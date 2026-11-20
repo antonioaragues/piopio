@@ -490,6 +490,10 @@ runs every thread on the same agent, giving a thread without a project a folder 
 
 ## 16. One New, and Agents beside Home (2026-11-15)
 
+> **Since §21 (2026-11-20):** your agents are back in the sidebar under an Agents heading with a +, and the compose
+> button is a menu of New Conversation and New Agent (CF27–CF29). That replaces CF10 and the "button, not a menu" part
+> of CF9; the rest of CF9 stands.
+
 > **Since 26 (2026-11-17):** the team parts of §16–§20 go in 26 C2. The Agents page lists agents only (CF10, no
 > Teams tab and no New team); the Board row under a project is the project's, not a team's (CF21); How it works in the
 > settings sheet becomes the project's way of working (CF22, 26 §4); and the New conversation page has no team mark
@@ -572,3 +576,17 @@ picked proposal A of four ([docs/design/new-conversation/proposals.html](../desi
 
 **Fixed along the way:** ⌘N after using a team's page opened the team's version of this page; New conversation now
 forgets a chosen team as it already forgot a chosen project.
+
+## 21. Agents in the sidebar, and New is a menu (2026-11-20)
+
+**Why:** with agents behind one row, every visit to an agent took two clicks and a second list column beside the
+sidebar, and making one meant finding that column's +. The user asked to hang the agents under Agents in the main
+sidebar, with a +, and to put New Agent in the compose button
+([mockup](https://claude.ai/artifact/VPZz4p42SpxCd2JD6jj5qM)).
+
+| ID | Decision |
+|---|---|
+| CF27 | **Agents is a sidebar section,** after Pinned and before Projects: the heading folds it like the others, a **+** opens the New agent page, and each agent is a row with its tile and name, the grey ring while it works, the blue dot when it wrote to you, or "Paused" / "Draft". The five latest show, then "N more ›", which opens the Agents page with all of them. An unfinished New agent page shows as a "Draft" row at the top. Pinned agents stay in Pinned. |
+| CF28 | **An agent's page fills the content card.** The agents' list column beside it is gone; so is the Agents row under Home and Automations. |
+| CF29 | **The compose button is a menu:** New Conversation (⌘N) and New Agent (⌥⌘N, also in File and the command palette). Both open their start pages. With Agents turned off it stays a plain button. Projects are still made from the Projects +. |
+| CF30 | **piopio tries on jobs on the New agent page:** secretary, doctor, detective, chef, mail carrier, coach, one every 2.8 s with a hop and its line in a bubble ("Say ahh… peep!"), and the box's example follows the job. Clicking it moves to the next job. Picking a template dresses it for that template's job (a briefing is the secretary, a watcher the detective); a template or anything typed stops the cycle. |

@@ -208,7 +208,7 @@ struct SectionIndex: View {
                         Text("\(rows.count) \(rows.count == 1 ? String(section.title.lowercased().dropLast()) : section.title.lowercased())").font(.system(size: 13)).foregroundStyle(Color.dsFg2)
                     }
                     Spacer()
-                    Button(newTitle) { NotificationCenter.default.post(name: newName, object: nil) }.buttonStyle(PillStyle(kind: .strong))
+                    Button(newTitle) { NotificationCenter.default.post(name: newName, object: section == .agents ? "form" : nil) }.buttonStyle(PillStyle(kind: .strong))
                 }
                 HStack(spacing: 7) {
                     Image(systemName: "magnifyingglass").font(.system(size: 11)).foregroundStyle(Color.dsFg3)
@@ -248,7 +248,7 @@ struct SectionIndex: View {
 
     private var newTitle: String {
         switch section {
-        case .agents: "New Agent"
+        case .agents: "New Agent ⌥⌘N"
         default: "New Conversation ⌘N"
         }
     }

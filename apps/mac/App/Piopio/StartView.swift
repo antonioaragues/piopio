@@ -848,6 +848,8 @@ private struct AgentStart: View {
     @FocusState private var focus: StartField?
     /// Where it runs (docs/spec/30 CT1): this Mac, unless you pick your cloud (offered once one is connected).
     @State private var inCloud = false
+    /// piopio trying on jobs (docs/spec/18 §21): one every few seconds while nothing is chosen or typed.
+    @State private var piopio = Piopio(job: .secretary)
 
     private var draft: StartDrafts.Draft { drafts[.agent] }
     private var name: String { draft.name.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -855,16 +857,24 @@ private struct AgentStart: View {
     /// Nothing is required: with no instructions (and no template) it interviews you and sets itself up (docs/spec/19 S2).
     private var canCreate: Bool { true }
 
+    /// A template or your own words settle what it's for: piopio stops changing jobs.
+    private var settled: Bool { draft.template != nil || !instructions.isEmpty }
+
     var body: some View {
-        StartHeader(kind: .agent, description: "Say what it should do, or just create it: it asks you a few questions and sets itself up. It remembers what you teach it and reaches you only when something matters.") {
-            HStack(spacing: 14) {
-                AvatarPicker(avatar: drafts.binding(.agent, \.avatar), size: CGSize(width: 44, height: 44))
-                TitleField(placeholder: "New agent", text: drafts.binding(.agent, \.name), focused: $focus) { focus = .text }
+        HStack(alignment: .top, spacing: 16) {
+            StartHeader(kind: .agent, description: "Say what it should do, or just create it: it asks you a few questions and sets itself up. It remembers what you teach it and reaches you only when something matters.") {
+                HStack(spacing: 14) {
+                    AvatarPicker(avatar: drafts.binding(.agent, \.avatar), size: CGSize(width: 44, height: 44))
+                    TitleField(placeholder: "New agent", text: drafts.binding(.agent, \.name), focused: $focus) { focus = .text }
+                }
             }
+            PiopioPerch(model: piopio, size: 76, bubbleBeside: true)
+                .padding(.top, 22).padding(.trailing, 6)
+                .help("piopio, trying on jobs. Click for another.")
         }
         VStack(alignment: .leading, spacing: 12) {
             ComposerCard(error: $error) {
-                AnyView(CardText(placeholder: "What should it do? In your own words, e.g. “Every morning, tell me what's on my calendar and which emails need a reply.” Or leave it empty: it will ask you.", text: drafts.binding(.agent, \.text), focused: $focus, minHeight: 84, submit: create))
+                AnyView(CardText(placeholder: "What should it do? In your own words, e.g. “\(piopio.job?.example ?? PiopioJob.secretary.example)” Or leave it empty: it will ask you.", text: drafts.binding(.agent, \.text), focused: $focus, minHeight: 84, submit: create))
             } extra: {
                 EmptyView()
             } leading: {
@@ -902,6 +912,14 @@ private struct AgentStart: View {
                 templates = await engine.agentTemplates()
                 focus = name.isEmpty ? .name : .text
             }
+            .task {
+                if let job = PiopioJob.forTemplate(draft.template) { piopio.wear(job) }
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .seconds(2.8))
+                    if !settled, let job = piopio.job { piopio.wear(job.next) }
+                }
+            }
+            .onChange(of: draft.text) { _, text in piopio.typed(text) }
     }
 
     /// From scratch first, then a briefing, a watcher, an assistant, a coach and a helper.
@@ -912,6 +930,7 @@ private struct AgentStart: View {
 
     /// A template sets the schedule, and drafts the name, icon and instructions unless you wrote your own.
     private func pick(_ t: AgentTemplate?) {
+        if let job = PiopioJob.forTemplate(t?.id) { piopio.wear(job) }
         let previous = templates.first { $0.id == draft.template }
         drafts.update(.agent) { d in
             d.template = t?.id

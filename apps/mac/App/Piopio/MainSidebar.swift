@@ -2,8 +2,8 @@ import PiopioKit
 import PiopioTranscript
 import SwiftUI
 
-/// The one sidebar (docs/design/grey 9a): a 52pt top bar (traffic lights, toggle, compose), Search ⌘K, Home and
-/// Agents (docs/spec/18 §16), then Pinned · Projects · Conversations, and a footer with the cost today and Settings.
+/// The one sidebar (docs/design/grey 9a): a 52pt top bar (traffic lights, toggle, New), Search ⌘K, Home and Automations,
+/// then Pinned · Agents · Projects · Conversations (docs/spec/18 §21), and a footer with the cost today and Settings.
 /// Rows are plain: a 16pt outline glyph, the name, and status only as a blue dot (needs you) or a grey ring (running).
 /// Long lists show only what's live: a project's sessions that are running, waiting on you or touched in the last
 /// 3 days (the rest fold into "N earlier sessions"), and a few of each section ("N more ›" opens the full index).
@@ -24,13 +24,13 @@ struct MainSidebar: View {
     private var areas: AreaSet { Areas.shared.set }
 
     /// How many of each section show before "N more ›".
-    private static let caps: [SidebarSection: Int] = [.projects: 4, .chats: 6]
+    private static let caps: [SidebarSection: Int] = [.agents: 5, .projects: 4, .chats: 6]
     /// A session counts as live this long after its last activity.
     private static let liveWindow: TimeInterval = 3 * 86_400
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // The traffic lights' row: the toggle and compose on the right.
+            // The traffic lights' row: the toggle and New on the right.
             HStack(spacing: 2) {
                 Spacer()
                 SidebarToggle()
@@ -40,16 +40,16 @@ struct MainSidebar: View {
             .frame(height: Shell.barHeight)
             .contentShape(Rectangle())
             .gesture(WindowDragGesture())
-            // Search, Home (it holds what waits on you, docs/spec/21 D2) and Agents (a place of its own: your agents,
-            // docs/spec/18 §16), then Pinned, Projects and Conversations; all of it scrolls.
+            // Search, Home (it holds what waits on you, docs/spec/21 D2) and Automations, then Pinned, your agents
+            // (docs/spec/18 §21), Projects and Conversations; all of it scrolls.
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 1) {
                     searchRow
                     navRow(.home, "Home", symbol: "house", count: engine.needsYouCount)
                     // Automations (docs/spec/27 AU10): what starts on its own, for Piopio and every agent.
                     automationsRow
-                    if areas.showsAgents { agentsRow }
                     pinnedSection
+                    if areas.showsAgents { agentsSection }
                     if areas.showsProjects { projectsSection }
                     if areas.showsChats { chatsSection }
                 }
@@ -498,26 +498,21 @@ struct MainSidebar: View {
 
     // MARK: Agents
 
-    /// Agents (docs/spec/18 §16): one row that opens the Agents page. It stays selected inside an agent or its start
-    /// page, and says what's going on there: a ring while one runs, the blue dot when an agent wrote to you.
-    private var agentsRow: some View {
-        let selected: Bool = switch item {
-        case .index(.agents), .agent, .start(.agent): true
-        default: false
-        }
-        let running = engine.agents.contains { engine.liveStatus[$0.ref.key] == .running }
-        let wrote = engine.agents.contains { ($0.agent?.status?.inbox ?? 0) > 0 }
-        return Button { item = .index(.agents) } label: {
-            HStack(spacing: 10) {
-                RowGlyph(symbol: "person.2")
-                Text("Agents").font(.system(size: 13)).foregroundStyle(Color.dsFg)
-                Spacer()
-                if wrote { SidebarDot(status: .waiting).help("An agent wrote to you") }
-                else if running { SidebarDot(status: .running).help("An agent is working") }
+    /// Agents (docs/spec/18 §21): your agents under their own heading, by latest activity, with a + for a new one. The
+    /// heading folds the section; "N more ›" opens the Agents page with all of them.
+    @ViewBuilder private var agentsSection: some View {
+        let agents = engine.agents.sorted { $0.updatedAt > $1.updatedAt }
+        let cap = Self.caps[.agents]!
+        let pinnedHere = Set(pinned)
+        let shown = Array(agents.prefix(cap))
+        header(.agents, total: agents.count, shown: shown.count, add: { item = .start(.agent) }, addHelp: "New agent (⌥⌘N)")
+        if !collapsed.contains(SidebarSection.agents.rawValue) {
+            draftRow(.agent)
+            ForEach(shown, id: \.ref.id) { agent in
+                if !pinnedHere.contains(SidebarItem.agent(agent.ref.id).raw) { agentRow(agent) }
             }
-            .rowChrome(selected: selected)
+            if agents.count > cap { more("\(agents.count - cap) more", .index(.agents)) }
         }
-        .buttonStyle(.plain)
     }
 
     private func agentRow(_ agent: SessionSummary) -> some View {
@@ -670,16 +665,37 @@ struct RowGlyph: View {
     }
 }
 
-/// Compose (docs/spec/18 §16): always the New conversation page, with no project. Projects and agents are made
-/// from their own places (the Projects +, the Agents page).
+/// New (docs/spec/18 §21): a menu of New Conversation (the New conversation page, with no project) and New Agent (its
+/// start page). With Agents off it's a plain button for a new conversation. Projects are made from the Projects +.
 struct ComposeButton: View {
     var body: some View {
-        Button { NotificationCenter.default.post(name: .newChat, object: nil) } label: {
-            Image(systemName: "square.and.pencil")
+        if Areas.shared.set.showsAgents {
+            Menu {
+                Button { NotificationCenter.default.post(name: .newChat, object: nil) } label: {
+                    Label("New Conversation", systemImage: "bubble.left")
+                }
+                .keyboardShortcut("n")
+                Button { NotificationCenter.default.post(name: .newAgent, object: "form") } label: {
+                    Label("New Agent", systemImage: "bird")
+                }
+                .keyboardShortcut("n", modifiers: [.command, .option])
+            } label: {
+                Image(systemName: "square.and.pencil")
+            }
+            .menuStyle(.button)
+            .menuIndicator(.hidden)
+            .buttonStyle(IconButtonStyle())
+            .fixedSize()
+            .help("New conversation or agent")
+            .accessibilityLabel("New")
+        } else {
+            Button { NotificationCenter.default.post(name: .newChat, object: nil) } label: {
+                Image(systemName: "square.and.pencil")
+            }
+            .buttonStyle(IconButtonStyle())
+            .help("New conversation (⌘N)")
+            .accessibilityLabel("New conversation")
         }
-        .buttonStyle(IconButtonStyle())
-        .help("New conversation (⌘N)")
-        .accessibilityLabel("New conversation")
     }
 }
 

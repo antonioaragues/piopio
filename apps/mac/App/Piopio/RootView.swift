@@ -237,13 +237,6 @@ struct RootView: View {
                 .id(id)
         case .index(.agents) where engine.agents.isEmpty:
             AgentsFirstRun(engine: engine, item: itemBinding)
-        case .index(.agents):
-            // The Agents row opens the agent you had open last (the handoff's "keep sidebar" model), or the first.
-            if let summary = engine.agents.first(where: { $0.ref.id == lastAgent }) ?? engine.agents.first {
-                AgentsSplit(engine: engine, item: itemBinding, selected: summary.ref.id) {
-                    AgentPage(engine: engine, summary: summary, selection: agentSelection).id(summary.ref.id)
-                }
-            }
         case .index(.chats) where engine.threads.isEmpty:
             ChatFirstRun(engine: engine, item: itemBinding)
         case .index(let section):
@@ -264,9 +257,8 @@ struct RootView: View {
             }
         case .agent(let id):
             if let summary = engine.agents.first(where: { $0.ref.id == id }) {
-                AgentsSplit(engine: engine, item: itemBinding, selected: id) {
-                    AgentPage(engine: engine, summary: summary, selection: agentSelection).id(id)
-                }
+                // Your agents are in the sidebar (docs/spec/18 §21): the page fills the card.
+                AgentPage(engine: engine, summary: summary, selection: agentSelection).id(id)
                 .onAppear { lastAgent = id }
                 .onChange(of: id) { _, now in lastAgent = now }
             } else {
@@ -287,10 +279,6 @@ struct RootView: View {
                 }
                 // Its first conversation: the start page with the new project chosen.
                 else { startConversation(target: "project:" + project.id) }
-            }
-        case .start(.agent) where !engine.agents.isEmpty:
-            AgentsSplit(engine: engine, item: itemBinding, selected: nil) {
-                StartView(engine: engine, kind: .agent, item: itemBinding)
             }
         case .start(let kind):
             StartView(engine: engine, kind: kind, item: itemBinding)

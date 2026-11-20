@@ -8,6 +8,8 @@ final class Piopio {
     static let shared = Piopio()
 
     private(set) var mood: PiopioMood = .at(.now)
+    /// The outfit on the New agent page (docs/spec/18 §21); nil on Home, where the mood dresses it.
+    private(set) var job: PiopioJob?
     /// Morning: asleep until tapped; then awake for the rest of the session.
     private(set) var woke = false
     private(set) var bubble: String?
@@ -27,7 +29,19 @@ final class Piopio {
     private var typingTask: Task<Void, Never>?
     private var pointerTask: Task<Void, Never>?
 
-    var asleep: Bool { mood == .morning && !woke }
+    /// A chick with a job doesn't nap.
+    var asleep: Bool { job == nil && mood == .morning && !woke }
+
+    init(job: PiopioJob? = nil) {
+        self.job = job
+    }
+
+    /// Puts on another job's outfit: it hops and says the job's line.
+    func wear(_ job: PiopioJob) {
+        guard job != self.job else { return }
+        self.job = job
+        hop(); say(job.line, for: 1.6)
+    }
 
     /// Captures force a mood: PIOPIO_DEMO_MOOD=night (and so on).
     func refreshMood() {
@@ -37,6 +51,10 @@ final class Piopio {
     }
 
     func tap() {
+        if let job {
+            wear(job.next)
+            return
+        }
         if asleep {
             woke = true
             hop(); say(PiopioMood.wakeLine, for: 2)
@@ -117,6 +135,8 @@ final class Piopio {
 struct PiopioPerch: View {
     let model: Piopio
     var size: CGFloat = 47
+    /// The bubble beside it, on its left, instead of above (the New agent page: hats reach where it would go).
+    var bubbleBeside = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -130,7 +150,7 @@ struct PiopioPerch: View {
                 .frame(width: size * 1.5, height: size * 1.5)
                 .allowsHitTesting(false)
             }
-            .overlay(alignment: .top) {
+            .overlay(alignment: bubbleBeside ? .topTrailing : .top) {
                 if let bubble = model.bubble {
                     Text(bubble)
                         .font(.system(size: 12, weight: .semibold))
@@ -138,8 +158,9 @@ struct PiopioPerch: View {
                         .fixedSize()
                         .padding(.horizontal, 10).padding(.vertical, 4)
                         .background(Color.dsInv, in: Capsule())
-                        .alignmentGuide(.top) { $0[.bottom] + 2 }
-                        .transition(.scale(scale: 0.6, anchor: .bottom).combined(with: .opacity))
+                        .alignmentGuide(.top) { bubbleBeside ? $0[.top] : $0[.bottom] + 2 }
+                        .offset(x: bubbleBeside ? -size - 2 : 0, y: bubbleBeside ? size * 0.18 : 0)
+                        .transition(.scale(scale: 0.6, anchor: bubbleBeside ? .trailing : .bottom).combined(with: .opacity))
                         .id(bubble)
                         .allowsHitTesting(false)
                         .accessibilityHidden(true)
@@ -186,7 +207,8 @@ private struct PiopioDrawing: View {
 
     var body: some View {
         // Read here so SwiftUI redraws on changes even while the timeline is paused (reduce motion).
-        let mood = model.mood, asleep = model.asleep, flapping = model.typing || model.bubble != nil
+        let job = model.job, mood = job == nil ? model.mood : .afternoon
+        let asleep = model.asleep, flapping = model.typing || model.bubble != nil
         let look = model.currentLook(at: still ? .now : time)
         let hop = model.hopStart.map { time.timeIntervalSince($0) }
         Canvas { context, _ in
@@ -202,7 +224,12 @@ private struct PiopioDrawing: View {
                 let h = still ? nil : hop.flatMap(Self.hop)
                 context.translateBy(x: 0, y: (bob + (h?.y ?? 0)) / s)
                 if let h { Self.scale(&context, h.sx, h.sy, around: CGPoint(x: 60, y: 114)) }
-                Self.drawAwake(&context, mood: mood, t: t, look: look, flapping: flapping && !still)
+                Self.drawAwake(&context, mood: mood, job: job, t: t, look: look, flapping: flapping && !still)
+                if let job {
+                    // A new outfit pops on with the hop.
+                    let pop = still ? 1 : hop.map { min(1, max(0, $0 / 0.4)) } ?? 1
+                    Self.drawJob(&context, job, t: still ? 0 : t, look: look, pop: pop)
+                }
             }
         }
     }
@@ -250,7 +277,7 @@ private struct PiopioDrawing: View {
 
     // MARK: Awake
 
-    static func drawAwake(_ c: inout GraphicsContext, mood: PiopioMood, t: Double, look: CGVector, flapping: Bool) {
+    static func drawAwake(_ c: inout GraphicsContext, mood: PiopioMood, job: PiopioJob?, t: Double, look: CGVector, flapping: Bool) {
         c.fill(ellipse(60, 114, 30, 3.5), with: .color(.black.opacity(0.08)))
         var feet = Path()
         for x in [47.0, 73.0] {
@@ -258,7 +285,7 @@ private struct PiopioDrawing: View {
         }
         c.stroke(feet, with: .color(Palette.feet), style: StrokeStyle(lineWidth: 3, lineCap: .round))
 
-        if !mood.hatted {
+        if !(job?.hatted ?? mood.hatted) {
             var tuft = c
             rotate(&tuft, -4 + 9 * Ease.wave(t, period: 3.2), around: CGPoint(x: 60, y: 32))
             tuft.fill(curve(56, 30, [(50, 18, 46, 14, 40, 14), (46, 20, 49, 26, 52, 32)]), with: .color(Palette.tuftSide))
@@ -307,7 +334,175 @@ private struct PiopioDrawing: View {
         beak.fill(polygon([(51, 72), (60, 64), (69, 72), (60, 82)]), with: Palette.beak(top: 64, bottom: 82))
         beak.fill(polygon([(51, 72), (60, 64), (69, 72), (60, 74)]), with: .color(Palette.beakTop))
 
-        drawAccessories(&c, mood: mood, t: t)
+        if job == nil { drawAccessories(&c, mood: mood, t: t) }
+    }
+
+    // MARK: Jobs
+
+    /// Each job's outfit (docs/spec/18 §21): something on the head, something in a wing. `pop` (0…1) is how far the
+    /// outfit has popped on since the hop; what's held sways a little.
+    static func drawJob(_ c: inout GraphicsContext, _ job: PiopioJob, t: Double, look: CGVector, pop: Double) {
+        let ink = Color(hex: 0x3A2A20), paper = Color.white, rule = Color(hex: 0xC9C9C4)
+        let sway = -8 * Ease.wave(t, period: 1.6)
+        /// Scales a part in from nothing, overshooting a little, around its own centre.
+        func popped(_ center: CGPoint, delay: Double = 0, _ draw: (inout GraphicsContext) -> Void) {
+            let p = min(1, max(0, (pop - delay) / (1 - delay)))
+            guard p > 0 else { return }
+            var g = c
+            let k = Ease.out(p) * (1 + 0.18 * sin(p * .pi))
+            g.opacity = min(1, p * 2)
+            scale(&g, k, k, around: center)
+            draw(&g)
+        }
+        /// Something held in a wing: pops in, then sways from where it's held.
+        func held(_ pivot: CGPoint, _ draw: @escaping (inout GraphicsContext) -> Void) {
+            popped(pivot, delay: 0.15) { g in
+                rotate(&g, sway, around: pivot)
+                draw(&g)
+            }
+        }
+        let thin = StrokeStyle(lineWidth: 1.2), round = { (w: Double) in StrokeStyle(lineWidth: w, lineCap: .round) }
+
+        switch job {
+        case .secretary:
+            // Glasses on the eyes, so they follow the look.
+            popped(CGPoint(x: 60, y: 62)) { g in
+                g.translateBy(x: look.dx, y: look.dy)
+                for cx in [42.0, 78.0] {
+                    g.fill(ellipse(cx, 62, 10, 10), with: .color(.white.opacity(0.18)))
+                    g.stroke(ellipse(cx, 62, 10, 10), with: .color(ink), lineWidth: 2.2)
+                }
+                var bridge = Path()
+                bridge.move(to: CGPoint(x: 52, y: 61)); bridge.addQuadCurve(to: CGPoint(x: 68, y: 61), control: CGPoint(x: 60, y: 57))
+                g.stroke(bridge, with: .color(ink), lineWidth: 2.2)
+            }
+            held(CGPoint(x: 14, y: 96)) { g in
+                rotate(&g, -10, around: CGPoint(x: 14, y: 85))
+                let pad = Path(roundedRect: CGRect(x: 2, y: 70, width: 24, height: 30), cornerRadius: 2.5)
+                g.fill(pad, with: .color(paper)); g.stroke(pad, with: .color(rule), style: thin)
+                var lines = Path()
+                for (y, w) in [(79.0, 14.0), (85, 14), (91, 9)] { lines.addPath(line(7, y, 7 + w, y)) }
+                g.stroke(lines, with: .color(Color(hex: 0x9BB4D6)), style: round(1.5))
+            }
+            held(CGPoint(x: 100, y: 92)) { g in
+                g.stroke(line(100, 92, 114, 64), with: .color(Color(hex: 0xF2A93B)), style: round(5))
+                g.stroke(line(114, 64, 116, 59), with: .color(Color(hex: 0xF4B6B0)), style: round(5))
+                g.stroke(line(100, 92, 99, 96), with: .color(ink), style: round(2))
+            }
+        case .doctor:
+            popped(CGPoint(x: 60, y: 34)) { g in
+                var band = Path()
+                band.move(to: CGPoint(x: 22, y: 48)); band.addQuadCurve(to: CGPoint(x: 98, y: 48), control: CGPoint(x: 60, y: 24))
+                g.stroke(band, with: .color(Color(hex: 0x7E8A94)), lineWidth: 3)
+                g.fill(ellipse(60, 33, 10, 10), with: .color(Color(hex: 0xE7ECEF)))
+                g.stroke(ellipse(60, 33, 10, 10), with: .color(Color(hex: 0x8D99A3)), lineWidth: 2)
+                g.fill(ellipse(60, 33, 3.5, 3.5), with: .color(Color(hex: 0xB8C2C9)))
+                g.fill(ellipse(56, 29, 3, 1.6), with: .color(.white.opacity(0.9)))
+            }
+            popped(CGPoint(x: 60, y: 100), delay: 0.1) { g in
+                var tube = Path()
+                tube.move(to: CGPoint(x: 34, y: 90)); tube.addQuadCurve(to: CGPoint(x: 60, y: 106), control: CGPoint(x: 36, y: 108))
+                tube.addQuadCurve(to: CGPoint(x: 86, y: 90), control: CGPoint(x: 84, y: 108))
+                g.stroke(tube, with: .color(Color(hex: 0x4E5A64)), style: round(2.6))
+                g.fill(ellipse(60, 106, 5.5, 5.5), with: .color(Color(hex: 0xC7D0D6)))
+                g.stroke(ellipse(60, 106, 5.5, 5.5), with: .color(Color(hex: 0x4E5A64)), lineWidth: 2)
+            }
+            held(CGPoint(x: 96, y: 100)) { g in
+                let kit = Path(roundedRect: CGRect(x: 88, y: 84, width: 16, height: 16), cornerRadius: 3)
+                g.fill(kit, with: .color(paper)); g.stroke(kit, with: .color(Color(hex: 0xE2E2DE)), lineWidth: 1)
+                var cross = line(96, 87, 96, 97); cross.addPath(line(91, 92, 101, 92))
+                g.stroke(cross, with: .color(Color(hex: 0xD9473C)), style: round(3))
+            }
+        case .detective:
+            popped(CGPoint(x: 60, y: 30)) { g in
+                var dome = Path()
+                dome.move(to: CGPoint(x: 20, y: 44))
+                dome.addCurve(to: CGPoint(x: 100, y: 44), control1: CGPoint(x: 18, y: 6), control2: CGPoint(x: 102, y: 6))
+                dome.addQuadCurve(to: CGPoint(x: 20, y: 44), control: CGPoint(x: 60, y: 34))
+                g.fill(dome, with: .color(Color(hex: 0x8B6A47)))
+                var check = g
+                check.clip(to: dome)
+                var lines = Path()
+                for (a, b) in [((30.0, 22.0), (90.0, 22.0)), ((24, 32), (96, 32)), ((44, 12), (40, 40)), ((60, 9), (60, 37)), ((76, 12), (80, 40))] { lines.addPath(line(a.0, a.1, b.0, b.1)) }
+                check.stroke(lines, with: .color(Color(hex: 0x6E5236).opacity(0.7)), lineWidth: 1.6)
+                var brim = Path()
+                brim.move(to: CGPoint(x: 22, y: 44))
+                brim.addQuadCurve(to: CGPoint(x: 98, y: 44), control: CGPoint(x: 60, y: 32))
+                brim.addQuadCurve(to: CGPoint(x: 92, y: 50), control: CGPoint(x: 100, y: 50))
+                brim.addQuadCurve(to: CGPoint(x: 28, y: 50), control: CGPoint(x: 60, y: 42))
+                brim.addQuadCurve(to: CGPoint(x: 22, y: 44), control: CGPoint(x: 20, y: 50))
+                g.fill(brim, with: .color(Color(hex: 0x6E5236)))
+                g.stroke(line(60, 17, 60, 11), with: .color(Color(hex: 0x6E5236)), style: round(3))
+            }
+            held(CGPoint(x: 110, y: 90)) { g in
+                let wood = Color(hex: 0x5A4632)
+                g.stroke(line(106, 82, 116, 98), with: .color(wood), style: round(5))
+                g.fill(ellipse(100, 72, 12, 12), with: .color(Color(hex: 0xD9ECFA).opacity(0.55)))
+                g.stroke(ellipse(100, 72, 12, 12), with: .color(wood), lineWidth: 3.2)
+                var glint = Path()
+                glint.move(to: CGPoint(x: 94, y: 67)); glint.addQuadCurve(to: CGPoint(x: 101, y: 64), control: CGPoint(x: 97, y: 64))
+                g.stroke(glint, with: .color(.white), style: round(2))
+            }
+        case .chef:
+            popped(CGPoint(x: 60, y: 24)) { g in
+                let parts = [ellipse(44, 16, 13, 13), ellipse(76, 16, 13, 13), ellipse(60, 8, 15, 15), Path(roundedRect: CGRect(x: 36, y: 16, width: 48, height: 20), cornerRadius: 4)]
+                let toque = parts.dropFirst().reduce(parts[0]) { Path($0.cgPath.union($1.cgPath)) }
+                g.fill(toque, with: .color(paper))
+                g.stroke(toque, with: .color(Color(hex: 0xE2E2DE)), lineWidth: 1.2)
+                var pleats = Path()
+                for (x, top) in [(48.0, 22.0), (60, 20), (72, 22)] { pleats.addPath(line(x, top, x, 32)) }
+                g.stroke(pleats, with: .color(Color(hex: 0xEDEDEA)), lineWidth: 2)
+            }
+            held(CGPoint(x: 102, y: 96)) { g in
+                let wood = Color(hex: 0xB9874E)
+                g.stroke(line(107, 72, 101, 98), with: .color(wood), style: round(3.5))
+                g.fill(ellipse(108, 66, 6, 8), with: .color(wood))
+            }
+        case .mailCarrier:
+            popped(CGPoint(x: 60, y: 30)) { g in
+                var cap = Path()
+                cap.move(to: CGPoint(x: 22, y: 42))
+                cap.addCurve(to: CGPoint(x: 98, y: 42), control1: CGPoint(x: 22, y: 12), control2: CGPoint(x: 98, y: 12))
+                cap.addQuadCurve(to: CGPoint(x: 22, y: 42), control: CGPoint(x: 60, y: 34))
+                g.fill(cap, with: .color(Color(hex: 0x2F5D9E)))
+                var visor = Path()
+                visor.move(to: CGPoint(x: 58, y: 40))
+                visor.addQuadCurve(to: CGPoint(x: 104, y: 44), control: CGPoint(x: 86, y: 34))
+                visor.addQuadCurve(to: CGPoint(x: 58, y: 44), control: CGPoint(x: 84, y: 48))
+                g.fill(visor, with: .color(Color(hex: 0x244A7F)))
+                g.fill(ellipse(60, 26, 5, 5), with: .color(Color(hex: 0xF2C94C)))
+            }
+            held(CGPoint(x: 12, y: 95)) { g in
+                rotate(&g, -12, around: CGPoint(x: 12, y: 83))
+                let envelope = Path(roundedRect: CGRect(x: -2, y: 74, width: 28, height: 19), cornerRadius: 2)
+                g.fill(envelope, with: .color(paper)); g.stroke(envelope, with: .color(rule), style: thin)
+                var flap = Path()
+                flap.move(to: CGPoint(x: -1, y: 76)); flap.addLine(to: CGPoint(x: 12, y: 86)); flap.addLine(to: CGPoint(x: 25, y: 76))
+                g.stroke(flap, with: .color(rule), style: thin)
+                g.fill(ellipse(12, 88, 3, 3), with: .color(Color(hex: 0xD9473C)))
+            }
+        case .coach:
+            popped(CGPoint(x: 60, y: 40)) { g in
+                var band = Path()
+                band.move(to: CGPoint(x: 21, y: 46)); band.addQuadCurve(to: CGPoint(x: 99, y: 46), control: CGPoint(x: 60, y: 22))
+                band.addLine(to: CGPoint(x: 98, y: 54)); band.addQuadCurve(to: CGPoint(x: 22, y: 54), control: CGPoint(x: 60, y: 31))
+                band.closeSubpath()
+                g.fill(band, with: .color(Color(hex: 0xE05A47)))
+                var stripe = Path()
+                stripe.move(to: CGPoint(x: 22, y: 50)); stripe.addQuadCurve(to: CGPoint(x: 98, y: 50), control: CGPoint(x: 60, y: 27))
+                g.stroke(stripe, with: .color(.white), lineWidth: 1.8)
+            }
+            popped(CGPoint(x: 60, y: 98), delay: 0.1) { g in
+                var cord = Path()
+                cord.move(to: CGPoint(x: 36, y: 90)); cord.addQuadCurve(to: CGPoint(x: 58, y: 100), control: CGPoint(x: 48, y: 104))
+                cord.move(to: CGPoint(x: 84, y: 90)); cord.addQuadCurve(to: CGPoint(x: 62, y: 100), control: CGPoint(x: 72, y: 104))
+                g.stroke(cord, with: .color(Color(hex: 0x2F5D9E)), lineWidth: 2)
+                let whistle = Path(roundedRect: CGRect(x: 52, y: 98, width: 18, height: 9), cornerRadius: 4.5)
+                g.fill(whistle, with: .color(Color(hex: 0xC7D0D6)))
+                g.stroke(whistle, with: .color(Color(hex: 0x6B7780)), lineWidth: 1.5)
+                g.fill(ellipse(56, 102.5, 2.2, 2.2), with: .color(Color(hex: 0x6B7780)))
+            }
+        }
     }
 
     static func drawAccessories(_ c: inout GraphicsContext, mood: PiopioMood, t: Double) {

@@ -43,6 +43,10 @@ struct PiopioApp: App {
                 // Only the areas that are on (docs/spec/15).
                 Button(newTitle) { NotificationCenter.default.post(name: .newThread, object: nil) }
                     .keyboardShortcut("n")
+                if areas.contains(.agents) {
+                    Button("New Agent") { NotificationCenter.default.post(name: .newAgent, object: "form") }
+                        .keyboardShortcut("n", modifiers: [.command, .option])
+                }
                 if areas.contains(.chat) {
                     Button("New Project…") { NotificationCenter.default.post(name: .newProject, object: nil) }
                         .keyboardShortcut("n", modifiers: [.command, .shift])
