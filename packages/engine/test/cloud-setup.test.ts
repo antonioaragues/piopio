@@ -108,6 +108,13 @@ test("one Cloudflare token: Piopio deploys its Worker, makes the owner token, an
 	expect(fake.secrets).toEqual({ OWNER_TOKEN: owner, OPENROUTER_API_KEY: "sk-or-new" });
 	expect(fake.calls.filter((c) => c.endsWith("/secrets"))).toHaveLength(1);
 
+	// The Keychain lost the owner token (the Worker keeps a write-only copy): Update makes a new one, on both sides.
+	delete client.secrets.CLOUD_OWNER_TOKEN;
+	expect(await client.call("cloud.update")).toMatchObject({ connected: true, reachable: true, managed: true });
+	expect(fake.secrets.OWNER_TOKEN).toMatch(/^[0-9a-f]{64}$/);
+	expect(fake.secrets.OWNER_TOKEN).not.toBe(owner);
+	expect(client.secrets.CLOUD_OWNER_TOKEN).toBe(fake.secrets.OWNER_TOKEN);
+
 	// Disconnecting forgets both tokens.
 	await client.call("cloud.disconnect");
 	expect(client.secrets.CLOUD_OWNER_TOKEN).toBeUndefined();

@@ -104,7 +104,10 @@ export class CloudLink {
 
 	private async token(): Promise<string> {
 		const token = await this.options.secrets.get(SECRET_CLOUD, "Your cloud's owner token");
-		if (!token) throw new EngineError("AUTH", "Piopio can't read your cloud's owner token from the Keychain. Connect again in Settings › This Mac & cloud.");
+		if (!token) {
+			const fix = this.config()?.accountId ? "Click Update in Settings › This Mac & cloud: Piopio makes a new one." : "Connect again in Settings › This Mac & cloud.";
+			throw new EngineError("AUTH", `Piopio can't read your cloud's owner token from the Keychain. ${fix}`);
+		}
 		return token;
 	}
 
@@ -163,14 +166,18 @@ export class CloudLink {
 
 	/**
 	 * The Worker again, from this version of Piopio, with your current OpenRouter key (after a Piopio update, or when
-	 * the key changed or expired). Only for a cloud Piopio deployed itself.
+	 * the key changed or expired). Only for a cloud Piopio deployed itself. When the Keychain lost the owner token (the
+	 * Worker only keeps a write-only copy), a new one replaces it; agents in the cloud stay where they are.
 	 */
 	async update(log?: (line: string) => void): Promise<CloudStatus> {
 		const config = this.config();
 		if (!config) throw new EngineError("INVALID", "No cloud is connected.");
 		const token = await this.options.secrets.get(SECRET_CLOUDFLARE, "Update your cloud");
 		if (!config.accountId || !token) throw new EngineError("INVALID", "This cloud was connected by its address and owner token, so Piopio can't update it. Connect it with a Cloudflare token instead (same account: its agents stay).");
-		await this.deployWorker(token, config.accountId, { OPENROUTER_API_KEY: await this.modelKey() }, log);
+		this.options.secrets.forget(SECRET_CLOUD);
+		const owner = (await this.options.secrets.get(SECRET_CLOUD, "Your cloud's owner token")) ? undefined : hex(32);
+		await this.deployWorker(token, config.accountId, { OPENROUTER_API_KEY: await this.modelKey(), ...(owner ? { OWNER_TOKEN: owner } : {}) }, log);
+		if (owner) return this.connect(config.url, owner, config.accountId);
 		this.close();
 		return this.status();
 	}
