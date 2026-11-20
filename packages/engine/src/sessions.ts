@@ -18,7 +18,8 @@ import { draftAgent, type AgentDraft } from "./agent-draft.js";
 import { addWorktree, checkout, git as runGit, mergeWorktree, removeWorktree, status as gitStatus } from "./git.js";
 import { BuildRuntime } from "./runtimes/build.js";
 import { ClaudeCodeRuntime } from "./runtimes/claude-code.js";
-import { CLAUDE_CODE_NAME, isCodingAgent } from "./coding-agents.js";
+import { isCodingAgent } from "./coding-agents.js";
+import { fileItems, handoffSummary, innerOf, pastItems, SegmentedRuntime, type Segment } from "./runtimes/segments.js";
 import { parseVerdict, REVIEW_SYSTEM, reviewPrompt, type TaskResult } from "@piopio/pi-extensions";
 import type { Runtime } from "./runtimes/runtime.js";
 import { DatabaseSync } from "node:sqlite";
@@ -63,6 +64,10 @@ type CatalogEntry = SessionSummary & {
 	sessionFile?: string;
 	/** A conversation run by a coding agent (docs/spec/31): Piopio's copy of its transcript. */
 	agentFile?: string;
+	/** Earlier parts of a conversation that changed who runs it (docs/spec/31 CA7), oldest first. */
+	segments?: Segment[];
+	/** The current part hasn't sent its first message yet: it carries the summary of the earlier ones. */
+	handoff?: boolean;
 	/** Chats moved from pi-durable (2026-11-15): the old SQLite file, kept until the chat is deleted. */
 	migratedFrom?: string;
 	/** Original CLI file for recovered history; avoid importing a duplicate after restore. */
@@ -238,20 +243,13 @@ export class Sessions {
 			else delete entry.toolsOff;
 		}
 		let replaced = false;
-		if (change.model && this.open.has(ref.id)) {
-			const runtime = await this.runtime(ref);
-			const onAgent = runtime instanceof ClaudeCodeRuntime;
-			if (onAgent !== isCodingAgent(change.model.provider)) {
-				// Piopio's agent ⇄ a coding agent (docs/spec/31 CA7): only before the first message, in phase A1.
-				if (runtime.snapshot().items.some((i) => i.kind === "user")) {
-					throw new EngineError("INVALID", onAgent ? `This conversation runs in ${CLAUDE_CODE_NAME}. Start a new conversation to use another model.` : `Start a new conversation to use ${CLAUDE_CODE_NAME}: it runs a conversation from its first message.`);
-				}
-				this.open.delete(ref.id);
-				await runtime.close().catch(() => undefined);
-				replaced = true;
-			}
+		const current = entry.model ?? this.hub.defaultModel;
+		if (change.model && entry.ref.kind !== "agent" && isCodingAgent(change.model.provider) !== isCodingAgent(current.provider)) {
+			// Piopio's agent ⇄ a coding agent (docs/spec/31 CA7): a new runner, from a summary of what came before.
+			await this.switchRunner(entry, current);
+			replaced = true;
 		}
-		if (this.open.has(ref.id)) await (await this.runtime(ref)).configure(change);
+		if (this.open.has(ref.id) && !replaced) await (await this.runtime(ref)).configure(change);
 		if (change.web !== undefined) entry.web = change.web;
 		if (change.model) entry.model = change.model;
 		if (change.thinking === "default") delete entry.thinking;
@@ -266,6 +264,39 @@ export class Sessions {
 
 	/** A conversation's runtime was replaced (the server moves its subscriptions to the new one). */
 	onRuntimeReplaced?: (ref: ContainerRef) => void;
+
+	/**
+	 * Closes the conversation's runner so the next open uses the new one (the caller sets the model). With messages, the
+	 * current part becomes an earlier segment and the next one starts from its summary. Without any, it's dropped; and
+	 * when the part before it ran on the runner you're going back to, that part is the current one again (an undo).
+	 */
+	private async switchRunner(entry: CatalogEntry, from: ModelRef): Promise<void> {
+		const open = this.open.get(entry.ref.id);
+		this.open.delete(entry.ref.id);
+		const runtime = open ? await open.catch(() => undefined) : undefined;
+		const items = runtime ? innerOf(runtime).snapshot().items : fileItems(entry.ref, entry);
+		await runtime?.close().catch(() => undefined);
+		if (items.some((i) => i.kind === "user")) {
+			(entry.segments ??= []).push({ model: from, ...(entry.sessionFile ? { sessionFile: entry.sessionFile } : {}), ...(entry.agentFile ? { agentFile: entry.agentFile } : {}), at: new Date().toISOString() });
+			delete entry.sessionFile;
+			delete entry.agentFile;
+			entry.handoff = true;
+			return;
+		}
+		// Nothing said in this part: its files go.
+		if (entry.agentFile) rmSync(entry.agentFile, { force: true });
+		if (entry.sessionFile && existsSync(entry.sessionFile) && !readFileSync(entry.sessionFile, "utf8").includes('"type":"message"')) rmSync(entry.sessionFile, { force: true });
+		delete entry.agentFile;
+		delete entry.sessionFile;
+		const previous = entry.segments?.at(-1);
+		if (previous && isCodingAgent(previous.model.provider) !== isCodingAgent(from.provider)) {
+			entry.segments!.pop();
+			if (previous.sessionFile) entry.sessionFile = previous.sessionFile;
+			if (previous.agentFile) entry.agentFile = previous.agentFile;
+			if (!entry.segments!.length) delete entry.segments;
+			delete entry.handoff;
+		}
+	}
 
 	rename(ref: ContainerRef, title: string): void {
 		const entry = this.entry(ref);
@@ -323,12 +354,7 @@ export class Sessions {
 	private async itemsOf(entry: CatalogEntry): Promise<readonly TimelineItem[]> {
 		const open = this.open.get(entry.ref.id);
 		if (open) return (await open).snapshot().items;
-		if (entry.ref.kind === "build" || entry.ref.kind === "thread") {
-			if (!entry.sessionFile || !existsSync(entry.sessionFile)) return [];
-			const builder = new TimelineBuilder(entry.ref);
-			builder.reset(sdkMessages(SessionManager.open(entry.sessionFile).buildSessionContext().messages as unknown as PiMessage[]), (index) => SdkEventMapper.idOf(index), false);
-			return builder.snapshot().items;
-		}
+		if (entry.ref.kind === "build" || entry.ref.kind === "thread") return this.storedItems(entry);
 		const runtime = await this.runtime(entry.ref);
 		const items = runtime.snapshot().items;
 		this.open.delete(entry.ref.id);
@@ -355,12 +381,10 @@ export class Sessions {
 	private async indexContainer(entry: CatalogEntry): Promise<void> {
 		// Searching unopened Build history must not load project extensions or require a provider key.
 		if ((entry.ref.kind === "build" || entry.ref.kind === "thread") && !this.open.has(entry.ref.id)) {
-			if (!entry.sessionFile || !existsSync(entry.sessionFile)) return;
-			const builder = new TimelineBuilder(entry.ref);
-			const messages = SessionManager.open(entry.sessionFile).buildSessionContext().messages as unknown as PiMessage[];
-			builder.reset(sdkMessages(messages), index => SdkEventMapper.idOf(index), false);
+			const items = this.storedItems(entry);
+			if (!items.length) return;
 			this.search.setDestination(entry.ref.id, entry.ref, entry.title, entry.updatedAt);
-			this.search.replaceSession(entry.ref.id, entry.title, entry.updatedAt, builder.snapshot().items);
+			this.search.replaceSession(entry.ref.id, entry.title, entry.updatedAt, items);
 			this.searchReady.add(entry.ref.id);
 			return;
 		}
@@ -483,7 +507,13 @@ export class Sessions {
 		if (runtime) await (await runtime.catch(() => undefined))?.close();
 		for (const old of [entry.file, entry.migratedFrom]) if (old) for (const suffix of ["", "-wal", "-shm"]) rmSync(old + suffix, { force: true });
 		// A coding agent's conversation: Piopio's copy of its transcript (the agent keeps its own session).
-		if (entry.agentFile) rmSync(entry.agentFile, { force: true });
+		for (const file of [entry.agentFile, ...(entry.segments ?? []).map((s) => s.agentFile)]) if (file) rmSync(file, { force: true });
+		// Earlier parts' pi sessions go as the current one does: deleted for a chat, to the Trash for Build.
+		for (const s of entry.segments ?? []) {
+			if (!s.sessionFile || !existsSync(s.sessionFile)) continue;
+			if (entry.ref.kind === "thread") rmSync(s.sessionFile, { force: true });
+			else moveToTrash(s.sessionFile, this.piOverrides.trashDir ?? join(homedir(), ".Trash"));
+		}
 		if (entry.ref.kind === "thread") {
 			// A chat's files are Piopio's own (chatsDir, scratchDir): they go, as a chat's history always did.
 			if (entry.sessionFile) rmSync(entry.sessionFile, { force: true });
@@ -2016,7 +2046,8 @@ export class Sessions {
 		const quiet = child.sideBy === "you" || (parent.sideWoke ?? 0) >= WAKE_LIMIT || (!!child.side && this.chat?.settings.get().chat.sideWake === false);
 		if (quiet) {
 			const runtime = await this.runtime(parent.ref);
-			if (runtime instanceof BuildRuntime) await runtime.sideNote(text, summary);
+			const inner = innerOf(runtime);
+			if (inner instanceof BuildRuntime) await inner.sideNote(text, summary);
 			return;
 		}
 		parent.sidePending = [...(parent.sidePending ?? []), text];
@@ -2295,13 +2326,14 @@ export class Sessions {
 	async reloadResources(): Promise<void> {
 		for (const pending of this.open.values()) {
 			const runtime = await pending.catch(() => undefined);
-			if (runtime instanceof BuildRuntime) await runtime.reloadResources().catch(() => undefined);
+			const inner = runtime && innerOf(runtime);
+			if (inner instanceof BuildRuntime) await inner.reloadResources().catch(() => undefined);
 		}
 	}
 
 	/** A Build session's runtime (checkpoints, approvals). */
 	async build(ref: ContainerRef): Promise<BuildRuntime> {
-		const runtime = await this.runtime(ref);
+		const runtime = innerOf(await this.runtime(ref));
 		if (!(runtime instanceof BuildRuntime)) throw new EngineError("INVALID", "Only Build sessions have checkpoints and approvals.");
 		return runtime;
 	}
@@ -2312,13 +2344,13 @@ export class Sessions {
 
 	/** The user's answer to a connector approval in a chat. */
 	async decide(ref: ContainerRef, approvalId: string, decision: { approve: boolean; always?: boolean; reason?: string }) {
-		const runtime = await this.runtime(ref);
+		const runtime = innerOf(await this.runtime(ref));
 		if (!(runtime instanceof BuildRuntime) || ref.kind !== "thread") throw new EngineError("INVALID", "Only chats ask this way.");
 		return runtime.decide(approvalId, decision);
 	}
 
 	async respond(ref: ContainerRef, promptId: string, response: PromptResponse): Promise<void> {
-		const runtime = await this.runtime(ref);
+		const runtime = innerOf(await this.runtime(ref));
 		if (!(runtime instanceof BuildRuntime) && !(runtime instanceof ClaudeCodeRuntime)) throw new EngineError("INVALID", "Only Build sessions ask for approval.");
 		runtime.respond(promptId, response);
 	}
@@ -2362,8 +2394,10 @@ export class Sessions {
 		} catch {
 			return;
 		}
-		const byFile = new Map([...this.entries.values()].filter((e) => e.sessionFile).flatMap(e => [
-			[e.sessionFile!, e] as const,
+		const byFile = new Map([...this.entries.values()].flatMap(e => [
+			...(e.sessionFile ? [[e.sessionFile, e] as const] : []),
+			// A conversation's earlier parts are its own, not sessions of their own (docs/spec/31 CA7).
+			...(e.segments ?? []).flatMap((s) => (s.sessionFile ? [[s.sessionFile, e] as const] : [])),
 			...(e.restoredFromSessionFile ? [[e.restoredFromSessionFile, e] as const] : []),
 		]));
 		const upserted: CatalogEntry[] = [];
@@ -2371,6 +2405,7 @@ export class Sessions {
 			const modified = info.modified.toISOString();
 			const entry = byFile.get(info.path);
 			if (entry?.restoredFromSessionFile === info.path && entry.sessionFile !== info.path) continue;
+			if (entry && entry.sessionFile !== info.path && entry.restoredFromSessionFile !== info.path) continue;
 			if (entry) {
 				let changed = !entry.onDisk;
 				entry.onDisk = true;
@@ -2456,7 +2491,7 @@ export class Sessions {
 
 	private async openRuntime(entry: CatalogEntry): Promise<Runtime> {
 		if (entry.ref.kind !== "build") await this.chat?.resources.ready();
-		const runtime = await this.createRuntime(entry);
+		const runtime = this.withSegments(entry, await this.createRuntime(entry));
 		if (!this.search.isIndexed(entry.ref.id)) this.search.replaceSession(entry.ref.id, entry.title, entry.updatedAt, runtime.snapshot().items);
 		runtime.onEvents((events) => {
 			this.searchReady.delete(entry.ref.id);
@@ -2471,6 +2506,28 @@ export class Sessions {
 			if ((entry.ref.kind === "thread" || entry.ref.kind === "build") && idle) void this.suggestFollowUps(entry, runtime);
 		});
 		return runtime;
+	}
+
+	/** A conversation that changed who runs it: its earlier parts before the current runtime's (docs/spec/31 CA7). */
+	private withSegments(entry: CatalogEntry, runtime: Runtime): Runtime {
+		if (!entry.segments?.length) return runtime;
+		const past = pastItems(entry.ref, entry.segments, entry.model ?? this.hub.defaultModel);
+		const handoff = entry.handoff
+			? {
+					summary: handoffSummary(past),
+					sent: () => {
+						delete entry.handoff;
+						this.save();
+					},
+				}
+			: undefined;
+		return new SegmentedRuntime(runtime, past, handoff);
+	}
+
+	/** A conversation's items from its files (every part), without opening it. */
+	private storedItems(entry: CatalogEntry): TimelineItem[] {
+		const current = fileItems(entry.ref, entry);
+		return entry.segments?.length ? [...pastItems(entry.ref, entry.segments, entry.model ?? this.hub.defaultModel), ...current] : current;
 	}
 
 	private async createRuntime(entry: CatalogEntry): Promise<Runtime> {
@@ -2745,7 +2802,7 @@ export class Sessions {
 	}
 }
 
-function summary({ file: _f, sessionFile: _s, agentFile: _af, restoredFromSessionFile: _recovered, onDisk: _d, thinking: _t, migratedFrom: _m, sideBrief: _b, sideBy: _y, sideWoke: _w, sidePending: _p, sideOffers: _o, sideBriefs: _sb, prSeen: _ps, prFailedSha: _pf, ...rest }: CatalogEntry): SessionSummary {
+function summary({ file: _f, sessionFile: _s, agentFile: _af, segments: _sg, handoff: _h, restoredFromSessionFile: _recovered, onDisk: _d, thinking: _t, migratedFrom: _m, sideBrief: _b, sideBy: _y, sideWoke: _w, sidePending: _p, sideOffers: _o, sideBriefs: _sb, prSeen: _ps, prFailedSha: _pf, ...rest }: CatalogEntry): SessionSummary {
 	// Proposals go after a week (docs/spec/24 §3).
 	if (rest.sideProposals) {
 		const live = rest.sideProposals.filter((p) => Date.parse(p.expiresAt) > Date.now());

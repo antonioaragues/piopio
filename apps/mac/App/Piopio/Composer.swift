@@ -568,7 +568,7 @@ struct ModelChip: View {
             HStack(spacing: 4) {
                 // A conversation that couldn't open for a missing provider (the notice above says which).
                 if thread.state == nil, thread.errorIsAuth { Text("Model needed").foregroundStyle(Color.dsWarn) } else {
-                    Text(engine.model(thread.state?.model).map { Self.label($0, engine: engine) } ?? thread.state?.model?.id ?? "Model")
+                    if let m = engine.model(thread.state?.model) { ModelLabel(model: m, engine: engine) } else { Text(thread.state?.model?.id ?? "Model") }
                 }
                 if thread.supportsThinking, let level = ThinkingLevel.title(thread.state?.thinking) { Text(level.lowercased()).foregroundStyle(Color.dsFg3) }
             }
@@ -576,7 +576,7 @@ struct ModelChip: View {
         .buttonStyle(ComposerChipStyle())
         .help("Model and thinking")
         .popover(isPresented: Binding(get: { thread.showModelPicker }, set: { thread.showModelPicker = $0 }), arrowEdge: .top) {
-            ModelPicker(engine: engine, selected: thread.state?.model, accessory: thread.supportsThinking ? AnyView(thinking) : nil, agents: thread.ref.kind == .thread || thread.ref.kind == .build, keepRunner: thread.document.lastItem != nil) { model in
+            ModelPicker(engine: engine, selected: thread.state?.model, accessory: thread.supportsThinking ? AnyView(thinking) : nil, agents: thread.ref.kind == .thread || thread.ref.kind == .build) { model in
                 thread.showModelPicker = false
                 Task { await thread.setModel(model) }
             }
@@ -615,11 +615,32 @@ struct ModelChip: View {
 
     /// The chip's text: the model, and where it runs once more than one provider is connected (docs/spec/10:
     /// the selected model's provider is always visible).
+    /// "Opus 5.5 · Claude Code", "Haiku 5.5 · OpenRouter": the model, then who runs it, once there's more than one
+    /// (docs/spec/31 §5; ModelLabel adds the agent glyph).
     static func label(_ m: ModelInfo, engine: EngineController) -> String {
         let name = short(m).replacingOccurrences(of: "Claude ", with: "")
-        // A coding agent runs the conversation: it's named first, always (docs/spec/31 CA3).
-        if m.isAgent { return "\(ModelPicker.providerTag(m)) · \(name)" }
-        return Set(engine.models.map(\.provider)).subtracting(["faux"]).count > 1 ? "\(name) · \(ModelPicker.providerTag(m))" : name
+        return m.isAgent || Set(engine.models.map(\.provider)).subtracting(["faux"]).count > 1 ? "\(name) · \(ModelPicker.providerTag(m))" : name
+    }
+}
+
+/// A model as the composer names it: the terminal glyph before a coding agent's (docs/spec/31), then ModelChip.label.
+struct ModelLabel: View {
+    let model: ModelInfo
+    let engine: EngineController
+
+    var body: some View {
+        HStack(spacing: 4) {
+            if model.isAgent { AgentGlyph(size: 11) }
+            Text(ModelChip.label(model, engine: engine))
+        }
+    }
+}
+
+/// The mark of a coding agent (Claude Code): in the composer, the picker and Settings › Models.
+struct AgentGlyph: View {
+    var size: CGFloat = 12
+    var body: some View {
+        Image(systemName: "apple.terminal").font(.system(size: size, weight: .regular)).foregroundStyle(Color.dsFg2)
     }
 }
 

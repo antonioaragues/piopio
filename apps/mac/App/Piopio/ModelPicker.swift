@@ -5,7 +5,10 @@ import SwiftUI
 /// The model picker (docs/design/grey 11f): a search field, a group per provider, one plain line for each model, ✓ on the
 /// current one, whatever the caller adds (Thinking), and Manage providers. Recently used models lead their group; batch
 /// and alias variants stay folded until you search. Searching also matches "free", "vision" and "reasoning".
-/// Keyboard: type to search, ↑↓ to move, ↩ to pick, ⌘↩ to pick and make it the default for `role`.
+/// With coding agents (docs/spec/31, docs/design/agent-runtimes/picker.html) the list has two parts, Models then Agents:
+/// one row per agent ("Claude Code", "Opus 5.5 · Pro plan"), its models in a menu at its side (›, or →), and the models
+/// that match a search under its row.
+/// Keyboard: type to search, ↑↓ to move, → to open an agent's models, ↩ to pick, ⌘↩ to pick and make it the default for `role`.
 struct ModelPicker: View {
     let engine: EngineController
     let selected: ModelRef?
@@ -15,11 +18,10 @@ struct ModelPicker: View {
     /// Coding agents' models (Claude Code runs the whole conversation, docs/spec/31): only where a conversation starts or
     /// continues (the composer, start pages, the Build and chat defaults), not for agents, Quick Chat or background work.
     var agents = false
-    /// A conversation with messages can't move between Piopio's agent and a coding agent yet (CA7): the other kind's
-    /// rows say so and can't be picked.
-    var keepRunner = false
     let onPick: (ModelRef) -> Void
     @State private var query = ""
+    /// The agent whose models are open at its side.
+    @State private var agentMenu: String?
     @State private var showVariants = false
     @State private var highlighted: String?
     @FocusState private var searching: Bool
@@ -29,7 +31,7 @@ struct ModelPicker: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            TextField("Search models", text: $query)
+            TextField(hasAgents ? "Search models and agents" : "Search models", text: $query)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13.5))
                 .focused($searching)
@@ -43,7 +45,7 @@ struct ModelPicker: View {
             }
             Rectangle().fill(Color.dsLine).frame(height: 0.5)
             HStack {
-                Button("Manage providers") {
+                Button(hasAgents ? "Manage providers and agents" : "Manage providers") {
                     UserDefaults.standard.set("Models", forKey: "settingsSection")
                     WindowOpener.shared.openSettings?()
                 }
@@ -58,11 +60,18 @@ struct ModelPicker: View {
         .background(Color.dsCard)
         .onAppear {
             searching = true
-            highlighted = keys.first { $0.hasSuffix("|\(selected?.provider ?? "")/\(selected?.id ?? "")") } ?? keys.first
+            // Captures: PIOPIO_DEMO_MODEL_QUERY types a search.
+            if let q = ProcessInfo.processInfo.environment["PIOPIO_DEMO_MODEL_QUERY"] { query = q }
+            highlighted = keys.first { $0.hasSuffix("|\(selected?.provider ?? "")/\(selected?.id ?? "")") } ?? keys.first { $0 == "agent|\(selected?.provider ?? "")" } ?? keys.first
         }
         .onChange(of: query) { _, _ in highlighted = keys.first }
         .onKeyPress(.downArrow) { move(1); return .handled }
         .onKeyPress(.upArrow) { move(-1); return .handled }
+        .onKeyPress(.rightArrow) {
+            guard let key = highlighted, key.hasPrefix("agent|") else { return .ignored }
+            agentMenu = String(key.dropFirst("agent|".count))
+            return .handled
+        }
         .onKeyPress(.return, phases: .down) { press in
             guard let model = model(for: highlighted) else { return .ignored }
             if press.modifiers.contains(.command) { engine.setModel(model.ref, for: role) }
@@ -75,12 +84,21 @@ struct ModelPicker: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 1) {
+                    if hasAgents, !sections.isEmpty { part("Models", "Piopio's agent runs them") }
                     ForEach(sections) { section in
                         Text(section.title).font(.system(size: 12)).foregroundStyle(Color.dsFg3)
                             .padding(.horizontal, 10).padding(.top, 8).padding(.bottom, 3)
                         ForEach(section.models) { model in row(model, in: section.id) }
                     }
-                    if sections.isEmpty {
+                    if !agentGroups.isEmpty {
+                        if !sections.isEmpty { Rectangle().fill(Color.dsLine).frame(height: 0.5).padding(.horizontal, 4).padding(.vertical, 8) }
+                        part("Agents", "run the whole conversation")
+                        ForEach(agentGroups) { group in
+                            agentRow(group)
+                            if !query.isEmpty { ForEach(group.models) { model in row(model, in: "agent:\(group.id)", indented: true) } }
+                        }
+                    }
+                    if sections.isEmpty && agentGroups.isEmpty {
                         Text(engine.models.isEmpty ? "Loading models…" : "No models match.")
                             .font(.system(size: 13)).foregroundStyle(Color.dsFg3)
                             .frame(maxWidth: .infinity).padding(.top, 60)
@@ -100,31 +118,87 @@ struct ModelPicker: View {
         }
     }
 
-    private func row(_ model: ModelInfo, in section: String) -> some View {
+    private func row(_ model: ModelInfo, in section: String, indented: Bool = false) -> some View {
         let key = "\(section)|\(model.provider)/\(model.id)"
         let isSelected = selected?.provider == model.provider && selected?.id == model.id
-        let blocked = isBlocked(model)
         return Button { pick(model) } label: {
             HStack(spacing: 8) {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(Self.shortName(model)).font(.system(size: 13)).foregroundStyle(Color.dsFg).lineLimit(1)
-                    Text(blocked ? "Start a new conversation to switch" : line(model)).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1)
+                    if !indented { Text(line(model)).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1) }
                 }
                 Spacer(minLength: 8)
                 if isSelected { Image(systemName: "checkmark").font(.system(size: 11, weight: .medium)).foregroundStyle(Color.dsFg2) }
             }
-            .padding(.horizontal, 10)
-            .frame(height: 42)
+            .padding(.leading, indented ? 46 : 10).padding(.trailing, 10)
+            .frame(height: indented ? 34 : 42)
             .background(isSelected || highlighted == key ? Color.dsChip : .clear, in: RoundedRectangle(cornerRadius: DS.Radius.row, style: .continuous))
             .contentShape(Rectangle())
-            .opacity(blocked ? 0.5 : 1)
         }
         .buttonStyle(.plain)
-        .disabled(blocked)
         .id(key)
         .help("\(model.id)\n\(Self.price(model)) per million tokens, input / output · \(Self.context(model)) context")
         .onHover { if $0 { highlighted = key } }
         .contextMenu { Button("Set as Default for \(Self.roleName(role))") { engine.setModel(model.ref, for: role) } }
+    }
+
+    /// "Models · Piopio's agent runs them", "Agents · run the whole conversation".
+    private func part(_ title: String, _ hint: String) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title).font(.system(size: 12.5, weight: .semibold)).foregroundStyle(Color.dsFg)
+            Spacer()
+            Text(hint).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
+        }
+        .padding(.horizontal, 10).padding(.top, 8).padding(.bottom, 2)
+    }
+
+    /// One row per coding agent: what it will run (the model you chose, else the last you used in it, else its first),
+    /// and the plan. Its models open at its side.
+    private func agentRow(_ group: AgentGroup) -> some View {
+        let key = "agent|\(group.id)"
+        let chosen = chosenModel(group)
+        let isSelected = selected?.provider == group.id
+        return HStack(spacing: 0) {
+            Button { pick(chosen) } label: {
+                HStack(spacing: 10) {
+                    RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Color(nsColor: DS.bubble)).frame(width: 26, height: 26)
+                        .overlay(AgentGlyph(size: 12))
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(Self.providerTag(chosen)).font(.system(size: 13)).foregroundStyle(Color.dsFg).lineLimit(1)
+                        Text(query.isEmpty ? [Self.shortName(chosen), Self.planLabel(chosen)].compactMap { $0 }.joined(separator: " · ") : (Self.planLabel(chosen) ?? ""))
+                            .font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1)
+                    }
+                    Spacer(minLength: 8)
+                    if isSelected { Image(systemName: "checkmark").font(.system(size: 11, weight: .medium)).foregroundStyle(Color.dsFg2) }
+                }
+                .padding(.leading, 10)
+                .frame(height: 46)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            Button { agentMenu = group.id } label: {
+                Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.dsFg3)
+                    .frame(width: 28, height: 46).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Its models")
+            .popover(isPresented: Binding(get: { agentMenu == group.id }, set: { if !$0 { agentMenu = nil } }), arrowEdge: .trailing) {
+                AgentModelsMenu(group: group, selected: selected) { model in
+                    agentMenu = nil
+                    pick(model)
+                }
+            }
+        }
+        .background(isSelected || highlighted == key ? Color.dsChip : .clear, in: RoundedRectangle(cornerRadius: DS.Radius.row, style: .continuous))
+        .id(key)
+        .help("\(Self.providerTag(chosen)) runs the whole conversation with its own tools, settings and MCP servers, on your plan.")
+        .onHover { if $0 { highlighted = key } }
+    }
+
+    private func chosenModel(_ group: AgentGroup) -> ModelInfo {
+        if let selected, selected.provider == group.id, let m = group.all.first(where: { $0.ref == selected }) { return m }
+        if let last = recent.first(where: { $0.hasPrefix("\(group.id)/") }), let m = group.all.first(where: { "\($0.provider)/\($0.id)" == last }) { return m }
+        return group.all[0]
     }
 
     /// One plain line: who makes it and what it's like, not its specs. "Anthropic · premium, reads images · default".
@@ -147,13 +221,31 @@ struct ModelPicker: View {
 
     // MARK: Data
 
-    /// The selected model runs in a coding agent.
-    private var selectedIsAgent: Bool {
-        guard let selected else { return false }
-        return engine.models.first { $0.ref == selected }?.isAgent ?? (selected.provider == "claude-code")
+    struct AgentGroup: Identifiable {
+        let id: String
+        /// Every model it offers, in its own order.
+        let all: [ModelInfo]
+        /// The ones that match the search (all of them when not searching).
+        let models: [ModelInfo]
     }
 
-    private func isBlocked(_ m: ModelInfo) -> Bool { keepRunner && selected != nil && m.isAgent != selectedIsAgent }
+    private var hasAgents: Bool { agents && engine.models.contains(where: \.isAgent) }
+
+    /// Coding agents, one per provider, in the engine's order; while searching, those whose name or a model matches.
+    private var agentGroups: [AgentGroup] {
+        guard agents else { return [] }
+        let all = engine.models.filter(\.isAgent)
+        let matched = Set(matching.filter(\.isAgent).map(\.id))
+        var order: [String] = []
+        for m in all where !order.contains(m.provider) { order.append(m.provider) }
+        return order.compactMap { provider in
+            let models = all.filter { $0.provider == provider }
+            let hits = models.filter { matched.contains($0.id) }
+            let nameHit = query.isEmpty || query.lowercased().split(separator: " ").allSatisfy { Self.providerTag(models[0]).lowercased().contains($0) }
+            if !query.isEmpty, hits.isEmpty, !nameHit { return nil }
+            return AgentGroup(id: provider, all: models, models: query.isEmpty ? models : hits)
+        }
+    }
 
     private var matching: [ModelInfo] {
         let terms = query.lowercased().split(separator: " ")
@@ -169,11 +261,13 @@ struct ModelPicker: View {
 
     /// Batch and alias variants stay folded unless searching or asked for.
     private var foldsVariants: Bool { !showVariants && query.isEmpty }
-    private var hiddenVariants: Int { matching.filter(Self.isVariant).count }
+    private var hiddenVariants: Int { matching.filter { !$0.isAgent && Self.isVariant($0) }.count }
 
     /// A group per provider, OpenRouter first. In a group: what you used lately, then the known makers, then the rest.
     private var sections: [Section] {
-        let listed = foldsVariants ? matching.filter { !Self.isVariant($0) || ($0.provider == selected?.provider && $0.id == selected?.id) } : matching
+        // Coding agents' models are in their own part (agentGroups).
+        let models = matching.filter { !$0.isAgent }
+        let listed = foldsVariants ? models.filter { !Self.isVariant($0) || ($0.provider == selected?.provider && $0.id == selected?.id) } : models
         let recents = (selected.map { ["\($0.provider)/\($0.id)"] } ?? []) + recent
         let order = ["openrouter", "faux", "openai", "openai-api"]
         let groups = Dictionary(grouping: listed, by: \.provider)
@@ -201,10 +295,13 @@ struct ModelPicker: View {
     /// Row keys in display order (keyboard navigation).
     private var keys: [String] {
         sections.flatMap { s in s.models.map { "\(s.id)|\($0.provider)/\($0.id)" } }
+            + agentGroups.flatMap { g in ["agent|\(g.id)"] + (query.isEmpty ? [] : g.models.map { "agent:\(g.id)|\($0.provider)/\($0.id)" }) }
     }
 
     private func model(for key: String?) -> ModelInfo? {
-        guard let key, let ref = key.split(separator: "|", maxSplits: 1).last else { return nil }
+        guard let key else { return nil }
+        if key.hasPrefix("agent|") { return agentGroups.first { "agent|\($0.id)" == key }.map(chosenModel) }
+        guard let ref = key.split(separator: "|", maxSplits: 1).last else { return nil }
         return engine.models.first { "\($0.provider)/\($0.id)" == ref }
     }
 
@@ -243,6 +340,13 @@ struct ModelPicker: View {
         case "openrouter": "OpenRouter"
         default: m.providerName ?? m.provider.capitalized
         }
+    }
+
+    /// "Claude Pro plan" → "Pro plan" (the agent's row already names it).
+    static func planLabel(_ m: ModelInfo) -> String? {
+        guard let billing = m.billing else { return nil }
+        let words = billing.split(separator: " ")
+        return words.count > 2 && billing.hasSuffix(" plan") ? words.dropFirst().joined(separator: " ") : billing
     }
 
     static func shortName(_ m: ModelInfo) -> String {
@@ -298,5 +402,48 @@ struct ModelPicker: View {
     static func context(_ m: ModelInfo) -> String {
         if m.contextWindow <= 0 { return "unknown" }
         return m.contextWindow >= 1_000_000 ? String(format: "%gM", (m.contextWindow / 100_000).rounded() / 10) : "\(Int(m.contextWindow / 1000))K"
+    }
+}
+
+/// A coding agent's models, at the side of its row (docs/design/agent-runtimes/picker.html): the current ones first, the
+/// older ones folded.
+private struct AgentModelsMenu: View {
+    let group: ModelPicker.AgentGroup
+    let selected: ModelRef?
+    let onPick: (ModelInfo) -> Void
+    @State private var showOlder = false
+
+    /// Claude Code lists its current models first (Opus, Sonnet, Fable, Haiku), then older ones.
+    private var current: [ModelInfo] { Array(group.all.prefix(4)) }
+    private var older: [ModelInfo] { Array(group.all.dropFirst(4)) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            HStack(spacing: 5) {
+                AgentGlyph(size: 11)
+                Text(ModelPicker.providerTag(group.all[0])).font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+            }
+            .padding(.horizontal, 10).padding(.top, 6).padding(.bottom, 3)
+            ForEach(showOlder || older.contains(where: { $0.ref == selected }) ? group.all : current) { model in
+                Button { onPick(model) } label: {
+                    HStack {
+                        Text(ModelPicker.shortName(model)).font(.system(size: 13)).foregroundStyle(Color.dsFg)
+                        Spacer(minLength: 12)
+                        if model.ref == selected { Image(systemName: "checkmark").font(.system(size: 11, weight: .medium)).foregroundStyle(Color.dsFg2) }
+                    }
+                    .padding(.horizontal, 10).frame(height: 30)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(HoverRowStyle())
+            }
+            if !older.isEmpty, !showOlder, !older.contains(where: { $0.ref == selected }) {
+                Button("Show \(older.count) older model\(older.count == 1 ? "" : "s")") { showOlder = true }
+                    .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Color.dsFg2)
+                    .padding(.horizontal, 10).padding(.vertical, 6)
+            }
+        }
+        .padding(6)
+        .frame(width: 200)
+        .background(Color.dsCard)
     }
 }

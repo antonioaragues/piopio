@@ -356,7 +356,9 @@ private struct CodingAgentRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            ProviderGlyph(provider: provider, size: 34)
+            // The agent glyph, as in the picker and the composer (docs/spec/31).
+            RoundedRectangle(cornerRadius: 9, style: .continuous).fill(Color(nsColor: DS.bubble)).frame(width: 34, height: 34)
+                .overlay(AgentGlyph(size: 15))
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(provider.name).font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.dsFg)

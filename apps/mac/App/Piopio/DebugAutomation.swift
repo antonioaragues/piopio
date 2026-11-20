@@ -165,6 +165,10 @@ enum DebugAutomation {
                 // PIOPIO_DEMO_FOLLOWUP: a second message; PIOPIO_DEMO_EDIT: then edit it into this text.
                 if let followUp = env["PIOPIO_DEMO_FOLLOWUP"] {
                     await waitIdle(thread)
+                    // PIOPIO_DEMO_SWITCH_MODEL=provider/id: switch the conversation's model first (docs/spec/31 CA7).
+                    if let raw = env["PIOPIO_DEMO_SWITCH_MODEL"], let slash = raw.firstIndex(of: "/") {
+                        await thread.setModel(ModelRef(provider: String(raw[..<slash]), id: String(raw[raw.index(after: slash)...])))
+                    }
                     await thread.send(followUp)
                     if let edit = env["PIOPIO_DEMO_EDIT"] {
                         await waitIdle(thread)

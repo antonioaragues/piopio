@@ -1,7 +1,8 @@
 # 31 · Coding agents: Claude Code, Codex and Antigravity run a conversation
 
-Status: decided 2026-11-20 from a question by the user; phase A1 (Claude Code) built the same day (§10). Mockup:
-[docs/design/agent-runtimes/mockup.html](../design/agent-runtimes/mockup.html).
+Status: decided 2026-11-20 from a question by the user; phase A1 (Claude Code) and A2's switching built the same day
+(§10). Mockups: [mockup.html](../design/agent-runtimes/mockup.html) (the idea) and
+[picker.html](../design/agent-runtimes/picker.html) (the picker and chip as decided).
 
 **The question (the user, 2026-11-20):** can Piopio use my Gemini subscription? Then: if we add the coding agents as
 providers and pick one in the model picker, the composer should make clear that it's that agent running. Isn't that what
@@ -65,10 +66,10 @@ covered by Antigravity plans. So the Google agent is Antigravity CLI, phase A3.
   asked from that agent as a one-off question on its smallest model, so a Mac with only Claude Code works.
 - **CA6 Plan, not spending.** Usage is shown, but an agent's reported cost isn't counted as spending (as AP7 already does
   for Claude Code tasks). Its billing line is the plan ("Claude Pro plan").
-- **CA7 Switching between Piopio's agent and a coding agent** is allowed only before the first message in phase A1. From
-  A2 on, switching mid-conversation starts the new agent from a summary of the conversation, shown as a line in the
-  transcript ("Now running in Claude Code · it starts from a summary of the 14 messages above"). Switching models inside
-  the same agent works from A1.
+- **CA7 Switching between Piopio's agent and a coding agent** works at any point. The new runner starts from a summary of
+  the conversation, shown as a line in the transcript ("Now running in Claude Code · it starts from a summary of the 14
+  messages above"). Switching back before sending anything is an undo. Switching models inside the same agent keeps its
+  session.
 - **CA8 Piopio's own tools reach the agent through MCP** (phase A2): memory, connectors, the browser, computer use and
   earlier conversations, passed when the agent's session starts (an in-process MCP server for the Claude Agent SDK, the
   `mcpServers` of ACP's `session/new` for the others).
@@ -78,12 +79,16 @@ covered by Antigravity plans. So the Google agent is Antigravity CLI, phase A3.
 
 ## 5. What you see
 
-- **Model picker:** a section per agent, below the model providers, titled with the agent and its plan
-  ("Claude Code · Claude Pro plan"). Rows are the models the agent reports. In a conversation with messages on the other
-  kind of runtime, the agent's rows (or the providers' rows, in a conversation on an agent) say "Start a new
-  conversation to switch" until A2.
-- **Composer:** the selector reads "Claude Code · Opus 5.5"; the placeholder "Message Claude Code…"; approvals in the
-  tray as today. A signed-out or missing agent is a composer notice ("Claude Code is signed out · nothing was sent",
+Decided 2026-11-20 with the user on [picker.html](../design/agent-runtimes/picker.html):
+
+- **Model picker:** one list in two parts. **Models** ("Piopio's agent runs them"), grouped by provider as before;
+  **Agents** ("run the whole conversation"), one row per agent: the terminal glyph, its name, and "Opus 5.5 · Pro plan"
+  (the model you chose in it, else the last you used, else its first). Clicking the row picks it; › (or →) opens its
+  models at its side, the current four first and older ones folded. While searching, its matching models show under its
+  row. No Models | Agents switch: with one row per agent it would hide a single line. The footer reads "Manage providers
+  and agents".
+- **Composer:** the chip always reads "model · who runs it" ("Haiku 5.5 · OpenRouter", "Opus 5.5 · Claude Code"), with
+  the terminal glyph before an agent's model; the placeholder "Message Claude Code…"; approvals in the tray as today. A signed-out or missing agent is a composer notice ("Claude Code is signed out · nothing was sent",
   with **Open Terminal**).
 - **Settings › Models:** a section "Agents on this Mac" with each agent found: version, sign-in state and plan, where it
   is. An agent that isn't installed says how to install it. Agents can be set as the default for Build and for chats.
@@ -122,6 +127,25 @@ covered by Antigravity plans. So the Google agent is Antigravity CLI, phase A3.
   asking (spec 29).
 - Notebooks' heading organizer is Piopio's own: does it keep running on a model while the conversation runs on an
   agent?
+
+## 10. As built (2026-11-20)
+
+- **A1:** `coding-agents.ts` (detection through `claude --version` and `claude auth status`, models from the SDK's
+  `supportedModels()`, one-off answers), `runtimes/claude-code.ts` (the conversation), `runtimes/claude-code-fake.ts`
+  (PIOPIO_FAKE_CLAUDE_CODE=1 for tests and captures). `@anthropic-ai/claude-agent-sdk` 0.3.319, matching CLI 2.1.319.
+  Tried with the user's real Claude Code (Pro plan, Haiku): an approval in Ask mode, the file written once allowed, and
+  the same Claude Code session continued after an engine restart.
+- **Switching (CA7):** a conversation keeps its earlier parts as segments in the catalog (`runtimes/segments.ts`), each
+  with its own history file; the transcript shows them in order with the switch line between them. The summary goes
+  with the first message after a switch as a text attachment, "Conversation so far.md" (who said what, tool calls as one
+  line each, the latest 16,000 characters). Folder sync knows earlier parts' pi files, so they don't show up as sessions
+  of their own; deleting a conversation removes every part.
+- **App:** the two-part picker, the chip with the glyph, the toolbar's "runs in Claude Code", Settings › Models'
+  "Agents on this Mac". Captures: `PIOPIO_FAKE_CLAUDE_CODE=1`, `PIOPIO_DEMO_PROMPT_MODEL`, `PIOPIO_DEMO_SWITCH_MODEL`,
+  `PIOPIO_DEMO_MODEL_QUERY`.
+- **Not yet:** Piopio's tools through MCP (CA8, the rest of A2); an Undo link on the switch line (picking the previous
+  model again before sending does it); the thinking level as Claude Code's effort mid-session (it applies from the next
+  session).
 
 ## 9. Not verified
 

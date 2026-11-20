@@ -534,7 +534,9 @@ struct AskBox: View {
                     }
                     Spacer(minLength: 6)
                     if agent == nil {
-                        Button { showModels = true } label: { Text(modelLabel) }
+                        Button { showModels = true } label: {
+                            if let m = engine.model(model ?? defaultModel) { ModelLabel(model: m, engine: engine) } else { Text(modelLabel) }
+                        }
                             .buttonStyle(ComposerChipStyle(muted: true))
                             .popover(isPresented: $showModels, arrowEdge: .bottom) {
                                 ModelPicker(engine: engine, selected: model ?? defaultModel, role: project != nil ? .build : .chat, agents: true) { m in model = m; showModels = false }

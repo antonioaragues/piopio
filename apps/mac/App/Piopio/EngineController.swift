@@ -1147,7 +1147,8 @@ final class EngineController {
     func loadModels() async throws {
         guard let client else { return }
         let list = try await client.call("models.list", ModelsListParams(), as: ModelsListResult.self)
-        models = list.models.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        // A coding agent's models keep its own order (Opus first, docs/spec/31); the rest by name.
+        models = list.models.filter { !$0.isAgent }.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending } + list.models.filter(\.isAgent)
         ModelNames.set(models.map { ($0.provider, $0.id, ModelChip.short($0).replacingOccurrences(of: "Claude ", with: "")) })
         defaultModel = list.defaultModel
     }
