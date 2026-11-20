@@ -38,7 +38,10 @@ import Testing
     r.openProposals = ["c3": .distantFuture]
     #expect(r.render(propose).string.contains("Start"))
     r.keptHere = ["c2"]
-    #expect(r.render(offer).string.contains("Doing it here · Dating app"))
+    // Answered here: the question and your answer in a box, as Claude keeps them.
+    let kept = r.render(offer)
+    #expect(kept.string.contains("Dating app") && kept.string.contains("Do it here"))
+    #expect(kept.attribute(.piopioCard, at: 0, effectiveRange: nil) as? String == CardStyle.link.rawValue)
     r.keptHere = []
     r.sides = [SideInfo(id: "thr_1", title: "Dating app", state: "queued", from: "c2")]
     guard case .side(let s)? = sideOfferModel(r.render(offer))?.content else { Issue.record("no side row"); return }
@@ -52,6 +55,28 @@ import Testing
     let other = TimelineItem.user(UserItem(id: "u2", at: "", text: "Something else"))
     #expect(TranscriptDocument.keptHere([offer, here, later, other]) == ["c1"])
     #expect(TranscriptDocument.keptHere([offer, other, here]).isEmpty)
+    #expect(TranscriptDocument.keptHerePairs([offer, here, later, other]).map(\.reply) == ["u1"])
+    // The offer's box shows the answer, so the "Do it here." bubble doesn't repeat it.
+    var r = ItemRenderer()
+    #expect(r.render(here).string.contains("Do it here."))
+    r.hereReplies = ["u1"]
+    #expect(r.render(here).length == 0)
+    #expect(r.render(other).string.contains("Something else"))
+}
+
+@Test func anAnsweredQuestionKeepsTheQuestionAndTheAnswerInABox() {
+    var item = ToolItem(id: "t", at: "", callId: "q", tool: "ask_user", args: .object(["question": .string("Should I build phase 1?")]), status: .done,
+                        output: "The user answered: Yes, build it", details: .object(["answer": .string("Yes, build it")]))
+    let r = ItemRenderer()
+    let box = r.render(.tool(item))
+    #expect(box.string.contains("Should I build phase 1?") && box.string.contains("Yes, build it"))
+    #expect(box.attribute(.piopioCard, at: 0, effectiveRange: nil) as? String == CardStyle.link.rawValue)
+    item.status = .interrupted
+    item.details = nil
+    item.output = nil
+    #expect(r.render(.tool(item)).string.contains("Stopped before you answered"))
+    item.status = .running
+    #expect(r.render(.tool(item)).length == 0)
 }
 
 @Test func aSideWaitingOnYouIsACardOnlyWhileItStillWaits() {

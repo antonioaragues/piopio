@@ -22,7 +22,11 @@ struct ThreadView: View {
 
     private var browserOpen: Bool { BrowserCenter.shared.openPanels.contains(summary.ref.id) }
     /// One panel on the right: the Browser covers the Summary while it's open, and the Summary comes back when it closes.
-    private var summaryShown: Bool { (showSummary || Self.demoSummary) && !browserOpen }
+    private var summaryShown: Bool { (showSummary || Self.demoSummary) && !browserOpen && !summaryAutoHidden }
+    /// The Summary stepped aside because the window got too narrow: back when it widens, or when you open it.
+    @State private var summaryAutoHidden = false
+    /// The chat keeps at least this much beside the Summary.
+    static let narrowChat = 252 + CardLayout.margin + 460
     @State private var conversationWidth: Double = 1200
     /// The Browser's width as you last dragged it (every chat shares it).
     @AppStorage("browserWidth") private var browserPreferred = 440.0
@@ -54,7 +58,11 @@ struct ThreadView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .onGeometryChange(for: Double.self) { $0.size.width } action: { conversationWidth = $0 }
+        .onGeometryChange(for: Double.self) { $0.size.width } action: { width in
+            let wasNarrow = conversationWidth < Self.narrowChat, narrow = width < Self.narrowChat
+            conversationWidth = width
+            if narrow != wasNarrow { withAnimation(.easeOut(duration: 0.15)) { summaryAutoHidden = narrow } }
+        }
         .ownsContentCard()
     }
 
@@ -121,7 +129,8 @@ struct ThreadView: View {
                         help: summaryShown ? "Hide the summary" : "Summary: model, web search, connectors and MCP, files and sources") {
                 withAnimation(.easeOut(duration: 0.15)) {
                     // With the Browser in the panel, Summary swaps it out rather than hiding a column you can't see.
-                    if browserOpen { BrowserCenter.shared.openPanels.remove(summary.ref.id); showSummary = true } else { showSummary.toggle() }
+                    if browserOpen { BrowserCenter.shared.openPanels.remove(summary.ref.id); showSummary = true } else { showSummary = !summaryShown }
+                    summaryAutoHidden = false
                 }
             }
             ToolbarIcon(symbol: "globe", label: "Browser", on: browserOpen,

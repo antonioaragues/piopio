@@ -25,6 +25,9 @@ sidebar and the content with a **card** that floats over the window. Built on 20
 - **Settings window**: the same: the section list on the window, the pane in a card.
 - **Reading column and composer**: 720 wide (`DS.column`; 560 until 2026-11-20, too narrow next to Claude's ~768), answers 14pt, 32pt sides; the composer is white with a 1pt ring and a
   soft shadow (0 4 14, 5%). Your bubble is #EDEDEC, radius 14, 14×10 padding.
+- **Narrow windows** (2026-11-20): below 860pt the sidebar steps aside, and a conversation's right panel (Summary,
+  Files, Browser) steps aside when the conversation would get under 460pt. Both come back when the window widens; the
+  toolbar toggles still open them, and that choice isn't saved over yours. Code: `RootView`, `BuildSessionView`, `ThreadView`.
 
 ## Deliberate differences
 

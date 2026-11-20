@@ -390,17 +390,38 @@ public final class DisclosureCard: @unchecked Sendable {
         let header = kind == .tool ? Self.collapsedHeight : lineHeight
         guard expanded, !isEmpty else { return header }
         if case .cards(let cards) = content {
+            if let only = soleCommand { return header + 4 + only.bodyHeight(width: width) }
             return header + 2 + cards.reduce(0) { $0 + $1.logHeight(width: width) + Self.logSpacing }
         }
+        if case .diff = content { return Self.collapsedHeight + bodyHeight(width: width) }
+        // A thought on its own: measured as it's drawn (13pt, 2pt line spacing, 14 in from the rule, 4 above and below),
+        // so the rule under it ends with its text.
+        if kind == .thinking {
+            let text = Self.thoughtHeight(body.trimmingCharacters(in: .whitespacesAndNewlines), width: width - Self.thoughtInset)
+            return header + min(text + 8, 360)
+        }
+        return header + bodyHeight(width: width)
+    }
+
+    /// The open body alone, under the header: diff rows, or text and output (long ones scroll inside the card).
+    func bodyHeight(width: CGFloat) -> CGFloat {
+        measuredWidth = width
         if case .diff = content {
             let (lines, hidden) = visibleDiff
-            return Self.collapsedHeight + CGFloat(lines.count) * Self.diffRowHeight + (hidden > 0 ? 24 : 0) + 10
+            return CGFloat(lines.count) * Self.diffRowHeight + (hidden > 0 ? 24 : 0) + 10
         }
         let font: NSFont = kind == .tool ? .monospacedSystemFont(ofSize: 11.5, weight: .regular) : .systemFont(ofSize: 12.5)
         let text = NSAttributedString(string: body, attributes: [.font: font])
         let h = text.boundingRect(with: NSSize(width: max(50, width - 28), height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin, .usesFontLeading]).height
-        // Long outputs scroll inside the card.
-        return header + min(ceil(h) + 20, 360)
+        return min(ceil(h) + 20, 360)
+    }
+
+    /// An activity whose one step is a command or script: the line already names it ("Running the tests…"), so it
+    /// opens straight to the command and its output rather than to a row that says the same thing again.
+    var soleCommand: DisclosureCard? {
+        guard kind == .activity, case .cards(let cards) = content, cards.count == 1, let only = cards.first,
+              only.kind == .tool, only.glyph == "apple.terminal", !only.isEmpty else { return nil }
+        return only
     }
 }
 
@@ -409,8 +430,10 @@ extension DisclosureCard {
     static let logIndent: CGFloat = 26
     static let logSpacing: CGFloat = 2
     static var thoughtFont: NSFont { .systemFont(ofSize: 13) }
+    /// A thought on its own sits this far in from its rule.
+    static let thoughtInset: CGFloat = 14
 
-    private static func thoughtHeight(_ text: String, width: CGFloat) -> CGFloat {
+    fileprivate static func thoughtHeight(_ text: String, width: CGFloat) -> CGFloat {
         let p = NSMutableParagraphStyle()
         p.lineSpacing = 2
         let s = NSAttributedString(string: text, attributes: [.font: thoughtFont, .paragraphStyle: p])
@@ -655,6 +678,11 @@ struct DisclosureCardView: View {
             }
             if card.expanded {
                 switch card.content {
+                case .cards where card.soleCommand != nil:
+                    // One command: its command and output, nothing repeating the line.
+                    if let only = card.soleCommand {
+                        DisclosureCardView(card: only, relay: { [card] in card.onToggle?(card) }).expandedBody.padding(.top, 4)
+                    }
                 case .cards(let cards):
                     // The log (docs/design/activity): steps in the order they happened, on a thin rail.
                     VStack(alignment: .leading, spacing: DisclosureCard.logSpacing) {
@@ -671,8 +699,8 @@ struct DisclosureCardView: View {
                 case .text(let text), .terminal(let text):
                     // A thought on its own: small and grey, under a hairline rule.
                     ScrollView {
-                        Text(text).font(.system(size: 13)).lineSpacing(2).foregroundStyle(Color(nsColor: DS.fg3)).textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading).padding(.leading, 14).padding(.vertical, 4)
+                        Text(text.trimmingCharacters(in: .whitespacesAndNewlines)).font(.system(size: 13)).lineSpacing(2).foregroundStyle(Color(nsColor: DS.fg3)).textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading).padding(.leading, DisclosureCard.thoughtInset).padding(.vertical, 4)
                     }
                     .overlay(alignment: .leading) { Rectangle().fill(Color(nsColor: DS.line)).frame(width: 1) }
                 case .diff, .plan: EmptyView()

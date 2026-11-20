@@ -18,6 +18,8 @@ What a turn did before answering (thinking, reads, commands, edits) is one quiet
   language; old calls without one show "Running a command/script" or "Ran a command/script". Opened: the exact
   command or script, then its output. Commands retain Copy; a `cd` outside the project shows "in <folder>" on the
   right. Approval rows still identify the actual command.
+- **One command alone** (no thought, no other step): the line already names it ("Running the tests…"), so it opens
+  straight to `$ <command>` and its output, with no log row repeating the line (2026-11-20).
 - **External tools** show readable operation and server names. The original tool name, arguments and output are
   available when opened.
 

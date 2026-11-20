@@ -15,6 +15,11 @@ struct RootView: View {
     /// The page on screen lays out its own content cards (a conversation beside a flat panel).
     @State private var pageOwnsCard = false
     @State private var availableWidth = 1280.0
+    /// Hidden because the window got too narrow for it (not your choice): it comes back when the window widens.
+    @State private var sidebarAutoHidden = false
+    /// Below this the sidebar steps aside so the conversation keeps a readable width.
+    static let narrowWindow = 860.0
+    private var sidebarHidden: Bool { sidebarCollapsed || sidebarAutoHidden }
     @State private var sidebarDragStart: Double?
     @State private var showOnboarding = false
     /// Where you were before a start page, for Esc.
@@ -35,7 +40,7 @@ struct RootView: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            if !sidebarCollapsed {
+            if !sidebarHidden {
             // On the window itself, with no line: the content card beside it does the separating.
             MainSidebar(engine: engine, item: itemBinding)
                 .frame(width: min(sidebarWidth, max(200, availableWidth * 0.28)))
@@ -70,18 +75,24 @@ struct RootView: View {
                 .onPreferenceChange(OwnsContentCardKey.self) { pageOwnsCard = $0 }
             }
             .padding([.top, .bottom, .trailing], CardLayout.margin)
-            .padding(.leading, sidebarCollapsed ? CardLayout.margin : 0)
+            .padding(.leading, sidebarHidden ? CardLayout.margin : 0)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(Color.dsSide)
         .overlay(alignment: .topLeading) {
             // In full screen there are no traffic lights to make room for.
-            if sidebarCollapsed { SidebarToggle().frame(height: Shell.barHeight).padding(.leading, fullScreen ? 14 : 78) }
+            if sidebarHidden { SidebarToggle().frame(height: Shell.barHeight).padding(.leading, fullScreen ? 14 : 78) }
         }
         .background { TrafficLightsPosition() }
         .modifier(ShellEvents(fullScreen: $fullScreen, toggleSidebar: toggleSidebar))
-        .environment(\.sidebarControl, SidebarControl(collapsed: sidebarCollapsed, fullScreen: fullScreen, toggle: toggleSidebar))
-        .onGeometryChange(for: Double.self) { $0.size.width } action: { availableWidth = $0 }
+        .environment(\.sidebarControl, SidebarControl(collapsed: sidebarHidden, fullScreen: fullScreen, toggle: toggleSidebar))
+        .onGeometryChange(for: Double.self) { $0.size.width } action: { width in
+            // Crossing the line hides or brings back the sidebar; a toggle in between is yours and stays.
+            let wasNarrow = availableWidth < Self.narrowWindow, narrow = width < Self.narrowWindow
+            availableWidth = width
+            guard narrow != wasNarrow else { return }
+            withAnimation(.easeOut(duration: 0.18)) { sidebarAutoHidden = narrow }
+        }
         .ignoresSafeArea(.container, edges: .top)
         .overlay(alignment: .top) {
             if let mode = palette, engine.status == .ready {
@@ -343,7 +354,10 @@ struct RootView: View {
     }
 
     private func toggleSidebar() {
-        withAnimation(.easeOut(duration: 0.18)) { sidebarCollapsed.toggle() }
+        withAnimation(.easeOut(duration: 0.18)) {
+            // The toggle does what you see: shows a hidden sidebar (also one the narrow window hid), hides a shown one.
+            if sidebarHidden { sidebarCollapsed = false; sidebarAutoHidden = false } else { sidebarCollapsed = true }
+        }
     }
 
     /// ⌘O and Open Folder: adds the folder as a project (once) and opens its new conversation page.

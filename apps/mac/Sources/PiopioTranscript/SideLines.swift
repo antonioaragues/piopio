@@ -44,12 +44,15 @@ extension ItemRenderer {
     }
 
     /// An offer (side_offer, docs/design/side-conversations 1a): the card while it waits; the side's row once New
-    /// conversation started it; a grey line once you chose Do it here.
+    /// conversation started it; the question and your answer, boxed, once you chose Do it here.
     func sideOffer(_ t: ToolItem) -> NSAttributedString {
         let title = t.args?["title"]?.stringValue ?? ""
         if let s = side(from: t.callId) { return attachmentParagraph(SideOfferAttachment(model: SideOfferModel(.side(s))), spacing: 14) }
-        if keptHere.contains(t.callId) { return note("Doing it here · \(title)") }
         let project = t.args?["project"]?.stringValue ?? ""
+        if keptHere.contains(t.callId) {
+            return answeredCard(context: ["This looks like its own task", project.isEmpty ? nil : "in \(project)"].compactMap { $0 }.joined(separator: " · "),
+                                question: title, answer: "Do it here")
+        }
         let model = SideOfferModel(.offer(callId: t.callId, title: title, brief: t.args?["brief"]?.stringValue ?? "", project: project.isEmpty ? nil : project))
         return attachmentParagraph(SideOfferAttachment(model: model), spacing: 14)
     }

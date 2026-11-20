@@ -26,8 +26,10 @@ nonisolated struct ItemRenderer: Sendable {
     var sides: [SideInfo] = []
     /// Open proposals (side_propose call ids) and when each expires.
     var openProposals: [String: Date] = [:]
-    /// Offers (side_offer call ids) you answered with Do it here: a grey line instead of the card.
+    /// Offers (side_offer call ids) you answered with Do it here: the question and your answer instead of the card.
     var keptHere: Set<String> = []
+    /// Your "Do it here." messages that answered those offers: the offer's box shows the answer, so no bubble.
+    var hereReplies: Set<String> = []
     /// The automations that exist now (docs/spec/27); nil until the app says. A card for one that's gone reads
     /// "Removed".
     var automations: Set<String>?
@@ -87,6 +89,9 @@ nonisolated struct ItemRenderer: Sendable {
             let title = (routine ? "Routine · " : "Board · ") + first
             if rest.isEmpty { return note(title) }
             return thinkingCard(DisclosureCard(kind: .thinking, title: title, body: rest))
+        case .user(let u) where hereReplies.contains(u.id):
+            // "Do it here." answered an offer: its box above says so.
+            return NSAttributedString()
         case .user(let u):
             if compact { return NSAttributedString() }
             let out = NSMutableAttributedString()
@@ -661,18 +666,23 @@ nonisolated struct ItemRenderer: Sendable {
         if t.status == .running || t.status == .pendingApproval { return NSAttributedString() }
         let prefix = "The user answered: "
         let answer = t.details?["answer"]?.stringValue ?? t.output.flatMap { $0.hasPrefix(prefix) ? String($0.dropFirst(prefix.count)) : nil }
-        // Once answered, one grey line (docs/design/grey 11d); the question is in its tooltip.
-        let grey: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: DS.fg3, .toolTip: question]
+        // Once answered, the question and your answer in a box, as Claude keeps them.
+        return answeredCard(question: question, answer: answer ?? (t.status == .interrupted ? "Stopped before you answered" : "Not answered"))
+    }
+
+    /// A question once answered: a hairline box with what led to it in grey (if anything), the question, and your
+    /// answer in grey under it.
+    func answeredCard(context: String? = nil, question: String, answer: String) -> NSAttributedString {
+        let size: CGFloat = 13.5
         let m = NSMutableAttributedString()
-        if answer == "Skipped" {
-            m.append(NSAttributedString(string: "Skipped", attributes: grey))
-        } else if let answer {
-            m.append(NSAttributedString(string: "You chose ", attributes: grey))
-            m.append(NSAttributedString(string: answer, attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: DS.fg2, .toolTip: question]))
-        } else {
-            m.append(NSAttributedString(string: (t.status == .interrupted ? "Stopped before you answered: " : "Not answered: ") + question, attributes: grey))
+        if let context, !context.isEmpty {
+            m.append(NSAttributedString(string: context + lineSeparator, attributes: [.font: NSFont.systemFont(ofSize: 12.5), .foregroundColor: DS.fg3]))
         }
-        return line(m, paragraph(spacing: 14, before: 6))
+        let q = question.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "\n", with: lineSeparator)
+        m.append(Inline.ns(q, font: .systemFont(ofSize: size), color: DS.fg))
+        let a = answer.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "\n", with: lineSeparator)
+        m.append(NSAttributedString(string: lineSeparator + a, attributes: [.font: NSFont.systemFont(ofSize: size), .foregroundColor: DS.fg3]))
+        return card(m, .link, lineHeight: 1.5)
     }
 
     /// A grey line in the transcript (docs/design/grey 11h). Only something waiting on you gets the blue dot.

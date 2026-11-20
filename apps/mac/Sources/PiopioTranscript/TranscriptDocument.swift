@@ -224,7 +224,9 @@ public final class TranscriptDocument {
         prefetched = nil
         items = snapshot.items
         renderer.midTurn = Self.midTurn(items)
-        renderer.keptHere = Self.keptHere(items)
+        let kept = Self.keptHerePairs(items)
+        renderer.keptHere = Set(kept.map(\.offer))
+        renderer.hereReplies = Set(kept.map(\.reply))
         windowStart = max(0, items.count - windowSize)
         let window = Array(items[windowStart...])
         let renderer = self.renderer
@@ -399,14 +401,17 @@ public final class TranscriptDocument {
     }
 
     /// The offers you answered with Do it here: the engine sends "Do it here." as your next message (docs/spec/24 §1).
-    nonisolated static func keptHere(_ items: [TimelineItem]) -> Set<String> {
-        var out = Set<String>()
+    nonisolated static func keptHere(_ items: [TimelineItem]) -> Set<String> { Set(keptHerePairs(items).map(\.offer)) }
+
+    /// Each offer answered with Do it here, and the message that answered it.
+    nonisolated static func keptHerePairs(_ items: [TimelineItem]) -> [(offer: String, reply: String)] {
+        var out: [(offer: String, reply: String)] = []
         var offer: String?
         for item in items {
             switch item {
             case .tool(let t) where t.tool == "side_offer": offer = t.callId
             case .user(let u):
-                if let o = offer, u.text.trimmingCharacters(in: .whitespacesAndNewlines) == "Do it here." { out.insert(o) }
+                if let o = offer, u.text.trimmingCharacters(in: .whitespacesAndNewlines) == "Do it here." { out.append((o, u.id)) }
                 offer = nil
             default: break
             }
@@ -416,12 +421,16 @@ public final class TranscriptDocument {
 
     /// Once you choose Do it here, its card becomes a grey line.
     private func refreshKeptHere() {
-        let next = Self.keptHere(items)
-        guard next != renderer.keptHere else { return }
+        let pairs = Self.keptHerePairs(items)
+        let next = Set(pairs.map(\.offer)), replies = Set(pairs.map(\.reply))
+        guard next != renderer.keptHere || replies != renderer.hereReplies else { return }
         let changed = next.symmetricDifference(renderer.keptHere)
+        let changedReplies = replies.symmetricDifference(renderer.hereReplies)
         renderer.keptHere = next
+        renderer.hereReplies = replies
         for item in items {
             if case .tool(let t) = item, changed.contains(t.callId) { replace(item) }
+            if case .user(let u) = item, changedReplies.contains(u.id) { replace(item) }
         }
     }
 

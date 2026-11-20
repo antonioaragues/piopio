@@ -65,6 +65,13 @@ struct BuildSessionView: View {
     /// The right column (docs/design/session-panel): closed by default; opens on Summary the first time a turn changes
     /// files; your toggle is then kept per session.
     @State private var showInspector = false
+    /// Stepped aside because the window got too narrow (docs/design/card-layout): back when it widens, or when you open it.
+    @State private var panelAutoHidden = false
+    @State private var sessionWidth = 1200.0
+    /// The conversation keeps at least this much beside the panel.
+    static let minConversation = 460.0
+    private var panelShown: Bool { showInspector && !panelAutoHidden }
+    private var panelWidth: Double { inspectorTab == .browser ? 440 : inspectorTab == .files ? 280 : 300 }
     @AppStorage("sessionPanel") private var inspectorTab = SessionPanel.inspector
     /// The file the Files panel shows in place of its tree (a path chip, a file card, Read).
     @State private var previewing: String?
@@ -113,7 +120,7 @@ struct BuildSessionView: View {
                 }
             }
             .contentCard()
-            if showInspector && !reviewing {
+            if panelShown && !reviewing {
                 VStack(spacing: 0) {
                     switch inspectorTab {
                     case .files:
@@ -132,18 +139,27 @@ struct BuildSessionView: View {
                                        })
                     }
                 }
-                .frame(width: inspectorTab == .browser ? 440 : inspectorTab == .files ? 280 : 300)
+                .frame(width: panelWidth)
                 .frame(maxHeight: .infinity, alignment: .top)
                 .contentCard(inspectorTab == .browser)
             }
         }
         .ownsContentCard()
+        .onGeometryChange(for: Double.self) { $0.size.width } action: { width in
+            // Crossing the line hides or brings back the panel; opening it in between is yours and stays.
+            let line = panelWidth + CardLayout.margin + Self.minConversation
+            let wasNarrow = sessionWidth < line, narrow = width < line
+            sessionWidth = width
+            guard narrow != wasNarrow else { return }
+            withAnimation(.easeOut(duration: 0.15)) { panelAutoHidden = narrow }
+        }
         // The model opened a page here: show the Browser view (docs/spec/22 §5).
         .onChange(of: BrowserCenter.shared.reveals[summary.ref.id]) { _, count in
             guard count != nil else { return }
             withAnimation(.easeOut(duration: 0.15)) {
                 inspectorTab = .browser
                 showInspector = true
+                panelAutoHidden = false
             }
         }
         .task { await session.open() }
@@ -170,7 +186,7 @@ struct BuildSessionView: View {
             guard let target = note.object as? RevealTarget, target.sessionId == session.ref.id, let cwd = summary.cwd else { return }
             previewing = target.path.hasPrefix(cwd + "/") ? String(target.path.dropFirst(cwd.count + 1)) : target.path
             inspectorTab = .files
-            withAnimation(.easeOut(duration: 0.15)) { showInspector = true }
+            withAnimation(.easeOut(duration: 0.15)) { showInspector = true; panelAutoHidden = false }
         }
         .task(id: summary.cwd) {
             guard let cwd = summary.cwd else { return }
@@ -281,7 +297,7 @@ struct BuildSessionView: View {
     /// A toolbar view icon: opens the column on that view, or closes it when that view is already showing.
     private func show(_ view: SessionPanel) {
         withAnimation(.easeOut(duration: 0.15)) {
-            if showInspector && inspectorTab == view { showInspector = false } else { inspectorTab = view; showInspector = true }
+            if panelShown && inspectorTab == view { showInspector = false } else { inspectorTab = view; showInspector = true; panelAutoHidden = false }
         }
         rememberInspector()
     }
@@ -296,7 +312,7 @@ struct BuildSessionView: View {
     private func openFile(_ path: String) {
         previewing = path
         inspectorTab = .files
-        withAnimation(.easeOut(duration: 0.15)) { showInspector = true }
+        withAnimation(.easeOut(duration: 0.15)) { showInspector = true; panelAutoHidden = false }
         rememberInspector()
     }
 
@@ -314,7 +330,7 @@ struct BuildSessionView: View {
     }
 
     private func viewButton(_ view: SessionPanel) -> some View {
-        let on = showInspector && inspectorTab == view
+        let on = panelShown && inspectorTab == view
         // A blue dot on Inspector while something waits on you (an approval, a question, a command the sandbox stopped).
         let needsYou = view == .inspector && session.state?.status == .waitingApproval
         return ToolbarIcon(symbol: view.symbol, label: view.title, on: on, help: on ? "Hide the \(view.title.lowercased())" : view.help) { show(view) }
@@ -369,7 +385,7 @@ struct BuildSessionView: View {
                 .help("Session tree, review, open in an editor or Finder, export")
             Button("") { show(.inspector) }.keyboardShortcut("i", modifiers: .command).hidden().frame(width: 0)
             Button("") {
-                if showInspector && inspectorTab == .files { NotificationCenter.default.post(name: .focusFileFilter, object: nil) } else { show(.files) }
+                if panelShown && inspectorTab == .files { NotificationCenter.default.post(name: .focusFileFilter, object: nil) } else { show(.files) }
             }
             .keyboardShortcut("p", modifiers: .command).hidden().frame(width: 0)
         }

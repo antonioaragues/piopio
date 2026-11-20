@@ -233,3 +233,25 @@ func sideOfferModel(_ text: NSAttributedString) -> SideOfferModel? {
     }
     return found
 }
+
+@Test func anActivityWhoseOnlyStepIsACommandOpensToItsOutput() {
+    let bash = ToolItem(id: "t", at: "", callId: "c", tool: "bash", args: .object(["command": .string("swift test"), "description": .string("Running the tests")]),
+                        status: .running, details: .object(["type": .string("terminal"), "command": .string("swift test")]))
+    let line = ItemRenderer.stepsCard(StepsItem(id: "s", at: "", tools: [bash]))
+    #expect(line.title == "Running the tests…")
+    #expect(line.soleCommand?.body == "$ swift test")
+    line.expanded = true
+    #expect(line.height(width: 600) == line.lineHeight + 4 + line.soleCommand!.bodyHeight(width: 600))
+    // With a thought or a second step it's the log, as before.
+    #expect(ItemRenderer.stepsCard(StepsItem(id: "s", at: "", tools: [bash], thinking: "Hmm")).soleCommand == nil)
+    #expect(ItemRenderer.stepsCard(StepsItem(id: "s", at: "", tools: [bash, bash])).soleCommand == nil)
+}
+
+@Test func aThoughtOnItsOwnIsAsTallAsItsText() {
+    let thought = DisclosureCard(kind: .thinking, title: "Thought", body: "One short line.")
+    thought.expanded = true
+    let trailing = DisclosureCard(kind: .thinking, title: "Thought", body: "One short line.\n\n\n")
+    trailing.expanded = true
+    #expect(thought.height(width: 600) == trailing.height(width: 600))
+    #expect(thought.height(width: 600) < DisclosureCard.lineHeight + 30)
+}
