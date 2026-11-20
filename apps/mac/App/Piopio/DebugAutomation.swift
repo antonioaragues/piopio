@@ -2,7 +2,7 @@ import AppKit
 import PiopioKit
 
 /// Development hooks for scripted smoke tests and design captures. Inactive unless the env vars are set.
-///   PIOPIO_DEMO_PROMPT  create a thread and send this message once the engine is ready
+///   PIOPIO_DEMO_PROMPT  create a thread and send this message once the engine is ready (PIOPIO_DEMO_PROMPT_MODEL: on this model)
 ///   PIOPIO_SNAPSHOT     write a PNG of the main window to this path after PIOPIO_SNAPSHOT_DELAY seconds (default 6)
 ///   PIOPIO_QUIT_AFTER_SNAPSHOT=1  quit afterwards
 @MainActor
@@ -147,6 +147,11 @@ enum DebugAutomation {
                 NotificationCenter.default.post(name: .selectThread, object: ref.id)
                 let thread = engine.thread(ref)
                 await thread.open()
+                // PIOPIO_DEMO_PROMPT_MODEL=provider/id: the chat's model before its first message (claude-code/opus with
+                // PIOPIO_FAKE_CLAUDE_CODE=1 for a conversation on the pretend Claude Code, docs/spec/31).
+                if let raw = env["PIOPIO_DEMO_PROMPT_MODEL"], let slash = raw.firstIndex(of: "/") {
+                    await thread.setModel(ModelRef(provider: String(raw[..<slash]), id: String(raw[raw.index(after: slash)...])))
+                }
                 // PIOPIO_DEMO_BROWSER=1: open the Browser panel in this chat.
                 if env["PIOPIO_DEMO_BROWSER"] == "1" { BrowserCenter.shared.openPanels.insert(ref.id) }
                 // PIOPIO_DEMO_ATTACH: colon-separated file paths attached to the first message.

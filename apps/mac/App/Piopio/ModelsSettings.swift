@@ -114,11 +114,14 @@ struct ModelsPane: View {
             }
             .padding(.bottom, 20)
 
-            Text("Connected").font(.system(size: 13, weight: .semibold)).padding(.bottom, 7)
-            ListCard {
-                ForEach(Array(connected.enumerated()), id: \.element.id) { i, p in
-                    ConnectedProviderRow(engine: engine, provider: p) { detail = p.id }
-                    if i < connected.count - 1 { Rectangle().fill(Color.dsLine).frame(height: 0.5).padding(.leading, 62) }
+            // Only coding agents on this Mac (docs/spec/31): no empty Connected list.
+            if !connected.isEmpty {
+                Text("Connected").font(.system(size: 13, weight: .semibold)).padding(.bottom, 7)
+                ListCard {
+                    ForEach(Array(connected.enumerated()), id: \.element.id) { i, p in
+                        ConnectedProviderRow(engine: engine, provider: p) { detail = p.id }
+                        if i < connected.count - 1 { Rectangle().fill(Color.dsLine).frame(height: 0.5).padding(.leading, 62) }
+                    }
                 }
             }
 
@@ -128,7 +131,7 @@ struct ModelsPane: View {
                     Spacer()
                     Text("Each runs a whole conversation on your own plan").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
                 }
-                .padding(.top, 22).padding(.bottom, 7)
+                .padding(.top, connected.isEmpty ? 0 : 22).padding(.bottom, 7)
                 ListCard {
                     ForEach(Array(agents.enumerated()), id: \.element.id) { i, p in
                         CodingAgentRow(provider: p)
@@ -186,7 +189,7 @@ struct ModelsPane: View {
         let count = connected.count
         let models = engine.models.filter { $0.provider != "faux" }.count
         let ready = agents.filter { $0.status == .connected }.count
-        var parts = ["\(count) provider\(count == 1 ? "" : "s")"] + (ready > 0 ? ["\(ready) agent\(ready == 1 ? "" : "s")"] : []) + ["\(models) model\(models == 1 ? "" : "s")"]
+        var parts = (count > 0 || ready == 0 ? ["\(count) provider\(count == 1 ? "" : "s")"] : []) + (ready > 0 ? ["\(ready) agent\(ready == 1 ? "" : "s")"] : []) + ["\(models) model\(models == 1 ? "" : "s")"]
         if let month = engine.usage?.monthUsd, month > 0 { parts.append("\(MainSidebar.money(month)) this month") }
         return parts.joined(separator: " · ")
     }

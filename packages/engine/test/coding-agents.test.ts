@@ -108,12 +108,12 @@ test("Ask before edits: Claude Code's write waits in the tray, then runs once al
 	await a.client.call("sessions.configure", { ref, approvalMode: "ask" });
 	await a.client.call("sessions.submit", { ref, input: { text: "write: out.txt | done\n$ rm -rf build" } });
 	let waiting = await stateWhere(a, sub, (s) => s.status === "waiting_approval");
-	expect(waiting.prompts![0]).toMatchObject({ kind: "approval", title: "Claude Code wants to write out.txt", tool: "write", detail: join(folder, "out.txt") });
+	expect(waiting.prompts![0]).toMatchObject({ kind: "approval", title: "Write out.txt", tool: "write", detail: join(folder, "out.txt") });
 	expect(existsSync(join(folder, "out.txt"))).toBe(false);
 	await a.client.call("sessions.respond", { ref, promptId: waiting.prompts![0]!.id, response: { decision: "allow" } });
 
 	waiting = await stateWhere(a, sub, (s) => s.status === "waiting_approval" && s.prompts![0]!.tool === "bash");
-	expect(waiting.prompts![0]).toMatchObject({ title: "Claude Code wants to run a command", detail: "rm -rf build", rule: { kind: "command", pattern: "rm -rf" } });
+	expect(waiting.prompts![0]).toMatchObject({ title: "Run a command", detail: "rm -rf build", rule: { kind: "command", pattern: "rm" } });
 	await a.client.call("sessions.respond", { ref, promptId: waiting.prompts![0]!.id, response: { decision: "deny", text: "not that" } });
 	await stateWhere(a, sub, (s) => s.status === "idle" && s.usage.outputTokens > 0);
 

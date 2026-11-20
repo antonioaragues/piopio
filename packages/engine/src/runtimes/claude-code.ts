@@ -96,22 +96,22 @@ export function editPatch(input: Record<string, unknown>): string | undefined {
 	return hunks.length ? hunks.join("\n") : undefined;
 }
 
-/** What an approval asks, in words. */
+/** What an approval asks, in Piopio's words ("Run a command", "Edit notes.md"); the composer already names the agent. */
 function approvalTitle(tool: string, input: Record<string, unknown>): { title: string; detail?: string } {
 	const path = typeof input.file_path === "string" ? input.file_path : undefined;
 	const file = path?.split("/").pop();
-	if (tool === "Bash") return { title: `${CLAUDE_CODE_NAME} wants to run a command`, ...(typeof input.command === "string" ? { detail: input.command } : {}) };
-	if (tool === "Write") return { title: `${CLAUDE_CODE_NAME} wants to write ${file ?? "a file"}`, ...(path ? { detail: path } : {}) };
-	if (tool === "Edit" || tool === "MultiEdit" || tool === "NotebookEdit") return { title: `${CLAUDE_CODE_NAME} wants to edit ${file ?? "a file"}`, ...(path ? { detail: path } : {}) };
-	if (tool === "WebFetch") return { title: `${CLAUDE_CODE_NAME} wants to open a page`, ...(typeof input.url === "string" ? { detail: input.url } : {}) };
-	if (tool.startsWith("mcp__")) return { title: `${CLAUDE_CODE_NAME} wants to use ${tool.split("__").slice(2).join("__") || tool}`, detail: JSON.stringify(input).slice(0, 400) };
-	return { title: `${CLAUDE_CODE_NAME} wants to use ${tool}`, detail: JSON.stringify(input).slice(0, 400) };
+	if (tool === "Bash") return { title: "Run a command", ...(typeof input.command === "string" ? { detail: input.command } : {}) };
+	if (tool === "Write") return { title: file ? `Write ${file}` : "Write a file", ...(path ? { detail: path } : {}) };
+	if (tool === "Edit" || tool === "MultiEdit" || tool === "NotebookEdit") return { title: file ? `Edit ${file}` : "Edit a file", ...(path ? { detail: path } : {}) };
+	if (tool === "WebFetch") return { title: "Open a page", ...(typeof input.url === "string" ? { detail: input.url } : {}) };
+	if (tool.startsWith("mcp__")) return { title: `Use ${tool.split("__").slice(2).join("__") || tool}`, detail: JSON.stringify(input).slice(0, 400) };
+	return { title: `Use ${tool}`, detail: JSON.stringify(input).slice(0, 400) };
 }
 
 /** The rule "Always allow" adds, in Piopio's words, from Claude Code's own suggestion. */
 function ruleFor(tool: string, input: Record<string, unknown>, suggestions: unknown[] | undefined): { kind: "command" | "tool" | "path"; pattern: string } | undefined {
 	if (!suggestions?.length) return undefined;
-	if (tool === "Bash" && typeof input.command === "string") return { kind: "command", pattern: input.command.split(/\s+/).slice(0, 2).join(" ") };
+	if (tool === "Bash" && typeof input.command === "string") return { kind: "command", pattern: input.command.trim().split(/\s+/)[0] ?? input.command };
 	if ((tool === "Write" || tool === "Edit" || tool === "MultiEdit") && typeof input.file_path === "string") return { kind: "path", pattern: `${dirname(input.file_path)}/**` };
 	return { kind: "tool", pattern: tool };
 }

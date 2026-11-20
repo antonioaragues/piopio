@@ -183,6 +183,8 @@ struct ModelPicker: View {
             let models = groups[provider]!.sorted { a, b in
                 let ra = query.isEmpty ? recents.firstIndex(of: "\(a.provider)/\(a.id)") ?? 99 : 99, rb = query.isEmpty ? recents.firstIndex(of: "\(b.provider)/\(b.id)") ?? 99 : 99
                 if ra != rb { return ra < rb }
+                // A coding agent's models keep its own order (Opus first).
+                if a.isAgent, b.isAgent { return (engine.models.firstIndex(of: a) ?? 0) < (engine.models.firstIndex(of: b) ?? 0) }
                 let ma = Self.makerRank(a), mb = Self.makerRank(b)
                 return ma != mb ? ma < mb : Self.shortName(a) < Self.shortName(b)
             }
