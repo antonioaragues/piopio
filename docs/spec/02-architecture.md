@@ -141,7 +141,7 @@ All formats are SQLite or JSONL/JSON/Markdown, so everything stays inspectable a
 
 ## 7. Security model
 
-- **Secrets** live in the **macOS Keychain**, owned by the app. The engine asks for them over the protocol (`secrets.get`, scoped and cached in memory only). Inherited env vars are never logged. For the cloud, secrets are pushed as Worker secrets or encrypted (AES-GCM, `MASTER_KEY`) in RegistryDO.
+- **Secrets** live in the **macOS Keychain**, owned by the app: the data protection keychain when the build is signed by the team (its own access group, no password prompts, this device only), the login keychain for ad hoc builds (docs/releasing.md). The engine asks for them over the protocol (`secrets.get`, scoped and cached in memory only). Inherited env vars are never logged. For the cloud, secrets are pushed as Worker secrets or encrypted (AES-GCM, `MASTER_KEY`) in RegistryDO.
 - **Local tool execution** (Build) runs as the user, with approval modes (05-build §6). OS sandboxing (Seatbelt profiles) is later.
 - **Cloud auth:** a single owner token (256-bit), generated at infra deploy and stored in Keychain. Rotatable. A future iOS app pairs by QR code with the owner token.
 - **Channel security:** verify every webhook signature. Contacts are allowlisted: unknown senders get a configurable reply ("I don't talk to strangers") and are logged for the owner to approve.

@@ -18,7 +18,8 @@ minutes, using the app the way you normally would.
 ```bash
 scripts/build-app.sh Release                                  # the shipped shape: bundled Node + engine
 security find-generic-password -s Piopio -a provider.openrouter.apiKey >/dev/null \
-  && echo "OpenRouter key: present" || echo "OpenRouter key: missing"   # may ask for the login keychain
+  && echo "OpenRouter key: present" || echo "OpenRouter key: missing"   # ad hoc builds only: a team-signed app keeps it in
+                                                                        # the data protection keychain, which `security` can't see
 tail -f ~/Library/Application\ Support/Piopio/logs/engine.log # second terminal, during every scenario
 corepack pnpm test && scripts/swift-test.sh                   # baseline: the scripted suites are green
 ```

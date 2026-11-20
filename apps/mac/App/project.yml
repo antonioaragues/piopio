@@ -84,14 +84,16 @@ targets:
         # Sparkle 2. Updates stay off while either is empty (see docs/releasing.md).
         SUFeedURL: $(SPARKLE_FEED_URL)
         SUPublicEDKey: $(SPARKLE_PUBLIC_KEY)
+    # Ad hoc, or your team with a keychain access group (Signing.xcconfig, scripts/setup-signing.sh).
+    configFiles:
+      Debug: Signing.xcconfig
+      Release: Signing.xcconfig
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.piopio.Piopio
         PRODUCT_NAME: Piopio
         MARKETING_VERSION: 0.1.0
         CURRENT_PROJECT_VERSION: 1
-        CODE_SIGN_IDENTITY: "-"
-        CODE_SIGN_STYLE: Manual
         ENABLE_HARDENED_RUNTIME: NO
         ENABLE_APP_SANDBOX: NO
         ENABLE_USER_SCRIPT_SANDBOXING: NO

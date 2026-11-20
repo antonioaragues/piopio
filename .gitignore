@@ -28,3 +28,6 @@ apps/mac/App/Piopio.xcodeproj/
 apps/mac/App/build/
 .cache/
 !packages/engine/test/fixtures/*.sqlite
+
+# Local signing team (scripts/setup-signing.sh)
+apps/mac/App/Signing.local.xcconfig

@@ -11,6 +11,10 @@ fi
 (cd "$root" && corepack pnpm -r build >/dev/null)
 cd "$root/apps/mac/App"
 xcodegen generate --quiet
+# A team (scripts/setup-signing.sh) lets Xcode make the certificate and provisioning profile it needs, and register
+# this Mac in the developer account (a development profile lists the Macs it runs on).
+signing=()
+[[ -f Signing.local.xcconfig ]] && signing+=(-allowProvisioningUpdates -allowProvisioningDeviceRegistration)
 # SwiftTerm's build plugin only writes its own git version into a generated Swift file.
-xcodebuild -project Piopio.xcodeproj -scheme Piopio -configuration "$config" -derivedDataPath build -quiet -skipPackagePluginValidation build
+xcodebuild -project Piopio.xcodeproj -scheme Piopio -configuration "$config" -derivedDataPath build -quiet -skipPackagePluginValidation ${signing[@]+"${signing[@]}"} build
 echo "$root/apps/mac/App/build/Build/Products/$config/Piopio.app"

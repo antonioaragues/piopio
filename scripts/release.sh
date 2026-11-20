@@ -6,6 +6,7 @@
 #
 # Env (all optional; without them you get an ad-hoc signed DMG for local testing):
 #   PIOPIO_SIGN_IDENTITY        "Developer ID Application: Name (TEAMID)"   (default "-": ad hoc)
+#   PIOPIO_PROVISIONING_PROFILE Developer ID provisioning profile for app.piopio.Piopio (required with an identity)
 #   PIOPIO_NOTARY_PROFILE       notarytool keychain profile (xcrun notarytool store-credentials)
 #   PIOPIO_BUILD                CFBundleVersion (default: commit count, so it always grows)
 #   PIOPIO_FEED_URL             overrides SPARKLE_FEED_URL from project.yml
@@ -25,11 +26,14 @@ if [[ -z "${DEVELOPER_DIR:-}" && "$(xcode-select -p)" == /Library/Developer/Comm
 	export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
 fi
 step() { printf '› %s\n' "$*"; }
+work="$(mktemp -d)"
+trap 'rm -rf "$work"' EXIT
 
 step "building Piopio $version ($build)"
 overrides=(MARKETING_VERSION="$version" CURRENT_PROJECT_VERSION="$build")
 [[ -n "${PIOPIO_FEED_URL:-}" ]] && overrides+=(SPARKLE_FEED_URL="$PIOPIO_FEED_URL")
 [[ -n "${PIOPIO_SPARKLE_PUBLIC_KEY:-}" ]] && overrides+=(SPARKLE_PUBLIC_KEY="$PIOPIO_SPARKLE_PUBLIC_KEY")
+[[ -f "$app_dir/Signing.local.xcconfig" ]] && overrides+=(-allowProvisioningUpdates)
 (cd "$app_dir" && xcodegen generate --quiet)
 xcodebuild -project "$app_dir/Piopio.xcodeproj" -scheme Piopio -configuration Release -derivedDataPath "$app_dir/build" \
 	-destination "generic/platform=macOS" -quiet -skipPackagePluginValidation build "${overrides[@]}" 2>&1 | grep -v -e DVTPlugIn -e CoreSimulator -e CoreDevice -e '^Details:' || true
@@ -44,6 +48,25 @@ app="$out/Piopio.app"
 # Inside out: nested code first, the app last. A Developer ID build gets the hardened runtime everywhere
 # (notarization requires it). Ad hoc, only Node gets it: library validation would refuse to load the ad hoc
 # Sparkle.framework (no Team ID), but Node's JIT entitlements still get exercised.
+# A Developer ID build keeps secrets in the data protection keychain (no password prompts): the app gets its own
+# keychain access group, which macOS honors only with a Developer ID provisioning profile for the app's bundle ID.
+entitlements="$work/Piopio.entitlements"
+cp "$app_dir/Piopio.entitlements" "$entitlements"
+rm -f "$app/Contents/embedded.provisionprofile"
+if [[ "$identity" != "-" ]]; then
+	profile="${PIOPIO_PROVISIONING_PROFILE:?release: a Developer ID build needs PIOPIO_PROVISIONING_PROFILE (docs/releasing.md)}"
+	team="$(sed -nE 's/.*\(([A-Z0-9]{10})\)$/\1/p' <<<"$identity")"
+	[[ -n "$team" ]] || { echo "release: PIOPIO_SIGN_IDENTITY should end in (TEAMID)" >&2; exit 1; }
+	app_id="$team.$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist")"
+	security cms -D -i "$profile" >"$work/profile.plist"
+	profile_app_id="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:com.apple.application-identifier' "$work/profile.plist")"
+	[[ "$profile_app_id" == "$app_id" ]] || { echo "release: the profile is for $profile_app_id, not $app_id" >&2; exit 1; }
+	/usr/libexec/PlistBuddy -c "Add :com.apple.application-identifier string $app_id" \
+		-c "Add :com.apple.developer.team-identifier string $team" \
+		-c "Add :keychain-access-groups array" -c "Add :keychain-access-groups:0 string $app_id" "$entitlements"
+	cp "$profile" "$app/Contents/embedded.provisionprofile"
+fi
+
 step "signing with ${identity/#-/ad hoc}"
 flags=(--force --sign "$identity")
 [[ "$identity" != "-" ]] && flags+=(--timestamp --options runtime)
@@ -57,13 +80,13 @@ sign --preserve-metadata=entitlements "$sparkle/Versions/B/XPCServices/Downloade
 sign "$sparkle/Versions/B/Autoupdate"
 sign "$sparkle/Versions/B/Updater.app"
 sign "$sparkle"
-sign --entitlements "$app_dir/Piopio.entitlements" "$app"
+sign --entitlements "$entitlements" "$app"
 codesign --verify --deep --strict "$app"
 
 step "making the DMG"
 dmg="$out/Piopio-$version.dmg"
-stage="$(mktemp -d)"
-trap 'rm -rf "$stage"' EXIT
+stage="$work/dmg"
+mkdir "$stage"
 ditto "$app" "$stage/Piopio.app"
 ln -s /Applications "$stage/Applications"
 rm -f "$dmg"

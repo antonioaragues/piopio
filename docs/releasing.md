@@ -36,12 +36,13 @@ You need a paid Apple Developer account.
    ```bash
    xcrun notarytool store-credentials piopio-notary --apple-id <you@example.com> --team-id <TEAMID>
    ```
-3. Release with both:
+3. Create a **Developer ID provisioning profile** for `app.piopio.Piopio`: developer.apple.com › Certificates, IDs & Profiles › Profiles › + › Developer ID, pick the App ID and your Developer ID certificate, and download it. A development build signed with your team (see "Development builds" below) registers the App ID first. The profile lets the app use its own keychain access group, so secrets live in the data protection keychain and macOS never asks for a password. Without it, macOS refuses to launch a Developer ID build that claims the group.
+4. Release with all three:
    ```bash
-   PIOPIO_SIGN_IDENTITY="Developer ID Application: <Name> (<TEAMID>)" PIOPIO_NOTARY_PROFILE=piopio-notary scripts/release.sh 0.1.0
+   PIOPIO_SIGN_IDENTITY="Developer ID Application: <Name> (<TEAMID>)" PIOPIO_PROVISIONING_PROFILE=~/Downloads/Piopio_Developer_ID.provisionprofile PIOPIO_NOTARY_PROFILE=piopio-notary scripts/release.sh 0.1.0
    ```
 
-The script signs from the inside out with the hardened runtime and a secure timestamp. Order: Node (with `apps/mac/App/Node.entitlements`, JIT for V8 and WebAssembly), the launcher, Sparkle's helpers, then the app. It then builds the DMG, signs it, notarizes it, staples it, and checks it with `spctl`.
+The script checks that the profile belongs to the same team and App ID and embeds it as `Contents/embedded.provisionprofile`. It adds `com.apple.application-identifier`, `com.apple.developer.team-identifier` and `keychain-access-groups` (`<TEAMID>.app.piopio.Piopio`) to `Piopio.entitlements`. Then it signs from the inside out with the hardened runtime and a secure timestamp. Order: Node (with `apps/mac/App/Node.entitlements`, JIT for V8 and WebAssembly), the launcher, Sparkle's helpers, then the app. It then builds the DMG, signs it, notarizes it, staples it, and checks it with `spctl`.
 
 ### 2. Sparkle signing key
 
@@ -58,6 +59,19 @@ Put the printed public key in `SPARKLE_PUBLIC_KEY` in `apps/mac/App/project.yml`
 Set `SPARKLE_FEED_URL` in `project.yml` to where `appcast.xml` will be served. For GitHub Releases, for example, that's `https://github.com/<owner>/piopio/releases/latest/download/appcast.xml`, with `PIOPIO_DOWNLOAD_URL_PREFIX=https://github.com/<owner>/piopio/releases/download/v<version>/`.
 
 Until both the key and the feed URL are set, the app's updater stays off. "Check for Updates…" is disabled, and Settings › General says the build doesn't update itself.
+
+### Development builds
+
+Ad hoc builds keep secrets in the login keychain. macOS identifies an ad hoc build by its hash, so after every rebuild it asks for your password once per secret ("Always Allow" only lasts until the next build). Signing with your team fixes that:
+
+```bash
+scripts/setup-signing.sh <TEAMID>     # writes apps/mac/App/Signing.local.xcconfig (not committed)
+scripts/build-app.sh
+```
+
+It needs your account in Xcode › Settings › Accounts. Xcode then makes the Apple Development certificate and a development profile with the keychain access group (`-allowProvisioningUpdates`). The app then uses the data protection keychain (`Keychain.usesDataProtection`): no prompts, items only on this Mac (`kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`, no iCloud sync, not in backups). Each secret still in the login keychain moves over the first time it's read, with one last prompt. `scripts/setup-signing.sh --remove` goes back to ad hoc.
+
+`piopio-cli` can't carry a provisioning profile, so it keeps using the login keychain. Secrets moved to the data protection keychain aren't visible to it; give it its own with `piopio-cli key set openrouter`.
 
 ## Each release
 

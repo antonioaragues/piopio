@@ -1,0 +1,8 @@
+// How Xcode signs Piopio.app. Ad hoc by default: the app then keeps secrets in the login keychain, which asks
+// for your password after every rebuild. With a team (scripts/setup-signing.sh writes Signing.local.xcconfig,
+// which isn't committed), builds are signed "Apple Development" with a keychain access group, and secrets live in
+// the data protection keychain: no prompts. See docs/releasing.md.
+CODE_SIGN_STYLE = Manual
+CODE_SIGN_IDENTITY = -
+
+#include? "Signing.local.xcconfig"
