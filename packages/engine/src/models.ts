@@ -115,8 +115,10 @@ export class ModelHub {
 	async ensureCredential(provider: string): Promise<void> {
 		if (provider === "faux" || this.endpoints.get(provider)?.keyless) return;
 		if (await this.credentials.read(provider)) return;
+		// With nothing connected, the conversation only has the default model: no provider was chosen, so none is named.
+		if ((await this.connected()).size === 0) throw new EngineError("AUTH", "No model provider is connected. Connect one in Settings › Models.");
 		const name = this.runtime?.getProvider(provider)?.name ?? provider;
-		throw new EngineError("AUTH", `${name} isn't connected. Connect it in Settings › Models.`);
+		throw new EngineError("AUTH", `${name} isn't connected. Connect it in Settings › Models, or pick another model.`);
 	}
 
 	/** Providers with a stored credential (not ambient ones: billing stays explicit). */

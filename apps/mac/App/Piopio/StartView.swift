@@ -408,6 +408,8 @@ enum StartField: Hashable { case name, text, extra }
 /// The composer card: the text, anything extra inside it, and a footer with settings on the left and the main action
 /// at the bottom right.
 private struct ComposerCard<Extra: View, Leading: View, Action: View>: View {
+    /// What went wrong, as the strip on top of the card (docs/design/grey "Composer notice"); ✕ clears it.
+    var error: Binding<String?> = .constant(nil)
     @ViewBuilder var text: AnyView
     @ViewBuilder var extra: Extra
     @ViewBuilder var leading: Leading
@@ -415,6 +417,9 @@ private struct ComposerCard<Extra: View, Leading: View, Action: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            if let message = error.wrappedValue {
+                ComposerNoticeStrip(notice: ComposerNotice(id: "start", symbol: "exclamationmark.triangle", title: message, dismiss: { error.wrappedValue = nil }), radius: 16)
+            }
             text
             extra
             HStack(spacing: 8) {
@@ -624,7 +629,7 @@ private struct ChatStart: View {
             TitleText(text: "What's on your mind?")
         }
         VStack(alignment: .leading, spacing: 12) {
-            ComposerCard {
+            ComposerCard(error: $error) {
                 AnyView(CardText(placeholder: "Ask anything…", text: drafts.binding(mode, \.text), focused: $focus, returnSubmits: true, submit: send))
             } extra: {
                 if !attachments.isEmpty { attachmentTiles.padding(.horizontal, 20).padding(.top, 8) }
@@ -634,7 +639,6 @@ private struct ChatStart: View {
                 modelSelector
                 sendButton
             }
-            StartError(text: error)
         }
         contextSection
         Hints(items: ["\(QuickChatShortcut.current.label) Quick Chat from any app", "↩ send", "⇧↩ new line"])
@@ -859,7 +863,7 @@ private struct AgentStart: View {
             }
         }
         VStack(alignment: .leading, spacing: 12) {
-            ComposerCard {
+            ComposerCard(error: $error) {
                 AnyView(CardText(placeholder: "What should it do? In your own words, e.g. “Every morning, tell me what's on my calendar and which emails need a reply.” Or leave it empty: it will ask you.", text: drafts.binding(.agent, \.text), focused: $focus, minHeight: 84, submit: create))
             } extra: {
                 EmptyView()
@@ -887,7 +891,6 @@ private struct AgentStart: View {
                 MainAction(title: "Create ⌘↩", busy: creating, enabled: canCreate, action: create)
                     .help(instructions.isEmpty && draft.template == nil ? "Create it: it asks you what it's for" : "Create the agent")
             }
-            StartError(text: error)
         }
         VStack(alignment: .leading, spacing: 12) {
             SectionHeader(title: "Start from a template")

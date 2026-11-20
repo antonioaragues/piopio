@@ -25,6 +25,8 @@ struct ComposerNotice: Identifiable {
 
 struct ComposerNoticeStrip<Accessory: View>: View {
     let notice: ComposerNotice
+    /// The box's corner radius (the composer's by default; the start pages' card is 16).
+    var radius: CGFloat = DS.Radius.composer
     /// Next to the secondary action (Composer anchors the context popover here).
     @ViewBuilder var accessory: () -> Accessory
 
@@ -57,7 +59,7 @@ struct ComposerNoticeStrip<Accessory: View>: View {
             }
         }
         .padding(.leading, 14).padding(.trailing, 10).padding(.vertical, 8)
-        .background(Color.dsWin, in: UnevenRoundedRectangle(topLeadingRadius: DS.Radius.composer, topTrailingRadius: DS.Radius.composer, style: .continuous))
+        .background(Color.dsWin, in: UnevenRoundedRectangle(topLeadingRadius: radius, topTrailingRadius: radius, style: .continuous))
         .overlay(alignment: .bottom) { Rectangle().fill(Color.dsLine).frame(height: 0.5) }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(notice.title)
@@ -66,5 +68,5 @@ struct ComposerNoticeStrip<Accessory: View>: View {
 }
 
 extension ComposerNoticeStrip where Accessory == EmptyView {
-    init(notice: ComposerNotice) { self.init(notice: notice) { EmptyView() } }
+    init(notice: ComposerNotice, radius: CGFloat = DS.Radius.composer) { self.init(notice: notice, radius: radius) { EmptyView() } }
 }

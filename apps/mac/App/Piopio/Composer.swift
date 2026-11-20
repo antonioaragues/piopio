@@ -102,12 +102,14 @@ struct Composer: View {
     private var notice: ComposerNotice? {
         if let error = thread.error {
             let auth = thread.errorIsAuth, opening = thread.openFailed, typed = !text.isEmpty
+            // Another model only helps when some provider is connected ("No model provider is connected" otherwise).
+            let another = engine.providers.contains { $0.status == .connected }
             return ComposerNotice(
                 id: "error", symbol: auth ? "key" : "exclamationmark.triangle", title: error,
-                detail: opening ? (auth ? "this conversation opens once it's connected" : nil) : typed ? "your message is kept" : nil,
+                detail: opening ? (auth ? "this conversation opens once you connect" : nil) : typed ? "your message is kept" : nil,
                 primary: auth ? .init(title: "Open Settings") { ThreadModel.openSettings() }
                     : typed && !opening && !thread.isSubmitting ? .init(title: "Retry") { Task { await thread.retrySend() } } : nil,
-                secondary: auth && !opening ? .init(title: "Use another model") { thread.showModelPicker = true } : nil,
+                secondary: auth && !opening && another ? .init(title: "Use another model") { thread.showModelPicker = true } : nil,
                 dismiss: opening ? nil : { thread.dismissError() })
         }
         if let attachError {
