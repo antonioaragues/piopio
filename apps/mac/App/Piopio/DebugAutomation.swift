@@ -162,6 +162,11 @@ enum DebugAutomation {
                     await waitIdle(thread)
                     if case .user(let u)? = thread.document.lastUser, let stored = u.attachments?.first?.stored { thread.handle(.openAttachment(stored: stored)) }
                 }
+                // PIOPIO_DEMO_SWITCH_MODEL alone: switch after the first answer and stop there (the composer's Undo).
+                if let raw = env["PIOPIO_DEMO_SWITCH_MODEL"], env["PIOPIO_DEMO_FOLLOWUP"] == nil, let slash = raw.firstIndex(of: "/") {
+                    await waitIdle(thread)
+                    await thread.setModel(ModelRef(provider: String(raw[..<slash]), id: String(raw[raw.index(after: slash)...])))
+                }
                 // PIOPIO_DEMO_FOLLOWUP: a second message; PIOPIO_DEMO_EDIT: then edit it into this text.
                 if let followUp = env["PIOPIO_DEMO_FOLLOWUP"] {
                     await waitIdle(thread)
@@ -531,6 +536,8 @@ enum DebugAutomation {
         case "sheet": NSApp.windows.compactMap(\.attachedSheet).first
         case "key": NSApp.keyWindow
         case "popover": NSApp.windows.first { $0.isVisible && String(describing: type(of: $0)).contains("Popover") }
+        // A popover opened from another (an agent's models at the side of the picker).
+        case "popover-last": NSApp.windows.last { $0.isVisible && String(describing: type(of: $0)).contains("Popover") }
         case "settings": NSApp.windows.first { $0.isVisible && ($0.identifier?.rawValue.localizedCaseInsensitiveContains("settings") ?? false) }
         default: NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil && ($0 is NSPanel) == wantsPanel && $0.attachedSheet == nil || ($0.isVisible && $0.attachedSheet != nil) })
         }

@@ -514,7 +514,21 @@ export class Sessions {
 		this.open.delete(ref.id);
 		if (runtime) await (await runtime.catch(() => undefined))?.close();
 		for (const old of [entry.file, entry.migratedFrom]) if (old) for (const suffix of ["", "-wal", "-shm"]) rmSync(old + suffix, { force: true });
-		// A coding agent's conversation: Piopio's copy of its transcript (the agent keeps its own session).
+		// A coding agent's conversation: Piopio's copy of its transcript. A chat's own sessions in the agents go too (a
+		// Build session's stay, as its pi file goes to the Trash: you may carry on in the agent's CLI).
+		const agentParts = [{ model: entry.model, agentFile: entry.agentFile }, ...(entry.segments ?? [])].filter((p) => p.agentFile && p.model && isCodingAgent(p.model.provider));
+		if (entry.ref.kind === "thread" && entry.cwd) {
+			for (const part of agentParts) {
+				const sessionId = (() => {
+					try {
+						return (JSON.parse(readFileSync(part.agentFile!, "utf8")) as { sessionId?: string }).sessionId;
+					} catch {
+						return undefined;
+					}
+				})();
+				if (sessionId) void this.hub.forgetAgentSession(part.model!.provider, sessionId, entry.cwd).catch(() => undefined);
+			}
+		}
 		for (const file of [entry.agentFile, ...(entry.segments ?? []).map((s) => s.agentFile)]) if (file) rmSync(file, { force: true });
 		// Earlier parts' pi sessions go as the current one does: deleted for a chat, to the Trash for Build.
 		for (const s of entry.segments ?? []) {
@@ -2523,6 +2537,7 @@ export class Sessions {
 		const past = pastItems(entry.ref, entry.segments, entry.model ?? this.hub.defaultModel);
 		const handoff = entry.handoff
 			? {
+					from: entry.segments.at(-1)!.model,
 					summary: handoffSummary(past),
 					sent: () => {
 						delete entry.handoff;

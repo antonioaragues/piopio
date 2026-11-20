@@ -432,6 +432,10 @@ public struct SessionState: Codable, Sendable, Hashable {
     /// Build: the agent's checklist, and plan mode.
     public var todos: [Todo]?
     public var planMode: Bool?
+    /// The conversation just changed who runs it and hasn't sent anything since: who ran it before (the composer's
+    /// Undo, docs/spec/31 CA7).
+    public struct Handoff: Codable, Sendable, Hashable { public var from: ModelRef }
+    public var handoff: Handoff?
     public init(status: SessionStatus, queue: [QueuedInput], model: ModelRef?, thinking: String?, tools: Tools? = nil, usage: Usage, context: Context? = nil) {
         self.status = status; self.queue = queue; self.model = model; self.thinking = thinking; self.tools = tools; self.usage = usage; self.context = context
     }

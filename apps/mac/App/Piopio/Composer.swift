@@ -115,6 +115,15 @@ struct Composer: View {
         if let attachError {
             return ComposerNotice(id: "attach", symbol: "paperclip", title: attachError, dismiss: { self.attachError = nil })
         }
+        // Just switched runner (docs/spec/31 CA7): Undo until the first message goes to the new one.
+        if let from = thread.state?.handoff?.from, let now = thread.state?.model, !thread.isRunning {
+            let runner = { (ref: ModelRef) in engine.model(ref).map { $0.isAgent ? ModelPicker.providerTag($0) : "Piopio's agent" } ?? (ref.provider == "claude-code" ? "Claude Code" : "Piopio's agent") }
+            return ComposerNotice(
+                id: "handoff", tone: .info, symbol: "arrow.triangle.swap",
+                title: "Now running \(runner(now) == "Piopio's agent" ? "on" : "in") \(runner(now))",
+                detail: "it starts from a summary of this conversation",
+                primary: .init(title: "Undo") { Task { await thread.setModel(from) } })
+        }
         if contextFraction >= 0.85, !contextNoticeDismissed {
             return ComposerNotice(
                 id: "context", tone: .info, symbol: "gauge.with.dots.needle.67percent",

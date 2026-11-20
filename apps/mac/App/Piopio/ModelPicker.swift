@@ -62,6 +62,10 @@ struct ModelPicker: View {
             searching = true
             // Captures: PIOPIO_DEMO_MODEL_QUERY types a search.
             if let q = ProcessInfo.processInfo.environment["PIOPIO_DEMO_MODEL_QUERY"] { query = q }
+            // PIOPIO_DEMO_AGENT_MENU=<provider>: open that agent's models at its side.
+            if let agent = ProcessInfo.processInfo.environment["PIOPIO_DEMO_AGENT_MENU"] {
+                Task { try? await Task.sleep(for: .seconds(1)); agentMenu = agent }
+            }
             highlighted = keys.first { $0.hasSuffix("|\(selected?.provider ?? "")/\(selected?.id ?? "")") } ?? keys.first { $0 == "agent|\(selected?.provider ?? "")" } ?? keys.first
         }
         .onChange(of: query) { _, _ in highlighted = keys.first }

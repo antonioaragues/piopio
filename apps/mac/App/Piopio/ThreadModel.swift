@@ -97,7 +97,14 @@ final class ThreadModel {
     }
 
     var isRunning: Bool { state?.status == .running }
-    var attachmentCount: Int { _ = state; return document.attachmentCount }
+    /// Files sent in this conversation; the summary a switch of runner sends ("Conversation so far.md") isn't yours.
+    var attachmentCount: Int {
+        _ = state
+        let handoffs = document.items.reduce(0) { n, item in
+            if case .user(let u) = item { n + (u.attachments ?? []).filter { $0.name == "Conversation so far.md" }.count } else { n }
+        }
+        return document.attachmentCount - handoffs
+    }
     var queue: [QueuedInput] { state?.queue ?? [] }
     var supportsThinking: Bool { engine?.model(state?.model)?.supports.reasoning ?? false }
 

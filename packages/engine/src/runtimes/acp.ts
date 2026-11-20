@@ -110,7 +110,7 @@ export class AcpRuntime implements Runtime {
 	private readonly tools = new Map<string, ToolState>();
 	private starting?: Promise<void>;
 	/** Piopio's tools for this conversation, and their address at the tool server. */
-	private piopio?: { tools: CapturedTool[]; url: string; close: () => void };
+	private piopio?: { tools: CapturedTool[]; url: string; close: () => void; prompt: () => Promise<string> };
 	/** Calls to Piopio's tools the agent announced and the tool server hasn't run yet (their ids key the cards). */
 	private piopioCalls: { id: string; name: string; input: string }[] = [];
 	/** What Piopio's tools answered, by call: the card's output when the agent doesn't report it (Antigravity). */
@@ -203,18 +203,28 @@ export class AcpRuntime implements Runtime {
 			this.broker.cancelAll();
 			if (this.busy) this.fail(message);
 		};
-		const init = await conn.request<{ agentCapabilities?: { loadSession?: boolean; mcpCapabilities?: { http?: boolean } } }>("initialize", { protocolVersion: 1, clientCapabilities: CLIENT_CAPABILITIES }, 30_000);
+		type Caps = { loadSession?: boolean; mcpCapabilities?: { http?: boolean }; sessionCapabilities?: { systemPrompt?: unknown }; _meta?: { antigravity?: { systemPrompt?: { append?: unknown } } } };
+		const init = await conn.request<{ agentCapabilities?: Caps }>("initialize", { protocolVersion: 1, clientCapabilities: CLIENT_CAPABILITIES }, 30_000);
 		const mcpServers = await this.mcpServers(Boolean(init.agentCapabilities?.mcpCapabilities?.http));
+		// What Piopio's tools add to the instructions (connected apps, About me, visuals), the way each agent takes it:
+		// ACP's `systemPrompt` in append mode (Codex), or Antigravity's `_meta.antigravity.systemPrompt.append`.
+		const append = (await this.piopio?.prompt().catch(() => "")) ?? "";
+		const extra = append
+			? {
+					...(init.agentCapabilities?.sessionCapabilities?.systemPrompt ? { systemPrompt: { mode: "append", content: [{ type: "text", text: append }] } } : {}),
+					...(init.agentCapabilities?._meta?.antigravity?.systemPrompt?.append ? { _meta: { antigravity: { systemPrompt: { append } } } } : {}),
+				}
+			: {};
 		let session: { sessionId?: string; configOptions?: ConfigOption[] } | undefined;
 		if (this.stored.sessionId && init.agentCapabilities?.loadSession) {
 			this.loading = true;
 			this.sessionId = this.stored.sessionId;
-			session = await conn.request<{ configOptions?: ConfigOption[] }>("session/load", { sessionId: this.stored.sessionId, cwd: this.options.cwd, mcpServers }, 60_000).catch(() => undefined);
+			session = await conn.request<{ configOptions?: ConfigOption[] }>("session/load", { sessionId: this.stored.sessionId, cwd: this.options.cwd, mcpServers, ...extra }, 60_000).catch(() => undefined);
 			this.loading = false;
 			if (session) session.sessionId = this.stored.sessionId;
 		}
 		if (!session) {
-			session = await conn.request<{ sessionId: string; configOptions?: ConfigOption[] }>("session/new", { cwd: this.options.cwd, mcpServers }, 60_000);
+			session = await conn.request<{ sessionId: string; configOptions?: ConfigOption[] }>("session/new", { cwd: this.options.cwd, mcpServers, ...extra }, 60_000);
 			this.stored.sessionId = session.sessionId;
 			this.save();
 		}
@@ -233,7 +243,7 @@ export class AcpRuntime implements Runtime {
 	private async mcpServers(http: boolean): Promise<unknown[]> {
 		if (!this.options.tools || !this.options.toolServer) return [];
 		if (!this.piopio) {
-			const collected = collectTools(this.options.tools(this.ask)).tools;
+			const { tools: collected, prompt } = collectTools(this.options.tools(this.ask));
 			if (!collected.length) return [];
 			const tools = collected.map((t): CapturedTool => ({
 				...t,
@@ -244,7 +254,7 @@ export class AcpRuntime implements Runtime {
 				},
 			}));
 			const served = await this.options.toolServer.register({ tools: () => tools, callIdFor: (name, args) => this.callIdFor(name, args), signal: () => this.turnAbort.signal });
-			this.piopio = { tools, ...served };
+			this.piopio = { tools, prompt, ...served };
 		}
 		return http ? [{ type: "http", name: PIOPIO_MCP, url: this.piopio.url, headers: [] }] : [{ name: PIOPIO_MCP, command: process.execPath, args: [bridgeScript(), this.piopio.url], env: [] }];
 	}

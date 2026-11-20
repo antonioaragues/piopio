@@ -19,7 +19,9 @@ const isCodex = agent === "codex-cli";
 let nextId = 1000;
 let counter = 0;
 const waiting = new Map<number, (result: any) => void>();
-const sessions = new Map<string, { cwd: string; options: any[]; cancelled: boolean; mcp: any[] }>();
+const sessions = new Map<string, { cwd: string; options: any[]; cancelled: boolean; mcp: any[]; instructions: string }>();
+/** The instructions a session was started with: ACP's `systemPrompt` (Codex) or Antigravity's `_meta`. */
+const instructionsOf = (p: any): string => (isCodex ? (p.systemPrompt?.content ?? []).map((c: any) => c.text).join("") : (p._meta?.antigravity?.systemPrompt?.append ?? ""));
 
 /** Calls a tool of the session's "piopio" MCP server: by HTTP, or by starting its command and talking over stdio. */
 async function callPiopio(server: any, name: string, args: unknown): Promise<any> {
@@ -128,7 +130,7 @@ async function prompt(sessionId: string, blocks: any[]) {
 	}
 	if (s.cancelled) return { stopReason: "cancelled" };
 	const q = text.trim();
-	const answer = q === "effort?" ? `Effort: ${setting(s, thinkingId)}` : q === "mode?" ? `Mode: ${setting(s, "mode")}` : q === "model?" ? `Model: ${setting(s, "model")}` : `Echo: ${[...resources, text].join("\n")}`;
+	const answer = q === "instructions?" ? `Instructions: ${s.instructions || "none"}` : q === "effort?" ? `Effort: ${setting(s, thinkingId)}` : q === "mode?" ? `Mode: ${setting(s, "mode")}` : q === "model?" ? `Model: ${setting(s, "model")}` : `Echo: ${[...resources, text].join("\n")}`;
 	update(sessionId, { sessionUpdate: "agent_thought_chunk", content: { type: "text", text: "Thinking it over." } });
 	for (const piece of answer.match(/.{1,12}/gs) ?? []) update(sessionId, { sessionUpdate: "agent_message_chunk", content: { type: "text", text: piece } });
 	update(sessionId, { sessionUpdate: "usage_update", used: 1200, size: 200000 });
@@ -139,15 +141,15 @@ async function handle(m: any): Promise<unknown> {
 	const p = m.params ?? {};
 	switch (m.method) {
 		case "initialize":
-			return { protocolVersion: 1, agentInfo: { name: `fake ${agent}`, version: "1.0.0-fake" }, agentCapabilities: { loadSession: true, sessionCapabilities: { close: {}, delete: {} }, ...(isCodex ? { mcpCapabilities: { http: true, sse: false } } : {}) }, authMethods: [] };
+			return { protocolVersion: 1, agentInfo: { name: `fake ${agent}`, version: "1.0.0-fake" }, agentCapabilities: { loadSession: true, sessionCapabilities: { close: {}, delete: {}, ...(isCodex ? { systemPrompt: {} } : {}) }, ...(isCodex ? { mcpCapabilities: { http: true, sse: false } } : { _meta: { antigravity: { systemPrompt: { append: true } } } }) }, authMethods: [] };
 		case "session/new": {
 			const sessionId = `fake-acp-${process.pid}-${++counter}`;
-			sessions.set(sessionId, { cwd: p.cwd, options: configOptions(), cancelled: false, mcp: p.mcpServers ?? [] });
+			sessions.set(sessionId, { cwd: p.cwd, options: configOptions(), cancelled: false, mcp: p.mcpServers ?? [], instructions: instructionsOf(p) });
 			if (isCodex) send({ jsonrpc: "2.0", method: "_auth/status_update", params: { authStatus: { kind: "account", label: "ChatGPT Plus" } } });
 			return { sessionId, configOptions: sessions.get(sessionId)!.options, ...(isCodex ? {} : { _meta: { antigravity: { tier: { name: "Google AI Pro" } } } }) };
 		}
 		case "session/load": {
-			sessions.set(p.sessionId, { cwd: p.cwd, options: configOptions(), cancelled: false, mcp: p.mcpServers ?? [] });
+			sessions.set(p.sessionId, { cwd: p.cwd, options: configOptions(), cancelled: false, mcp: p.mcpServers ?? [], instructions: instructionsOf(p) });
 			// The real agents replay the conversation; the client already has it.
 			update(p.sessionId, { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "(replayed history)" } });
 			return { configOptions: sessions.get(p.sessionId)!.options };

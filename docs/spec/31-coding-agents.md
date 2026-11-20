@@ -153,9 +153,7 @@ Decided 2026-11-20 with the user on [picker.html](../design/agent-runtimes/picke
   found a fact in another conversation.
 - **Thinking level:** Claude Code's effort is set when its session starts, so a new level ends the session and the next
   message starts it again, resumed, with that effort.
-- **Not yet:** an Undo link on the switch line (picking the previous model again before sending does it); computer use
-  for Claude Code (Piopio's computer-use tools aren't engine extensions yet); deleting a chat leaves Claude Code's own
-  session in `~/.claude/projects`.
+- **Not yet:** computer use for coding agents (Piopio's computer-use tools aren't engine extensions yet).
 
 - **A3 (2026-11-20):** `acp.ts` (a JSON-RPC client over the agent's stdio; each agent's command, modes, thinking setting,
   install and sign-in; detection by starting it once in a throwaway session, cached ten minutes) and `runtimes/acp.ts`
@@ -180,6 +178,21 @@ Decided 2026-11-20 with the user on [picker.html](../design/agent-runtimes/picke
   tray where they need to. Antigravity doesn't report an MCP tool's result, so the card shows what Piopio's tool
   answered. Tried for real: each found a fact in another conversation with `search_conversations` (Antigravity also
   read it with `read_conversation`). `PIOPIO_ACP_LOG=<folder>` keeps every ACP message for debugging.
+
+- **Finishing touches (2026-11-21):**
+  - **Undo:** after a switch, the session's state says who ran the conversation before (`state.handoff.from`) until the
+    first message goes to the new runner, and the composer shows a notice, "Now running in Codex · it starts from a
+    summary of this conversation", with **Undo** (picking that model again, which puts the earlier part back). It's
+    in the composer rather than on the transcript's line, which stays plain text.
+  - **Instructions:** what Piopio's tools add to the instructions (connected apps, About me, visuals) now reaches
+    Antigravity CLI and Codex too: ACP's `systemPrompt` in append mode for Codex, `_meta.antigravity.systemPrompt.append`
+    for Antigravity (found in its binary; both checked against the pretend agent).
+  - **Deleting a chat** deletes its sessions in the agents too: Claude Code's through the SDK's `deleteSession`,
+    Codex's with `session/delete` (Antigravity has no delete; its session is closed). A Build session's stay, as its pi
+    file goes to the Trash: you may carry on in the agent's CLI.
+  - The toolbar's file count leaves out "Conversation so far.md".
+  - Checked in the app: an agent's models at the side of its row (`PIOPIO_DEMO_AGENT_MENU`, captured with
+    `PIOPIO_SNAPSHOT_WINDOW=popover-last`) and the Undo notice (`PIOPIO_DEMO_SWITCH_MODEL` without a follow-up).
 
 ## 9. Not verified
 

@@ -287,6 +287,19 @@ export class AcpAgent {
 		return out;
 	}
 
+	/** Deletes one of its sessions (a deleted chat's), when it can delete them (Codex can; Antigravity only closes). */
+	async deleteSession(sessionId: string, cwd: string): Promise<void> {
+		const cmd = this.command();
+		if (!cmd || !existsSync(cwd)) return;
+		const conn = new AcpConnection(cmd.command, cmd.args, cwd);
+		try {
+			const init = await conn.request<{ agentCapabilities?: { sessionCapabilities?: Record<string, unknown> } }>("initialize", { protocolVersion: 1, clientCapabilities: CLIENT_CAPABILITIES }, 20_000);
+			if ("delete" in (init.agentCapabilities?.sessionCapabilities ?? {})) await conn.request("session/delete", { sessionId }, 20_000);
+		} finally {
+			conn.close();
+		}
+	}
+
 	/** Its models as the picker lists them (docs/spec/31 §5). */
 	async modelInfos(): Promise<ModelInfo[]> {
 		const s = await this.status();

@@ -223,6 +223,13 @@ export class ClaudeCodeAgent {
 		};
 	}
 
+	/** Deletes one of its sessions (a deleted chat's). Nothing when it's fake or can't. */
+	async deleteSession(sessionId: string, cwd: string): Promise<void> {
+		if (this.options.fake) return;
+		const sdk = await import("@anthropic-ai/claude-agent-sdk");
+		await sdk.deleteSession(sessionId, { dir: cwd });
+	}
+
 	/**
 	 * A one-off answer with no tools (titles, follow-ups, commit messages for a conversation on Claude Code: CA5), on
 	 * its smallest model. Undefined when it can't answer.

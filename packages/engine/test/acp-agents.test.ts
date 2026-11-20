@@ -169,6 +169,31 @@ test.each([
 	expect(states(a, sub).some((e) => e.state.status === "waiting_approval")).toBe(false);
 });
 
+test.each([
+	["Codex, as ACP's systemPrompt", CODEX],
+	["Antigravity CLI, in its _meta", AGY],
+])("Piopio's instructions reach %s", { timeout: 20_000 }, async (_name, model) => {
+	const a = await start();
+	const { ref } = await a.client.call("sessions.create", { kind: "thread", model });
+	const sub = (await a.client.call("sessions.subscribe", { ref })).subscriptionId as string;
+	await turn(a, ref, sub, "instructions?");
+	const said = answers((await a.client.call("sessions.open", { ref })) as Snapshot).at(-1)!;
+	expect(said).toMatch(/^Instructions: /);
+	expect(said).toContain("Visuals");
+});
+
+test("after a switch, the state says who ran it before (the composer's Undo) until the first message", { timeout: 20_000 }, async () => {
+	const a = await start();
+	const { ref } = await a.client.call("sessions.create", { kind: "thread", model: { provider: "faux", id: "faux-1" } });
+	const sub = (await a.client.call("sessions.subscribe", { ref })).subscriptionId as string;
+	await turn(a, ref, sub, "hello");
+	await a.client.call("sessions.configure", { ref, model: CODEX });
+	expect(((await a.client.call("sessions.open", { ref })) as Snapshot).state.handoff).toEqual({ from: { provider: "faux", id: "faux-1" } });
+	await turn(a, ref, sub, "go on");
+	expect(((await a.client.call("sessions.open", { ref })) as Snapshot).state.handoff).toBeUndefined();
+	expect(states(a, sub).at(-1)!.state.handoff).toBeUndefined();
+});
+
 test("ACP tool calls get Piopio's names and arguments", () => {
 	expect(acpTool({ kind: "execute", title: "ls", rawInput: { CommandLine: "ls -la" } })).toEqual({ name: "bash", args: { CommandLine: "ls -la", command: "ls -la" } });
 	expect(acpTool({ kind: "execute", rawInput: { command: ["git", "status"] } }).args.command).toBe("git status");

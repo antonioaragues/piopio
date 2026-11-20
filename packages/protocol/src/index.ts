@@ -370,6 +370,11 @@ export const SessionState = Type.Object({
 	/** Build: the agent's current checklist, and whether plan mode is on. */
 	todos: Type.Optional(Type.Array(Type.Object({ text: Type.String(), detail: Type.Optional(Type.String()), status: literals("pending", "in_progress", "done") }))),
 	planMode: Type.Optional(Type.Boolean()),
+	/**
+	 * The conversation just changed who runs it (docs/spec/31 CA7) and hasn't sent anything since: who ran it before, for
+	 * the composer's Undo.
+	 */
+	handoff: Type.Optional(Type.Object({ from: ModelRef })),
 	/** How full the model's context is (Build). `tokens` is null right after a compaction. */
 	context: Type.Optional(Type.Object({
 		tokens: Type.Union([Type.Number(), Type.Null()]),

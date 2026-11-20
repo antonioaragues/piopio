@@ -95,8 +95,8 @@ export class SegmentedRuntime implements Runtime {
 	constructor(
 		readonly inner: Runtime,
 		private readonly past: TimelineItem[],
-		/** The summary for the first message after the switch, and how to mark it sent. */
-		private handoff?: { summary: string; sent: () => void },
+		/** The summary for the first message after the switch, how to mark it sent, and who ran it before (Undo). */
+		private handoff?: { summary: string; sent: () => void; from: ModelRef },
 	) {
 		this.ref = inner.ref;
 		if (inner.edit) this.edit = (id, text) => inner.edit!(id, text);
@@ -107,11 +107,21 @@ export class SegmentedRuntime implements Runtime {
 
 	snapshot(): Snapshot {
 		const s = this.inner.snapshot();
-		return { ...s, items: [...this.past, ...s.items] };
+		return { ...s, items: [...this.past, ...s.items], state: this.withHandoff(s.state) };
+	}
+
+	private withHandoff(state: Snapshot["state"]): Snapshot["state"] {
+		return this.handoff ? { ...state, handoff: { from: this.handoff.from } } : state;
 	}
 
 	onEvents(listener: (events: SessionEvent[]) => void): () => void {
-		return this.inner.onEvents((events) => listener(events.map((e) => (e.type === "resnapshot" ? { ...e, snapshot: { ...e.snapshot, items: [...this.past, ...e.snapshot.items] } } : e))));
+		return this.inner.onEvents((events) =>
+			listener(
+				events.map((e) =>
+					e.type === "resnapshot" ? { ...e, snapshot: { ...e.snapshot, items: [...this.past, ...e.snapshot.items], state: this.withHandoff(e.snapshot.state) } } : e.type === "state" ? { ...e, state: this.withHandoff(e.state) } : e,
+				),
+			),
+		);
 	}
 
 	async submit(text: string, options: SubmitOptions) {

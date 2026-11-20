@@ -186,6 +186,12 @@ export class ModelHub {
 		return [...claude, ...acp.flat()];
 	}
 
+	/** Deletes a coding agent's own session (a deleted chat's, docs/spec/31); best effort. */
+	async forgetAgentSession(provider: string, sessionId: string, cwd: string): Promise<void> {
+		if (provider === CLAUDE_CODE) return this.claudeCode.deleteSession(sessionId, cwd);
+		await this.acpAgents.find((a) => a.spec.id === provider)?.deleteSession(sessionId, cwd);
+	}
+
 	/** Coding agents on this Mac, found or not (Settings › Models › Agents on this Mac). */
 	async listAgents(): Promise<ProviderInfo[]> {
 		if (!this.agentsOn) return [];
