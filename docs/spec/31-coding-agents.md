@@ -1,6 +1,6 @@
 # 31 · Coding agents: Claude Code, Codex and Antigravity run a conversation
 
-Status: decided 2026-11-20 from a question by the user; phase A1 (Claude Code) and A2's switching built the same day
+Status: decided 2026-11-20 from a question by the user; phases A1 (Claude Code) and A2 built the same day
 (§10). Mockups: [mockup.html](../design/agent-runtimes/mockup.html) (the idea) and
 [picker.html](../design/agent-runtimes/picker.html) (the picker and chip as decided).
 
@@ -143,9 +143,18 @@ Decided 2026-11-20 with the user on [picker.html](../design/agent-runtimes/picke
 - **App:** the two-part picker, the chip with the glyph, the toolbar's "runs in Claude Code", Settings › Models'
   "Agents on this Mac". Captures: `PIOPIO_FAKE_CLAUDE_CODE=1`, `PIOPIO_DEMO_PROMPT_MODEL`, `PIOPIO_DEMO_SWITCH_MODEL`,
   `PIOPIO_DEMO_MODEL_QUERY`.
-- **Not yet:** Piopio's tools through MCP (CA8, the rest of A2); an Undo link on the switch line (picking the previous
-  model again before sending does it); the thinking level as Claude Code's effort mid-session (it applies from the next
-  session).
+- **Piopio's tools (CA8, A2 done 2026-11-20):** `runtimes/claude-code-tools.ts` runs the extensions a Build session loads
+  (browser, connected apps, visuals, earlier conversations, and About me in a chat) against a stand-in for pi's API and
+  serves their tools as the in-process MCP server "piopio" (`mcp__piopio__<name>`); what they add to the system prompt
+  is appended to Claude Code's own. They're allowed without asking Claude Code's way: they ask through the tray where
+  they need to (a connector's change, acting on a site), as in Build, and their cards use Piopio's names. Tried with the
+  user's real Claude Code: it loaded `search_conversations` (Claude Code defers MCP tools behind its ToolSearch) and
+  found a fact in another conversation.
+- **Thinking level:** Claude Code's effort is set when its session starts, so a new level ends the session and the next
+  message starts it again, resumed, with that effort.
+- **Not yet:** an Undo link on the switch line (picking the previous model again before sending does it); computer use
+  for Claude Code (Piopio's computer-use tools aren't engine extensions yet); deleting a chat leaves Claude Code's own
+  session in `~/.claude/projects`.
 
 ## 9. Not verified
 

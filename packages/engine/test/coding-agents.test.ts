@@ -218,6 +218,44 @@ describe("switching between Piopio's agent and Claude Code (docs/spec/31 CA7)", 
 	});
 });
 
+describe("Piopio's tools in Claude Code (docs/spec/31 CA8)", () => {
+	test("it searches your other conversations and shows a visual, through the piopio MCP server; the cards use Piopio's names", { timeout: 30_000 }, async () => {
+		const a = await start();
+		const other = await a.client.call("sessions.create", { kind: "thread", model: { provider: "faux", id: "faux-1" } });
+		const otherSub = (await a.client.call("sessions.subscribe", { ref: other.ref })).subscriptionId as string;
+		await a.client.call("sessions.submit", { ref: other.ref, input: { text: "pineapple pizza plans for Friday" } });
+		await stateWhere(a, otherSub, (s) => s.status === "idle" && s.usage.outputTokens > 0);
+
+		const { ref } = await a.client.call("sessions.create", { kind: "thread", model: CLAUDE });
+		const sub = (await a.client.call("sessions.subscribe", { ref })).subscriptionId as string;
+		const script = ['call: search_conversations | {"query":"pineapple"}', 'call: show_visual | {"title":"Plan","html":"<p>Friday</p>"}'].join("\n");
+		await a.client.call("sessions.submit", { ref, input: { text: script } });
+		await stateWhere(a, sub, (s) => s.status === "idle" && s.usage.outputTokens > 0);
+		const tools = ((await a.client.call("sessions.open", { ref })) as Snapshot).items.flatMap((i) => (i.kind === "tool" ? [i] : []));
+		expect(tools.map((t) => [t.tool, t.status])).toEqual([
+			["search_conversations", "done"],
+			["show_visual", "done"],
+		]);
+		expect(tools[0]!.output).toContain("pineapple pizza");
+		expect(tools[1]!.output).toContain('Shown to the user as "Plan"');
+	});
+
+	test("a new thinking level starts Claude Code's session again with that effort, resumed", async () => {
+		const a = await start();
+		const { ref } = await a.client.call("sessions.create", { kind: "thread", model: CLAUDE });
+		const sub = (await a.client.call("sessions.subscribe", { ref })).subscriptionId as string;
+		await a.client.call("sessions.submit", { ref, input: { text: "effort?" } });
+		await stateWhere(a, sub, (s) => s.status === "idle" && s.usage.outputTokens > 0);
+		await a.client.call("sessions.configure", { ref, thinking: "high" });
+		await a.client.call("sessions.submit", { ref, input: { text: "effort?" } });
+		await stateWhere(a, sub, (s) => s.status === "idle" && s.usage.outputTokens >= 10);
+		const answers = ((await a.client.call("sessions.open", { ref })) as Snapshot).items.flatMap((i) => (i.kind === "assistant" ? [i.parts.map((p) => p.text).join("")] : []));
+		expect(answers).toEqual(["Effort: default", "Effort: high"]);
+		const stored = JSON.parse(readFileSync(join(a.home, "chats", "agents", `${ref.id}.json`), "utf8"));
+		expect(stored.sessionId).toMatch(/^fake-session-/);
+	});
+});
+
 test("Claude Code's tools get Piopio's names and details; modes map to its permission modes", () => {
 	expect(piopioTool("Read", { file_path: "/a/b.ts" })).toEqual({ name: "read", args: { file_path: "/a/b.ts", path: "/a/b.ts" } });
 	expect(piopioTool("Bash", { command: "ls" }).name).toBe("bash");

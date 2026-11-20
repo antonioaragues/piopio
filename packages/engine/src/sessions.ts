@@ -17,7 +17,12 @@ import { attachmentsDir, copyAttachments, deleteAttachments, toolImageKeeper } f
 import { draftAgent, type AgentDraft } from "./agent-draft.js";
 import { addWorktree, checkout, git as runGit, mergeWorktree, removeWorktree, status as gitStatus } from "./git.js";
 import { BuildRuntime } from "./runtimes/build.js";
-import { ClaudeCodeRuntime } from "./runtimes/claude-code.js";
+import { ClaudeCodeRuntime, type ToolAsk } from "./runtimes/claude-code.js";
+import type { ExtensionFactory } from "@earendil-works/pi-coding-agent";
+import { codingBrowserExtension } from "./tools/browser-tools.js";
+import { codingConnectorsExtension } from "./connectors/extension.js";
+import { codingVisualsExtension } from "./tools/visuals.js";
+import { historySdkExtension } from "./tools/history.js";
 import { isCodingAgent } from "./coding-agents.js";
 import { fileItems, handoffSummary, innerOf, pastItems, SegmentedRuntime, type Segment } from "./runtimes/segments.js";
 import { parseVerdict, REVIEW_SYSTEM, reviewPrompt, type TaskResult } from "@piopio/pi-extensions";
@@ -2792,7 +2797,31 @@ export class Sessions {
 			...(chat ? { chat: true } : {}),
 			keepImages: toolImageKeeper(attachmentsDir(this.paths.home, entry.ref.id)),
 			onAttention: (_kind, message) => this.onAttention?.({ ref: entry.ref, title: entry.title, kind: "waiting", message }),
+			tools: (ask) => this.piopioTools(entry, ask),
 		});
+	}
+
+	/**
+	 * Piopio's own tools for a conversation on a coding agent (docs/spec/31 CA8): the browser, connected apps, visuals,
+	 * earlier conversations and, in a chat, About me. The same extensions a Build session loads, asking through `ask`.
+	 */
+	private piopioTools(entry: CatalogEntry, ask: ToolAsk): ExtensionFactory[] {
+		const decision = async (request: { title: string; tool: string }, callId: string, signal: AbortSignal | undefined, canAlways = true) => {
+			const response = await ask({ title: request.title, tool: request.tool, callId }, signal);
+			return { approved: response?.decision === "allow" || response?.decision === "always", ...(response?.decision === "always" && canAlways ? { always: true } : {}), ...(response?.text ? { reason: response.text } : {}) };
+		};
+		const { browser } = this.browserFor(entry.ref);
+		const { visuals } = this.visualsFor(entry.ref);
+		const history = this.historyBridge(entry);
+		const off = () => [...(entry.toolsOff ?? []), ...(entry.ref.kind === "thread" ? (this.chat?.mcpOff() ?? []).map((name) => `mcp:${name}`) : [])];
+		this.aboutMeSdk ??= this.chat ? aboutMeSdkExtension(this.chat.aboutMe, this.chat.settings) : undefined;
+		return [
+			...(browser ? [codingBrowserExtension(browser, (callId, signal) => (request) => decision(request, callId, signal))] : []),
+			...(this.connectors ? [codingConnectorsExtension(this.connectors, (callId, signal) => (request) => decision(request, callId, signal, request.canAllowAlways), (id) => off().includes(`connector:${id}`))] : []),
+			codingVisualsExtension(visuals),
+			...(history ? [historySdkExtension(history)] : []),
+			...(entry.ref.kind === "thread" && this.aboutMeSdk ? [this.aboutMeSdk] : []),
+		];
 	}
 
 	private save(): void {

@@ -11,6 +11,8 @@ import type { ApprovalMode, Attachment, AttachmentInfo, ContainerRef, ModelRef, 
 import { CLAUDE_CODE, CLAUDE_CODE_NAME, type AgentMessage, type AgentPermissionMode, type AgentQuery, type AgentUserMessage, type CanUseTool, type ClaudeCodeAgent } from "../coding-agents.js";
 import { EngineError } from "../models.js";
 import { TimelineBuilder, type PiContentBlock, type PiMessage, type PiUsage, type ToolImageKeeper } from "../timeline/builder.js";
+import type { ExtensionFactory } from "@earendil-works/pi-coding-agent";
+import { collectTools, PIOPIO_MCP, PIOPIO_MCP_PREFIX, piopioServer } from "./claude-code-tools.js";
 import { PromptBroker } from "./prompts.js";
 import { Emitter, type Runtime, type SubmitOptions } from "./runtime.js";
 
@@ -32,7 +34,15 @@ export type ClaudeCodeOpenOptions = {
 	keepImages?: ToolImageKeeper;
 	/** Something waits on the user (an approval, a question), for notifications. */
 	onAttention?: (kind: "approval" | "question", message: string) => void;
+	/**
+	 * Piopio's own tools (docs/spec/31 CA8): the extensions Build loads, given a way to ask the user. Served to Claude Code
+	 * as the "piopio" MCP server.
+	 */
+	tools?: (ask: ToolAsk) => ExtensionFactory[];
 };
+
+/** How one of Piopio's tools asks the user (a connector's change, acting on a site): through the composer tray. */
+export type ToolAsk = (request: { title: string; tool: string; callId: string }, signal: AbortSignal | undefined) => Promise<PromptResponse | undefined>;
 
 /** Piopio's approval modes as Claude Code's permission modes (CA4). */
 export function permissionMode(mode: ApprovalMode): AgentPermissionMode {
@@ -54,6 +64,8 @@ function effortFor(thinking: string | undefined): string | undefined {
  * (`timeline/tool-details.ts`); other tools keep their own names.
  */
 export function piopioTool(name: string, input: Record<string, unknown>): { name: string; args: Record<string, unknown> } {
+	// Piopio's own tools, by their own names (the transcript draws visuals, browser and connector calls as it does in Build).
+	if (name.startsWith(PIOPIO_MCP_PREFIX)) return { name: name.slice(PIOPIO_MCP_PREFIX.length), args: input };
 	const path = typeof input.file_path === "string" ? input.file_path : typeof input.notebook_path === "string" ? input.notebook_path : undefined;
 	switch (name) {
 		case "Bash":
@@ -187,6 +199,11 @@ export class ClaudeCodeRuntime implements Runtime {
 	private busy = false;
 	/** Stopped by the user: the turn's "interrupted" result isn't an error. */
 	private stopping = false;
+	/** The thinking level changed: Claude Code's session restarts (resumed) with the new effort after this turn. */
+	private restart = false;
+	/** Calls to Piopio's tools Claude Code made and the MCP server hasn't run yet: their ids key the transcript's cards. */
+	private piopioCalls: { id: string; name: string; input: string }[] = [];
+	private turnAbort = new AbortController();
 
 	private constructor(private readonly options: ClaudeCodeOpenOptions) {
 		this.ref = options.ref;
@@ -301,6 +318,8 @@ export class ClaudeCodeRuntime implements Runtime {
 		const query = await this.options.agent.queryFn();
 		const mode = this.options.chat ? "acceptEdits" : permissionMode(this.options.approvalMode());
 		const effort = effortFor(this.thinking);
+		const piopio = this.options.tools ? collectTools(this.options.tools(this.ask)) : undefined;
+		const append = piopio ? await piopio.prompt().catch(() => "") : "";
 		this.inbox = new Inbox();
 		this.stderr = "";
 		this.query = query({
@@ -316,6 +335,9 @@ export class ClaudeCodeRuntime implements Runtime {
 				thinking: { type: "adaptive", display: "summarized" },
 				...(effort ? { effort } : {}),
 				...(this.stored.sessionId ? { resume: this.stored.sessionId } : {}),
+				...(piopio?.tools.length ? { mcpServers: { [PIOPIO_MCP]: piopioServer(piopio.tools, (name, args) => this.callIdFor(name, args), () => this.turnAbort.signal) } } : {}),
+				// Claude Code's own system prompt, with what Piopio's tools add (connected apps, About me, visuals).
+				...(append ? { systemPrompt: { type: "preset", preset: "claude_code", append } } : {}),
 				// The user's own Claude Code setup applies: CLAUDE.md, their settings, MCP servers and skills (CA2).
 				settingSources: ["user", "project", "local"],
 				stderr: (data: string) => (this.stderr = (this.stderr + data).slice(-2000)),
@@ -407,6 +429,7 @@ export class ClaudeCodeRuntime implements Runtime {
 				const tool = piopioTool(b.name, input);
 				s.blocks.push({ type: "toolCall", id: b.id, name: tool.name, arguments: tool.args });
 				this.toolStarted.set(b.id, { name: b.name, input, at: Date.now() });
+				if (b.name.startsWith(PIOPIO_MCP_PREFIX)) this.piopioCalls.push({ id: b.id, name: tool.name, input: JSON.stringify(input) });
 			}
 		}
 		const usage = usageOf(message.usage);
@@ -466,6 +489,11 @@ export class ClaudeCodeRuntime implements Runtime {
 			if (m.subtype !== "success") this.builder.system(`e${Date.now()}`, "error", `${CLAUDE_CODE_NAME}: ${text}`);
 		}
 		this.busy = false;
+		this.piopioCalls = [];
+		if (this.restart) {
+			this.restart = false;
+			this.endQuery();
+		}
 		this.builder.setState({ status: this.broker.list().length ? "waiting_approval" : "idle" });
 		this.emit();
 		const next = this.followUps.shift();
@@ -477,6 +505,8 @@ export class ClaudeCodeRuntime implements Runtime {
 
 	/** Claude Code's permission requests, as Piopio's prompts (CA4). */
 	private canUseTool: CanUseTool = async (tool, input, options) => {
+		// Piopio's own tools ask the user themselves where they need to (docs/spec/31 CA8).
+		if (tool.startsWith(PIOPIO_MCP_PREFIX)) return { behavior: "allow", updatedInput: input };
 		if (tool === "AskUserQuestion") return this.askQuestions(input, options.signal);
 		if (tool === "ExitPlanMode") {
 			if (!this.options.chat && this.options.approvalMode() === "read_only") {
@@ -523,7 +553,29 @@ export class ClaudeCodeRuntime implements Runtime {
 		return { behavior: "allow" as const, updatedInput: { ...input, answers } };
 	}
 
+	/** One of Piopio's tools asks the user. */
+	private ask: ToolAsk = (request, signal) => this.broker.ask({ kind: "approval", title: request.title, tool: request.tool, callId: request.callId }, signal);
+
+	/** The tool call Claude Code made for this run of one of Piopio's tools (same name and arguments, else same name). */
+	private callIdFor(name: string, args: Record<string, unknown>): string {
+		const json = JSON.stringify(args);
+		const i = this.piopioCalls.findIndex((c) => c.name === name && c.input === json);
+		const at = i >= 0 ? i : this.piopioCalls.findIndex((c) => c.name === name);
+		if (at < 0) return `piopio-${Date.now()}`;
+		return this.piopioCalls.splice(at, 1)[0]!.id;
+	}
+
+	/** Ends Claude Code's session; the next message starts it again, resumed (a new effort, docs/spec/31). */
+	private endQuery(): void {
+		this.inbox?.end();
+		this.query?.close();
+		this.query = undefined;
+		this.inbox = undefined;
+	}
+
 	async abort(): Promise<void> {
+		this.turnAbort.abort();
+		this.turnAbort = new AbortController();
 		if (this.busy) this.stopping = true;
 		this.followUps = [];
 		this.broker.cancelAll();
@@ -542,7 +594,9 @@ export class ClaudeCodeRuntime implements Runtime {
 		if (change.thinking) {
 			if (change.thinking === "default") delete this.thinking;
 			else this.thinking = change.thinking;
-			// Effort is set when Claude Code's session starts: the next one picks it up.
+			// Effort is set when Claude Code's session starts: it starts again (resumed) for the next message.
+			if (this.busy) this.restart = true;
+			else this.endQuery();
 			this.builder.setState(this.thinking ? { thinking: this.thinking } : {});
 		}
 		if (change.approvalMode && !this.options.chat) {
