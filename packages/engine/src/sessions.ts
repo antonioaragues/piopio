@@ -2447,7 +2447,7 @@ export class Sessions {
 	}
 
 	private async createRuntime(entry: CatalogEntry): Promise<Runtime> {
-		const model = entry.model ?? this.hub.defaultModel;
+		const model = entry.ref.kind === "agent" ? (entry.model ?? this.hub.defaultModel) : await this.conversationModel(entry);
 		if (entry.ref.kind === "agent") {
 			const id = entry.ref.id;
 			this.agentDefinition(id);
@@ -2620,6 +2620,24 @@ export class Sessions {
 	}
 
 	/** A chat on the pi SDK, with a chat's tools (BuildRuntime's ChatProfile); its session file is in `chatsDir`. */
+	/**
+	 * A conversation's model. One with no message yet follows the default of now when its own provider isn't
+	 * connected: it got the default of when it was made, maybe before any provider was (OpenRouter's then), and
+	 * nobody chose it. One with messages keeps its model; the error then says to connect it or pick another.
+	 */
+	private async conversationModel(entry: CatalogEntry): Promise<ModelRef> {
+		const model = entry.model ?? this.hub.defaultModel;
+		if (model.provider === "faux") return model;
+		const connected = await this.hub.connected();
+		if (connected.size === 0 || connected.has(model.provider)) return model;
+		const file = entry.sessionFile;
+		if (file && existsSync(file) && readFileSync(file, "utf8").includes('"type":"message"')) return model;
+		entry.model = this.hub.defaultModel;
+		this.save();
+		this.changed(entry);
+		return entry.model;
+	}
+
 	private async openChat(entry: CatalogEntry, model: ModelRef): Promise<Runtime> {
 		const cwd = entry.cwd && existsSync(entry.cwd) ? entry.cwd : this.scratch(entry.ref.id);
 		if (entry.cwd !== cwd) entry.cwd = cwd;

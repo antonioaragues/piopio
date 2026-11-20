@@ -102,7 +102,8 @@ describe.each(["thread", "build"] as const)("%s session", (kind) => {
 test("asks the client for the OpenRouter key and reports AUTH when it has none", async () => {
 	const a = await start(undefined, false);
 	const { ref } = await a.client.call("sessions.create", { kind: "thread" });
-	await expect(a.client.call("sessions.submit", { ref, input: { text: "hi" } })).rejects.toMatchObject({ data: { code: "AUTH" } });
+	// Nothing connected: the default model's provider wasn't a choice, so the error doesn't name it.
+	await expect(a.client.call("sessions.submit", { ref, input: { text: "hi" } })).rejects.toMatchObject({ data: { code: "AUTH" }, message: "No model provider is connected. Connect one in Settings › Models." });
 });
 
 test("rejects bad params and unauthenticated calls", async () => {
@@ -2420,6 +2421,23 @@ describe("model providers (docs/spec/10-model-providers)", () => {
 		await new Promise((r) => setTimeout(r, 10));
 		expect(events.at(-1)).toEqual({ type: "failed", message: "Cancelled." });
 		expect(flows.connecting("openai")).toBe(false);
+	});
+
+	test("a conversation with no message yet follows the default once a provider is connected", async () => {
+		const a = await start(undefined, false);
+		const { ref } = await a.client.call("sessions.create", { kind: "thread" });
+		// Nothing connected: it got OpenRouter's default model, which nobody chose.
+		expect((await a.client.call("sessions.list")).sessions[0].model).toMatchObject({ provider: "openrouter" });
+		await expect(a.client.call("sessions.submit", { ref, input: { text: "hi" } })).rejects.toMatchObject({ message: /No model provider is connected/ });
+		const { loginId } = await a.client.call("providers.login", { provider: "openai-api", method: "api_key" });
+		await until(() => authEvents(a, loginId).some((e) => e.type === "prompt"));
+		const prompt = authEvents(a, loginId).find((e) => e.type === "prompt");
+		await a.client.call("providers.answer", { loginId, promptId: prompt.promptId, value: "sk-openai-test" });
+		await until(() => authEvents(a, loginId).some((e) => e.type === "done" || e.type === "failed"));
+		// Opening it again: no message yet, so it takes the default of now, the OpenAI API's.
+		const sub = await a.client.call("sessions.subscribe", { ref });
+		expect(sub.snapshot.state.model).toMatchObject({ provider: "openai-api" });
+		expect((await a.client.call("sessions.list")).sessions[0].model).toMatchObject({ provider: "openai-api" });
 	});
 
 	test("refreshed sign-in tokens are written back to the Keychain", async () => {
