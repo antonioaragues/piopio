@@ -2,7 +2,7 @@ import PiopioKit
 import PiopioTranscript
 import SwiftUI
 
-/// The one sidebar (docs/design/grey 9a): a 52pt top bar (traffic lights, toggle, New), Search ⌘K, Home and Automations,
+/// The one sidebar (docs/design/grey 9a): a 52pt top bar (traffic lights, toggle), Search ⌘K beside New (a round +), Home and Automations,
 /// then Pinned · Agents · Projects · Conversations (docs/spec/18 §21), and a footer with the cost today and Settings.
 /// Rows are plain: a 16pt outline glyph, the name, and status only as a blue dot (needs you) or a grey ring (running).
 /// Long lists show only what's live: a project's sessions that are running, waiting on you or touched in the last
@@ -30,11 +30,10 @@ struct MainSidebar: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // The traffic lights' row: the toggle and New on the right.
+            // The traffic lights' row: the toggle on the right (New sits beside Search).
             HStack(spacing: 2) {
                 Spacer()
                 SidebarToggle()
-                ComposeButton()
             }
             .padding(.horizontal, 12)
             .frame(height: Shell.barHeight)
@@ -82,19 +81,14 @@ struct MainSidebar: View {
 
     // MARK: Search and footer
 
-    /// Search ⌘K: opens the search and command box (10b).
+    /// Search ⌘K (opens the search and command box, 10b) as a pill, and New beside it: a round black + whose menu
+    /// starts a conversation, an agent or a project.
     private var searchRow: some View {
-        Button { NotificationCenter.default.post(name: .showPalette, object: nil) } label: {
-            HStack(spacing: 10) {
-                Image(systemName: "magnifyingglass").font(.system(size: 14)).foregroundStyle(Color.dsFg2).frame(width: 18)
-                Text("Search").font(.system(size: 13)).foregroundStyle(Color.dsFg)
-                Spacer()
-                Text("⌘K").font(.system(size: 11)).foregroundStyle(Color.dsFg3)
-            }
-            .rowChrome(selected: false)
+        HStack(spacing: 8) {
+            SearchPill()
+            ComposeButton()
         }
-        .buttonStyle(.plain)
-        .help("Search and commands (⌘K)")
+        .padding(.bottom, 6)
     }
 
     /// Avatar, name, "This Mac · $0.91 today", and Settings.
@@ -667,34 +661,88 @@ struct RowGlyph: View {
 
 /// New (docs/spec/18 §21): a menu of New Conversation (the New conversation page, with no project) and New Agent (its
 /// start page). With Agents off it's a plain button for a new conversation. Projects are made from the Projects +.
-struct ComposeButton: View {
+/// The sidebar's Search: a pill on the window's field grey that opens the search and command box (⌘K).
+private struct SearchPill: View {
+    @State private var hovering = false
+
     var body: some View {
-        if Areas.shared.set.showsAgents {
+        Button { NotificationCenter.default.post(name: .showPalette, object: nil) } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass").font(.system(size: 12.5, weight: .medium)).foregroundStyle(Color.dsFg2)
+                Text("Search").font(.system(size: 13)).foregroundStyle(Color.dsFg2)
+                Spacer(minLength: 4)
+                Text("⌘K").font(.system(size: 11)).foregroundStyle(Color.dsFg3)
+            }
+            .padding(.horizontal, 12)
+            .frame(height: 32)
+            .background(hovering ? Color.dsChip : Color.dsField, in: Capsule())
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help("Search and commands (⌘K)")
+    }
+}
+
+/// New: a round black + (the sidebar's one black action). Its menu holds what you can start, by the areas that are on
+/// (the same as File › New); with neither Agents nor Chat on, it starts a conversation straight away.
+struct ComposeButton: View {
+    private var areas: AreaSet { Areas.shared.set }
+
+    var body: some View {
+        if areas.showsAgents || areas.showsChats {
             Menu {
                 Button { NotificationCenter.default.post(name: .newChat, object: nil) } label: {
                     Label("New Conversation", systemImage: "bubble.left")
                 }
                 .keyboardShortcut("n")
-                Button { NotificationCenter.default.post(name: .newAgent, object: "form") } label: {
-                    Label("New Agent", systemImage: "bird")
+                if areas.showsAgents {
+                    Button { NotificationCenter.default.post(name: .newAgent, object: "form") } label: {
+                        Label("New Agent", systemImage: "bird")
+                    }
+                    .keyboardShortcut("n", modifiers: [.command, .option])
                 }
-                .keyboardShortcut("n", modifiers: [.command, .option])
+                if areas.showsChats {
+                    Button { NotificationCenter.default.post(name: .newProject, object: nil) } label: {
+                        Label("New Project…", systemImage: "folder.badge.plus")
+                    }
+                    .keyboardShortcut("n", modifiers: [.command, .shift])
+                }
             } label: {
-                Image(systemName: "square.and.pencil")
+                Image(systemName: "plus")
             }
             .menuStyle(.button)
             .menuIndicator(.hidden)
-            .buttonStyle(IconButtonStyle())
+            .buttonStyle(NewButtonStyle())
             .fixedSize()
-            .help("New conversation or agent")
+            .help("New conversation, agent or project")
             .accessibilityLabel("New")
         } else {
             Button { NotificationCenter.default.post(name: .newChat, object: nil) } label: {
-                Image(systemName: "square.and.pencil")
+                Image(systemName: "plus")
             }
-            .buttonStyle(IconButtonStyle())
+            .buttonStyle(NewButtonStyle())
             .help("New conversation (⌘N)")
             .accessibilityLabel("New conversation")
+        }
+    }
+}
+
+/// A 32pt black circle with a white glyph (inverted in dark mode).
+private struct NewButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View { NewButtonBody(configuration: configuration) }
+
+    private struct NewButtonBody: View {
+        let configuration: ButtonStyleConfiguration
+        @State private var hovering = false
+        var body: some View {
+            configuration.label
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Color.dsInvFg)
+                .frame(width: 32, height: 32)
+                .background(Color.dsInv.opacity(configuration.isPressed ? 0.75 : hovering ? 0.88 : 1), in: Circle())
+                .contentShape(Circle())
+                .onHover { hovering = $0 }
         }
     }
 }

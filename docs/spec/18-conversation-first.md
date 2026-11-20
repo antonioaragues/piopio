@@ -590,3 +590,13 @@ sidebar, with a +, and to put New Agent in the compose button
 | CF28 | **An agent's page fills the content card.** The agents' list column beside it is gone; so is the Agents row under Home and Automations. |
 | CF29 | **The compose button is a menu:** New Conversation (⌘N) and New Agent (⌥⌘N, also in File and the command palette). Both open their start pages. With Agents turned off it stays a plain button. Projects are still made from the Projects +. |
 | CF30 | **piopio tries on jobs on the New agent page:** secretary, doctor, detective, chef, mail carrier, coach, one every 2.8 s with a hop and its line in a bubble ("Say ahh… peep!"), and the box's example follows the job. Clicking it moves to the next job. Picking a template dresses it for that template's job (a briefing is the secretary, a watcher the detective); a template or anything typed stops the cycle. |
+
+## 22. New moves beside Search (2026-11-20)
+
+**Why:** the compose button was a small pencil next to the sidebar toggle, easy to miss, and once it became a menu
+the pencil no longer said what it does. The user compared three placements and picked a search pill with a round +
+beside it (option C2 of the [mockups](https://claude.ai/artifact/Bec6wd9tVE31VgftFmL8Eg)).
+
+| ID | Decision |
+|---|---|
+| CF31 | **Search and New share the sidebar's first row.** The top bar keeps only the toggle. Search is a pill on the window's field grey ("Search", ⌘K) that opens the search and command box; New is a 32 pt black circle with a +, the sidebar's one black action. Clicking it opens its menu: New Conversation (⌘N), New Agent (⌥⌘N, with Agents on) and New Project… (⇧⌘N, with Chat on), the same as File › New. With neither Agents nor Chat on, it starts a conversation straight away. This replaces CF29's pencil, and New Project joins the menu (the Projects + still makes one too). |
