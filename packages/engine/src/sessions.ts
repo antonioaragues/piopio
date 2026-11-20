@@ -20,6 +20,7 @@ import { BuildRuntime } from "./runtimes/build.js";
 import { ClaudeCodeRuntime, type ToolAsk } from "./runtimes/claude-code.js";
 import { AcpRuntime } from "./runtimes/acp.js";
 import { acpSpec } from "./acp.js";
+import { ToolServer } from "./tool-server.js";
 import type { ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import { codingBrowserExtension } from "./tools/browser-tools.js";
 import { codingConnectorsExtension } from "./connectors/extension.js";
@@ -2494,6 +2495,7 @@ export class Sessions {
 		this.open.clear();
 		await Promise.allSettled(runtimes.map((r) => (r.status === "fulfilled" ? r.value.close() : undefined)));
 		this.search.close();
+		await this.toolServer?.close();
 	}
 
 	private async openRuntime(entry: CatalogEntry): Promise<Runtime> {
@@ -2775,6 +2777,8 @@ export class Sessions {
 	}
 
 	private aboutMeSdk?: ReturnType<typeof aboutMeSdkExtension>;
+	/** Piopio's tools by address, for coding agents that take MCP servers that way (docs/spec/31 CA8). */
+	private toolServer?: ToolServer;
 
 	/**
 	 * A conversation run by Claude Code (docs/spec/31): in the project's folder, or a chat's own folder. Its transcript
@@ -2803,6 +2807,8 @@ export class Sessions {
 				...(chat ? { chat: true } : {}),
 				keepImages: toolImageKeeper(attachmentsDir(this.paths.home, entry.ref.id)),
 				onAttention: (message) => this.onAttention?.({ ref: entry.ref, title: entry.title, kind: "waiting", message }),
+				tools: (ask) => this.piopioTools(entry, ask),
+				toolServer: (this.toolServer ??= new ToolServer()),
 			});
 		}
 		return ClaudeCodeRuntime.open({

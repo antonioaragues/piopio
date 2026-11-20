@@ -11,6 +11,10 @@ import type { ApprovalMode, Attachment, AttachmentInfo, ContainerRef, ModelRef, 
 import { AcpConnection, CLIENT_CAPABILITIES, type AcpAgent, type ConfigOption } from "../acp.js";
 import { EngineError } from "../models.js";
 import { emptyUsage, TimelineBuilder, type PiContentBlock, type PiMessage, type ToolImageKeeper } from "../timeline/builder.js";
+import type { ExtensionFactory } from "@earendil-works/pi-coding-agent";
+import { bridgeScript, type ToolServer } from "../tool-server.js";
+import { collectTools, PIOPIO_MCP, type CapturedTool } from "./claude-code-tools.js";
+import type { ToolAsk } from "./claude-code.js";
 import { PromptBroker } from "./prompts.js";
 import { Emitter, type Runtime, type SubmitOptions } from "./runtime.js";
 
@@ -43,6 +47,9 @@ export type AcpOpenOptions = {
 	chat?: boolean;
 	keepImages?: ToolImageKeeper;
 	onAttention?: (message: string) => void;
+	/** Piopio's own tools (docs/spec/31 CA8), served to the agent as the MCP server "piopio" by `toolServer`. */
+	tools?: (ask: ToolAsk) => ExtensionFactory[];
+	toolServer?: ToolServer;
 };
 
 const WRITES = new Set(["edit", "delete", "move", "execute"]);
@@ -102,6 +109,13 @@ export class AcpRuntime implements Runtime {
 	private followUps: Input[] = [];
 	private readonly tools = new Map<string, ToolState>();
 	private starting?: Promise<void>;
+	/** Piopio's tools for this conversation, and their address at the tool server. */
+	private piopio?: { tools: CapturedTool[]; url: string; close: () => void };
+	/** Calls to Piopio's tools the agent announced and the tool server hasn't run yet (their ids key the cards). */
+	private piopioCalls: { id: string; name: string; input: string }[] = [];
+	/** What Piopio's tools answered, by call: the card's output when the agent doesn't report it (Antigravity). */
+	private readonly piopioResults = new Map<string, string>();
+	private turnAbort = new AbortController();
 
 	private constructor(private readonly options: AcpOpenOptions) {
 		this.ref = options.ref;
@@ -189,17 +203,18 @@ export class AcpRuntime implements Runtime {
 			this.broker.cancelAll();
 			if (this.busy) this.fail(message);
 		};
-		const init = await conn.request<{ agentCapabilities?: { loadSession?: boolean } }>("initialize", { protocolVersion: 1, clientCapabilities: CLIENT_CAPABILITIES }, 30_000);
+		const init = await conn.request<{ agentCapabilities?: { loadSession?: boolean; mcpCapabilities?: { http?: boolean } } }>("initialize", { protocolVersion: 1, clientCapabilities: CLIENT_CAPABILITIES }, 30_000);
+		const mcpServers = await this.mcpServers(Boolean(init.agentCapabilities?.mcpCapabilities?.http));
 		let session: { sessionId?: string; configOptions?: ConfigOption[] } | undefined;
 		if (this.stored.sessionId && init.agentCapabilities?.loadSession) {
 			this.loading = true;
 			this.sessionId = this.stored.sessionId;
-			session = await conn.request<{ configOptions?: ConfigOption[] }>("session/load", { sessionId: this.stored.sessionId, cwd: this.options.cwd, mcpServers: [] }, 60_000).catch(() => undefined);
+			session = await conn.request<{ configOptions?: ConfigOption[] }>("session/load", { sessionId: this.stored.sessionId, cwd: this.options.cwd, mcpServers }, 60_000).catch(() => undefined);
 			this.loading = false;
 			if (session) session.sessionId = this.stored.sessionId;
 		}
 		if (!session) {
-			session = await conn.request<{ sessionId: string; configOptions?: ConfigOption[] }>("session/new", { cwd: this.options.cwd, mcpServers: [] }, 60_000);
+			session = await conn.request<{ sessionId: string; configOptions?: ConfigOption[] }>("session/new", { cwd: this.options.cwd, mcpServers }, 60_000);
 			this.stored.sessionId = session.sessionId;
 			this.save();
 		}
@@ -209,6 +224,49 @@ export class AcpRuntime implements Runtime {
 		await this.setOption("model", this.model.id, true);
 		await this.applyThinking();
 		await this.applyMode();
+	}
+
+	/**
+	 * Piopio's tools as an MCP server the agent reaches: by address when it can use HTTP (Codex), else through the stdio
+	 * bridge it starts (Antigravity CLI).
+	 */
+	private async mcpServers(http: boolean): Promise<unknown[]> {
+		if (!this.options.tools || !this.options.toolServer) return [];
+		if (!this.piopio) {
+			const collected = collectTools(this.options.tools(this.ask)).tools;
+			if (!collected.length) return [];
+			const tools = collected.map((t): CapturedTool => ({
+				...t,
+				execute: async (callId, params, signal, onUpdate, ctx) => {
+					const r = await t.execute(callId, params, signal, onUpdate, ctx);
+					this.piopioResults.set(callId, (r.content ?? []).flatMap((c) => (c.type === "text" ? [c.text ?? ""] : [])).join("\n"));
+					return r;
+				},
+			}));
+			const served = await this.options.toolServer.register({ tools: () => tools, callIdFor: (name, args) => this.callIdFor(name, args), signal: () => this.turnAbort.signal });
+			this.piopio = { tools, ...served };
+		}
+		return http ? [{ type: "http", name: PIOPIO_MCP, url: this.piopio.url, headers: [] }] : [{ name: PIOPIO_MCP, command: process.execPath, args: [bridgeScript(), this.piopio.url], env: [] }];
+	}
+
+	/** One of Piopio's tools asks the user. */
+	private ask: ToolAsk = (request, signal) => this.broker.ask({ kind: "approval", title: request.title, tool: request.tool, callId: request.callId }, signal);
+
+	/** One of Piopio's tools, if the agent's tool call is one (agents name MCP tools in their own ways). */
+	private piopioName(call: Pick<AcpToolCall, "title" | "kind"> & { name?: string }): string | undefined {
+		if (!this.piopio) return undefined;
+		// "mcp.piopio.search_conversations" (Codex), "mcp_piopio_search_conversations" (Antigravity), or the bare name.
+		const words = `${call.name ?? ""} ${call.title ?? ""}`.split(/[^A-Za-z0-9_]+/);
+		return this.piopio.tools.find((t) => words.some((w) => w === t.name || w.endsWith(`piopio_${t.name}`) || w.endsWith(`piopio__${t.name}`)))?.name;
+	}
+
+	/** The agent's tool call for this run of one of Piopio's tools (same name and arguments, else same name). */
+	private callIdFor(name: string, args: Record<string, unknown>): string {
+		const json = JSON.stringify(args);
+		const i = this.piopioCalls.findIndex((c) => c.name === name && c.input === json);
+		const at = i >= 0 ? i : this.piopioCalls.findIndex((c) => c.name === name);
+		if (at < 0) return `piopio-${Date.now()}`;
+		return this.piopioCalls.splice(at, 1)[0]!.id;
 	}
 
 	/** Changes one of the session's settings when the agent offers that value. */
@@ -300,6 +358,7 @@ export class AcpRuntime implements Runtime {
 		else if (result.stopReason === "max_tokens" || result.stopReason === "max_turn_requests") this.builder.system(`e${Date.now()}`, "warn", `${this.name} stopped: it reached its limit for one turn.`);
 		this.busy = false;
 		this.stopping = false;
+		this.piopioCalls = [];
 		this.builder.setState({ status: this.broker.list().length ? "waiting_approval" : "idle" });
 		this.emit();
 		const next = this.followUps.shift();
@@ -383,7 +442,11 @@ export class AcpRuntime implements Runtime {
 	/** A new tool call: it ends the answer so far and shows as running (its arguments may still grow). */
 	private toolCall(call: AcpToolCall): void {
 		if (this.tools.has(call.toolCallId)) return this.toolUpdate(call);
-		const tool = acpTool(call);
+		const own = this.piopioName(call as AcpToolCall & { name?: string });
+		// Codex wraps an MCP call's arguments: { server, tool, arguments }.
+		const ownArgs = (call.rawInput?.arguments && typeof call.rawInput.arguments === "object" ? call.rawInput.arguments : call.rawInput ?? {}) as Record<string, unknown>;
+		const tool = own ? { name: own, args: ownArgs } : acpTool(call);
+		if (own) this.piopioCalls.push({ id: call.toolCallId, name: own, input: JSON.stringify(ownArgs) });
 		const s = this.current ?? this.beginAssistant();
 		s.blocks.push({ type: "toolCall", id: call.toolCallId, name: tool.name, arguments: tool.args });
 		this.tools.set(call.toolCallId, { name: tool.name, args: tool.args, at: Date.now(), terminal: call._meta?.terminal_output_delta?.data ?? "", done: false });
@@ -405,8 +468,11 @@ export class AcpRuntime implements Runtime {
 		this.tools.delete(id);
 		const texts = (call.content ?? []).flatMap((c) => (c.type === "content" && c.content.type === "text" ? [c.content.text ?? ""] : []));
 		const images = (call.content ?? []).flatMap((c) => (c.type === "content" && c.content.type === "image" && c.content.data ? [{ type: "image" as const, data: c.content.data, mimeType: c.content.mimeType ?? "image/png" }] : []));
-		const raw = typeof call.rawOutput?.output === "string" ? call.rawOutput.output : "";
-		let output = texts.join("\n") || t.terminal || raw;
+		// Codex reports an MCP tool's result as `rawOutput.result.content`.
+		const mcp = (call.rawOutput?.result as { content?: { type: string; text?: string }[] } | undefined)?.content ?? [];
+		const raw = typeof call.rawOutput?.output === "string" ? call.rawOutput.output : mcp.flatMap((c) => (c.type === "text" ? [c.text ?? ""] : [])).join("\n");
+		let output = texts.join("\n") || t.terminal || raw || this.piopioResults.get(id) || "";
+		this.piopioResults.delete(id);
 		const exit = t.exitCode ?? (typeof call.rawOutput?.exit_code === "number" ? call.rawOutput.exit_code : undefined);
 		const failed = call.status === "failed" || (exit !== undefined && exit !== 0);
 		if (t.name === "bash" && exit !== undefined && !/exited with code/.test(output)) output = `${output}${output.endsWith("\n") || !output ? "" : "\n"}Command exited with code ${exit}`;
@@ -424,6 +490,9 @@ export class AcpRuntime implements Runtime {
 		const call = (params.toolCall ?? {}) as AcpToolCall;
 		const options = (params.options as { optionId: string; name: string; kind: string }[] | undefined) ?? [];
 		const pick = (...kinds: string[]) => options.find((o) => kinds.includes(o.kind))?.optionId;
+		// Piopio's own tools ask the user themselves where they need to (docs/spec/31 CA8). Codex's request names only the call.
+		const known = this.tools.get(call.toolCallId);
+		if (this.piopioName(call as AcpToolCall & { name?: string }) || (known && this.piopio?.tools.some((t) => t.name === known.name))) return { outcome: { outcome: "selected", optionId: pick("allow_once", "allow_always") } };
 		const reject = { outcome: { outcome: "selected", optionId: pick("reject_once", "reject_always") } };
 		// Read only refuses changes outright (an agent's "read-only" may still ask).
 		if (!this.options.chat && this.options.approvalMode() === "read_only" && WRITES.has(call.kind ?? "")) return pick("reject_once", "reject_always") ? reject : { outcome: { outcome: "cancelled" } };
@@ -449,6 +518,8 @@ export class AcpRuntime implements Runtime {
 	// ── Controls ─────────────────────────────────────────────────────────────
 
 	async abort(): Promise<void> {
+		this.turnAbort.abort();
+		this.turnAbort = new AbortController();
 		if (this.busy) this.stopping = true;
 		this.followUps = [];
 		this.broker.cancelAll();
@@ -483,5 +554,7 @@ export class AcpRuntime implements Runtime {
 		this.conn = undefined;
 		if (conn && this.sessionId) await conn.request("session/close", { sessionId: this.sessionId }, 3000).catch(() => undefined);
 		conn?.close();
+		this.piopio?.close();
+		this.piopio = undefined;
 	}
 }

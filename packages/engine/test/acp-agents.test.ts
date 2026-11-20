@@ -152,6 +152,23 @@ test("Codex: Piopio's modes are Codex's own; a chat on Piopio's agent switches t
 	expect(answers(snap).at(-1)).toBe("Mode: workspace-write");
 });
 
+test.each([
+	["Codex, by HTTP", CODEX],
+	["Antigravity CLI, through the stdio bridge", AGY],
+])("Piopio's tools reach %s; their cards use Piopio's names", { timeout: 30_000 }, async (_name, model) => {
+	const a = await start();
+	const other = await a.client.call("sessions.create", { kind: "thread", model: { provider: "faux", id: "faux-1" } });
+	const otherSub = (await a.client.call("sessions.subscribe", { ref: other.ref })).subscriptionId as string;
+	await turn(a, other.ref, otherSub, "pineapple pizza plans for Friday");
+	const { ref } = await a.client.call("sessions.create", { kind: "thread", model });
+	const sub = (await a.client.call("sessions.subscribe", { ref })).subscriptionId as string;
+	await turn(a, ref, sub, 'call: search_conversations | {"query":"pineapple"}');
+	const tool = ((await a.client.call("sessions.open", { ref })) as Snapshot).items.find((i) => i.kind === "tool");
+	expect(tool).toMatchObject({ tool: "search_conversations", status: "done" });
+	expect(tool?.kind === "tool" && tool.output).toContain("pineapple pizza");
+	expect(states(a, sub).some((e) => e.state.status === "waiting_approval")).toBe(false);
+});
+
 test("ACP tool calls get Piopio's names and arguments", () => {
 	expect(acpTool({ kind: "execute", title: "ls", rawInput: { CommandLine: "ls -la" } })).toEqual({ name: "bash", args: { CommandLine: "ls -la", command: "ls -la" } });
 	expect(acpTool({ kind: "execute", rawInput: { command: ["git", "status"] } }).args.command).toBe("git status");

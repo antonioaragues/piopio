@@ -5,9 +5,12 @@
  *   $ <command>                  an `execute` call (not run; its output says so)
  *   write: <path> | <content>    an `edit` call with a diff (the file is written once allowed)
  *   plan: <step> | <step>…       a plan update
+ *   call: <tool> | <JSON>        one of Piopio's tools, through the "piopio" MCP server the session was given (HTTP for
+ *                                the Codex flavor, the stdio bridge for the Antigravity one, as the real agents)
  *   effort? / mode? / model?     answers with the session's setting
  * No imports from the project: Node runs it as it is.
  */
+import { spawn } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 
@@ -16,7 +19,43 @@ const isCodex = agent === "codex-cli";
 let nextId = 1000;
 let counter = 0;
 const waiting = new Map<number, (result: any) => void>();
-const sessions = new Map<string, { cwd: string; options: any[]; cancelled: boolean }>();
+const sessions = new Map<string, { cwd: string; options: any[]; cancelled: boolean; mcp: any[] }>();
+
+/** Calls a tool of the session's "piopio" MCP server: by HTTP, or by starting its command and talking over stdio. */
+async function callPiopio(server: any, name: string, args: unknown): Promise<any> {
+	const messages = [
+		{ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "fake-acp-agent", version: "1" } } },
+		{ jsonrpc: "2.0", method: "notifications/initialized" },
+		{ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name, arguments: args } },
+	];
+	if (server.type === "http") {
+		let result: any;
+		for (const m of messages) {
+			const res = await fetch(server.url, { method: "POST", headers: { "content-type": "application/json", accept: "application/json, text/event-stream" }, body: JSON.stringify(m) });
+			if (res.status === 202) continue;
+			const body = await res.json();
+			if (body.id === 2) result = body.result ?? { content: [{ type: "text", text: body.error?.message }], isError: true };
+		}
+		return result;
+	}
+	const child = spawn(server.command, server.args, { stdio: ["pipe", "pipe", "inherit"] });
+	return new Promise((resolve) => {
+		let buf = "";
+		child.stdout.setEncoding("utf8");
+		child.stdout.on("data", (d: string) => {
+			buf += d;
+			for (const line of buf.split("\n").slice(0, -1)) {
+				const m = JSON.parse(line);
+				if (m.id === 2) {
+					resolve(m.result ?? { content: [{ type: "text", text: m.error?.message }], isError: true });
+					child.kill();
+				}
+			}
+			buf = buf.slice(buf.lastIndexOf("\n") + 1);
+		});
+		for (const m of messages) child.stdin.write(`${JSON.stringify(m)}\n`);
+	});
+}
 
 const models = isCodex
 	? [{ value: "gpt-6.2-sol", name: "6.2 Sol" }, { value: "gpt-6.2-astra", name: "6.2 Astra" }, { value: "gpt-6-luna", name: "6 Luna" }]
@@ -52,6 +91,16 @@ async function prompt(sessionId: string, blocks: any[]) {
 		const plan = /^plan:\s*(.+)$/.exec(line);
 		if (plan) {
 			update(sessionId, { sessionUpdate: "plan", entries: plan[1]!.split("|").map((c, i) => ({ content: c.trim(), status: i === 0 ? "in_progress" : "pending", priority: "medium" })) });
+			continue;
+		}
+		const call_ = /^call:\s*([a-z_]+)\s*\|\s*(.*)$/.exec(line);
+		if (call_) {
+			const toolCallId = `call_fake_${++counter}`;
+			const args = JSON.parse(call_[2]!);
+			update(sessionId, { sessionUpdate: "tool_call", toolCallId, kind: "other", title: `piopio/${call_[1]}`, name: call_[1], status: "in_progress", rawInput: args });
+			const server = s.mcp.find((m) => m.name === "piopio");
+			const r = server ? await callPiopio(server, call_[1]!, args) : { content: [{ type: "text", text: "No piopio server." }], isError: true };
+			update(sessionId, { sessionUpdate: "tool_call_update", toolCallId, status: r?.isError ? "failed" : "completed", content: (r?.content ?? []).map((c: any) => ({ type: "content", content: c })) });
 			continue;
 		}
 		const bash = /^\$\s*(.+)$/.exec(line);
@@ -90,15 +139,15 @@ async function handle(m: any): Promise<unknown> {
 	const p = m.params ?? {};
 	switch (m.method) {
 		case "initialize":
-			return { protocolVersion: 1, agentInfo: { name: `fake ${agent}`, version: "1.0.0-fake" }, agentCapabilities: { loadSession: true, sessionCapabilities: { close: {}, delete: {} } }, authMethods: [] };
+			return { protocolVersion: 1, agentInfo: { name: `fake ${agent}`, version: "1.0.0-fake" }, agentCapabilities: { loadSession: true, sessionCapabilities: { close: {}, delete: {} }, ...(isCodex ? { mcpCapabilities: { http: true, sse: false } } : {}) }, authMethods: [] };
 		case "session/new": {
 			const sessionId = `fake-acp-${process.pid}-${++counter}`;
-			sessions.set(sessionId, { cwd: p.cwd, options: configOptions(), cancelled: false });
+			sessions.set(sessionId, { cwd: p.cwd, options: configOptions(), cancelled: false, mcp: p.mcpServers ?? [] });
 			if (isCodex) send({ jsonrpc: "2.0", method: "_auth/status_update", params: { authStatus: { kind: "account", label: "ChatGPT Plus" } } });
 			return { sessionId, configOptions: sessions.get(sessionId)!.options, ...(isCodex ? {} : { _meta: { antigravity: { tier: { name: "Google AI Pro" } } } }) };
 		}
 		case "session/load": {
-			sessions.set(p.sessionId, { cwd: p.cwd, options: configOptions(), cancelled: false });
+			sessions.set(p.sessionId, { cwd: p.cwd, options: configOptions(), cancelled: false, mcp: p.mcpServers ?? [] });
 			// The real agents replay the conversation; the client already has it.
 			update(p.sessionId, { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "(replayed history)" } });
 			return { configOptions: sessions.get(p.sessionId)!.options };

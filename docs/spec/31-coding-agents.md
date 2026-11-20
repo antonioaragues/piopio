@@ -172,9 +172,16 @@ Decided 2026-11-20 with the user on [picker.html](../design/agent-runtimes/picke
   `printf`), and after an engine restart each remembered the file. Captures: `PIOPIO_FAKE_ACP=1`
   (`runtimes/acp-fake-agent.ts`).
 
+- **Piopio's tools in Antigravity CLI and Codex (CA8, 2026-11-20):** `tool-server.ts` serves each open conversation's
+  tools on a loopback-only HTTP server at a secret address (`/mcp/<secret>`, MCP Streamable HTTP without sessions). Codex
+  takes it by URL; Antigravity CLI, which can't reach HTTP, starts `mcp-bridge.js` (stdio to that address; bundled next
+  to `main.js`). The agents name the tools their own ways (`mcp.piopio.search_conversations`,
+  `mcp_piopio_search_conversations`) and ask permission for them; Piopio allows its own tools, which ask through the
+  tray where they need to. Antigravity doesn't report an MCP tool's result, so the card shows what Piopio's tool
+  answered. Tried for real: each found a fact in another conversation with `search_conversations` (Antigravity also
+  read it with `read_conversation`). `PIOPIO_ACP_LOG=<folder>` keeps every ACP message for debugging.
+
 ## 9. Not verified
 
-- Piopio's tools (CA8) reach Claude Code only: Antigravity CLI and Codex take MCP servers by command or URL, not in
-  process, so they need Piopio's tools served over HTTP (next).
 - Titles and follow-ups for a conversation on Antigravity CLI or Codex come from another connected provider or Apple's
   on-device model: ACP has no one-off question (CA5 holds for Claude Code only).

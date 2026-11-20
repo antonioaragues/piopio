@@ -6,7 +6,7 @@
  * Models and the picker. Conversations run in `runtimes/acp.ts`.
  */
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -41,8 +41,17 @@ export class AcpConnection {
 	/** The process ended. */
 	onExit?: (message: string) => void;
 
+	/** PIOPIO_ACP_LOG=<folder>: every message, both ways, in `<folder>/<agent>-<pid>.jsonl` (debugging). */
+	private readonly log?: (direction: "in" | "out", line: string) => void;
+
 	constructor(command: string, args: readonly string[], cwd: string, env: NodeJS.ProcessEnv = process.env) {
 		this.child = spawn(command, [...args], { cwd, env, stdio: ["pipe", "pipe", "pipe"] });
+		const dir = process.env.PIOPIO_ACP_LOG;
+		if (dir) {
+			mkdirSync(dir, { recursive: true });
+			const file = join(dir, `${command.split("/").pop()}-${this.child.pid}.jsonl`);
+			this.log = (direction, line) => appendFileSync(file, `${direction === "in" ? "<<" : ">>"} ${line}\n`);
+		}
 		this.child.stdout.setEncoding("utf8");
 		this.child.stdout.on("data", (d: string) => this.read(d));
 		this.child.stderr.on("data", (d: Buffer) => (this.stderr = (this.stderr + d.toString()).slice(-4000)));
@@ -68,6 +77,7 @@ export class AcpConnection {
 			const line = this.buf.slice(0, i).trim();
 			this.buf = this.buf.slice(i + 1);
 			if (!line) continue;
+			this.log?.("in", line);
 			let m: { id?: number | string; method?: string; params?: Record<string, unknown>; result?: unknown; error?: { code?: number; message?: string } };
 			try {
 				m = JSON.parse(line);
@@ -95,7 +105,10 @@ export class AcpConnection {
 	}
 
 	private write(message: unknown): void {
-		if (!this.closed) this.child.stdin.write(`${JSON.stringify(message)}\n`);
+		if (this.closed) return;
+		const line = JSON.stringify(message);
+		this.log?.("out", line);
+		this.child.stdin.write(`${line}\n`);
 	}
 
 	request<T = Record<string, unknown>>(method: string, params: unknown, timeoutMs = 0): Promise<T> {
