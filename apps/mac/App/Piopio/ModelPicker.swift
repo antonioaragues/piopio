@@ -342,11 +342,14 @@ struct ModelPicker: View {
         }
     }
 
-    /// "Claude Pro plan" → "Pro plan" (the agent's row already names it).
+    /// "Claude Pro plan" → "Pro plan", "Google AI Pro plan" → "AI Pro plan", "ChatGPT Plus plan" → "Plus plan": the
+    /// agent's row already names who it's from.
     static func planLabel(_ m: ModelInfo) -> String? {
         guard let billing = m.billing else { return nil }
-        let words = billing.split(separator: " ")
-        return words.count > 2 && billing.hasSuffix(" plan") ? words.dropFirst().joined(separator: " ") : billing
+        for brand in ["Claude ", "ChatGPT ", "Google "] where billing.hasPrefix(brand) && billing.count > brand.count + 5 {
+            return String(billing.dropFirst(brand.count))
+        }
+        return billing
     }
 
     static func shortName(_ m: ModelInfo) -> String {
@@ -413,7 +416,7 @@ private struct AgentModelsMenu: View {
     let onPick: (ModelInfo) -> Void
     @State private var showOlder = false
 
-    /// Claude Code lists its current models first (Opus, Sonnet, Fable, Haiku), then older ones.
+    /// Agents list their main models first (Claude Code: Opus, Sonnet, Fable, Haiku), then the rest.
     private var current: [ModelInfo] { Array(group.all.prefix(4)) }
     private var older: [ModelInfo] { Array(group.all.dropFirst(4)) }
 
@@ -437,7 +440,7 @@ private struct AgentModelsMenu: View {
                 .buttonStyle(HoverRowStyle())
             }
             if !older.isEmpty, !showOlder, !older.contains(where: { $0.ref == selected }) {
-                Button("Show \(older.count) older model\(older.count == 1 ? "" : "s")") { showOlder = true }
+                Button("Show \(older.count) more model\(older.count == 1 ? "" : "s")") { showOlder = true }
                     .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Color.dsFg2)
                     .padding(.horizontal, 10).padding(.vertical, 6)
             }

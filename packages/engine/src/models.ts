@@ -16,6 +16,7 @@ import { billingLabel, connectMethods, FEATURED, KEY_PAGES, maskKey, openaiApiAl
 import type { SecretBroker } from "./secrets.js";
 import { OpenRouterLive } from "./openrouter-live.js";
 import { CLAUDE_CODE, ClaudeCodeAgent } from "./coding-agents.js";
+import { ACP_AGENTS, AcpAgent } from "./acp.js";
 
 export const DEFAULT_MODEL: ModelRef = { provider: "openrouter", id: "anthropic/claude-haiku-5.5" };
 
@@ -41,7 +42,11 @@ export class ModelHub {
 	readonly onDevice: OnDeviceModel;
 	/** The user's Claude Code, which can run a whole conversation (docs/spec/31). Off in tests unless faked. */
 	readonly claudeCode: ClaudeCodeAgent;
-	private readonly agentsOn: boolean;
+	/** Antigravity CLI and Codex, over ACP (docs/spec/31 A3). */
+	readonly acpAgents: AcpAgent[];
+	private agentsOn: boolean;
+	/** The real Claude Code is looked for (not in faux runs unless faked). */
+	private readonly claudeOn: boolean;
 	/** Claude Code was found signed in at the last listing, for the synchronous default model. */
 	private claudeCodeReady = false;
 	/** The user's choice (Settings › Models); the server connects it to the settings file. Unset: automatic. */
@@ -55,7 +60,11 @@ export class ModelHub {
 		// The real Claude Code is looked for except in faux runs (tests, captures), which get the pretend one on request.
 		const fake = process.env.PIOPIO_FAKE_CLAUDE_CODE === "1";
 		this.agentsOn = Boolean(options.claudeCode) || fake || !options.faux;
+		this.claudeOn = this.agentsOn;
 		this.claudeCode = options.claudeCode ?? new ClaudeCodeAgent({ fake });
+		const fakeAcp = process.env.PIOPIO_FAKE_ACP === "1";
+		this.acpAgents = fakeAcp || !options.faux ? ACP_AGENTS.map((spec) => new AcpAgent(spec, { fake: fakeAcp })) : [];
+		this.agentsOn ||= fakeAcp;
 		this.credentials = new KeychainCredentialStore(secrets, options.home ? join(options.home, "credentials.json") : undefined);
 		this.endpoints = new Endpoints(options.home ? join(options.home, "endpoints.json") : undefined);
 		this.extraCosts = new ExtraCosts(options.home ? join(options.home, "extra-costs.db") : undefined);
@@ -172,17 +181,17 @@ export class ModelHub {
 	/** Claude Code's models, when it's on this Mac and signed in. */
 	private async agentModels(): Promise<ModelInfo[]> {
 		if (!this.agentsOn) return [];
-		const models = await this.claudeCode.modelInfos().catch(() => []);
-		this.claudeCodeReady = models.length > 0;
-		return models;
+		const [claude, ...acp] = await Promise.all([this.claudeOn ? this.claudeCode.modelInfos().catch(() => []) : [], ...this.acpAgents.map((a) => a.modelInfos().catch(() => []))]);
+		this.claudeCodeReady = claude.length > 0;
+		return [...claude, ...acp.flat()];
 	}
 
 	/** Coding agents on this Mac, found or not (Settings › Models › Agents on this Mac). */
 	async listAgents(): Promise<ProviderInfo[]> {
 		if (!this.agentsOn) return [];
-		const info = await this.claudeCode.providerInfo().catch(() => undefined);
+		const [info, ...acp] = await Promise.all([this.claudeOn ? this.claudeCode.providerInfo().catch(() => undefined) : undefined, ...this.acpAgents.map((a) => a.providerInfo().catch(() => undefined))]);
 		this.claudeCodeReady = info?.status === "connected";
-		return info ? [info] : [];
+		return [info, ...acp].filter((p): p is ProviderInfo => Boolean(p));
 	}
 
 	/** Every provider pi knows, featured first, with how it's connected (FR1). */

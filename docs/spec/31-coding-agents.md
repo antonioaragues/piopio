@@ -1,6 +1,7 @@
 # 31 · Coding agents: Claude Code, Codex and Antigravity run a conversation
 
-Status: decided 2026-11-20 from a question by the user; phases A1 (Claude Code) and A2 built the same day
+Status: decided 2026-11-20 from a question by the user; phases A1 (Claude Code), A2 and A3 (Antigravity CLI and Codex)
+built the same day
 (§10). Mockups: [mockup.html](../design/agent-runtimes/mockup.html) (the idea) and
 [picker.html](../design/agent-runtimes/picker.html) (the picker and chip as decided).
 
@@ -156,8 +157,24 @@ Decided 2026-11-20 with the user on [picker.html](../design/agent-runtimes/picke
   for Claude Code (Piopio's computer-use tools aren't engine extensions yet); deleting a chat leaves Claude Code's own
   session in `~/.claude/projects`.
 
+- **A3 (2026-11-20):** `acp.ts` (a JSON-RPC client over the agent's stdio; each agent's command, modes, thinking setting,
+  install and sign-in; detection by starting it once in a throwaway session, cached ten minutes) and `runtimes/acp.ts`
+  (the conversation). Installed on this Mac with the user's go-ahead: Antigravity CLI 1.5.13 (`agy acp`, Google's
+  installer, which added `~/.local/bin` to `~/.zshrc`), Codex 0.170.0 and `@agentclientprotocol/codex-acp` 2.7.0 (the
+  maintained adapter; `@zed-industries/codex-acp` is deprecated). Both report their models and thinking levels as ACP
+  `configOptions`, so Piopio sets model, thinking level and mode with `session/set_config_option`. Modes: Antigravity
+  plan / default / accept-edits / auto; Codex read-only / read-only / workspace-write / agent-full-access, for Read
+  only / Ask / Auto-edit / Full auto. Read only also refuses an agent's writes and commands without asking. Plans come
+  from the agents: Antigravity's `_meta.antigravity.tier` ("Google AI Pro"), Codex's `_auth/status_update` ("ChatGPT
+  Plus"). Sessions reopen with `session/load`, whose replay Piopio ignores (it has the transcript); Codex warns it
+  resumed on its default model before Piopio sets the recorded one again, and that stale line is dropped. Tried for
+  real: a Build session on each in Ask mode wrote a file once allowed (Antigravity asked to write, Codex to run
+  `printf`), and after an engine restart each remembered the file. Captures: `PIOPIO_FAKE_ACP=1`
+  (`runtimes/acp-fake-agent.ts`).
+
 ## 9. Not verified
 
-- Antigravity CLI's ACP details (initialize capabilities, mode ids, model switching) are from Google's docs only; `agy`
-  isn't installed on this Mac.
-- Codex isn't installed on this Mac.
+- Piopio's tools (CA8) reach Claude Code only: Antigravity CLI and Codex take MCP servers by command or URL, not in
+  process, so they need Piopio's tools served over HTTP (next).
+- Titles and follow-ups for a conversation on Antigravity CLI or Codex come from another connected provider or Apple's
+  on-device model: ACP has no one-off question (CA5 holds for Claude Code only).

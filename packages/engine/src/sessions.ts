@@ -18,6 +18,8 @@ import { draftAgent, type AgentDraft } from "./agent-draft.js";
 import { addWorktree, checkout, git as runGit, mergeWorktree, removeWorktree, status as gitStatus } from "./git.js";
 import { BuildRuntime } from "./runtimes/build.js";
 import { ClaudeCodeRuntime, type ToolAsk } from "./runtimes/claude-code.js";
+import { AcpRuntime } from "./runtimes/acp.js";
+import { acpSpec } from "./acp.js";
 import type { ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import { codingBrowserExtension } from "./tools/browser-tools.js";
 import { codingConnectorsExtension } from "./connectors/extension.js";
@@ -2356,7 +2358,7 @@ export class Sessions {
 
 	async respond(ref: ContainerRef, promptId: string, response: PromptResponse): Promise<void> {
 		const runtime = innerOf(await this.runtime(ref));
-		if (!(runtime instanceof BuildRuntime) && !(runtime instanceof ClaudeCodeRuntime)) throw new EngineError("INVALID", "Only Build sessions ask for approval.");
+		if (!(runtime instanceof BuildRuntime) && !(runtime instanceof ClaudeCodeRuntime) && !(runtime instanceof AcpRuntime)) throw new EngineError("INVALID", "Only Build sessions ask for approval.");
 		runtime.respond(promptId, response);
 	}
 
@@ -2780,11 +2782,28 @@ export class Sessions {
 	 */
 	private async openCodingAgent(entry: CatalogEntry, model: ModelRef): Promise<Runtime> {
 		const chat = entry.ref.kind === "thread";
+		const spec = acpSpec(model.provider);
 		const cwd = entry.cwd && existsSync(entry.cwd) ? entry.cwd : this.scratch(entry.ref.id);
 		if (entry.cwd !== cwd) entry.cwd = cwd;
 		if (!entry.agentFile) {
 			entry.agentFile = join(this.paths.chatsDir, "agents", `${entry.ref.id}.json`);
 			this.save();
+		}
+		// Antigravity CLI and Codex: over ACP (docs/spec/31 A3).
+		const acp = spec && this.hub.acpAgents.find((a) => a.spec.id === spec.id);
+		if (acp) {
+			return AcpRuntime.open({
+				ref: entry.ref,
+				cwd,
+				model,
+				...(entry.thinking ? { thinking: entry.thinking } : {}),
+				file: entry.agentFile,
+				agent: acp,
+				approvalMode: () => entry.approvalMode ?? this.policy.modeFor(entry.projectPath ?? cwd),
+				...(chat ? { chat: true } : {}),
+				keepImages: toolImageKeeper(attachmentsDir(this.paths.home, entry.ref.id)),
+				onAttention: (message) => this.onAttention?.({ ref: entry.ref, title: entry.title, kind: "waiting", message }),
+			});
 		}
 		return ClaudeCodeRuntime.open({
 			ref: entry.ref,

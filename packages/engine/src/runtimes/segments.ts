@@ -8,7 +8,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import type { Attachment, ContainerRef, ModelRef, SessionEvent, Snapshot, TimelineItem } from "@piopio/protocol";
-import { CLAUDE_CODE_NAME, isCodingAgent } from "../coding-agents.js";
+import { agentName, isCodingAgent } from "../coding-agents.js";
 import { TimelineBuilder, type PiMessage } from "../timeline/builder.js";
 import { sdkMessages, SdkEventMapper } from "../timeline/pi-sdk.js";
 import type { Runtime, SubmitOptions } from "./runtime.js";
@@ -17,7 +17,7 @@ import type { Runtime, SubmitOptions } from "./runtime.js";
 export type Segment = { model: ModelRef; sessionFile?: string; agentFile?: string; at: string };
 
 /** Who runs a model: Piopio's agent, or a coding agent by name. */
-export const runnerName = (model: ModelRef): string => (isCodingAgent(model.provider) ? CLAUDE_CODE_NAME : "Piopio's agent");
+export const runnerName = (model: ModelRef): string => (isCodingAgent(model.provider) ? agentName(model.provider) : "Piopio's agent");
 
 /** A history file's items as the transcript shows them (pi session or a coding agent's copy), without opening a runtime. */
 export function fileItems(ref: ContainerRef, files: { sessionFile?: string; agentFile?: string }): TimelineItem[] {

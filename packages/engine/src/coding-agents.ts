@@ -8,12 +8,17 @@ import { spawn } from "node:child_process";
 import type { ModelInfo, ModelRef, ProviderInfo } from "@piopio/protocol";
 import { findAgent } from "./external-agents.js";
 import { fakeClaudeQuery } from "./runtimes/claude-code-fake.js";
+import { acpSpec } from "./acp.js";
 
 /** The provider id of Claude Code's models: `{ provider: "claude-code", id: "opus" }`. */
 export const CLAUDE_CODE = "claude-code";
 export const CLAUDE_CODE_NAME = "Claude Code";
 
-export const isCodingAgent = (provider: string | undefined): boolean => provider === CLAUDE_CODE;
+/** Claude Code, Antigravity CLI or Codex: an agent that runs a whole conversation (docs/spec/31). */
+export const isCodingAgent = (provider: string | undefined): boolean => provider === CLAUDE_CODE || Boolean(acpSpec(provider));
+
+/** A coding agent's name ("Claude Code", "Codex"). */
+export const agentName = (provider: string): string => (provider === CLAUDE_CODE ? CLAUDE_CODE_NAME : (acpSpec(provider)?.name ?? provider));
 
 /** The part of the Agent SDK's `Query` Piopio uses (an async stream of SDK messages plus a few controls). */
 export interface AgentQuery extends AsyncIterable<AgentMessage> {
