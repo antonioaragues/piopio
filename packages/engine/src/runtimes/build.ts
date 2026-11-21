@@ -761,7 +761,10 @@ export class BuildRuntime implements Runtime {
 			const calendars = apps ? apps.calendars("chat", appOff).length > 0 : false;
 			const mailboxes = apps ? apps.mailboxes("chat", appOff).length > 0 : false;
 			const wanted = (name: string) => !off.has(name) && (!name.startsWith("calendar_") || calendars) && (!name.startsWith("mail_") || mailboxes);
-			this.session.setActiveToolsByName(this.session.getAllTools().map((t) => t.name).filter(wanted));
+			// Deferred tools (an app's many tools) wait for tool_search; the ones it already loaded here stay.
+			const loaded = new Set(this.session.getActiveToolNames());
+			const offered = (t: { name: string; exposure?: string }) => (t.exposure === "deferred" || t.exposure === "hidden" ? loaded.has(t.name) : wanted(t.name));
+			this.session.setActiveToolsByName(this.session.getAllTools().filter(offered).map((t) => t.name));
 			return;
 		}
 		const readOnly = this.approvalMode() === "read_only";

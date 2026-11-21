@@ -82,9 +82,8 @@ adds a second account, and then the tools take an `account` argument.
   (`save_issue` creates or updates an issue) destructive: trusting the hint left creating issues in Delete, off, in the
   first real run. Settings shows three rows: **Find and read**, **Create and change**, **Delete**.
 - Linear offers about **70 tools** (~100 KB of descriptions and schemas). Thirteen everyday ones go to conversations
-  directly (issues, comments, projects, teams, users, statuses, labels, cycles; ~30 KB), and one **`linear_more`**
-  tool reaches the others by name: called with a tool's name it returns that tool's schema, and with arguments it runs
-  it, asking first like the rest. In agents, `linear_more` asks whenever any tool behind it would.
+  up front (issues, comments, projects, teams, users, statuses, labels, cycles; ~30 KB); the rest wait for **tool
+  search** (below).
 - Permissions are kept per row (`linear.read`, `linear.write`, `linear.delete`), not per tool, so a tool Linear adds
   later follows its row. A tool that's Off isn't offered to the model at all.
 - The tool list is kept in `connectors.json` so a conversation gets the tools without waiting for Linear, and is
@@ -95,17 +94,47 @@ adds a second account, and then the tools take an `account` argument.
 **Not done yet.**
 - Tried against a real workspace on 2026-11-21: sign-in, who signed in (`get_user` "me"), reads, and creating issues
   (after the name-first sorting above) work. The engine test uses a fake Linear
-  that marks `save_*` destructive like the real one: sign-in, a read, `linear_more`, approvals, "Don't ask again",
+  that marks `save_*` destructive like the real one: sign-in, a read, tool search in a chat and an agent, approvals, "Don't ask again",
   disconnect.
 - Linear **as a trigger** (a label or an assignment starts a session) needs Linear to send events to a server; that
   waits for the user's own Cloudflare Worker (13, 30), since Piopio has no backend.
-- Which tools are core is fixed in `linear.ts`; general tool search for many tools (§4) is still to come.
 - A custom MCP connector from Settings (an address plus sign-in, §4 "Adding your own") can reuse this path; it isn't
   offered yet.
 
+## Tool search, and the rest of C3 (2026-11-21)
+
+**Tool search.** An app's tools outside its everyday set aren't offered up front: the model finds them with pi's
+`tool_search` ("linear document", "notion database") and they're offered from then on, in that conversation. They're
+real tools once found (their own schema, the same ask-first rules), unlike the `linear_more` gateway this replaced.
+- Chats and Build: the tools are registered with `exposure: "deferred"` and the app as their namespace (what
+  `tool_search` ranks by, with their descriptions); Piopio turns `tool_search` on when an app has deferred tools. A chat
+  setting its tools for a mode leaves deferred ones for search, keeping those it already loaded.
+- Agents: the same tools with `deferred: true`, and pi-durable's `tool_search`. The agent's app tools are rebuilt
+  when they change, so an app connected while the agent is open reaches it (before, an agent only got app tools when
+  a calendar or mailbox was connected, so Linear alone never reached agents).
+- Which tools are up front: a connector's `core` list; without one, all of them when there are 12 or fewer, else none.
+- The prompt says connected apps have more tools than listed, and to find them with `tool_search`.
+
+**The other apps.** Each is one file in `connectors/`, the same MCP connector as Linear:
+
+| App | Server | Sign-in |
+|---|---|---|
+| Notion | `mcp.notion.com/mcp` | Browser, dynamic client registration; one workspace per sign-in |
+| Jira & Confluence | `mcp.atlassian.com/v1/mcp` | Browser, dynamic client registration; the sites picked on Atlassian's page |
+| Sentry | `mcp.sentry.dev/mcp` | Browser, dynamic client registration |
+| GitHub | `api.githubcopilot.com/mcp/` | No browser: GitHub registers no clients on the spot, so it uses Piopio's GitHub sign-in (the GitHub CLI's, or the token in Settings › Git & GitHub) |
+
+- Tool names lose the app's own prefix (Notion's `notion-search` is `notion_search`), and the first word decides what a
+  tool does in camelCase too (Atlassian's `getJiraIssue` reads, `createJiraIssue` changes).
+- Who signed in comes from each app's own tool (`notion-get-self`, `atlassianUserInfo`, `whoami`, `get_me`): an id and
+  an email, login or name in its answer.
+- Notion, Atlassian, Sentry and GitHub are tested against a fake server only (GitHub's token path too); none has been
+  tried with a real account yet, so their core lists and who-signed-in may need adjusting on first real use, as
+  Linear's did.
+
 ## 3. After C1
 - **C2:** Gmail (own Google project for now), Google Drive, Slack.
-- **C3:** Jira and Confluence, Linear (built first, above), Notion, GitHub, Datadog, Sentry — apps with official servers you sign in to directly.
+- **C3:** Linear, Notion, Jira and Confluence, GitHub, Sentry (built, above); Datadog next — apps with official servers you sign in to directly.
 - **Later:** a gallery others can add to, then a marketplace (§5).
 
 ### The list we'd offer

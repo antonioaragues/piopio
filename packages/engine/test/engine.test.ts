@@ -44,7 +44,9 @@ const settled = (subscriptionId: string, after = 0) => (n: { subscriptionId: str
 	/** The conversation's tool items once `count` of them have finished. */
 	const finishedTools = async (ctx: Ctx, ref: ContainerRef, count: number) => {
 		for (let i = 0; i < 300; i++) {
-			const tools = ((await ctx.client.call("sessions.open", { ref })) as Snapshot).items.flatMap((x) => (x.kind === "tool" && (x.status === "done" || x.status === "error") ? [x] : []));
+			// Agents group their tool calls in steps items.
+			const all = ((await ctx.client.call("sessions.open", { ref })) as Snapshot).items.flatMap((x) => (x.kind === "steps" ? x.tools : [x]));
+			const tools = all.flatMap((x) => (x.kind === "tool" && (x.status === "done" || x.status === "error") ? [x] : []));
 			if (tools.length >= count) return tools as { tool: string; status: string; output?: string }[];
 			await new Promise((r) => setTimeout(r, 100));
 		}
@@ -2732,18 +2734,18 @@ describe("connected apps (docs/spec/12-connectors C1)", () => {
 	}, 30_000);
 
 	/** A fake Linear: OAuth discovery, dynamic client registration, authorize and token, and an MCP server that needs the token. */
-	async function fakeLinear() {
+	async function fakeLinear(options: { token?: string; tools?: unknown[]; answers?: Record<string, string> } = {}) {
 		const { createServer } = await import("node:http");
 		const calls: { method: string; tool?: string; args?: unknown; auth?: string }[] = [];
 		let tokens = 0;
 		let base = "";
-		const tools = [
+		const tools = options.tools ?? [
 			{ name: "list_issues", description: "List issues", inputSchema: { type: "object", properties: { query: { type: "string" } } }, annotations: { readOnlyHint: true } },
 			{ name: "get_user", description: "Get a user", inputSchema: { type: "object", properties: { query: { type: "string" } } } },
 			// Like the real Linear (2026-11-21): save_* creates or updates, and is marked destructive.
 			{ name: "save_issue", description: "Create or update an issue", inputSchema: { type: "object", properties: { title: { type: "string" }, team: { type: "string" } }, required: ["title", "team"] }, annotations: { destructiveHint: true } },
 			{ name: "delete_comment", description: "Delete a comment", inputSchema: { type: "object", properties: { id: { type: "string" } } }, annotations: { destructiveHint: true } },
-			// Outside Linear's core list: reached through linear_more.
+			// Outside Linear's core list: found with tool_search.
 			{ name: "get_document", description: "Get a document. Returns its content.", inputSchema: { type: "object", properties: { id: { type: "string" } }, required: ["id"] }, annotations: { readOnlyHint: true } },
 			{ name: "save_document", description: "Create or update a document", inputSchema: { type: "object", properties: { title: { type: "string" } } }, annotations: { destructiveHint: true } },
 		];
@@ -2768,7 +2770,7 @@ describe("connected apps (docs/spec/12-connectors C1)", () => {
 				if (url.pathname !== "/mcp") return send(404, {});
 				if (req.method !== "POST") return void res.writeHead(405).end();
 				const auth = req.headers.authorization;
-				if (!auth?.startsWith("Bearer lin")) return send(401, {}, { "www-authenticate": `Bearer resource_metadata="${base}/.well-known/oauth-protected-resource/mcp", scope="read write"` });
+				if (options.token ? auth !== `Bearer ${options.token}` : !auth?.startsWith("Bearer lin")) return send(401, {}, { "www-authenticate": `Bearer resource_metadata="${base}/.well-known/oauth-protected-resource/mcp", scope="read write"` });
 				const msg = JSON.parse(body) as { id?: number; method: string; params?: { name?: string; arguments?: Record<string, unknown> } };
 				calls.push({ method: msg.method, tool: msg.params?.name, args: msg.params?.arguments, auth });
 				if (msg.id === undefined) return void res.writeHead(202).end();
@@ -2777,6 +2779,7 @@ describe("connected apps (docs/spec/12-connectors C1)", () => {
 				if (msg.method === "tools/list") return reply({ tools });
 				if (msg.method === "tools/call") {
 					const name = msg.params?.name;
+					if (name && options.answers?.[name]) return reply({ content: [{ type: "text", text: options.answers[name] }] });
 					if (name === "get_user") return reply({ content: [{ type: "text", text: JSON.stringify({ id: "u-42", name: "Toño", email: "me@example.com" }) }] });
 					if (name === "list_issues") return reply({ content: [{ type: "text", text: "ENG-1 Fix the login (In Progress)" }] });
 					if (name === "save_issue") return reply({ content: [{ type: "text", text: `Created ENG-2 ${String(msg.params?.arguments?.title)}` }] });
@@ -2789,7 +2792,7 @@ describe("connected apps (docs/spec/12-connectors C1)", () => {
 		});
 		await new Promise<void>((r) => server.listen(0, "127.0.0.1", () => r()));
 		base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
-		return { calls, endpoints: { linear: { mcpUrl: `${base}/mcp` } }, close: () => server.close() };
+		return { calls, endpoints: { linear: { mcpUrl: `${base}/mcp` }, github: { mcpUrl: `${base}/mcp` } }, close: () => server.close() };
 	}
 
 	test("Linear signs in through its own server, keeps the workspace's tokens in the Keychain, and its tools ask by kind", async () => {
@@ -2821,19 +2824,28 @@ describe("connected apps (docs/spec/12-connectors C1)", () => {
 		expect((await finishedTools(a, ref, 1))[0]?.output).toContain("ENG-1 Fix the login");
 		expect(linear.calls.find((c) => c.tool === "list_issues")).toMatchObject({ args: { query: "login" }, auth: "Bearer lin1" });
 
-		// The core tools are offered directly, the rest through linear_more; deleting is off, so it isn't offered at all.
+		// Outside Linear's core list, tools wait for tool_search: a chat finds one, then calls it.
+		await a.client.call("sessions.submit", { ref, input: { text: `call: tool_search | {"query":"linear document"}` } });
+		const search = (await finishedTools(a, ref, 2))[1];
+		expect(search).toMatchObject({ tool: "tool_search", status: "done" });
+		expect(search?.output).toContain("linear_get_document");
+		await a.client.call("sessions.submit", { ref, input: { text: `call: linear_get_document | {"id":"d1"}` } });
+		expect((await finishedTools(a, ref, 3))[2]?.output).toBe("Doc d1: the plan");
+
+		// Deleting is off, so it isn't offered at all.
 		const hub = a.engine.connectors;
 		const asked: { tool: string; title: string }[] = [];
 		const tools = connectorTools(hub, "chat");
-		expect(tools.map((t) => t.name).filter((n) => n.startsWith("linear_"))).toEqual(["linear_list_issues", "linear_get_user", "linear_save_issue", "linear_more"]);
-		const more = tools.find((t) => t.name === "linear_more")!;
-		expect(more.description).toContain("get_document: Get a document.");
-		expect(more.description).not.toContain("delete_comment");
+		expect(tools.filter((t) => t.name.startsWith("linear_")).map((t) => [t.name, Boolean(t.deferred)])).toEqual([
+			["linear_list_issues", false],
+			["linear_get_user", false],
+			["linear_save_issue", false],
+			["linear_get_document", true],
+			["linear_save_document", true],
+		]);
 		const ask = async (r: { tool: string; title: string }) => (asked.push(r), { approved: false });
-		expect((await more.run({ tool: "get_document" }, ask)).text).toContain('"required":["id"]');
-		expect((await more.run({ tool: "get_document", arguments: { id: "d1" } }, ask)).text).toBe("Doc d1: the plan");
-		expect((await more.run({ tool: "save_document", arguments: { title: "Plan" } }, ask)).text).toContain("declined");
-		expect((await more.run({ tool: "delete_comment", arguments: { id: "c1" } }, ask)).isError).toBe(true);
+		const saveDoc = tools.find((t) => t.name === "linear_save_document")!;
+		expect((await saveDoc.run({ title: "Plan" }, ask)).text).toContain("declined");
 		// Creating asks first.
 		const save = tools.find((t) => t.name === "linear_save_issue")!;
 		expect((await save.run({ title: "Fix the logout", team: "ENG" }, ask)).text).toContain("declined");
@@ -2842,7 +2854,7 @@ describe("connected apps (docs/spec/12-connectors C1)", () => {
 		// "Don't ask again" covers the kind of tool, stored once for it: saving a document runs now too.
 		expect((await save.run({ title: "Fix the logout", team: "ENG" }, async () => ({ approved: true, always: true }))).text).toContain("Created ENG-2");
 		expect(hub.settings("linear").permissions).toEqual({ "linear.write": "runs" });
-		expect((await more.run({ tool: "save_document", arguments: { title: "Plan" } }, ask)).text).toBe("Saved Plan");
+		expect((await saveDoc.run({ title: "Plan" }, ask)).text).toBe("Saved Plan");
 		await a.client.call("connectors.configure", { connector: "linear", permissions: { linear_delete_comment: "runs" } });
 		expect(hub.settings("linear").permissions).toMatchObject({ "linear.delete": "ask" });
 
@@ -2850,6 +2862,74 @@ describe("connected apps (docs/spec/12-connectors C1)", () => {
 		expect(a.client.secrets["connector.linear.u-42"]).toBeUndefined();
 		expect(connectorTools(hub, "chat").some((t) => t.name.startsWith("linear_"))).toBe(false);
 		linear.close();
+	}, 30_000);
+
+	test("an agent with only Linear connected gets its tools, finds the rest with tool_search, and asks before saving", async () => {
+		const linear = await fakeLinear();
+		const a = await start(undefined, true, { connectorEndpoints: linear.endpoints });
+		expect(await connect(a, "linear")).toEqual({ type: "done" });
+		const { ref } = await a.client.call("agents.create", { name: "Triage", owner: "Antonio", instructions: "Keep Linear tidy.", schedule: null, model: { provider: "faux", id: "faux-1" } });
+		await a.client.call("sessions.subscribe", { ref });
+		await a.client.call("sessions.submit", { ref, input: { text: `call: linear_list_issues | {"query":"login"}` } });
+		expect((await finishedTools(a, ref, 1))[0]?.output).toContain("ENG-1 Fix the login");
+		await a.client.call("sessions.submit", { ref, input: { text: `call: tool_search | {"query":"linear document"}` } });
+		expect((await finishedTools(a, ref, 2))[1]?.output).toContain("linear_get_document");
+		await a.client.call("sessions.submit", { ref, input: { text: `call: linear_get_document | {"id":"d1"}` } });
+		expect((await finishedTools(a, ref, 3))[2]?.output).toContain("Doc d1: the plan");
+		// Saving a document is a change: the agent's own approvals ask the owner first.
+		const approvals = () => a.client.events.flatMap((n) => n.events).filter((e) => (e.type === "item.added" || e.type === "item.updated") && e.item.kind === "approval").map((e) => (e as { item: { status: string; title: string } }).item);
+		await a.client.call("sessions.submit", { ref, input: { text: `call: tool_search | {"query":"save linear document"}` } });
+		await finishedTools(a, ref, 4);
+		await a.client.call("sessions.submit", { ref, input: { text: `call: linear_save_document | {"title":"Plan"}` } });
+		await until(() => approvals().some((x) => x.status === "pending"));
+		expect(linear.calls.some((c) => c.tool === "save_document")).toBe(false);
+		linear.close();
+	}, 30_000);
+
+	test("apps' tool names: verbs in camelCase and after the app's own prefix decide what a tool does", async () => {
+		const { accessOf, modelName, toolInfos } = await import("../src/connectors/mcp-remote.js");
+		const { notion } = await import("../src/connectors/notion.js");
+		const kinds = (names: string[]) => names.map((name) => accessOf({ name }));
+		expect(kinds(["getJiraIssue", "searchConfluenceUsingCql", "createJiraIssue", "transitionJiraIssue", "lookupJiraAccountId"])).toEqual(["read", "read", "write", "write", "read"]);
+		expect(kinds(["merge_pull_request", "delete_file", "issue_write", "whoami"])).toEqual(["destructive", "destructive", "write", "read"]);
+		// Hints decide only when the name doesn't: an upsert marked destructive still changes things.
+		expect(accessOf({ name: "save_issue", annotations: { destructiveHint: true } })).toBe("write");
+		expect(accessOf({ name: "issue_read", annotations: { readOnlyHint: true } })).toBe("read");
+		const infos = toolInfos(notion, [
+			{ name: "notion-search", inputSchema: { type: "object" } },
+			{ name: "notion-update-page", inputSchema: { type: "object" } },
+		] as never);
+		expect(infos.map((t) => [modelName(notion, t.name), t.access])).toEqual([["notion_search", "read"], ["notion_update-page", "write"]]);
+	});
+
+	test("GitHub connects with the GitHub sign-in Piopio already has, with no browser step", async () => {
+		const gh = await fakeLinear({
+			token: "gh-token",
+			tools: [
+				{ name: "get_me", description: "Your GitHub user", inputSchema: { type: "object" }, annotations: { readOnlyHint: true } },
+				{ name: "list_issues", description: "List issues", inputSchema: { type: "object" }, annotations: { readOnlyHint: true } },
+			],
+			answers: { get_me: JSON.stringify({ login: "octo", id: 583231, name: "The Octocat" }) },
+		});
+		const a = await start(undefined, true, { connectorEndpoints: gh.endpoints });
+		const hub = a.engine.connectors;
+		const connectNoBrowser = async () => {
+			const { loginId } = await a.client.call("connectors.connect", { connector: "github" });
+			const events = () => a.client.notifications.filter((n) => n.method === "connectors.auth" && n.params.loginId === loginId).map((n) => n.params.event);
+			await until(() => events().some((e) => e.type === "done" || e.type === "failed"));
+			return events();
+		};
+		hub.tokens.github = { get: async () => undefined, help: "Sign in to GitHub in Settings › Git & GitHub." };
+		expect((await connectNoBrowser()).at(-1)).toEqual({ type: "failed", message: "Sign in to GitHub in Settings › Git & GitHub." });
+		hub.tokens.github = { get: async () => "gh-token", help: "Sign in to GitHub in Settings › Git & GitHub." };
+		expect((await connectNoBrowser()).map((e) => e.type)).toEqual(["progress", "done"]);
+		expect(hub.accounts("github")).toMatchObject([{ id: "github:583231", label: "octo" }]);
+		// Nothing of its own in the Keychain: the token stays GitHub's.
+		expect(Object.keys(a.client.secrets).filter((k) => k.startsWith("connector.github"))).toEqual([]);
+		const list = connectorTools(hub, "chat").find((t) => t.name === "github_list_issues")!;
+		expect((await list.run({}, async () => ({ approved: true }))).text).toContain("ENG-1");
+		expect(gh.calls.find((c) => c.tool === "list_issues")).toMatchObject({ auth: "Bearer gh-token" });
+		gh.close();
 	}, 30_000);
 
 	test("free time skips busy events within working hours", async () => {

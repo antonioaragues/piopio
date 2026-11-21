@@ -64,7 +64,8 @@ const READS = /^(list|get|search|find|read|fetch|query|show|view|lookup|whoami|e
 export function accessOf(tool: Pick<Tool, "name" | "annotations">, overrides?: Record<string, Access>): Access {
 	const set = overrides?.[tool.name];
 	if (set) return set;
-	const verb = tool.name.toLowerCase().split(/[_\-.]/)[0] ?? "";
+	// The first word: list_issues, notion-search (after the app's own prefix), getJiraIssue.
+	const verb = (tool.name.match(/^[A-Za-z][a-z]*/)?.[0] ?? "").toLowerCase();
 	if (DELETES.test(verb)) return "destructive";
 	if (tool.annotations?.readOnlyHint === true) return "read";
 	if (CHANGES.test(verb)) return "write";
@@ -73,27 +74,33 @@ export function accessOf(tool: Pick<Tool, "name" | "annotations">, overrides?: R
 	return "write";
 }
 
+/** A tool's name without the app's own prefix (Notion's notion-search is "search"). */
+const local = (def: McpConnector, name: string) => name.replace(new RegExp(`^${def.mcp.prefix}[-_]`, "i"), "");
+
 export function toolInfos(def: McpConnector, tools: Tool[]): McpToolInfo[] {
 	return tools.map((t) => ({
 		name: t.name,
 		...(t.title ?? t.annotations?.title ? { title: t.title ?? t.annotations?.title } : {}),
 		description: t.description ?? t.name,
 		inputSchema: normalizeMcpInputSchema(t.inputSchema as Record<string, unknown>),
-		access: accessOf(t, def.mcp.access),
+		access: def.mcp.access?.[t.name] ?? accessOf({ ...t, name: local(def, t.name) }),
 	}));
 }
 
 /** The name a conversation sees: `<prefix>_<tool>`, as providers allow (64 characters of [A-Za-z0-9_-]). */
-export const modelName = (def: McpConnector, tool: string) => `${def.mcp.prefix}_${tool}`.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 64);
+export const modelName = (def: McpConnector, tool: string) => `${def.mcp.prefix}_${local(def, tool)}`.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 64);
 
-/** The one tool that reaches an app's other tools by name (Linear has about 70; most conversations need a dozen). */
-export const moreName = (def: McpConnector) => `${def.mcp.prefix}_more`;
+/** Apps with more tools than this, and no core list, offer them all through tool search. */
+export const DIRECT_LIMIT = 12;
 
-/** The tools offered directly; the rest go through `<prefix>_more`. Without a core list, all of them. */
-export function splitTools(def: McpConnector, tools: McpToolInfo[]): { core: McpToolInfo[]; rest: McpToolInfo[] } {
+/**
+ * Which of an app's tools are offered up front (`direct`) and which wait for tool search (`deferred`): the app's core
+ * list, else all of them when there are few, else none.
+ */
+export function splitTools(def: McpConnector, tools: McpToolInfo[]): { direct: McpToolInfo[]; deferred: McpToolInfo[] } {
 	const core = def.mcp.core;
-	if (!core) return { core: tools, rest: [] };
-	return { core: tools.filter((t) => core.includes(t.name)), rest: tools.filter((t) => !core.includes(t.name)) };
+	if (!core) return tools.length <= DIRECT_LIMIT ? { direct: tools, deferred: [] } : { direct: [], deferred: tools };
+	return { direct: tools.filter((t) => core.includes(t.name)), deferred: tools.filter((t) => !core.includes(t.name)) };
 }
 
 /** Settings' groups for an MCP app: its reading, changing and deleting tools (a kind with no tools isn't shown once connected). */
@@ -106,6 +113,36 @@ export function mcpGroups(def: McpConnector, tools: McpToolInfo[] | undefined): 
 	return kinds
 		.map((k) => ({ id: `${def.id}.${k.key}`, capability: "mcp" as const, label: k.label, access: k.access, tools: (tools ?? []).filter((t) => t.access === k.access).map((t) => modelName(def, t.name)) }))
 		.filter((g) => !tools || g.tools.length > 0);
+}
+
+/**
+ * Who signed in, from one of the app's own tools ("whoami", "get_me"): an id and an email, login or name found in its
+ * JSON answer, or an email in its text. Undefined when the app has no such tool or says nothing usable.
+ */
+export function identifyWith(tool: string, args: Record<string, unknown> = {}): NonNullable<McpConnector["mcp"]["identify"]> {
+	return async (call, tools) => {
+		if (!tools.some((t) => t.name === tool)) return undefined;
+		const answer = await call(tool, args).catch(() => undefined);
+		if (!answer || answer.isError) return undefined;
+		const found: Record<string, string> = {};
+		const walk = (value: unknown, depth: number): void => {
+			if (!value || typeof value !== "object" || depth > 3) return;
+			for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+				const key = k.toLowerCase().replace(/[_-]/g, "");
+				if ((typeof v === "string" || typeof v === "number") && String(v).trim() && !(key in found)) found[key] = String(v).trim();
+				else walk(v, depth + 1);
+			}
+		};
+		try {
+			walk(JSON.parse(answer.text), 0);
+		} catch {
+			// a sentence, such as Sentry's "You are authenticated as …"
+		}
+		const email = found.email ?? found.mail ?? answer.text.match(/[\w.+-]+@[\w-]+(\.[\w-]+)+/)?.[0];
+		const label = email ?? found.login ?? found.username ?? found.name ?? found.displayname;
+		const id = found.accountid ?? found.userid ?? found.id ?? found.login ?? email;
+		return id && label ? { id, label } : undefined;
+	};
 }
 
 /** A readable title for an approval: "Create issue in Linear: “Fix the login”". */
@@ -149,34 +186,46 @@ export async function signInMcp(def: McpConnector, url: string, signal: AbortSig
 export class McpNeedsSignIn extends Error {}
 
 /** One account's connection: opened on first use, reopened after it drops. */
+/** How an account signs its requests: the server's OAuth (state in `io`), or a token Piopio already has (GitHub's). */
+export type McpAuth = { io: StateIO } | { token: () => Promise<string | undefined>; help: string };
+
 export class McpAccount {
 	private client?: Promise<McpClient>;
-	readonly store: LockedStore;
+	private readonly store?: LockedStore;
 
 	constructor(
 		private readonly def: McpConnector,
 		private readonly url: string,
-		io: StateIO,
+		private readonly auth: McpAuth,
 		private readonly fetchImpl?: McpFetch,
 	) {
-		this.store = new LockedStore(io);
+		if ("io" in auth) this.store = new LockedStore(auth.io);
 	}
 
 	private connect(): Promise<McpClient> {
 		this.client ??= (async () => {
 			const client = new McpClient({ ...CLIENT, requestTimeoutMs: 60_000 });
-			const authProvider = createMcpAuthProvider({
-				serverUrl: this.url,
-				store: this.store,
-				settings: () => ({ ...(this.def.mcp.scope ? { scope: this.def.mcp.scope } : {}), clientRegistration: "dcr" }),
-				clientName: CLIENT.name,
-				onChallenge: () => {},
-			});
+			const store = this.store;
+			const authProvider = store
+				? createMcpAuthProvider({
+						serverUrl: this.url,
+						store,
+						settings: () => ({ ...(this.def.mcp.scope ? { scope: this.def.mcp.scope } : {}), clientRegistration: "dcr" }),
+						clientName: CLIENT.name,
+						onChallenge: () => {},
+					})
+				: undefined;
+			let headers: Record<string, string> | undefined;
+			if ("token" in this.auth) {
+				const token = await this.auth.token();
+				if (!token) throw new McpNeedsSignIn(this.auth.help);
+				headers = { authorization: `Bearer ${token}` };
+			}
 			client.onClose(() => {
 				this.client = undefined;
 			});
 			try {
-				await client.connect(new StreamableHttpTransport({ url: this.url, authProvider, openGetStream: false, ...(this.fetchImpl ? { fetch: this.fetchImpl } : {}) }));
+				await client.connect(new StreamableHttpTransport({ url: this.url, openGetStream: false, ...(authProvider ? { authProvider } : {}), ...(headers ? { headers } : {}), ...(this.fetchImpl ? { fetch: this.fetchImpl } : {}) }));
 			} catch (error) {
 				this.client = undefined;
 				throw this.explain(error);
@@ -187,7 +236,9 @@ export class McpAccount {
 	}
 
 	private explain(error: unknown): Error {
-		if (error instanceof McpOAuthAuthorizationRequiredError || /401|invalid_token|unauthori[sz]ed/i.test(String((error as Error)?.message))) return new McpNeedsSignIn(`${this.def.name} needs you to sign in again.`);
+		if (error instanceof McpNeedsSignIn) return error;
+		if (error instanceof McpOAuthAuthorizationRequiredError || /401|invalid_token|unauthori[sz]ed/i.test(String((error as Error)?.message)))
+			return new McpNeedsSignIn("token" in this.auth ? this.auth.help : `${this.def.name} needs you to sign in again.`);
 		return error instanceof Error ? error : new Error(String(error));
 	}
 

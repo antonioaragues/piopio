@@ -30,7 +30,7 @@ export const linear: McpConnector = {
 		scope: "read write",
 		prefix: "linear",
 		labels: { read: "Find and read issues, projects and docs", write: "Create and change issues, projects and comments", destructive: "Delete" },
-		prompt: "Use linear_* tools for the user's Linear issues, projects, cycles and comments; linear_more reaches Linear's other tools (documents, milestones, attachments, releases, notifications, views…).",
+		prompt: "Use linear_* tools for the user's Linear issues, projects, cycles and comments. Linear's other tools (documents, milestones, attachments, releases, notifications, views…) load with tool_search.",
 		// The everyday tools (2026-11-21 Linear offers about 70, ~100 KB of descriptions): issues, comments, projects, teams.
 		core: ["list_issues", "get_issue", "save_issue", "list_comments", "save_comment", "list_projects", "get_project", "list_teams", "list_users", "get_user", "list_issue_statuses", "list_issue_labels", "list_cycles"],
 		identify: async (call, tools) => {

@@ -301,10 +301,7 @@ enum ConnectorCatalog {
     static let soon: [Soon] = [
         Soon(id: "gmail", name: "Gmail", line: "Search, read and draft email", category: .mail, color: Color(red: 0.86, green: 0.27, blue: 0.22)),
         Soon(id: "drive", name: "Google Drive", line: "Find and read your files", category: .files, color: Color(red: 0.12, green: 0.63, blue: 0.33)),
-        Soon(id: "notion", name: "Notion", line: "Pages and databases", category: .files, color: Color(red: 0.2, green: 0.2, blue: 0.2)),
         Soon(id: "slack", name: "Slack", line: "Read channels, send messages", category: .chat, color: Color(red: 0.38, green: 0.12, blue: 0.42)),
-        Soon(id: "jira", name: "Jira", line: "Issues and sprints", category: .dev, color: Color(red: 0.0, green: 0.4, blue: 0.85)),
-        Soon(id: "github", name: "GitHub", line: "Issues, PRs and repos", category: .dev, color: Color(red: 0.14, green: 0.16, blue: 0.18)),
         Soon(id: "datadog", name: "Datadog", line: "Monitors, logs and incidents", category: .dev, color: Color(red: 0.39, green: 0.17, blue: 0.64)),
     ]
 
@@ -312,6 +309,7 @@ enum ConnectorCatalog {
         switch c.category {
         case "calendar", "email": .mail
         case "work": .work
+        case "files": .files
         default: .dev
         }
     }
@@ -321,6 +319,10 @@ enum ConnectorCatalog {
         case "google-calendar": "Your day in every briefing"
         case "outlook": "Calendar and mail"
         case "linear": "Issues and projects"
+        case "notion": "Pages and databases"
+        case "atlassian": "Jira issues and Confluence pages"
+        case "github": "Issues, pull requests and code"
+        case "sentry": "Errors and issues"
         default: ""
         }
     }
@@ -330,6 +332,10 @@ enum ConnectorCatalog {
         case "google-calendar": "Read your calendars, find free time, create events"
         case "outlook": "Calendar and mail: events, messages, drafts"
         case "linear": "Find, create and update issues, projects and comments"
+        case "notion": "Search, read and write pages and databases"
+        case "atlassian": "Jira issues and Confluence pages: find, create, update"
+        case "github": "Issues, pull requests and code, with your GitHub sign-in"
+        case "sentry": "Find errors and issues, and what caused them"
         default: c.description
         }
     }
@@ -338,6 +344,11 @@ enum ConnectorCatalog {
         switch id {
         case "outlook": "Sign in with Microsoft…"
         case "linear": "Sign in with Linear…"
+        case "notion": "Sign in with Notion…"
+        case "atlassian": "Sign in with Atlassian…"
+        case "sentry": "Sign in with Sentry…"
+        // No browser step: it uses the GitHub sign-in from Settings › Git & GitHub.
+        case "github": "Connect GitHub"
         default: "Sign in with Google…"
         }
     }
@@ -593,6 +604,10 @@ struct ConnectorTile: View {
         case "google-calendar": ("calendar", Color(red: 0.26, green: 0.52, blue: 0.96))
         case "outlook": ("envelope.fill", Color(red: 0.0, green: 0.47, blue: 0.83))
         case "linear": ("checklist", Color(red: 0.37, green: 0.42, blue: 0.82))
+        case "notion": ("doc.text", Color.gray)
+        case "atlassian": ("square.stack.3d.up", Color.blue)
+        case "github": ("chevron.left.forwardslash.chevron.right", Color.gray)
+        case "sentry": ("exclamationmark.triangle", Color.purple)
         default: ("app.connected.to.app.below.fill", Color.gray)
         }
         Image(systemName: symbol).font(.system(size: size * 0.45, weight: .semibold)).foregroundStyle(Color.dsFg2)

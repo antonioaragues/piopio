@@ -9,12 +9,12 @@
  * changes show result cards with Undo (06 §4.2, §9).
  */
 import { durableConnectorsExtension } from "../connectors/extension.js";
+import { connectorTools } from "../connectors/tools.js";
 import type { ConnectorHub } from "../connectors/hub.js";
-import { modelName, moreName } from "../connectors/mcp-remote.js";
-import { isMcp } from "../connectors/types.js";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { ConversationBusy, createRegistry, Harness, type Conversation, type ConversationWatch, type Extension, type SubmissionDraft } from "@earendil-works/pi-durable";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
+import { createToolSearchExtension } from "@earendil-works/pi-durable/tool-search";
 import type { ApprovalItem, ContainerRef, ModelRef, ResultItem, SessionEvent, Snapshot, TimelineItem, UtilityChoice } from "@piopio/protocol";
 import { AGENT_ENTRY, AgentCore, type AgentCoreOptions, alwaysLabel, modelOf, type Envelope, LEARN_ENTRY, NOTICE_ENTRY, OUT_ENTRY, type AgentDefinition, type Approval, type MemoryProvider, type ResultCard, type RunRecord, type UndoRecord } from "@piopio/runtime";
 import { BOT_TOKEN } from "../channels/telegram.js";
@@ -101,8 +101,20 @@ export class AgentRuntime implements Runtime {
 		const wantsWeb = () => options.definition().tools.builtin.some((t) => t === "web_search" || t === "web_fetch");
 		// Connected apps: changes ask through the agent's own approvals (durable), so the tool itself doesn't ask.
 		const hub = options.connectors;
-		const apps = hub ? (durableConnectorsExtension(hub, "agent", () => async () => ({ approved: true })) as unknown as Extension) : undefined;
-		const hasApps = () => Boolean(hub && (hub.calendars("agent").length || hub.mailboxes("agent").length));
+		// Rebuilt when the connected apps' tools change (Linear connected while the agent is open), so they're offered.
+		let built: { key: string; extensions: Extension[] } | undefined;
+		const toolSearch = createToolSearchExtension() as unknown as Extension;
+		const appExtensions = (): Extension[] => {
+			if (!hub || !(hub.calendars("agent").length || hub.mailboxes("agent").length || hub.mcpUses("agent").length)) return [];
+			const tools = connectorTools(hub, "agent");
+			const key = tools.map((t) => `${t.name}${t.deferred ? "*" : ""}`).join(",");
+			if (built?.key !== key) {
+				const apps = durableConnectorsExtension(hub, "agent", () => async () => ({ approved: true })) as unknown as Extension;
+				// Apps with many tools: the agent finds the rest with tool_search.
+				built = { key, extensions: tools.some((t) => t.deferred) ? [apps, toolSearch] : [apps] };
+			}
+			return built.extensions;
+		};
 		const definition = () => withConnectorApprovals(options.definition(), hub);
 		const harness = await Harness.open(storage, { models: options.hub.models, registry }, ctx);
 		// The extra extensions (writing, About me, visuals) must be installed too, or their tools are never offered and
@@ -119,7 +131,11 @@ export class AgentRuntime implements Runtime {
 			definition,
 			instructions: options.instructions,
 			memory: options.memory,
-			extensions: () => [...(wantsWeb() ? [web] : []), ...(apps && hasApps() ? [apps] : []), ...extras()],
+			extensions: () => {
+				const apps = appExtensions();
+				for (const e of apps) registry.install(e as never);
+				return [...(wantsWeb() ? [web] : []), ...apps, ...extras()];
+			},
 			context: ctx,
 			...(options.now ? { now: options.now } : {}),
 			...(options.appTool ? { appTool: options.appTool } : {}),
@@ -159,7 +175,7 @@ export class AgentRuntime implements Runtime {
 			...(options.automations ? { automations: options.automations } : {}),
 			...(options.updateSelf ? { updateSelf: options.updateSelf } : {}),
 		});
-		for (const e of [web, core.extension, ...(apps ? [apps] : [])]) registry.install(e as never);
+		for (const e of [web, core.extension, ...appExtensions()]) registry.install(e as never);
 		runtime = new AgentRuntime(options, harness, core);
 		runtime.owner = await runtime.view(ownerOf(options.definition()));
 		await core.configureAll();
@@ -778,12 +794,6 @@ function withConnectorApprovals(def: AgentDefinition, hub: ConnectorHub | undefi
 			if (g.permission === "ask") for (const t of g.tools) asked.add(t);
 			// Sending and deleting (mail_send, calendar_delete_event, an MCP app's delete tools) ask whenever they're on.
 			if ((g.access === "send" || g.access === "destructive") && g.permission !== "off") for (const t of g.tools) asked.add(t);
-		}
-		// An MCP app's other tools go through one `<prefix>_more` tool: it asks when any tool behind it would.
-		const def = hub.definition(c.id);
-		if (def && isMcp(def) && def.mcp.core) {
-			const behind = new Set(hub.capabilities(c.id).flatMap((g) => g.tools).filter((t) => !def.mcp.core!.some((name) => modelName(def, name) === t)));
-			if ([...behind].some((t) => asked.has(t))) asked.add(moreName(def));
 		}
 	}
 	const rules = [...new Set([...(def.policies?.requireApproval ?? []), ...asked])];

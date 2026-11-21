@@ -353,6 +353,8 @@ export class Engine {
 		// GitHub (docs/spec/05-build G4–G8): pull requests linked to conversations, polled for what happens on them.
 		this.github = new GitHub(this.secrets, options.github ?? {});
 		this.sessions.github = this.github;
+		// The GitHub connector (docs/spec/12 C3) signs in with the same GitHub sign-in.
+		this.connectors.tokens.github = { get: async () => (await this.github.token())?.token, help: "Sign in to GitHub in Settings › Git & GitHub (or with `gh auth login`), then connect GitHub again." };
 		// Side conversations in another project (docs/spec/24 SCQ5, 26 CL11): by its name or id.
 		this.sessions.projectNamed = (name) => {
 			const p = this.projects.list().find((x) => x.missing !== true && (x.id === name || x.name.toLowerCase() === name.toLowerCase()));

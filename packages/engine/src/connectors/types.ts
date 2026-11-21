@@ -68,7 +68,7 @@ type ConnectorBase = {
 	id: string;
 	name: string;
 	/** For the app's tile and the catalog's sections. */
-	category: "calendar" | "email" | "work";
+	category: "calendar" | "email" | "work" | "files" | "dev";
 	description: string;
 	/** Shown when no OAuth client is set up yet. */
 	setupHelp: string;
@@ -108,6 +108,11 @@ export type McpConnector = ConnectorBase & {
 	kind: "mcp";
 	mcp: {
 		url: string;
+		/**
+		 * How it signs in: its server's OAuth through the browser (default), or a token Piopio already has for the app
+		 * (GitHub: the GitHub CLI's sign-in or the token in Settings › Git & GitHub), with no browser step.
+		 */
+		signIn?: "oauth" | "token";
 		/** Scopes to ask for (Linear: "read write"). */
 		scope?: string;
 		/** Prefix of the tools' names in conversations ("linear" → linear_list_issues). */
@@ -117,8 +122,8 @@ export type McpConnector = ConnectorBase & {
 		/** One line for the prompt: what the tools are for. */
 		prompt: string;
 		/**
-		 * Tools offered directly, by server name. The others are reached through one `<prefix>_more` tool, so a server
-		 * with many tools doesn't fill every conversation's prompt. Without it, all are offered directly.
+		 * Tools offered up front, by server name; the others wait until the model finds them with tool search. Without it,
+		 * all are offered up front when there are few (DIRECT_LIMIT), else all wait for tool search.
 		 */
 		core?: string[];
 		/** Tools whose kind the server doesn't say right: by server name. */

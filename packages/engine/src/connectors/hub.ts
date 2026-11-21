@@ -11,8 +11,12 @@ import type { ProviderAuthEvent } from "@piopio/protocol";
 import type { SecretBroker } from "../secrets.js";
 import type { McpOAuthState } from "@earendil-works/pi-mcp/oauth";
 import { googleCalendar } from "./google-calendar.js";
+import { atlassian } from "./atlassian.js";
+import { github } from "./github.js";
 import { linear } from "./linear.js";
+import { sentry } from "./sentry.js";
 import { McpAccount, McpNeedsSignIn, mcpGroups, memoryIO, signInMcp, type StateIO, toolInfos } from "./mcp-remote.js";
+import { notion } from "./notion.js";
 import { outlook } from "./outlook.js";
 import { CAPABILITIES, type CapabilityGroup, defaultPermission, groupOf, type Permission } from "./permissions.js";
 import { type ApiConnector, type AuthorizedFetch, type Calendar, type CalendarEntry, type ConnectorDefinition, type ConnectorEndpoints, isMcp, type Mailbox, type McpCall, type McpConnector, type McpToolInfo, type Tokens } from "./types.js";
@@ -49,6 +53,8 @@ export class ConnectorHub {
 	private readonly logins = new Map<string, Login>();
 	private readonly problems = new Map<string, string>();
 	private readonly mcp = new Map<string, McpAccount>();
+	/** Tokens Piopio already has, for apps that sign in with one (`signIn: "token"`): set by the server (GitHub's). */
+	readonly tokens: Record<string, { get: () => Promise<string | undefined>; help: string }> = {};
 	/** Set by the server: connected apps changed (accounts, settings, needs attention). */
 	onChange?: () => void;
 
@@ -56,7 +62,7 @@ export class ConnectorHub {
 		private readonly secrets: SecretBroker,
 		private readonly options: { home?: string; endpoints?: ConnectorEndpoints; fetchImpl?: typeof fetch; emit?: Emit } = {},
 	) {
-		this.definitions = [googleCalendar, outlook, linear].map((d): ConnectorDefinition => {
+		this.definitions = [googleCalendar, outlook, linear, notion, atlassian, github, sentry].map((d): ConnectorDefinition => {
 			const o = options.endpoints?.[d.id];
 			if (!o) return d;
 			if (isMcp(d)) return o.mcpUrl ? { ...d, mcp: { ...d.mcp, url: o.mcpUrl } } : d;
@@ -238,15 +244,17 @@ export class ConnectorHub {
 
 	/** MCP apps: the server's own sign-in, then its tools and who signed in. */
 	private async signInMcp(def: McpConnector, signal: AbortSignal, emit: (e: ProviderAuthEvent) => void): Promise<void> {
-		const state = await signInMcp(def, def.mcp.url, signal, emit, page);
+		const byToken = def.mcp.signIn === "token";
+		if (byToken) emit({ type: "progress", message: `Connecting with your ${def.name} sign-in…` });
+		const state = byToken ? undefined : await signInMcp(def, def.mcp.url, signal, emit, page);
 		const io = memoryIO();
-		io.state = state;
-		const session = new McpAccount(def, def.mcp.url, io, this.options.fetchImpl);
+		if (state) io.state = state;
+		const session = new McpAccount(def, def.mcp.url, byToken ? this.tokenAuth(def) : { io }, this.options.fetchImpl);
 		try {
 			const tools = toolInfos(def, await session.tools());
 			const who = (await def.mcp.identify?.(session.call, tools).catch(() => undefined)) ?? { id: "default", label: def.name };
 			const account: Account = { id: `${def.id}:${who.id}`, connector: def.id, label: who.label, addedAt: new Date().toISOString() };
-			await this.secrets.set(this.secretName(account.id), JSON.stringify(io.state ?? state));
+			if (state) await this.secrets.set(this.secretName(account.id), JSON.stringify(io.state ?? state));
 			await this.mcp.get(account.id)?.close();
 			this.mcp.delete(account.id);
 			this.state.accounts = [...this.state.accounts.filter((a) => a.id !== account.id), account];
@@ -399,8 +407,18 @@ export class ConnectorHub {
 	// ── MCP apps (Linear) ──
 
 	/** An account's connection to its app's server; its OAuth state lives in the Keychain. */
+	/** An app that signs in with a token Piopio already has. */
+	private tokenAuth(def: McpConnector) {
+		const source = this.tokens[def.id];
+		return { token: async () => source?.get(), help: source?.help ?? `${def.name} isn't signed in on this Mac.` };
+	}
+
 	private mcpAccount(account: Account, def: McpConnector): McpAccount {
 		let session = this.mcp.get(account.id);
+		if (!session && def.mcp.signIn === "token") {
+			session = new McpAccount(def, def.mcp.url, this.tokenAuth(def), this.options.fetchImpl);
+			this.mcp.set(account.id, session);
+		}
 		if (!session) {
 			const name = this.secretName(account.id);
 			const io: StateIO = {
@@ -412,7 +430,7 @@ export class ConnectorHub {
 					await this.secrets.set(name, JSON.stringify(state));
 				},
 			};
-			session = new McpAccount(def, def.mcp.url, io, this.options.fetchImpl);
+			session = new McpAccount(def, def.mcp.url, { io }, this.options.fetchImpl);
 			this.mcp.set(account.id, session);
 		}
 		return session;
@@ -427,7 +445,7 @@ export class ConnectorHub {
 				return result;
 			} catch (error) {
 				if (error instanceof McpNeedsSignIn) {
-					const message = `${def.name} (${account.label}) needs you to sign in again. Reconnect it in Settings › Connectors.`;
+					const message = def.mcp.signIn === "token" ? error.message : `${def.name} (${account.label}) needs you to sign in again. Reconnect it in Settings › Connectors.`;
 					this.problems.set(account.id, message);
 					this.onChange?.();
 					throw new NeedsSignIn(message);
