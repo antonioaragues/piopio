@@ -93,8 +93,8 @@ adds a second account, and then the tools take an `account` argument.
   in Settings, like Google and Outlook.
 
 **Not done yet.**
-- Tried against a real workspace on 2026-11-21: sign-in, who signed in (`get_user` "me") and reads work. Creating
-  issues waits on the name-first sorting above (re-tried after the engine restarts). The engine test uses a fake Linear
+- Tried against a real workspace on 2026-11-21: sign-in, who signed in (`get_user` "me"), reads, and creating issues
+  (after the name-first sorting above) work. The engine test uses a fake Linear
   that marks `save_*` destructive like the real one: sign-in, a read, `linear_more`, approvals, "Don't ask again",
   disconnect.
 - Linear **as a trigger** (a label or an assignment starts a session) needs Linear to send events to a server; that
