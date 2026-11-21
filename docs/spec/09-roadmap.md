@@ -76,7 +76,7 @@ validation, the agent checking its own work, long-running processes and cloud/pa
 | ID | Gap | Where it stands | Size |
 |---|---|---|---|
 | **PAR1** | **Proven by real use.** Daily real-model work on Piopio in Piopio and a large repository: long sessions, compaction, big diffs, transcript speed | Track A; status.md's Build acceptance is open | Use, not building |
-| **PAR2** | **Background processes.** Start a command that keeps running (dev server, watcher, long test run), read its output later, stop it; the turn doesn't block. Shown in the transcript and the terminal drawer | Nothing in the engine or extensions | Medium |
+| **PAR2** | **Background processes.** Start a command that keeps running (dev server, watcher, long test run), read its output later, stop it; the turn doesn't block. Shown in the transcript and the terminal drawer | Built 2026-11-21 (05-build §9 TM4): bash `background: true`, process_output / process_stop / process_list, drawer tabs | Done |
 | **PAR3** | **Project web preview.** The pane runs the project's dev server, opens its `localhost` in a profile of its own, `browser_console` / `browser_requests` / `browser_eval` | Designed in 22 §6 (B10), not built | Medium; wants PAR2 |
 | **PAR4** | **Agent code review.** Review the session's diff, a branch or a PR (correctness first), findings as cards with file and line that become follow-ups; also someone else's PR | "PR review mode" in 05 §8 Later; `review.ts` only judges commands (AP6) | Medium |
 | **PAR5** | **Diagnostics.** The project's compiler/type errors after an edit (LSP or the project's own check command), fed back to the agent | Not built; the agent only sees errors when it runs a build | Medium |
