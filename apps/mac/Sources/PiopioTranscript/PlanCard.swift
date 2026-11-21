@@ -21,12 +21,18 @@ public struct PlanContent: Sendable, Hashable {
     static let padding: CGFloat = 16
     static let stepIndent: CGFloat = 30
     static let headerHeight: CGFloat = 22
-    static let footerHeight: CGFloat = 46
+    static let footerHeight: CGFloat = 40
+    /// Answered and folded: the header line alone.
+    static let foldedHeight: CGFloat = 46
     nonisolated(unsafe) static let summaryFont = NSFont.systemFont(ofSize: 14, weight: .semibold)
     nonisolated(unsafe) static let stepFont = NSFont.systemFont(ofSize: 13.5)
     nonisolated(unsafe) static let smallFont = NSFont.systemFont(ofSize: 12.5)
 
-    func height(width: CGFloat) -> CGFloat {
+    /// Answered plans fold to one line in the transcript; the side panel carries the plan from there.
+    public var answered: Bool { state != .pending }
+
+    func height(width: CGFloat, folded: Bool = false) -> CGFloat {
+        if folded { return Self.foldedHeight }
         let inner = max(120, width - Self.padding * 2)
         func h(_ text: String, _ font: NSFont, _ w: CGFloat) -> CGFloat {
             ceil(NSAttributedString(string: Self.plain(text), attributes: [.font: font]).boundingRect(with: NSSize(width: w, height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin, .usesFontLeading]).height)
@@ -37,12 +43,13 @@ public struct PlanContent: Sendable, Hashable {
         if !files.isEmpty { total += 6 + h("Files  " + files.joined(separator: "   "), .monospacedSystemFont(ofSize: 11.5, weight: .regular), inner - 44) + 4 }
         for risk in risks { total += h(risk, Self.smallFont, inner - 20) + 6 }
         if case .changes(let note?) = state { total += h(note, Self.smallFont, inner) + 6 }
-        total += 10 + Self.footerHeight
+        // A plan waiting for you has no footer: the box below the transcript takes the answer.
+        total += answered ? 10 + Self.footerHeight : 14
         return total + 8
     }
 
     /// Markdown markers dropped, for measuring.
-    static func plain(_ s: String) -> String {
+    public static func plain(_ s: String) -> String {
         s.replacingOccurrences(of: "**", with: "").replacingOccurrences(of: "`", with: "")
     }
 
@@ -52,21 +59,58 @@ public struct PlanContent: Sendable, Hashable {
     }
 }
 
+/// The plan in the transcript (docs/design/plan-flow). While it waits it's a document to read: no buttons, because
+/// the composer's tray is the one place that takes the answer. Once answered it folds to one line ("Plan · 7 steps ·
+/// Approved ›") that opens it again; the side panel's Plan carries it from there.
 struct PlanCardView: View {
     let plan: PlanContent
-    let act: @MainActor (TranscriptAction) -> Void
+    let expanded: Bool
+    let toggle: @MainActor () -> Void
 
-    private var pending: Bool { plan.state == .pending }
+    private var folded: Bool { plan.answered && !expanded }
+    // `expanded` is the transcript card's: true for a plan waiting for you, false once answered until you open it.
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 7) {
-                Image(systemName: "list.number").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color(nsColor: DS.accent))
-                Text("Plan").font(.system(size: 12, weight: .semibold)).foregroundStyle(Color(nsColor: DS.fg2))
-                status
-                Spacer()
+        Group {
+            if folded {
+                Button(action: toggle) { header.contentShape(Rectangle()) }.buttonStyle(.plain)
+                    .padding(.horizontal, 14)
+                    .frame(height: PlanContent.foldedHeight - 8)
+                    .help("Show the plan")
+            } else {
+                full
             }
-            .frame(height: PlanContent.headerHeight)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(nsColor: DS.card), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color(nsColor: DS.line), lineWidth: 0.5))
+    }
+
+    /// "Plan  7 steps", and on the right how it stands: "● Waiting for you", or the answer with a chevron.
+    private var header: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 7) {
+            Text("Plan").font(.system(size: 12, weight: .semibold)).foregroundStyle(Color(nsColor: DS.fg2))
+            Text(plan.steps.count == 1 ? "1 step" : "\(plan.steps.count) steps").font(.system(size: 12)).foregroundStyle(Color(nsColor: DS.fg3))
+            Spacer(minLength: 8)
+            if plan.answered {
+                Text(outcome).font(.system(size: 12)).foregroundStyle(Color(nsColor: DS.fg3))
+                Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).foregroundStyle(Color(nsColor: DS.fg3))
+                    .rotationEffect(.degrees(expanded ? 90 : 0))
+            } else {
+                HStack(spacing: 5) {
+                    Circle().fill(Color(nsColor: DS.accent)).frame(width: 6, height: 6)
+                    Text("Waiting for you").font(.system(size: 12)).foregroundStyle(Color(nsColor: DS.fg2))
+                }
+            }
+        }
+        .frame(height: PlanContent.headerHeight)
+    }
+
+    private var full: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Group {
+                if plan.answered { Button(action: toggle) { header.contentShape(Rectangle()) }.buttonStyle(.plain).help("Fold the plan") } else { header }
+            }
             .padding(.bottom, 8)
             Text(PlanContent.inline(plan.summary)).font(Font(PlanContent.summaryFont)).foregroundStyle(Color(nsColor: DS.fg))
                 .fixedSize(horizontal: false, vertical: true)
@@ -74,10 +118,8 @@ struct PlanCardView: View {
             VStack(alignment: .leading, spacing: 8) {
                 ForEach(Array(plan.steps.enumerated()), id: \.offset) { i, step in
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
-                        Text("\(i + 1)").font(.system(size: 11, weight: .bold).monospacedDigit()).foregroundStyle(Color(nsColor: DS.accent))
-                            .frame(width: 20, height: 20)
-                            .background(Circle().fill(Color(nsColor: DS.accentSoft)))
-                            .alignmentGuide(.firstTextBaseline) { d in d[VerticalAlignment.center] + 4.5 }
+                        Text("\(i + 1)").font(.system(size: 12.5).monospacedDigit()).foregroundStyle(Color(nsColor: DS.fg3))
+                            .frame(width: 20, alignment: .trailing)
                         Text(PlanContent.inline(step)).font(Font(PlanContent.stepFont)).foregroundStyle(Color(nsColor: DS.fg))
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -92,10 +134,11 @@ struct PlanCardView: View {
                 .padding(.top, 10)
             }
             if !plan.risks.isEmpty {
+                // Risks and open questions in grey ink: a dot, not an amber warning.
                 VStack(alignment: .leading, spacing: 6) {
                     ForEach(Array(plan.risks.enumerated()), id: \.offset) { _, risk in
                         HStack(alignment: .firstTextBaseline, spacing: 6) {
-                            Image(systemName: "exclamationmark.triangle").font(.system(size: 10.5)).foregroundStyle(Color(nsColor: DS.amber))
+                            Text("·").font(.system(size: 12.5, weight: .bold)).foregroundStyle(Color(nsColor: DS.fg3)).frame(width: 10)
                             Text(PlanContent.inline(risk)).font(Font(PlanContent.smallFont)).foregroundStyle(Color(nsColor: DS.fg2)).fixedSize(horizontal: false, vertical: true)
                         }
                     }
@@ -105,48 +148,27 @@ struct PlanCardView: View {
             if case .changes(let note?) = plan.state {
                 Text("You asked for: \(note)").font(Font(PlanContent.smallFont)).foregroundStyle(Color(nsColor: DS.fg2)).fixedSize(horizontal: false, vertical: true).padding(.top, 8)
             }
-            Rectangle().fill(Color(nsColor: DS.line)).frame(height: 0.5).padding(.top, 10)
-            footer.frame(height: PlanContent.footerHeight)
+            if plan.answered {
+                Rectangle().fill(Color(nsColor: DS.line)).frame(height: 0.5).padding(.top, 10)
+                HStack {
+                    Text(footnote).font(.system(size: 12)).foregroundStyle(Color(nsColor: DS.fg3))
+                    Spacer()
+                }
+                .frame(height: PlanContent.footerHeight)
+            }
         }
         .padding(.horizontal, PlanContent.padding)
         .padding(.top, PlanContent.padding)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(nsColor: DS.card), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(pending ? Color(nsColor: DS.accentLine) : Color(nsColor: DS.line), lineWidth: pending ? 1 : 0.5))
+        .padding(.bottom, plan.answered ? 0 : 14)
     }
 
-    @ViewBuilder private var status: some View {
+    private var outcome: String {
         switch plan.state {
-        case .pending: label("Waiting for you", DS.amber)
-        case .approved: label("Approved", DS.green)
-        case .approvedEdited: label("Approved with your edits", DS.green)
-        case .changes: label("Sent back", DS.fg3)
-        case .unanswered: label("Not answered", DS.fg3)
-        }
-    }
-
-    private func label(_ text: String, _ color: NSColor) -> some View {
-        HStack(spacing: 4) {
-            Circle().fill(Color(nsColor: color)).frame(width: 6, height: 6)
-            Text(text).font(.system(size: 11.5, weight: .medium)).foregroundStyle(Color(nsColor: color == DS.fg3 ? DS.fg3 : color))
-        }
-    }
-
-    @ViewBuilder private var footer: some View {
-        if pending {
-            HStack(spacing: 8) {
-                button("Keep planning…", primary: false) { act(.plan(callId: plan.callId, answer: .revise)) }
-                    .help("Tell the agent what to change; it plans again")
-                Spacer()
-                button("Edit…", primary: false) { act(.plan(callId: plan.callId, answer: .edit)) }
-                    .help("Change, reorder or remove steps, then approve your version")
-                button("Approve and build", primary: true) { act(.plan(callId: plan.callId, answer: .approve)) }
-            }
-        } else {
-            HStack {
-                Text(footnote).font(.system(size: 12)).foregroundStyle(Color(nsColor: DS.fg3))
-                Spacer()
-            }
+        case .approved: "Approved"
+        case .approvedEdited: "Approved with your edits"
+        case .changes: "Sent back"
+        case .unanswered: "Not answered"
+        case .pending: ""
         }
     }
 
@@ -159,16 +181,25 @@ struct PlanCardView: View {
         case .pending: ""
         }
     }
+}
 
-    private func button(_ title: String, primary: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title).font(.system(size: 12.5, weight: primary ? .semibold : .medium))
-                .foregroundStyle(primary ? Color.white : Color(nsColor: DS.fg))
-                .padding(.horizontal, 12)
-                .frame(height: 28)
-                .background(primary ? Color(nsColor: DS.accent) : Color(nsColor: DS.chip), in: Capsule())
-                .contentShape(Capsule())
+extension PlanContent {
+    /// The session's latest plan proposal, for the side panel: the plan, and whether the agent has written its todo
+    /// list since (then the list is the plan, as the approved plan asks it to track the steps with `todo`).
+    public static func latest(in items: [TimelineItem]) -> (plan: PlanContent, todosSince: Bool)? {
+        var found: PlanContent?
+        var todosSince = false
+        for item in items {
+            let tools: [ToolItem] = switch item {
+            case .tool(let t): [t]
+            case .steps(let s): s.tools
+            default: []
+            }
+            for tool in tools {
+                if tool.tool == "propose_plan" { found = ItemRenderer.planContent(tool); todosSince = false }
+                else if tool.tool == "todo", found != nil { todosSince = true }
+            }
         }
-        .buttonStyle(.plain)
+        return found.map { ($0, todosSince) }
     }
 }

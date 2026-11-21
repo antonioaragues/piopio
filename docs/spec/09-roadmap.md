@@ -154,7 +154,7 @@ Noted by the user after using the v2 redesign. Not scheduled into a phase yet.
 - S2 · Thinking lines read "Thought x words": drop the word count ("Thought for 4s" or just "Thought"). **Fixed 2026-10-22:** it reads "Thought" (pi doesn't time thinking separately).
 
 **Plan mode**
-- P1 · Show the plan inline in the transcript, not in a pop-up. **Done 2026-10-22:** the plan is its own card in the transcript with Keep planning… / Edit… / Approve and build; above the composer only a one-line bar remains (with ⌘↩).
+- P1 · Show the plan inline in the transcript, not in a pop-up. **Done 2026-10-22:** the plan is its own card in the transcript with Keep planning… / Edit… / Approve and build; above the composer only a one-line bar remains (with ⌘↩). **Changed 2026-11-21** ([plan-flow](../design/plan-flow/README.md)): the card has no buttons; the composer's tray is the one place that answers, an answered plan folds to one line, and the side panel's Plan shows the proposal.
 - P2 · Give it real formatting (headings, numbered steps, checkboxes, code) instead of flat text. **Done 2026-10-22:** summary, numbered steps in circles with inline Markdown, the files it expects to change and its risks (`propose_plan` gained `files` and `risks`); once answered it says Approved, Approved with your edits, or Sent back with your note.
 - P3 · Let the user edit the plan before approving it. **Done 2026-10-22:** Edit… opens the plan to change, reorder, remove or add steps; Approve and build sends your version and the agent builds it instead of its own.
 

@@ -327,14 +327,15 @@ public final class DisclosureCard: @unchecked Sendable {
         self.content = .text(body)
     }
 
-    /// A plan, always open (docs/spec/09 P1–P3).
+    /// A plan (docs/spec/09 P1–P3): open while it waits for you, folded to one line once answered.
     public init(plan: PlanContent) {
         self.kind = .plan
         self.title = "Plan"
         self.detail = ""
         self.trailing = ""
         self.content = .plan(plan)
-        self.expanded = true
+        // A plan waiting for you is always open (it has no fold); an answered one starts folded.
+        self.expanded = !plan.answered
     }
 
     public init(tool title: String, detail: String, trailing: String, content: Body) {
@@ -386,7 +387,7 @@ public final class DisclosureCard: @unchecked Sendable {
 
     func height(width: CGFloat) -> CGFloat {
         measuredWidth = width
-        if case .plan(let plan) = content { return plan.height(width: width) }
+        if case .plan(let plan) = content { return plan.height(width: width, folded: plan.answered && !expanded) }
         let header = kind == .tool ? Self.collapsedHeight : lineHeight
         guard expanded, !isEmpty else { return header }
         if case .cards(let cards) = content {
@@ -636,7 +637,7 @@ struct DisclosureCardView: View {
     var relay: (@MainActor () -> Void)?
 
     var body: some View {
-        if case .plan(let plan) = card.content { PlanCardView(plan: plan, act: { card.onAction?($0) }) }
+        if case .plan(let plan) = card.content { PlanCardView(plan: plan, expanded: card.expanded, toggle: toggle) }
         else if card.kind == .tool { toolCard } else { quietLine }
     }
 

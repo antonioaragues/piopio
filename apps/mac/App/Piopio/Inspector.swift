@@ -127,16 +127,18 @@ struct SessionTab: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            // No plan, no Plan block (docs/design/plan-flow): then the block above it is the last.
+            let plan = PlanBlock.shown(session) != nil
             setup.inspectorBlock()
             ToolsBlock(engine: engine, thread: session, summary: summary).inspectorBlock()
-            read.inspectorBlock()
+            read.inspectorBlock(last: chatLens && !plan)
             if !chatLens {
                 ChangesBlock(engine: engine, session: session, summary: summary, git: git, files: files,
                              commit: git?.status?.repo == true && (git?.changedCount ?? 0) > 0 ? { committing = true } : nil,
                              onReview: onReview, open: $changesOpen)
-                    .inspectorBlock()
+                    .inspectorBlock(last: !plan)
             }
-            PlanBlock(session: session).inspectorBlock(last: true)
+            if plan { PlanBlock(session: session).inspectorBlock(last: true) }
         }
         .padding(.horizontal, 18)
     }
@@ -327,52 +329,88 @@ struct ToolsBlock: View {
 /// The plan as a timeline (docs/design/plan-timeline, 1a in grey ink): a rail of markers joined by a line, done steps
 /// checked in `fg3`, the current one ringed in ink with its detail open, the rest just their titles. Clicking a step
 /// with a detail opens or closes it; the agent alone moves the plan along. Done shows every step checked, with how
-/// long it took in the header; none says why, with a way to ask for one.
+/// long it took in the header.
+///
+/// One plan (docs/design/plan-flow): a plan mode proposal waiting for you shows here as "Proposed", in place of any
+/// older list, with the same steps as the card in the transcript; one sent back reads "Revising…" while the agent
+/// works on it; an approved one shows its steps until the agent writes its todo list, which is the plan from then on.
+/// With none of these there is no Plan block at all (`shown` is nil).
 struct PlanBlock: View {
     let session: ThreadModel
     /// Steps (by title) whose detail is flipped from its default: open for the current one, closed for the rest.
     @State private var flipped: Set<String> = []
 
-    var body: some View {
-        let todos = session.todos
-        let done = todos.filter { $0.status == .done }.count
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("Plan").font(.system(size: 13, weight: .semibold))
-                Spacer(minLength: 8)
-                Text(counter(todos, done: done)).font(.system(size: 12).monospacedDigit()).foregroundStyle(Color.dsFg3)
-            }
-            if todos.isEmpty {
-                none
-            } else {
-                timeline(todos)
+    enum Shown { case todos([Todo]), proposed([Todo]), approved([Todo]), revising }
+
+    @MainActor static func shown(_ session: ThreadModel) -> Shown? {
+        if let latest = PlanContent.latest(in: session.document.items) {
+            let steps = latest.plan.steps.map(Self.step)
+            switch latest.plan.state {
+            case .pending: return .proposed(steps)
+            case .changes where session.isRunning: return .revising
+            case .approved, .approvedEdited: if !latest.todosSince { return .approved(steps) }
+            default: break
             }
         }
-        .animation(.easeOut(duration: 0.2), value: todos.map(\.status))
+        return session.todos.isEmpty ? nil : .todos(session.todos)
+    }
+
+    /// A proposed step as a timeline row: its bold lead ("**PIO-7 Precios:** …") or first clause as the title, the
+    /// whole step as the detail.
+    static func step(_ text: String) -> Todo {
+        let plain = PlanContent.plain(text).trimmingCharacters(in: .whitespacesAndNewlines)
+        var title = plain
+        if text.hasPrefix("**"), let close = text.dropFirst(2).range(of: "**") {
+            title = String(text.dropFirst(2)[..<close.lowerBound])
+        } else if let cut = plain.firstIndex(where: { ":—(".contains($0) }), plain.distance(from: plain.startIndex, to: cut) >= 8 {
+            title = String(plain[..<cut])
+        }
+        title = title.trimmingCharacters(in: CharacterSet(charactersIn: " :.,"))
+        return Todo(text: title, detail: title == plain ? nil : plain, status: .pending)
+    }
+
+    var body: some View {
+        if let shown = Self.shown(session) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Plan").font(.system(size: 13, weight: .semibold))
+                    Spacer(minLength: 8)
+                    trailing(shown)
+                }
+                switch shown {
+                case .todos(let todos): timeline(todos)
+                case .proposed(let steps), .approved(let steps): timeline(steps)
+                case .revising:
+                    Text("It's changing the plan as you asked.").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                }
+            }
+            .animation(.easeOut(duration: 0.2), value: session.todos.map(\.status))
+        }
+    }
+
+    @ViewBuilder private func trailing(_ shown: Shown) -> some View {
+        switch shown {
+        case .todos(let todos):
+            Text(counter(todos)).font(.system(size: 12).monospacedDigit()).foregroundStyle(Color.dsFg3)
+        case .proposed(let steps):
+            HStack(spacing: 5) {
+                Circle().fill(Color.accentColor).frame(width: 6, height: 6)
+                Text("Proposed · \(steps.count == 1 ? "1 step" : "\(steps.count) steps")").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+            }
+            .help("Waiting for you: answer in the box below the conversation")
+        case .approved(let steps):
+            Text("0 of \(steps.count)").font(.system(size: 12).monospacedDigit()).foregroundStyle(Color.dsFg3)
+        case .revising:
+            Text("Revising…").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+        }
     }
 
     /// "2 of 6"; "6 of 6 · 34 min" once it's done.
-    private func counter(_ todos: [Todo], done: Int) -> String {
-        guard !todos.isEmpty else { return "None" }
+    private func counter(_ todos: [Todo]) -> String {
+        let done = todos.filter { $0.status == .done }.count
         let base = "\(done) of \(todos.count)"
         guard done == todos.count, let duration = Self.duration(session.document.items) else { return base }
         return "\(base) · \(duration)"
-    }
-
-    @ViewBuilder private var none: some View {
-        let answered = session.document.items.contains { if case .assistant = $0 { true } else { false } }
-        HStack(spacing: 4) {
-            if answered && !session.isRunning {
-                Text("Short task — no plan needed.").foregroundStyle(Color.dsFg3)
-                SummaryLink("Ask for one") {
-                    Task { _ = await session.send("Make a plan for this with the todo tool before you go on.") }
-                }
-                .help("Ask it to write the steps down")
-            } else {
-                Text("It makes one for longer tasks.").foregroundStyle(Color.dsFg3)
-            }
-        }
-        .font(.system(size: 12))
     }
 
     private func timeline(_ todos: [Todo]) -> some View {

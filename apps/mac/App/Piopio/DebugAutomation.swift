@@ -421,6 +421,11 @@ enum DebugAutomation {
                     for _ in 0..<50 where session.prompts.isEmpty { try? await Task.sleep(for: .milliseconds(200)) }
                     if let question = session.prompts.first { await session.respond(question, PromptResponse(choice: reply)) }
                 }
+                // PIOPIO_DEMO_APPROVE_PLAN=1: approve the first plan it proposes (plan mode captures of what follows).
+                if env["PIOPIO_DEMO_APPROVE_PLAN"] == "1" {
+                    for _ in 0..<50 where !session.prompts.contains(where: { $0.kind == .plan }) { try? await Task.sleep(for: .milliseconds(200)) }
+                    if let plan = session.prompts.first(where: { $0.kind == .plan }) { await session.respond(plan, PromptResponse(decision: .allow)) }
+                }
                 // PIOPIO_DEMO_BUILD_FOLLOWUP: a second turn; PIOPIO_DEMO_REVIEW=1 then opens the diff review,
                 // PIOPIO_DEMO_RESTORE=1 the restore sheet for the first checkpoint.
                 if let followUp = env["PIOPIO_DEMO_BUILD_FOLLOWUP"] {

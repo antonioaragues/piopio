@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Piopio · One plan: the card, the tray and the panel</title>
+<style>
+  :root {
+    --win: #FCFCFB; --side: #F4F4F2; --field: #FFFFFF; --bubble: #EFEFEC; --sel: rgba(0,0,0,.05);
+    --fg: #1F1F1E; --fg2: #6B6B67; --fg3: #9B9B96; --line: rgba(0,0,0,.08);
+    --inv: #1F1F1E; --invfg: #FCFCFB; --accent: #2F6FEB;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #E4E4E0; font: 13px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif; color: var(--fg); -webkit-font-smoothing: antialiased; }
+  header.page { padding: 28px 36px 4px; max-width: 1100px; }
+  h1 { font-size: 20px; margin: 0 0 8px; font-weight: 650; }
+  header.page p { margin: 0 0 6px; color: var(--fg2); }
+  .state { padding: 22px 36px 8px; }
+  .state h2 { font-size: 15px; margin: 0 0 4px; font-weight: 650; }
+  .state > p { margin: 0 0 14px; color: var(--fg2); max-width: 900px; }
+  .frame { display: flex; width: 940px; height: 640px; background: var(--side); border-radius: 12px; box-shadow: 0 0 0 .5px rgba(0,0,0,.1), 0 8px 24px rgba(0,0,0,.07); overflow: hidden; }
+  .card { flex: 1; margin: 8px 0 8px 8px; background: var(--win); border-radius: 10px; box-shadow: 0 0 0 .5px var(--line); display: flex; flex-direction: column; position: relative; overflow: hidden; }
+  .bar { height: 44px; display: flex; align-items: center; padding: 0 18px; gap: 8px; border-bottom: .5px solid transparent; }
+  .bar b { font-weight: 600; font-size: 13px; }
+  .scroll { flex: 1; overflow: hidden; padding: 6px 36px 0; }
+  .col { max-width: 560px; margin: 0 auto; }
+  .user { margin-left: auto; width: max-content; max-width: 80%; background: var(--bubble); border-radius: 12px; padding: 8px 14px; font-size: 14px; margin-bottom: 14px; }
+  .fg2 { color: var(--fg2); } .fg3 { color: var(--fg3); }
+  .grey { color: var(--fg3); font-size: 13px; margin: 6px 0 12px; }
+  .answer { font-size: 14px; line-height: 1.6; margin-bottom: 12px; }
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; }
+  .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); vertical-align: middle; }
+  .link { color: var(--accent); cursor: pointer; }
+
+  /* The plan in the transcript: a document, no buttons */
+  .plan { border: .5px solid var(--line); border-radius: 12px; padding: 14px 16px; background: var(--win); margin-bottom: 12px; }
+  .plan .ph { display: flex; align-items: baseline; gap: 8px; font-size: 12px; color: var(--fg3); margin-bottom: 8px; }
+  .plan .ph .t { color: var(--fg2); font-weight: 600; }
+  .plan .sum { font-size: 14px; font-weight: 600; line-height: 1.45; margin-bottom: 10px; }
+  .plan ol { margin: 0; padding: 0; list-style: none; counter-reset: s; }
+  .plan li { counter-increment: s; position: relative; padding-left: 26px; margin: 0 0 7px; font-size: 13.5px; line-height: 1.45; }
+  .plan li::before { content: counter(s); position: absolute; left: 0; top: 0; width: 18px; text-align: right; color: var(--fg3); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+  .plan li.more { counter-increment: none; color: var(--fg3); }
+  .plan li.more::before { content: ""; }
+  .plan .meta { margin-top: 10px; font-size: 12.5px; color: var(--fg2); }
+  .plan .meta div { margin: 3px 0; padding-left: 14px; position: relative; }
+  .plan .meta div::before { content: "·"; position: absolute; left: 3px; color: var(--fg3); }
+  .plan .foot { margin-top: 12px; padding-top: 10px; border-top: .5px solid var(--line); font-size: 12px; color: var(--fg3); }
+  .plan.folded { padding: 10px 14px; }
+  .plan.folded .ph { margin: 0; }
+
+  /* Composer + tray */
+  .composer { margin: 0 auto 16px; width: calc(100% - 72px); max-width: 600px; background: var(--field); border: .5px solid var(--line); border-radius: 16px; box-shadow: 0 2px 10px rgba(0,0,0,.04); overflow: hidden; }
+  .tray { background: var(--win); border-bottom: .5px solid var(--line); padding: 11px 14px; }
+  .tray .tt { display: flex; align-items: baseline; gap: 8px; }
+  .tray .tt b { font-weight: 600; }
+  .tray .acts { display: flex; align-items: center; gap: 16px; margin-top: 10px; color: var(--fg2); font-size: 12.5px; }
+  .btn { background: var(--inv); color: var(--invfg); border-radius: 8px; padding: 5px 11px; font-size: 12.5px; font-weight: 500; margin-left: auto; }
+  .field { padding: 12px 14px 10px; }
+  .ph-text { color: var(--fg3); font-size: 14px; }
+  .crow { display: flex; align-items: center; gap: 14px; margin-top: 12px; color: var(--fg2); font-size: 12.5px; }
+  .crow .send { margin-left: auto; width: 26px; height: 26px; border-radius: 50%; background: var(--sel); }
+  .chip-on { background: var(--sel); border-radius: 6px; padding: 2px 6px; color: var(--fg); }
+
+  /* The panel */
+  .panel { width: 300px; flex: 0 0 300px; display: flex; flex-direction: column; }
+  .pb { flex: 1; padding: 0 18px; overflow: hidden; }
+  .blk { padding: 16px 0; border-bottom: .5px solid var(--line); }
+  .blk.last { border-bottom: 0; }
+  .hrow { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .bt { font-weight: 600; }
+  .grid { display: grid; grid-template-columns: 72px 1fr; gap: 7px 8px; margin-top: 9px; }
+  .lbl { color: var(--fg3); }
+  .pfoot { height: 44px; border-top: .5px solid var(--line); display: flex; align-items: center; justify-content: space-between; padding: 0 18px; color: var(--fg2); font-size: 12.5px; }
+  .new { box-shadow: inset 2px 0 0 var(--accent); margin-left: -18px; padding-left: 16px; }
+
+  /* Timeline */
+  .tl { margin-top: 12px; }
+  .st { display: flex; gap: 10px; }
+  .rail { width: 14px; display: flex; flex-direction: column; align-items: center; }
+  .mk { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid rgba(155,155,150,.6); margin-top: 2px; flex: 0 0 auto; }
+  .mk.cur { border: 2px solid var(--fg); }
+  .mk.done { background: var(--fg3); border-color: var(--fg3); }
+  .ln { width: 1.5px; flex: 1; min-height: 8px; background: rgba(155,155,150,.28); margin: 3px 0; }
+  .sx { flex: 1; padding-bottom: 12px; color: var(--fg2); }
+  .sx.cur { color: var(--fg); font-weight: 600; }
+  .sx .d { font-weight: 400; color: var(--fg2); font-size: 12.5px; margin-top: 3px; }
+
+  .notes { margin: 14px 0 6px; max-width: 940px; font-size: 12.5px; color: var(--fg2); display: grid; grid-template-columns: 1fr 1fr; gap: 6px 28px; }
+  .notes b { color: var(--fg); font-weight: 600; }
+</style>
+</head>
+<body>
+<header class="page">
+  <h1>One plan: the card, the tray and the panel</h1>
+  <p>Three moments of the same session. A blue bar on the left marks what changes against today.</p>
+</header>
+
+<!-- 1 · NO PLAN -->
+<section class="state">
+  <h2>1 · No plan</h2>
+  <p>The Plan block isn't shown until there is a plan or a proposal. To ask for one you use Plan mode, which is already in the composer (⇧⇥). “Ask for one” goes away: it made a second kind of plan that nobody approved.</p>
+  <div class="frame">
+    <div class="card">
+      <div class="bar"><b>Quiero probar el conector de Linear…</b><span class="fg3">test-linear · no git</span></div>
+      <div class="scroll"><div class="col">
+        <div class="user">Mira las tareas pendientes en Linear</div>
+        <div class="grey">Used Linear 2 times ›</div>
+        <div class="answer">Hay 6 tareas abiertas en el equipo PIO. PIO-5 y PIO-6 ya están hechas en <span class="mono">index.html</span> pero siguen en Todo…</div>
+      </div></div>
+      <div class="composer">
+        <div class="field"><div class="ph-text">Ask for changes, @mention a file…</div>
+          <div class="crow"><span>+</span><span>Ask before edits</span><span style="margin-left:auto">Sonnet 5.5 · OpenRouter</span><span class="send" style="margin-left:0"></span></div>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="pb">
+        <div class="blk"><div class="bt">Setup</div><div class="grid"><span class="lbl">Project</span><span>test-linear <span class="fg3">· no git</span></span><span class="lbl">Runs on</span><span>This Mac</span></div></div>
+        <div class="blk hrow"><span class="bt">Tools</span><span class="fg3">2 on ⌄</span></div>
+        <div class="blk hrow"><span class="bt">Read</span><span class="fg3">Nothing yet</span></div>
+        <div class="blk hrow last new"><span class="bt">Changes</span><span class="fg3">1 file ›</span></div>
+      </div>
+      <div class="pfoot"><span>56,6k of 1M ⌃</span><span>$0.46</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- 2 · PROPOSED -->
+<section class="state">
+  <h2>2 · The agent proposes a plan</h2>
+  <p>The card in the conversation is for reading. It has no buttons, and only the box below asks for an answer, with one black action. The panel shows the same steps as “Proposed”, replacing any older list.</p>
+  <div class="frame">
+    <div class="card">
+      <div class="bar"><b>Quiero probar el conector de Linear…</b><span class="fg3">test-linear · no git</span></div>
+      <div class="scroll"><div class="col">
+        <div class="user">vamos a plantear el proyecto</div>
+        <div class="grey">Thought for 3s ›</div>
+        <div class="plan new">
+          <div class="ph"><span class="t">Plan</span><span>7 steps</span><span style="margin-left:auto"><span class="dot"></span> Waiting for you</span></div>
+          <div class="sum">Organizar la landing de Piopio como un proyecto en Linear (equipo PIO) y terminar las tareas pendientes en orden.</div>
+          <ol>
+            <li><b>Crear el proyecto</b> «Landing Piopio» en Linear y asociar PIO-5 a PIO-10.</li>
+            <li><b>Crear etiquetas</b> web, diseño y contenido.</li>
+            <li><b>PIO-7 Precios:</b> sección de precios en <span class="mono">index.html</span>.</li>
+            <li><b>PIO-8 Responsive:</b> revisar a anchos móvil, tablet y escritorio.</li>
+            <li class="more">3 more steps</li>
+          </ol>
+          <div class="meta">
+            <div>Changes <span class="mono">index.html</span>, <span class="mono">NOTES.md</span></div>
+            <div>Needs from you: plans and prices, the download URL, where to publish</div>
+          </div>
+        </div>
+      </div></div>
+      <div class="composer">
+        <div class="tray new">
+          <div class="tt"><span class="dot"></span><b>Build this plan?</b><span class="fg3">7 steps · Linear changes ask first</span><span class="fg3" style="margin-left:auto">⌄</span></div>
+          <div class="acts"><span>Keep planning</span><span>Edit</span><span class="btn">Approve and build ⌘↩</span></div>
+        </div>
+        <div class="field"><div class="ph-text">Or say what to change in the plan…</div>
+          <div class="crow"><span>+</span><span class="chip-on">Plan</span><span style="margin-left:auto">Sonnet 5.5 · OpenRouter</span><span class="send" style="margin-left:0"></span></div>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="pb">
+        <div class="blk"><div class="bt">Setup</div><div class="grid"><span class="lbl">Project</span><span>test-linear <span class="fg3">· no git</span></span><span class="lbl">Runs on</span><span>This Mac</span></div></div>
+        <div class="blk hrow"><span class="bt">Tools</span><span class="fg3">2 on ⌄</span></div>
+        <div class="blk hrow"><span class="bt">Read</span><span class="fg3">4 files ›</span></div>
+        <div class="blk hrow"><span class="bt">Changes</span><span class="fg3">1 file ›</span></div>
+        <div class="blk last new">
+          <div class="hrow"><span class="bt">Plan</span><span class="fg3"><span class="dot"></span> Proposed · 7 steps</span></div>
+          <div class="tl">
+            <div class="st"><div class="rail"><div class="mk"></div><div class="ln"></div></div><div class="sx">Crear el proyecto en Linear</div></div>
+            <div class="st"><div class="rail"><div class="mk"></div><div class="ln"></div></div><div class="sx">Crear etiquetas</div></div>
+            <div class="st"><div class="rail"><div class="mk"></div><div class="ln"></div></div><div class="sx">PIO-7 Precios</div></div>
+            <div class="st"><div class="rail"><div class="mk"></div><div class="ln"></div></div><div class="sx">PIO-8 Responsive</div></div>
+            <div class="st"><div class="rail"><div class="mk"></div></div><div class="sx fg3">3 more</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="pfoot"><span>56,6k of 1M ⌃</span><span>$0.46</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- 3 · BUILDING -->
+<section class="state">
+  <h2>3 · Approved, building</h2>
+  <p>The card folds into one grey line (“Plan approved · 7 steps ›”, which opens it again). The panel becomes the timeline the agent keeps up to date as it works. The plan lives in the panel from here on.</p>
+  <div class="frame">
+    <div class="card">
+      <div class="bar"><b>Quiero probar el conector de Linear…</b><span class="fg3">test-linear · no git</span></div>
+      <div class="scroll"><div class="col">
+        <div class="user">vamos a plantear el proyecto</div>
+        <div class="plan folded new"><div class="ph"><span class="t">Plan</span><span>7 steps</span><span style="margin-left:auto">Approved ›</span></div></div>
+        <div class="grey">Used Linear 3 times ›</div>
+        <div class="answer">He creado el proyecto «Landing Piopio» y he asociado PIO-5 a PIO-10. Ahora las etiquetas…</div>
+      </div></div>
+      <div class="composer">
+        <div class="field"><div class="ph-text">Steer it, or queue a message…</div>
+          <div class="crow"><span>+</span><span>Ask before edits</span><span style="margin-left:auto">Sonnet 5.5 · OpenRouter</span><span class="send" style="margin-left:0;background:var(--inv)"></span></div>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="pb">
+        <div class="blk"><div class="bt">Setup</div><div class="grid"><span class="lbl">Project</span><span>test-linear <span class="fg3">· no git</span></span><span class="lbl">Runs on</span><span>This Mac</span></div></div>
+        <div class="blk hrow"><span class="bt">Tools</span><span class="fg3">2 on ⌄</span></div>
+        <div class="blk hrow"><span class="bt">Read</span><span class="fg3">4 files ›</span></div>
+        <div class="blk hrow"><span class="bt">Changes</span><span class="fg3">1 file ›</span></div>
+        <div class="blk last">
+          <div class="hrow"><span class="bt">Plan</span><span class="fg3">1 of 7</span></div>
+          <div class="tl">
+            <div class="st"><div class="rail"><div class="mk done"></div><div class="ln" style="background:var(--fg3)"></div></div><div class="sx fg3">Crear el proyecto en Linear</div></div>
+            <div class="st"><div class="rail"><div class="mk cur"></div><div class="ln"></div></div><div class="sx cur">Crear etiquetas <span class="fg3" style="float:right;font-weight:400;font-size:12px">now</span><div class="d">web, diseño y contenido, aplicadas a cada tarea.</div></div></div>
+            <div class="st"><div class="rail"><div class="mk"></div><div class="ln"></div></div><div class="sx">PIO-7 Precios</div></div>
+            <div class="st"><div class="rail"><div class="mk"></div><div class="ln"></div></div><div class="sx">PIO-8 Responsive</div></div>
+            <div class="st"><div class="rail"><div class="mk"></div></div><div class="sx fg3">3 more</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="pfoot"><span>61,2k of 1M ⌃</span><span>$0.52</span></div>
+    </div>
+  </div>
+  <div class="notes">
+    <div><b>Sent back</b> (Keep planning): the card says “Sent back · your note” and folds. The panel's Plan reads “Revising…” until the new proposal arrives.</div>
+    <div><b>Edit</b> opens the same editor as today. What you approve is what the panel shows.</div>
+    <div><b>Risks</b> stop being amber ⚠: they become grey lines in the card (“Needs from you: …”), as in grey ink.</div>
+    <div><b>Without the panel open</b>, nothing is lost: the card holds the whole plan, and the box asks the question.</div>
+  </div>
+</section>
+</body>
+</html>
