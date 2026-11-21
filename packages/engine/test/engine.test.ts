@@ -2731,6 +2731,112 @@ describe("connected apps (docs/spec/12-connectors C1)", () => {
 		apps.close();
 	}, 30_000);
 
+	/** A fake Linear: OAuth discovery, dynamic client registration, authorize and token, and an MCP server that needs the token. */
+	async function fakeLinear() {
+		const { createServer } = await import("node:http");
+		const calls: { method: string; tool?: string; args?: unknown; auth?: string }[] = [];
+		let tokens = 0;
+		let base = "";
+		const tools = [
+			{ name: "list_issues", description: "List issues", inputSchema: { type: "object", properties: { query: { type: "string" } } }, annotations: { readOnlyHint: true } },
+			{ name: "get_user", description: "Get a user", inputSchema: { type: "object", properties: { query: { type: "string" } } } },
+			{ name: "create_issue", title: "Create issue", description: "Create an issue", inputSchema: { type: "object", properties: { title: { type: "string" }, team: { type: "string" } }, required: ["title", "team"] } },
+			{ name: "delete_comment", description: "Delete a comment", inputSchema: { type: "object", properties: { id: { type: "string" } } } },
+		];
+		const server = createServer((req, res) => {
+			let body = "";
+			req.on("data", (c) => (body += c));
+			req.on("end", () => {
+				const url = new URL(req.url ?? "/", "http://x");
+				const send = (status: number, value: unknown, headers: Record<string, string> = {}) => res.writeHead(status, { "content-type": "application/json", ...headers }).end(JSON.stringify(value));
+				if (url.pathname.startsWith("/.well-known/oauth-protected-resource")) return send(200, { resource: `${base}/mcp`, authorization_servers: [base], scopes_supported: ["read", "write"] });
+				if (url.pathname === "/.well-known/oauth-authorization-server")
+					return send(200, { issuer: base, authorization_endpoint: `${base}/authorize`, token_endpoint: `${base}/token`, registration_endpoint: `${base}/register`, response_types_supported: ["code"], code_challenge_methods_supported: ["S256"], token_endpoint_auth_methods_supported: ["none"], grant_types_supported: ["authorization_code", "refresh_token"] });
+				if (url.pathname.startsWith("/.well-known/")) return send(404, {});
+				if (url.pathname === "/register") return send(201, { ...JSON.parse(body), client_id: "dcr-client" });
+				if (url.pathname === "/authorize") {
+					const back = new URL(url.searchParams.get("redirect_uri")!);
+					back.searchParams.set("code", "the-code");
+					back.searchParams.set("state", url.searchParams.get("state")!);
+					return void res.writeHead(302, { location: back.toString() }).end();
+				}
+				if (url.pathname === "/token") return send(200, { access_token: `lin${++tokens}`, refresh_token: "lin-refresh", expires_in: 3600, token_type: "Bearer" });
+				if (url.pathname !== "/mcp") return send(404, {});
+				if (req.method !== "POST") return void res.writeHead(405).end();
+				const auth = req.headers.authorization;
+				if (!auth?.startsWith("Bearer lin")) return send(401, {}, { "www-authenticate": `Bearer resource_metadata="${base}/.well-known/oauth-protected-resource/mcp", scope="read write"` });
+				const msg = JSON.parse(body) as { id?: number; method: string; params?: { name?: string; arguments?: Record<string, unknown> } };
+				calls.push({ method: msg.method, tool: msg.params?.name, args: msg.params?.arguments, auth });
+				if (msg.id === undefined) return void res.writeHead(202).end();
+				const reply = (result: unknown) => send(200, { jsonrpc: "2.0", id: msg.id, result });
+				if (msg.method === "initialize") return reply({ protocolVersion: "2025-06-18", capabilities: { tools: {} }, serverInfo: { name: "linear", version: "1" } });
+				if (msg.method === "tools/list") return reply({ tools });
+				if (msg.method === "tools/call") {
+					const name = msg.params?.name;
+					if (name === "get_user") return reply({ content: [{ type: "text", text: JSON.stringify({ id: "u-42", name: "Toño", email: "me@example.com" }) }] });
+					if (name === "list_issues") return reply({ content: [{ type: "text", text: "ENG-1 Fix the login (In Progress)" }] });
+					if (name === "create_issue") return reply({ content: [{ type: "text", text: `Created ENG-2 ${String(msg.params?.arguments?.title)}` }] });
+					return reply({ content: [{ type: "text", text: "ok" }] });
+				}
+				send(200, { jsonrpc: "2.0", id: msg.id, error: { code: -32601, message: "no" } });
+			});
+		});
+		await new Promise<void>((r) => server.listen(0, "127.0.0.1", () => r()));
+		base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+		return { calls, endpoints: { linear: { mcpUrl: `${base}/mcp` } }, close: () => server.close() };
+	}
+
+	test("Linear signs in through its own server, keeps the workspace's tokens in the Keychain, and its tools ask by kind", async () => {
+		const linear = await fakeLinear();
+		const a = await start(undefined, true, { connectorEndpoints: linear.endpoints });
+		const before = (await a.client.call("connectors.list", {})).connectors.find((c: { id: string }) => c.id === "linear")!;
+		// Nothing to set up: no OAuth client of ours.
+		expect(before).toMatchObject({ ready: true, needsSecret: false, accounts: [] });
+		expect(before.capabilities.map((c: { id: string; permission: string }) => [c.id, c.permission])).toEqual([["linear.read", "runs"], ["linear.write", "ask"], ["linear.delete", "off"]]);
+
+		expect(await connect(a, "linear")).toEqual({ type: "done" });
+		expect(JSON.parse(a.client.secrets["connector.linear.u-42"]!)).toMatchObject({ clientInformation: { client_id: "dcr-client" }, tokens: { access_token: "lin1", refresh_token: "lin-refresh" } });
+		const saved = readFileSync(join(a.home, "connectors.json"), "utf8");
+		expect(saved).not.toContain("lin1");
+		expect(saved).toContain("create_issue");
+		const after = (await a.client.call("connectors.list", {})).connectors.find((c: { id: string }) => c.id === "linear")!;
+		expect(after.accounts).toMatchObject([{ id: "linear:u-42", label: "me@example.com" }]);
+		// get_user has no hint and reads by its name; delete_comment deletes.
+		expect(after.capabilities).toEqual([
+			expect.objectContaining({ id: "linear.read", tools: ["linear_list_issues", "linear_get_user"], permission: "runs", choices: ["runs", "ask", "off"] }),
+			expect.objectContaining({ id: "linear.write", tools: ["linear_create_issue"], permission: "ask" }),
+			expect.objectContaining({ id: "linear.delete", tools: ["linear_delete_comment"], permission: "off", choices: ["ask", "off"] }),
+		]);
+
+		// A chat reads issues with the stored token.
+		const { ref } = await a.client.call("sessions.create", { kind: "thread" });
+		await a.client.call("sessions.subscribe", { ref });
+		await a.client.call("sessions.submit", { ref, input: { text: `call: linear_list_issues | {"query":"login"}` } });
+		expect((await finishedTools(a, ref, 1))[0]?.output).toContain("ENG-1 Fix the login");
+		expect(linear.calls.find((c) => c.tool === "list_issues")).toMatchObject({ args: { query: "login" }, auth: "Bearer lin1" });
+
+		// Creating asks first; deleting is off, so it isn't offered at all.
+		const hub = a.engine.connectors;
+		const asked: { tool: string; title: string }[] = [];
+		const tools = connectorTools(hub, "chat");
+		expect(tools.map((t) => t.name).filter((n) => n.startsWith("linear_"))).toEqual(["linear_list_issues", "linear_get_user", "linear_create_issue"]);
+		const create = tools.find((t) => t.name === "linear_create_issue")!;
+		const declined = await create.run({ title: "Fix the logout", team: "ENG" }, async (r) => (asked.push(r), { approved: false }));
+		expect(declined.text).toContain("declined");
+		expect(asked).toMatchObject([{ tool: "linear_create_issue", title: "Create issue in Linear: “Fix the logout”" }]);
+		expect(linear.calls.some((c) => c.tool === "create_issue")).toBe(false);
+		// "Don't ask again" covers the kind of tool, stored once for it.
+		expect((await create.run({ title: "Fix the logout", team: "ENG" }, async () => ({ approved: true, always: true }))).text).toContain("Created ENG-2");
+		expect(hub.settings("linear").permissions).toEqual({ "linear.write": "runs" });
+		await a.client.call("connectors.configure", { connector: "linear", permissions: { linear_delete_comment: "runs" } });
+		expect(hub.settings("linear").permissions).toMatchObject({ "linear.delete": "ask" });
+
+		await a.client.call("connectors.disconnect", { accountId: "linear:u-42" });
+		expect(a.client.secrets["connector.linear.u-42"]).toBeUndefined();
+		expect(connectorTools(hub, "chat").some((t) => t.name.startsWith("linear_"))).toBe(false);
+		linear.close();
+	}, 30_000);
+
 	test("free time skips busy events within working hours", async () => {
 		const { freeSlots } = await import("../src/connectors/tools.js");
 		const t = (h: number, m = 0) => new Date(2026, 9, 26, h, m).getTime();

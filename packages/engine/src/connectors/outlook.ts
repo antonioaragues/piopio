@@ -1,5 +1,5 @@
 /** Outlook calendar and mail through Microsoft Graph (docs/spec/12-connectors C1). Personal and work accounts. */
-import type { AuthorizedFetch, Calendar, CalendarEvent, ConnectorDefinition, EventInput, Mailbox, MailMessage } from "./types.js";
+import type { AuthorizedFetch, Calendar, CalendarEvent, ApiConnector, EventInput, Mailbox, MailMessage } from "./types.js";
 
 type GEvent = {
 	id: string;
@@ -151,7 +151,7 @@ function mailbox(fetch: AuthorizedFetch): Mailbox {
 	};
 }
 
-export const outlook: ConnectorDefinition = {
+export const outlook: ApiConnector = {
 	id: "outlook",
 	name: "Outlook",
 	category: "calendar",

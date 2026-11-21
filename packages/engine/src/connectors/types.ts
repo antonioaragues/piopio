@@ -4,6 +4,7 @@
  * from capabilities (a calendar, a mailbox) that several connectors implement, so "check my calendar" reads every
  * connected calendar in one call.
  */
+import type { Access } from "./permissions.js";
 
 /** OAuth 2.0 with PKCE through the browser and a loopback redirect (RFC 8252). */
 export type OAuthConfig = {
@@ -63,12 +64,19 @@ export interface Mailbox {
 /** An authorized fetch for one account: adds the token, refreshes it when it expires. */
 export type AuthorizedFetch = (path: string, init?: RequestInit) => Promise<Response>;
 
-export type ConnectorDefinition = {
+type ConnectorBase = {
 	id: string;
 	name: string;
-	/** For the app's tile. */
-	category: "calendar" | "email";
+	/** For the app's tile and the catalog's sections. */
+	category: "calendar" | "email" | "work";
 	description: string;
+	/** Shown when no OAuth client is set up yet. */
+	setupHelp: string;
+};
+
+/** An app Piopio talks to through its API (Google Calendar, Outlook): our own OAuth client, our own tools. */
+export type ApiConnector = ConnectorBase & {
+	kind?: "api";
 	oauth: OAuthConfig;
 	/** Where its API lives (overridable in tests). */
 	apiBase: string;
@@ -76,9 +84,48 @@ export type ConnectorDefinition = {
 	identify(fetch: AuthorizedFetch): Promise<{ id: string; label: string }>;
 	calendar?(fetch: AuthorizedFetch): Calendar;
 	mailbox?(fetch: AuthorizedFetch): Mailbox;
-	/** Shown when no OAuth client is set up yet. */
-	setupHelp: string;
 };
 
+/** A tool the app's MCP server offers, as Piopio keeps it (connectors.json) so conversations get it without asking the server. */
+export type McpToolInfo = {
+	/** Its name on the server. */
+	name: string;
+	title?: string;
+	description: string;
+	inputSchema: Record<string, unknown>;
+	access: Access;
+};
+
+/** Calls one of the account's MCP tools; resolves to the text the model reads. */
+export type McpCall = (tool: string, args: Record<string, unknown>) => Promise<{ text: string; isError: boolean }>;
+
+/**
+ * An app whose tools come from its own MCP server (docs/spec/12 §4): Piopio signs in through the server's OAuth
+ * (discovery and dynamic client registration, no client of ours to register) and passes the server's tools on, each
+ * marked reading, changing or deleting so changes ask first.
+ */
+export type McpConnector = ConnectorBase & {
+	kind: "mcp";
+	mcp: {
+		url: string;
+		/** Scopes to ask for (Linear: "read write"). */
+		scope?: string;
+		/** Prefix of the tools' names in conversations ("linear" → linear_list_issues). */
+		prefix: string;
+		/** Settings' labels for its reading, changing and deleting tools. */
+		labels: { read: string; write: string; destructive: string };
+		/** One line for the prompt: what the tools are for. */
+		prompt: string;
+		/** Tools whose kind the server doesn't say right: by server name. */
+		access?: Record<string, Access>;
+		/** Who signed in, through its own tools; without it, one account. */
+		identify?(call: McpCall, tools: McpToolInfo[]): Promise<{ id: string; label: string } | undefined>;
+	};
+};
+
+export type ConnectorDefinition = ApiConnector | McpConnector;
+
+export const isMcp = (d: ConnectorDefinition): d is McpConnector => d.kind === "mcp";
+
 /** Where a connector's endpoints live; tests point them at a fake server. */
-export type ConnectorEndpoints = Partial<Record<string, { authorizeUrl?: string; tokenUrl?: string; apiBase?: string }>>;
+export type ConnectorEndpoints = Partial<Record<string, { authorizeUrl?: string; tokenUrl?: string; apiBase?: string; mcpUrl?: string }>>;

@@ -275,7 +275,10 @@ struct CapabilitiesCard: View {
                 HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(c.label).font(.system(size: 13))
-                        Text(c.tools.joined(separator: ", ")).font(.system(size: 11.5, design: .monospaced)).foregroundStyle(Color.dsFg3).lineLimit(1).truncationMode(.middle)
+                        // An app with its own server (Linear) lists its tools once it's connected.
+                        if !c.tools.isEmpty {
+                            Text(c.tools.joined(separator: ", ")).font(.system(size: 11.5, design: .monospaced)).foregroundStyle(Color.dsFg3).lineLimit(1).truncationMode(.middle)
+                        }
                         if let note = c.note { Text(note).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3) }
                     }
                     Spacer()
@@ -292,7 +295,7 @@ struct CapabilitiesCard: View {
 
 /// The catalog: apps Piopio connects to today, and the ones coming (shown, not clickable).
 enum ConnectorCatalog {
-    enum Category: String, CaseIterable { case all = "All", mail = "Calendar & mail", files = "Files & docs", chat = "Team chat", dev = "Dev & ops" }
+    enum Category: String, CaseIterable { case all = "All", mail = "Calendar & mail", work = "Work & tasks", files = "Files & docs", chat = "Team chat", dev = "Dev & ops" }
     struct Soon: Identifiable { let id, name, line: String; let category: Category; let color: Color }
 
     static let soon: [Soon] = [
@@ -305,12 +308,19 @@ enum ConnectorCatalog {
         Soon(id: "datadog", name: "Datadog", line: "Monitors, logs and incidents", category: .dev, color: Color(red: 0.39, green: 0.17, blue: 0.64)),
     ]
 
-    static func category(_ c: ConnectorInfo) -> Category { c.category == "calendar" || c.category == "email" ? .mail : .dev }
+    static func category(_ c: ConnectorInfo) -> Category {
+        switch c.category {
+        case "calendar", "email": .mail
+        case "work": .work
+        default: .dev
+        }
+    }
 
     static func tagline(_ id: String) -> String {
         switch id {
         case "google-calendar": "Your day in every briefing"
         case "outlook": "Calendar and mail"
+        case "linear": "Issues and projects"
         default: ""
         }
     }
@@ -319,11 +329,18 @@ enum ConnectorCatalog {
         switch c.id {
         case "google-calendar": "Read your calendars, find free time, create events"
         case "outlook": "Calendar and mail: events, messages, drafts"
+        case "linear": "Find, create and update issues, projects and comments"
         default: c.description
         }
     }
 
-    static func signIn(_ id: String) -> String { id == "outlook" ? "Sign in with Microsoft…" : "Sign in with Google…" }
+    static func signIn(_ id: String) -> String {
+        switch id {
+        case "outlook": "Sign in with Microsoft…"
+        case "linear": "Sign in with Linear…"
+        default: "Sign in with Google…"
+        }
+    }
 
     /// "reads freely, asks before changes", from its permissions.
     static func summary(_ c: ConnectorInfo) -> String {
@@ -575,6 +592,7 @@ struct ConnectorTile: View {
         let (symbol, color): (String, Color) = switch id {
         case "google-calendar": ("calendar", Color(red: 0.26, green: 0.52, blue: 0.96))
         case "outlook": ("envelope.fill", Color(red: 0.0, green: 0.47, blue: 0.83))
+        case "linear": ("checklist", Color(red: 0.37, green: 0.42, blue: 0.82))
         default: ("app.connected.to.app.below.fill", Color.gray)
         }
         Image(systemName: symbol).font(.system(size: size * 0.45, weight: .semibold)).foregroundStyle(Color.dsFg2)

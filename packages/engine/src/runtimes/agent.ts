@@ -772,8 +772,11 @@ function withConnectorApprovals(def: AgentDefinition, hub: ConnectorHub | undefi
 	const asked = new Set<string>();
 	for (const c of hub.definitions) {
 		if (!hub.accounts(c.id).length) continue;
-		for (const g of hub.capabilities(c.id)) if (g.permission === "ask") for (const t of g.tools) asked.add(t);
-		for (const t of ["calendar_delete_event", "mail_send"]) if (hub.permission(c.id, t) !== "off") asked.add(t);
+		for (const g of hub.capabilities(c.id)) {
+			if (g.permission === "ask") for (const t of g.tools) asked.add(t);
+			// Sending and deleting (mail_send, calendar_delete_event, an MCP app's delete tools) ask whenever they're on.
+			if ((g.access === "send" || g.access === "destructive") && g.permission !== "off") for (const t of g.tools) asked.add(t);
+		}
 	}
 	const rules = [...new Set([...(def.policies?.requireApproval ?? []), ...asked])];
 	return { ...def, policies: { ...def.policies, requireApproval: rules } };

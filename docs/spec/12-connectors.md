@@ -54,9 +54,51 @@ What you can do at the end of C1, in any chat, notebook, Build session or agent:
 - Notebooks (topics) don't get the tools yet; chats, Build and agents do.
 - Not tried against real Google or Microsoft accounts.
 
+## Linear: the first app with its own server (C3, 2026-11-21)
+
+Linear is the first connector whose tools come from the app's own MCP server (§4), and the pattern the rest of C3
+follows (GitHub, Notion, Sentry, Atlassian).
+
+**What you can do.** In any chat, Build session or agent: "what's assigned to me?", "find the login bug", "file this
+in Linear for the ENG team", "comment on ENG-12 that it's fixed". Finding and reading runs; creating, changing and
+commenting ask first; deleting is off until you turn it on, and even then it asks.
+
+**Sign-in.** Settings › Connectors › Add › Linear › **Sign in with Linear…** → Linear's page in the browser → done.
+There's no Piopio app to register with Linear and nothing to review: Linear's server registers Piopio on the spot
+(OAuth 2.1 with dynamic client registration). One sign-in is one Linear workspace; signing in to another workspace
+adds a second account, and then the tools take an `account` argument.
+
+**How it works.**
+- A connector is either an **API connector** (Google Calendar, Outlook: our OAuth client, our tools) or an **MCP
+  connector** (`kind: "mcp"`: the server's URL, the prefix for its tools, Settings' labels). `connectors/linear.ts`
+  is the whole Linear connector.
+- pi's MCP client (`@earendil-works/pi-mcp`) does the OAuth: discovery, registration, PKCE, the loopback redirect and
+  refresh. Its state (the registered client and the tokens) is kept in the Keychain as `connector.linear.<user id>`,
+  never in `connectors.json`.
+- The server's tools reach conversations as `linear_<tool>`. Linear doesn't publish its tool list, so each tool is
+  sorted by what it does: the server's `readOnlyHint` / `destructiveHint`, then its name (`list_`, `get_`, `search_`…
+  read; `delete_`, `remove_`, `archive_` delete), and anything else counts as a change and asks. Settings shows three
+  rows: **Find and read**, **Create and change**, **Delete**.
+- Permissions are kept per row (`linear.read`, `linear.write`, `linear.delete`), not per tool, so a tool Linear adds
+  later follows its row. A tool that's Off isn't offered to the model at all.
+- The tool list is kept in `connectors.json` so a conversation gets the tools without waiting for Linear, and is
+  asked for again each time the engine starts. Who signed in comes from Linear's `get_user` tool ("me").
+- When Linear refuses the tokens (Linear's refresh window is 25 days), the account shows "needs you to sign in again"
+  in Settings, like Google and Outlook.
+
+**Not done yet.**
+- Not tried against a real Linear workspace from the app yet (the engine test uses a fake Linear: discovery,
+  registration, sign-in, a read, an approval, "Don't ask again", disconnect).
+- Linear **as a trigger** (a label or an assignment starts a session) needs Linear to send events to a server; that
+  waits for the user's own Cloudflare Worker (13, 30), since Piopio has no backend.
+- All of Linear's tools (about two dozen) go to every conversation where it's on; tool search for many tools (§4) is
+  still to come.
+- A custom MCP connector from Settings (an address plus sign-in, §4 "Adding your own") can reuse this path; it isn't
+  offered yet.
+
 ## 3. After C1
 - **C2:** Gmail (own Google project for now), Google Drive, Slack.
-- **C3:** Jira and Confluence, Linear, Notion, GitHub, Datadog, Sentry — apps with official servers you sign in to directly.
+- **C3:** Jira and Confluence, Linear (built first, above), Notion, GitHub, Datadog, Sentry — apps with official servers you sign in to directly.
 - **Later:** a gallery others can add to, then a marketplace (§5).
 
 ### The list we'd offer

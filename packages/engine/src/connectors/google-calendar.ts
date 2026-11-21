@@ -1,5 +1,5 @@
 /** Google Calendar through the Calendar API v3 (docs/spec/12-connectors C1). */
-import type { AuthorizedFetch, Calendar, CalendarEvent, ConnectorDefinition, EventInput } from "./types.js";
+import type { AuthorizedFetch, Calendar, CalendarEvent, ApiConnector, EventInput } from "./types.js";
 
 type GEvent = {
 	id: string;
@@ -100,7 +100,7 @@ function calendar(fetch: AuthorizedFetch): Calendar {
 	};
 }
 
-export const googleCalendar: ConnectorDefinition = {
+export const googleCalendar: ApiConnector = {
 	id: "google-calendar",
 	name: "Google Calendar",
 	category: "calendar",

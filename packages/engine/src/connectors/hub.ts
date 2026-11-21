@@ -9,10 +9,13 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import type { ProviderAuthEvent } from "@piopio/protocol";
 import type { SecretBroker } from "../secrets.js";
+import type { McpOAuthState } from "@earendil-works/pi-mcp/oauth";
 import { googleCalendar } from "./google-calendar.js";
+import { linear } from "./linear.js";
+import { McpAccount, McpNeedsSignIn, mcpGroups, memoryIO, signInMcp, type StateIO, toolInfos } from "./mcp-remote.js";
 import { outlook } from "./outlook.js";
-import { CAPABILITIES, defaultPermission, groupOf, type Permission } from "./permissions.js";
-import type { AuthorizedFetch, Calendar, CalendarEntry, ConnectorDefinition, ConnectorEndpoints, Mailbox, Tokens } from "./types.js";
+import { CAPABILITIES, type CapabilityGroup, defaultPermission, groupOf, type Permission } from "./permissions.js";
+import { type ApiConnector, type AuthorizedFetch, type Calendar, type CalendarEntry, type ConnectorDefinition, type ConnectorEndpoints, isMcp, type Mailbox, type McpCall, type McpConnector, type McpToolInfo, type Tokens } from "./types.js";
 
 export type Account = { id: string; connector: string; label: string; addedAt: string };
 /**
@@ -21,7 +24,16 @@ export type Account = { id: string; connector: string; label: string; addedAt: s
  */
 export type ConnectorSettings = { chats: boolean; dontAsk: string[]; permissions?: Record<string, Permission>; clientId?: string };
 /** Per account: calendars turned on or off in Settings (absent: what the app itself shows). */
-type State = { accounts: Account[]; settings: Record<string, ConnectorSettings>; calendars?: Record<string, Record<string, boolean>> };
+type State = {
+	accounts: Account[];
+	settings: Record<string, ConnectorSettings>;
+	calendars?: Record<string, Record<string, boolean>>;
+	/** MCP apps: the tools their server offered last time, so conversations get them without waiting for the server. */
+	tools?: Record<string, McpToolInfo[]>;
+};
+
+/** An MCP app's account as conversations use it: its tools and how to call them. */
+export type McpUse = { account: Account; def: McpConnector; tools: McpToolInfo[]; call: McpCall };
 
 /** OAuth clients Piopio ships with (docs/spec/12 §2): empty until our Google and Microsoft apps are registered. */
 const BUILT_IN_CLIENTS: Record<string, string> = {};
@@ -36,6 +48,7 @@ export class ConnectorHub {
 	private state: State = { accounts: [], settings: {} };
 	private readonly logins = new Map<string, Login>();
 	private readonly problems = new Map<string, string>();
+	private readonly mcp = new Map<string, McpAccount>();
 	/** Set by the server: connected apps changed (accounts, settings, needs attention). */
 	onChange?: () => void;
 
@@ -43,9 +56,11 @@ export class ConnectorHub {
 		private readonly secrets: SecretBroker,
 		private readonly options: { home?: string; endpoints?: ConnectorEndpoints; fetchImpl?: typeof fetch; emit?: Emit } = {},
 	) {
-		this.definitions = [googleCalendar, outlook].map((d) => {
+		this.definitions = [googleCalendar, outlook, linear].map((d): ConnectorDefinition => {
 			const o = options.endpoints?.[d.id];
-			return o ? { ...d, apiBase: o.apiBase ?? d.apiBase, oauth: { ...d.oauth, ...(o.authorizeUrl ? { authorizeUrl: o.authorizeUrl } : {}), ...(o.tokenUrl ? { tokenUrl: o.tokenUrl } : {}) } } : d;
+			if (!o) return d;
+			if (isMcp(d)) return o.mcpUrl ? { ...d, mcp: { ...d.mcp, url: o.mcpUrl } } : d;
+			return { ...d, apiBase: o.apiBase ?? d.apiBase, oauth: { ...d.oauth, ...(o.authorizeUrl ? { authorizeUrl: o.authorizeUrl } : {}), ...(o.tokenUrl ? { tokenUrl: o.tokenUrl } : {}) } };
 		});
 		const path = this.path;
 		if (path && existsSync(path)) {
@@ -108,9 +123,10 @@ export class ConnectorHub {
 	/** What a tool may do with this app: set in Settings, else C1's "Don't ask again", else the safe default. */
 	permission(connector: string, tool: string): Permission {
 		const s = this.settings(connector);
-		const set = s.permissions?.[tool];
+		const group = this.groupFor(connector, tool);
+		// MCP apps keep one setting per kind of tool, so tools the server adds later follow it.
+		const set = (group && this.isMcpApp(connector) ? s.permissions?.[group.id] : undefined) ?? s.permissions?.[tool];
 		if (set) return set;
-		const group = groupOf(tool);
 		if (s.dontAsk.includes(tool) && group?.access === "write") return "runs";
 		return defaultPermission(group?.access ?? "write");
 	}
@@ -118,11 +134,15 @@ export class ConnectorHub {
 	async configure(connector: string, patch: { chats?: boolean; dontAsk?: string[]; permissions?: Record<string, Permission>; clientId?: string; clientSecret?: string }): Promise<void> {
 		if (!this.definition(connector)) throw new Error(`No connector ${connector}`);
 		const current = this.settings(connector);
-		const permissions = { ...current.permissions, ...patch.permissions };
-		for (const [tool, p] of Object.entries(permissions)) {
-			const access = groupOf(tool)?.access;
-			if (!access) delete permissions[tool];
-			else if (p === "runs" && (access === "send" || access === "destructive")) permissions[tool] = "ask";
+		const permissions: Record<string, Permission> = { ...current.permissions };
+		for (const [key, p] of Object.entries(patch.permissions ?? {})) {
+			const group = this.groupFor(connector, key);
+			permissions[group && this.isMcpApp(connector) ? group.id : key] = p;
+		}
+		for (const [key, p] of Object.entries(permissions)) {
+			const access = this.groupFor(connector, key)?.access;
+			if (!access) delete permissions[key];
+			else if (p === "runs" && (access === "send" || access === "destructive")) permissions[key] = "ask";
 		}
 		this.state.settings[connector] = {
 			chats: patch.chats ?? current.chats,
@@ -140,15 +160,34 @@ export class ConnectorHub {
 	/** Lets a write action run without asking from now on (an approval's "Don't ask again"). */
 	/** "Don't ask again" on an approval: the tool's whole capability runs from now on. */
 	async allow(connector: string, tool: string): Promise<void> {
-		const tools = groupOf(tool)?.tools ?? [tool];
+		const tools = this.groupFor(connector, tool)?.tools ?? [tool];
 		if (tools.some((t) => this.permission(connector, t) !== "runs")) await this.configure(connector, { permissions: Object.fromEntries(tools.map((t) => [t, "runs" as const])) });
+	}
+
+	private isMcpApp(connector: string): boolean {
+		const def = this.definition(connector);
+		return Boolean(def && isMcp(def));
+	}
+
+	/** An app's groups of tools: the fixed calendar and mail ones, or an MCP app's reading, changing and deleting tools. */
+	private groups(connector: string): CapabilityGroup[] {
+		const def = this.definition(connector);
+		if (!def) return [];
+		if (isMcp(def)) return mcpGroups(def, this.state.tools?.[connector]);
+		const has = new Set([...(def.calendar ? ["calendar"] : []), ...(def.mailbox ? ["mail"] : [])]);
+		return CAPABILITIES.filter((g) => has.has(g.capability));
+	}
+
+	/** The group a tool (or, for MCP apps, a group id) belongs to. */
+	groupFor(connector: string, tool: string): CapabilityGroup | undefined {
+		const def = this.definition(connector);
+		if (def && isMcp(def)) return mcpGroups(def, this.state.tools?.[connector]).find((g) => g.id === tool || g.tools.includes(tool)) ?? mcpGroups(def, undefined).find((g) => g.id === tool);
+		return groupOf(tool);
 	}
 
 	/** The capabilities an app offers, as Settings shows them: each with its tools and permission. */
 	capabilities(connector: string) {
-		const def = this.definition(connector);
-		const has = new Set([...(def?.calendar ? ["calendar"] : []), ...(def?.mailbox ? ["mail"] : [])]);
-		return CAPABILITIES.filter((g) => has.has(g.capability)).map((g) => ({ ...g, permission: this.permission(connector, g.tools[0]!) }));
+		return this.groups(connector).map((g) => ({ ...g, permission: g.tools[0] ? this.permission(connector, g.tools[0]) : (this.settings(connector).permissions?.[g.id] ?? defaultPermission(g.access)) }));
 	}
 
 	// ── Calendars (Settings › Connectors, the calendars card) ──
@@ -157,7 +196,7 @@ export class ConnectorHub {
 	async calendarList(accountId: string): Promise<(CalendarEntry & { enabled: boolean })[]> {
 		const account = this.state.accounts.find((a) => a.id === accountId);
 		const def = account && this.definition(account.connector);
-		if (!account || !def?.calendar) return [];
+		if (!account || !def || isMcp(def) || !def.calendar) return [];
 		const chosen = this.state.calendars?.[accountId] ?? {};
 		return (await def.calendar(this.authorized(account)).calendars()).map((c) => ({ ...c, enabled: chosen[c.id] ?? c.shown }));
 	}
@@ -174,13 +213,13 @@ export class ConnectorHub {
 	connect(connector: string): string {
 		const def = this.definition(connector);
 		if (!def) throw new Error(`No connector ${connector}`);
-		const clientId = this.clientId(connector);
-		if (!clientId) throw new Error(`${def.name} needs an OAuth client first. ${def.setupHelp}`);
+		const clientId = isMcp(def) ? "" : this.clientId(connector);
+		if (!isMcp(def) && !clientId) throw new Error(`${def.name} needs an OAuth client first. ${def.setupHelp}`);
 		const loginId = randomUUID();
 		const login: Login = { connector, abort: new AbortController() };
 		this.logins.set(loginId, login);
 		const emit = (event: ProviderAuthEvent) => this.options.emit?.(loginId, connector, event);
-		void this.signIn(def, clientId, login.abort.signal, emit)
+		void (isMcp(def) ? this.signInMcp(def, login.abort.signal, emit) : this.signIn(def, clientId!, login.abort.signal, emit))
 			.then(
 				() => emit({ type: "done" }),
 				(error: unknown) => emit({ type: "failed", message: login.abort.signal.aborted ? "Cancelled." : error instanceof Error ? error.message : String(error) }),
@@ -197,7 +236,29 @@ export class ConnectorHub {
 		this.logins.get(loginId)?.abort.abort();
 	}
 
-	private async signIn(def: ConnectorDefinition, clientId: string, signal: AbortSignal, emit: (e: ProviderAuthEvent) => void): Promise<void> {
+	/** MCP apps: the server's own sign-in, then its tools and who signed in. */
+	private async signInMcp(def: McpConnector, signal: AbortSignal, emit: (e: ProviderAuthEvent) => void): Promise<void> {
+		const state = await signInMcp(def, def.mcp.url, signal, emit, page);
+		const io = memoryIO();
+		io.state = state;
+		const session = new McpAccount(def, def.mcp.url, io, this.options.fetchImpl);
+		try {
+			const tools = toolInfos(def, await session.tools());
+			const who = (await def.mcp.identify?.(session.call, tools).catch(() => undefined)) ?? { id: "default", label: def.name };
+			const account: Account = { id: `${def.id}:${who.id}`, connector: def.id, label: who.label, addedAt: new Date().toISOString() };
+			await this.secrets.set(this.secretName(account.id), JSON.stringify(io.state ?? state));
+			await this.mcp.get(account.id)?.close();
+			this.mcp.delete(account.id);
+			this.state.accounts = [...this.state.accounts.filter((a) => a.id !== account.id), account];
+			this.state.tools = { ...this.state.tools, [def.id]: tools };
+			this.problems.delete(account.id);
+			this.save();
+		} finally {
+			await session.close();
+		}
+	}
+
+	private async signIn(def: ApiConnector, clientId: string, signal: AbortSignal, emit: (e: ProviderAuthEvent) => void): Promise<void> {
 		const verifier = randomBytes(32).toString("base64url");
 		const challenge = createHash("sha256").update(verifier).digest("base64url");
 		const state = randomBytes(16).toString("base64url");
@@ -234,6 +295,8 @@ export class ConnectorHub {
 	}
 
 	async disconnect(accountId: string): Promise<void> {
+		await this.mcp.get(accountId)?.close();
+		this.mcp.delete(accountId);
 		await this.secrets.delete(this.secretName(accountId));
 		this.state.accounts = this.state.accounts.filter((a) => a.id !== accountId);
 		if (this.state.calendars) delete this.state.calendars[accountId];
@@ -248,14 +311,14 @@ export class ConnectorHub {
 		return `connector.${connector}.${rest.join(":")}`;
 	}
 
-	private async token(def: ConnectorDefinition, form: Record<string, string>): Promise<Tokens> {
+	private async token(def: ApiConnector, form: Record<string, string>): Promise<Tokens> {
 		const response = await this.fetchImpl(def.oauth.tokenUrl, { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams(form), signal: AbortSignal.timeout(20_000) });
 		const body = (await response.json().catch(() => ({}))) as { access_token?: string; refresh_token?: string; expires_in?: number; error?: string; error_description?: string };
 		if (!response.ok || !body.access_token) throw new Error(`${def.name} didn't complete the sign-in: ${body.error_description ?? body.error ?? response.status}`);
 		return { access: body.access_token, ...(body.refresh_token ? { refresh: body.refresh_token } : {}), expires: Date.now() + (body.expires_in ?? 3600) * 1000 };
 	}
 
-	private async request(def: ConnectorDefinition, tokens: () => Tokens, init: RequestInit | undefined, path: string): Promise<Response> {
+	private async request(def: ApiConnector, tokens: () => Tokens, init: RequestInit | undefined, path: string): Promise<Response> {
 		const url = /^https?:\/\//.test(path) ? path : `${def.apiBase}${path}`;
 		const headers = new Headers(init?.headers);
 		headers.set("authorization", `Bearer ${tokens().access}`);
@@ -264,7 +327,8 @@ export class ConnectorHub {
 
 	/** A fetch for one account that refreshes the token when it's about to expire or the API says it's stale. */
 	authorized(account: Account): AuthorizedFetch {
-		const def = this.definition(account.connector)!;
+		const def = this.definition(account.connector);
+		if (!def || isMcp(def)) throw new Error(`${account.connector} isn't an app with its own API.`);
 		let cached: Tokens | undefined;
 		const load = async (): Promise<Tokens> => {
 			if (cached) return cached;
@@ -315,7 +379,7 @@ export class ConnectorHub {
 	calendars(scope: "chat" | "agent", off: (connector: string) => boolean = () => false): { account: Account; calendar: Calendar; name: string }[] {
 		return this.state.accounts.flatMap((account) => {
 			const def = this.definition(account.connector);
-			if (!def?.calendar || (scope === "chat" && (!this.settings(def.id).chats || off(def.id)))) return [];
+			if (!def || isMcp(def) || !def.calendar || (scope === "chat" && (!this.settings(def.id).chats || off(def.id)))) return [];
 			const calendar = def.calendar(this.authorized(account));
 			const chosen = this.state.calendars?.[account.id];
 			// Calendars turned off in Settings aren't read.
@@ -327,13 +391,93 @@ export class ConnectorHub {
 	mailboxes(scope: "chat" | "agent", off: (connector: string) => boolean = () => false): { account: Account; mailbox: Mailbox; name: string }[] {
 		return this.state.accounts.flatMap((account) => {
 			const def = this.definition(account.connector);
-			if (!def?.mailbox || (scope === "chat" && (!this.settings(def.id).chats || off(def.id)))) return [];
+			if (!def || isMcp(def) || !def.mailbox || (scope === "chat" && (!this.settings(def.id).chats || off(def.id)))) return [];
 			return [{ account, mailbox: def.mailbox(this.authorized(account)), name: def.name }];
 		});
+	}
+
+	// ── MCP apps (Linear) ──
+
+	/** An account's connection to its app's server; its OAuth state lives in the Keychain. */
+	private mcpAccount(account: Account, def: McpConnector): McpAccount {
+		let session = this.mcp.get(account.id);
+		if (!session) {
+			const name = this.secretName(account.id);
+			const io: StateIO = {
+				load: async () => {
+					const raw = await this.secrets.get(name, `Use ${def.name}`);
+					return raw ? (JSON.parse(raw) as McpOAuthState) : undefined;
+				},
+				save: async (state) => {
+					await this.secrets.set(name, JSON.stringify(state));
+				},
+			};
+			session = new McpAccount(def, def.mcp.url, io, this.options.fetchImpl);
+			this.mcp.set(account.id, session);
+		}
+		return session;
+	}
+
+	/** Calls through an account, noting when it needs a new sign-in (Settings shows it) and when it works again. */
+	private mcpCall(account: Account, def: McpConnector): McpCall {
+		return async (tool, args) => {
+			try {
+				const result = await this.mcpAccount(account, def).call(tool, args);
+				if (this.problems.delete(account.id)) this.onChange?.();
+				return result;
+			} catch (error) {
+				if (error instanceof McpNeedsSignIn) {
+					const message = `${def.name} (${account.label}) needs you to sign in again. Reconnect it in Settings › Connectors.`;
+					this.problems.set(account.id, message);
+					this.onChange?.();
+					throw new NeedsSignIn(message);
+				}
+				throw error;
+			}
+		};
+	}
+
+	/** MCP apps' accounts a conversation may use (in chats, only apps allowed there and not turned off here). */
+	mcpUses(scope: "chat" | "agent", off: (connector: string) => boolean = () => false): McpUse[] {
+		return this.state.accounts.flatMap((account) => {
+			const def = this.definition(account.connector);
+			if (!def || !isMcp(def) || (scope === "chat" && (!this.settings(def.id).chats || off(def.id)))) return [];
+			return [{ account, def, tools: this.state.tools?.[def.id] ?? [], call: this.mcpCall(account, def) }];
+		});
+	}
+
+	/** Asks each connected MCP app's server for its tools again (at start, in the background): new ones reach new conversations. */
+	async refreshMcpTools(): Promise<void> {
+		for (const def of this.definitions.filter(isMcp)) {
+			const account = this.accounts(def.id)[0];
+			if (!account) continue;
+			try {
+				const tools = toolInfos(def, await this.mcpAccount(account, def).tools());
+				if (JSON.stringify(tools) !== JSON.stringify(this.state.tools?.[def.id])) {
+					this.state.tools = { ...this.state.tools, [def.id]: tools };
+					this.save();
+				}
+			} catch (error) {
+				if (error instanceof McpNeedsSignIn) {
+					this.problems.set(account.id, `${def.name} (${account.label}) needs you to sign in again. Reconnect it in Settings › Connectors.`);
+					this.onChange?.();
+				}
+			}
+		}
+	}
+
+	async close(): Promise<void> {
+		await Promise.all([...this.mcp.values()].map((m) => m.close()));
+		this.mcp.clear();
 	}
 }
 
 export class NeedsSignIn extends Error {}
+
+/** The browser page after a sign-in. */
+function page(title: string, text: string): string {
+	return `<!doctype html><meta charset="utf-8"><title>${title}</title><body style="font:15px -apple-system;margin:80px auto;max-width:420px;text-align:center"><h2>${title}</h2><p>${text}</p></body>`;
+}
 
 /** A one-shot loopback server for the OAuth redirect; resolves with the code once the browser comes back. */
 async function loopback(host: string, state: string, signal: AbortSignal): Promise<{ server: Server; port: number; code: Promise<string> }> {

@@ -8,7 +8,8 @@ export type Permission = "runs" | "ask" | "off";
 
 export type CapabilityGroup = {
 	id: string;
-	capability: "calendar" | "mail";
+	/** "mcp": an app whose tools come from its own server (Linear), grouped by what they do. */
+	capability: "calendar" | "mail" | "mcp";
 	label: string;
 	tools: string[];
 	/** The kind of action, which sets the default and the choices. */

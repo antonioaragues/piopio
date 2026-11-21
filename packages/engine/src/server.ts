@@ -415,6 +415,8 @@ export class Engine {
 		// Automations' clock: what was due while the engine was off runs once (docs/spec/27 AU9).
 		this.automations.start();
 		void this.sessions.startAgents(this.log);
+		// MCP apps (Linear): their servers' current tools, for conversations started from now on.
+		void this.connectors.refreshMcpTools().catch(() => undefined);
 		// Cloud agents' status (paused, spend, Inbox) and their approvals' notifications, every minute (docs/spec/30 K1).
 		this.cloudTick = setInterval(() => void this.sessions.refreshCloudAgents(), 60_000);
 		this.cloudTick.unref?.();
@@ -472,7 +474,9 @@ export class Engine {
 			this.connectors.definitions.map(async (d) => {
 				const settings = this.connectors.settings(d.id);
 				const clientId = this.connectors.clientId(d.id);
-				const ready = Boolean(clientId) && (!d.oauth.needsSecret || (await this.connectors.hasClientSecret(d.id)));
+				// MCP apps sign in through their own server: nothing to set up.
+				const mcp = d.kind === "mcp";
+				const ready = mcp || (Boolean(clientId) && (!d.oauth.needsSecret || (await this.connectors.hasClientSecret(d.id))));
 				return {
 					id: d.id,
 					name: d.name,
@@ -480,7 +484,7 @@ export class Engine {
 					description: d.description,
 					ready,
 					ownClient: Boolean(settings.clientId),
-					needsSecret: d.oauth.needsSecret,
+					needsSecret: !mcp && d.oauth.needsSecret,
 					setupHelp: d.setupHelp,
 					connecting: this.connectors.connecting(d.id),
 					chats: settings.chats,
@@ -600,6 +604,7 @@ export class Engine {
 		await new Promise<void>((resolve) => (this.server ? this.server.close(() => resolve()) : resolve()));
 		await this.hooks.close();
 		await this.sessions.closeAll();
+		await this.connectors.close();
 		this.inputReceipts.close();
 		this.hub.extraCosts.close();
 		await this.memory.reset();
