@@ -91,7 +91,7 @@ them when built.
 
 | Command | Mode | Kind | Runs in |
 |---|---|---|---|
-| /plan | Build | Words | App: plan mode on, then the words go out as your message; `/plan` typed alone still toggles it. The extension's row is hidden |
+| /plan | Build | Mode | App: plan mode on, shown as a chip for as long as it lasts; taking the chip off turns it off. The extension's row is hidden |
 | /goal | Build (Chat later) | Words | `piopio-goal` extension |
 | /side | Both | Words | App (24) |
 | /automation | Both | Words | Bundled template → automation tools (27) |
@@ -137,7 +137,10 @@ CM1 and CM2 are app-only and change nothing in the protocol. CM3 adds three temp
   by hand, or a message put in the box (a draft, an edit), never re-read from the text while you type: the text
   field can't be rewritten under the cursor. A command with a chip needs words to send. ⌫ listens for U+007F, what
   the Mac's delete key sends (SwiftUI's `.delete` is U+0008).
-- **/plan takes words** like the others (changed after use, 2026-11-21): a chip, then plan mode on and the task sent.
+- **The plan chip is plan mode** (changed after use, 2026-11-21): picking /plan (or typing it and a space) turns plan
+  mode on, and the chip shows while it's on, past the message that started it; ×, or ⌫ in an empty box, turns it
+  off. It isn't in the message's text, and the placeholder is its hint, "What to plan…". `/plan` typed alone and
+  sent still toggles plan mode; `/plan <task>` pasted in one go turns it on and sends the task.
   Skills without an argument hint get "What the skill should do…".
 - **Templates** ([piopio-commands.ts](../../packages/engine/src/runtimes/piopio-commands.ts)) join pi's through the
   resource loader's `promptsOverride`, so Build and chats have them; a template of the same name in the user's pi

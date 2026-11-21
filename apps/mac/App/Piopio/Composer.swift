@@ -275,6 +275,9 @@ struct Composer: View {
             }
             if !attachments.isEmpty { chips }
             HStack(alignment: .top, spacing: 2) {
+            if let planChip {
+                CommandChipView(chip: planChip) { Task { await thread.setPlanMode(false) }; focused = true }.padding(.top, 0.5)
+            }
             if let chip {
                 CommandChipView(chip: chip) { removeChip() }.padding(.top, 0.5)
             }
@@ -331,12 +334,15 @@ struct Composer: View {
                     // ⌫ in an empty box takes the command chip off. The Mac's delete key sends U+007F, not SwiftUI's
                     // `.delete` (U+0008), so both.
                     .onKeyPress(keys: [.delete, KeyEquivalent("\u{7F}")]) { _ in
-                        guard chip != nil, fieldText.wrappedValue.isEmpty else { return .ignored }
-                        removeChip()
+                        guard fieldText.wrappedValue.isEmpty else { return .ignored }
+                        if chip != nil { removeChip(); return .handled }
+                        guard planChip != nil else { return .ignored }
+                        Task { await thread.setPlanMode(false) }
                         return .handled
                     }
                     // A space after a command typed by hand (`/goal`) makes its chip.
                     .onKeyPress(.space) {
+                        if isBuild, text == "/plan" { text = ""; Task { await thread.setPlanMode(true) }; return .handled }
                         guard chip == nil, text.hasPrefix("/"), let found = chipCommands[String(text.dropFirst())] else { return .ignored }
                         chip = found
                         text = "/\(found.name) "
@@ -418,7 +424,7 @@ struct Composer: View {
         if let prompt = shownPrompt, prompt.takesReply { return prompt.replyPlaceholder }
         if let chip { return chip.hint }
         if thread.isRunning { return "Add to the queue, or ⌥↩ to steer now…" }
-        if isBuild && thread.planMode { return "Plan only: describe what you want; the agent proposes a plan first" }
+        if let planChip { return planChip.hint }
         // An agent is set up by talking (docs/spec/21 D3): its chat says so.
         if thread.ref.kind == .agent, thread.ref.conversationId == nil {
             // A new agent is still asking what it's for (docs/spec/21 D4).
@@ -586,12 +592,13 @@ struct Composer: View {
         }
         let files = attachments.map(\.attachment)
         attachError = nil
-        // `/plan <task>`: plan mode on, then the task goes out as your words (pi's /plan would only toggle).
-        if isBuild, let l = leading, l.chip.name == "plan" {
-            text = l.rest
+        // `/plan <task>` pasted or typed in one go: plan mode on, then the task (pi's /plan would only toggle).
+        if isBuild, trimmedMessage.hasPrefix("/plan ") {
+            let task = String(trimmedMessage.dropFirst(6)).trimmingCharacters(in: .whitespacesAndNewlines)
+            text = task
             Task {
                 if !thread.planMode { await thread.setPlanMode(true) }
-                await thread.send(l.rest, attachments: files, steer: steer && thread.isRunning)
+                await thread.send(task, attachments: files, steer: steer && thread.isRunning)
             }
             return
         }
@@ -894,8 +901,15 @@ extension Composer {
         for c in piCommands where c.kind == .skill || (c.kind == .template && c.hint != nil) {
             out[c.name] = CommandChip(name: c.name, label: Self.label(c), icon: Self.icon(c), hint: c.hint ?? "What the skill should do…", help: c.description)
         }
-        for c in builtIns { if let hint = c.hint { out[c.name] = CommandChip(name: c.name, label: c.name, icon: c.icon, hint: hint, help: c.summary) } }
+        for c in builtIns where c.name != "plan" { if let hint = c.hint { out[c.name] = CommandChip(name: c.name, label: c.name, icon: c.icon, hint: hint, help: c.summary) } }
         return out
+    }
+
+    /// Plan mode as a chip (docs/spec/32 §7): there exactly while plan mode is on, so picking /plan turns it on and
+    /// taking the chip off turns it off. It isn't part of the text: plan mode lasts past one message.
+    var planChip: CommandChip? {
+        guard isBuild, thread.planMode, let plan = BuiltInCommand.all.first(where: { $0.name == "plan" }) else { return nil }
+        return CommandChip(name: plan.name, label: plan.name, icon: plan.icon, hint: plan.hint ?? "", help: "Plan mode: the agent explores and proposes a plan before changing anything. Remove to turn it off.")
     }
 
     /// A skill by its name ("greet" for `skill:greet`).
@@ -965,6 +979,9 @@ extension Composer {
         case .conversation(let id, _):
             if let query = mentionQuery { text.removeLast(query.count + 1) }
             text += "@conversation:\(id) "
+        case .builtIn(let c) where c.name == "plan":
+            text = ""
+            Task { await thread.setPlanMode(true) }
         case .builtIn(let c) where c.hint != nil:
             chip = chipCommands[c.name]
             text = "/\(c.name) "
