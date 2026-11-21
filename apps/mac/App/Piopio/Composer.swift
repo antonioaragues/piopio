@@ -275,9 +275,6 @@ struct Composer: View {
             }
             if !attachments.isEmpty { chips }
             HStack(alignment: .top, spacing: 2) {
-            if let planChip {
-                CommandChipView(chip: planChip) { Task { await thread.setPlanMode(false) }; focused = true }.padding(.top, 0.5)
-            }
             if let chip {
                 CommandChipView(chip: chip) { removeChip() }.padding(.top, 0.5)
             }
@@ -334,15 +331,12 @@ struct Composer: View {
                     // ⌫ in an empty box takes the command chip off. The Mac's delete key sends U+007F, not SwiftUI's
                     // `.delete` (U+0008), so both.
                     .onKeyPress(keys: [.delete, KeyEquivalent("\u{7F}")]) { _ in
-                        guard fieldText.wrappedValue.isEmpty else { return .ignored }
-                        if chip != nil { removeChip(); return .handled }
-                        guard planChip != nil else { return .ignored }
-                        Task { await thread.setPlanMode(false) }
+                        guard chip != nil, fieldText.wrappedValue.isEmpty else { return .ignored }
+                        removeChip()
                         return .handled
                     }
                     // A space after a command typed by hand (`/goal`) makes its chip.
                     .onKeyPress(.space) {
-                        if isBuild, text == "/plan" { text = ""; Task { await thread.setPlanMode(true) }; return .handled }
                         guard chip == nil, text.hasPrefix("/"), let found = chipCommands[String(text.dropFirst())] else { return .ignored }
                         chip = found
                         text = "/\(found.name) "
@@ -424,7 +418,7 @@ struct Composer: View {
         if let prompt = shownPrompt, prompt.takesReply { return prompt.replyPlaceholder }
         if let chip { return chip.hint }
         if thread.isRunning { return "Add to the queue, or ⌥↩ to steer now…" }
-        if let planChip { return planChip.hint }
+        if isBuild && thread.planMode { return "Plan only: describe what you want; the agent proposes a plan first" }
         // An agent is set up by talking (docs/spec/21 D3): its chat says so.
         if thread.ref.kind == .agent, thread.ref.conversationId == nil {
             // A new agent is still asking what it's for (docs/spec/21 D4).
@@ -584,24 +578,13 @@ struct Composer: View {
         }
         // Piopio's commands that act run here; the others, and pi's templates, skills and extension commands, go to
         // the agent as typed.
-        // `/plan` alone, typed, still turns plan mode on or off.
-        if let command = builtIns.first(where: { ($0.hint == nil || $0.name == "plan") && "/\($0.name)" == trimmedMessage }) {
+        if let command = builtIns.first(where: { $0.hint == nil && "/\($0.name)" == trimmedMessage }) {
             text = ""
             command.run(thread)
             return
         }
         let files = attachments.map(\.attachment)
         attachError = nil
-        // `/plan <task>` pasted or typed in one go: plan mode on, then the task (pi's /plan would only toggle).
-        if isBuild, trimmedMessage.hasPrefix("/plan ") {
-            let task = String(trimmedMessage.dropFirst(6)).trimmingCharacters(in: .whitespacesAndNewlines)
-            text = task
-            Task {
-                if !thread.planMode { await thread.setPlanMode(true) }
-                await thread.send(task, attachments: files, steer: steer && thread.isRunning)
-            }
-            return
-        }
         Task { await thread.send(message, attachments: files, steer: steer && thread.isRunning) }
     }
 }
@@ -822,7 +805,7 @@ enum Suggestion: Hashable, Identifiable {
     }
 }
 
-/// Piopio's own commands (docs/spec/32 §4), the menu's first group in this order. Some act when picked (plan, compact,
+/// Piopio's own commands (docs/spec/32 §4), the menu's first group in this order. Some act when picked (compact,
 /// review…); the others take words: picking one puts a chip in the box with its hint as the placeholder, and the
 /// message goes out as `/name words`.
 struct BuiltInCommand: Hashable {
@@ -838,7 +821,6 @@ struct BuiltInCommand: Hashable {
     var engine = false
 
     static let all = [
-        BuiltInCommand(name: "plan", summary: "Plan first: explore and propose a plan before changing anything", icon: "list.bullet.rectangle", keywords: ["think", "propose"], buildOnly: true, hint: "What to plan…"),
         BuiltInCommand(name: "goal", summary: "Keep working until a goal is met", icon: "scope", keywords: ["done", "until", "finish"], buildOnly: true, hint: "What done looks like…", engine: true),
         BuiltInCommand(name: "side", summary: "A side conversation for something else; this one goes on", icon: "bubble.left.and.text.bubble.right", keywords: ["btw", "aside", "meanwhile"], hint: "What the side conversation is about…"),
         BuiltInCommand(name: "automation", summary: "Make an automation: work that starts on its own, once or on a schedule", icon: "clock", keywords: ["schedule", "timer", "remind", "every", "later", "cron"], hint: "What, and when or how often…", engine: true),
@@ -859,7 +841,6 @@ struct BuiltInCommand: Hashable {
 
     @MainActor func run(_ thread: ThreadModel) {
         switch name {
-        case "plan": Task { await thread.setPlanMode(!thread.planMode) }
         case "compact": Task { await thread.compact() }
         case "model": thread.showModelPicker = true
         case "review": NotificationCenter.default.post(name: .showReview, object: thread.ref.id)
@@ -881,7 +862,8 @@ extension Composer {
     /// Piopio's commands here, then pi's (templates, skills, extension commands) without those Piopio has by name.
     private var builtIns: [BuiltInCommand] { BuiltInCommand.available(build: isBuild, session: sessionCommands) }
     private var piCommands: [SessionCommand] {
-        let own = Set(BuiltInCommand.all.map(\.name))
+        // Plan is a mode, set in the mode selector (docs/spec/32 §7), not a command: pi's /plan isn't listed.
+        let own = Set(BuiltInCommand.all.map(\.name)).union(["plan"])
         return sessionCommands.filter { !own.contains($0.name) }
     }
 
@@ -901,15 +883,8 @@ extension Composer {
         for c in piCommands where c.kind == .skill || (c.kind == .template && c.hint != nil) {
             out[c.name] = CommandChip(name: c.name, label: Self.label(c), icon: Self.icon(c), hint: c.hint ?? "What the skill should do…", help: c.description)
         }
-        for c in builtIns where c.name != "plan" { if let hint = c.hint { out[c.name] = CommandChip(name: c.name, label: c.name, icon: c.icon, hint: hint, help: c.summary) } }
+        for c in builtIns { if let hint = c.hint { out[c.name] = CommandChip(name: c.name, label: c.name, icon: c.icon, hint: hint, help: c.summary) } }
         return out
-    }
-
-    /// Plan mode as a chip (docs/spec/32 §7): there exactly while plan mode is on, so picking /plan turns it on and
-    /// taking the chip off turns it off. It isn't part of the text: plan mode lasts past one message.
-    var planChip: CommandChip? {
-        guard isBuild, thread.planMode, let plan = BuiltInCommand.all.first(where: { $0.name == "plan" }) else { return nil }
-        return CommandChip(name: plan.name, label: plan.name, icon: plan.icon, hint: plan.hint ?? "", help: "Plan mode: the agent explores and proposes a plan before changing anything. Remove to turn it off.")
     }
 
     /// A skill by its name ("greet" for `skill:greet`).
@@ -979,9 +954,6 @@ extension Composer {
         case .conversation(let id, _):
             if let query = mentionQuery { text.removeLast(query.count + 1) }
             text += "@conversation:\(id) "
-        case .builtIn(let c) where c.name == "plan":
-            text = ""
-            Task { await thread.setPlanMode(true) }
         case .builtIn(let c) where c.hint != nil:
             chip = chipCommands[c.name]
             text = "/\(c.name) "

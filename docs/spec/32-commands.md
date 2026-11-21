@@ -43,7 +43,7 @@ Most of the capabilities behind Antigravity's commands already exist in Piopio; 
 | **compact** | Build built-in; popover in both | Also in Chat |
 | **schedule** | Automations are made by asking (27 §4); triggers include once (`at`) | **New.** `/automation <what and when>`: a bundled template that asks for an automation; 27's card answers. Named after what it makes, so the command, the sidebar and the card share one word; "schedule", "timer", "remind" and "every" find it. Antigravity's separate `automation` skill (a guided design) isn't needed: the model asks when details are missing. Both modes, since both load the automation tools |
 | **browser** | Browser tools and pane (22) | **New, small.** `/browser <task>`: do this in the browser pane, and show it |
-| **plan** | Build: plan mode | Keep; one row (§4.3) |
+| **plan** | Build: plan mode | Not a command: plan is a mode, set in the mode selector (§7) |
 | **grill-me** | `ask_user` exists | **New, cheap, high value.** `/grill-me <idea>`: the agent asks one question at a time with `ask_user` until it can state the plan back, then writes it. A bundled template, both modes |
 | **teamwork / boost / swarm** | Parallel work board, off by default ([swarms](../research/swarms.md)) | **One command**, `/parallel <task>`: the board on for this request, with its budget shown in the chip's hint. After daily use of the board says it's worth a command |
 | **learn** | Memory (14); [self-improvement](../research/self-improvement.md) research; creating skills is PAR12 | **New.** `/learn`: look back at this conversation (corrections, what worked) and propose a skill, an AGENTS.md rule or a memory, as a card you approve or dismiss. Nothing is saved without you. Waits on PAR12's skill writing |
@@ -91,7 +91,6 @@ them when built.
 
 | Command | Mode | Kind | Runs in |
 |---|---|---|---|
-| /plan | Build | Mode | App: plan mode on, shown as a chip for as long as it lasts; taking the chip off turns it off. The extension's row is hidden |
 | /goal | Build (Chat later) | Words | `piopio-goal` extension |
 | /side | Both | Words | App (24) |
 | /automation | Both | Words | Bundled template → automation tools (27) |
@@ -137,10 +136,9 @@ CM1 and CM2 are app-only and change nothing in the protocol. CM3 adds three temp
   by hand, or a message put in the box (a draft, an edit), never re-read from the text while you type: the text
   field can't be rewritten under the cursor. A command with a chip needs words to send. ⌫ listens for U+007F, what
   the Mac's delete key sends (SwiftUI's `.delete` is U+0008).
-- **The plan chip is plan mode** (changed after use, 2026-11-21): picking /plan (or typing it and a space) turns plan
-  mode on, and the chip shows while it's on, past the message that started it; ×, or ⌫ in an empty box, turns it
-  off. It isn't in the message's text, and the placeholder is its hint, "What to plan…". `/plan` typed alone and
-  sent still toggles plan mode; `/plan <task>` pasted in one go turns it on and sends the task.
+- **Plan is a mode only** (decided after use, 2026-11-21): no /plan command and no chip. It lasts past one message
+  and decides what the agent may do, like Auto-edit, so it lives in the mode selector, which already showed it; a
+  chip for it was the same state in a second place. pi's own /plan extension command isn't listed either.
   Skills without an argument hint get "What the skill should do…".
 - **Templates** ([piopio-commands.ts](../../packages/engine/src/runtimes/piopio-commands.ts)) join pi's through the
   resource loader's `promptsOverride`, so Build and chats have them; a template of the same name in the user's pi
