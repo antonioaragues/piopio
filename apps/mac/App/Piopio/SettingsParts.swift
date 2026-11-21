@@ -5,7 +5,9 @@ import SwiftUI
 // Extensions, This Mac & cloud", after Models): a header with a one-line summary and one add button, cards that show
 // only what you have, rows that push a detail page, adding in a sheet, editing on the detail page.
 
-/// Title (20 bold), one line of facts (13.5 fg2), and the page's actions top-right.
+/// Every Settings page starts with this, empty or not: title (20 bold), one line (13 fg2) and the page's actions
+/// top-right. The line is the page's status when there's something to count ("2 connected · used by…"), else one
+/// sentence on what the page is for.
 struct SettingsHeader<Actions: View>: View {
     let title: String
     let summary: String
@@ -28,13 +30,13 @@ extension SettingsHeader where Actions == EmptyView {
     init(title: String, summary: String) { self.init(title: title, summary: summary) { EmptyView() } }
 }
 
-/// "+ Add …": the page's one primary button (inv capsule), always in the same place.
+/// "+ Add …": the page's one primary button (black capsule), always top-right in the header, on empty pages too.
 struct AddButton: View {
     let title: String
     let action: () -> Void
     var body: some View {
-        Button(action: action) { Text(title).font(.system(size: 13)).foregroundStyle(Color.accentColor) }
-            .buttonStyle(.plain)
+        Button(action: action) { Label(title, systemImage: "plus").font(.system(size: 12.5, weight: .semibold)) }
+            .buttonStyle(PillStyle(kind: .strong))
     }
 }
 
@@ -59,10 +61,12 @@ extension CardTitle where Trailing == EmptyView {
     init(_ title: String, detail: String? = nil) { self.init(title: title, detail: detail) { EmptyView() } }
 }
 
-/// The hairline between rows; inset to the text when rows have a tile.
+/// The hairline between rows; inset to the text when rows have a tile. Rows in a `ListCard` reach 14pt past the
+/// card on both sides (their padding), so a divider stops 14pt short on the right and never starts before 14: it
+/// ends where the card's own top and bottom lines end.
 struct RowDivider: View {
     var inset: CGFloat = 62
-    var body: some View { Rectangle().fill(Color.dsLine).frame(height: 0.5).padding(.leading, inset) }
+    var body: some View { Rectangle().fill(Color.dsLine).frame(height: 0.5).padding(.leading, max(inset, 14)).padding(.trailing, 14) }
 }
 
 /// Fine print (12 fg3) under or beside what it's about.
@@ -102,7 +106,8 @@ struct LetterTile: View {
     }
 }
 
-/// One row of a list page: 34pt tile, name, status dot, subtitle, optional badge, chevron. The whole row opens its page.
+/// One row of a list page: 34pt tile, name, subtitle, optional badge, chevron. The whole row opens its page. `dot` is
+/// only for something that needs you (amber); a working thing gets no dot.
 struct SettingsListRow<Tile: View, Subtitle: View, Trailing: View>: View {
     let name: String
     var dot: Color?
@@ -118,8 +123,8 @@ struct SettingsListRow<Tile: View, Subtitle: View, Trailing: View>: View {
                 tile
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
-                        Text(name).font(.system(size: 13)).foregroundStyle(Color.dsFg).lineLimit(1)
-                        if dot != nil { Circle().strokeBorder(Color.dsFg3, lineWidth: 1).frame(width: 6, height: 6) }
+                        Text(name).font(.system(size: 13.5, weight: .semibold)).foregroundStyle(Color.dsFg).lineLimit(1)
+                        if let dot { Circle().fill(dot).frame(width: 6, height: 6) }
                     }
                     subtitle.font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1)
                 }
@@ -127,7 +132,7 @@ struct SettingsListRow<Tile: View, Subtitle: View, Trailing: View>: View {
                 trailing
                 Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).foregroundStyle(Color.dsFg3)
             }
-            .padding(.horizontal, 14).frame(minHeight: 50)
+            .padding(.horizontal, 14).frame(minHeight: 56)
             .background(highlighted ? Color.dsAccentSoft : .clear)
             .contentShape(Rectangle())
         }
@@ -186,22 +191,6 @@ struct StatusText: View {
     let text: String
     var body: some View {
         Text(text)
-    }
-}
-
-/// The empty state of a list page: a title, one sentence, then real starting points.
-struct SettingsEmpty<Content: View>: View {
-    let title: String
-    let message: String
-    @ViewBuilder var content: Content
-
-    var body: some View {
-        VStack(spacing: 0) {
-            Text(title).font(.system(size: 20, weight: .bold)).padding(.top, 40)
-            Text(message).font(.system(size: 13.5)).foregroundStyle(Color.dsFg2).multilineTextAlignment(.center).frame(maxWidth: 440).padding(.top, 6)
-            VStack(spacing: 10) { content }.frame(maxWidth: 460).padding(.top, 22)
-        }
-        .frame(maxWidth: .infinity)
     }
 }
 
@@ -268,7 +257,31 @@ struct PermissionMenu: View {
     }
 }
 
-/// A row with a label and a subtitle on the left and a toggle on the right (settings cards).
+/// The one settings row: a title (13) and an optional subtitle (11.5 fg3) on the left, its control on the right.
+struct SettingRow<Control: View>: View {
+    let title: String
+    var subtitle: String?
+    var subtitleColor: Color = .dsFg3
+    var last = false
+    @ViewBuilder var control: Control
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(.system(size: 13))
+                    if let subtitle { Text(subtitle).font(.system(size: 11.5)).foregroundStyle(subtitleColor).fixedSize(horizontal: false, vertical: true) }
+                }
+                Spacer(minLength: 16)
+                control
+            }
+            .padding(.horizontal, 14).padding(.vertical, 8).frame(minHeight: 46)
+            if !last { RowDivider(inset: 14) }
+        }
+    }
+}
+
+/// A `SettingRow` with a switch.
 struct ToggleRow: View {
     let title: String
     var subtitle: String?
@@ -277,17 +290,8 @@ struct ToggleRow: View {
     @Binding var isOn: Bool
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.system(size: 13))
-                    if let subtitle { Text(subtitle).font(.system(size: 11.5)).foregroundStyle(subtitleColor) }
-                }
-                Spacer()
-                Toggle("", isOn: $isOn).toggleStyle(.switch).controlSize(.small).labelsHidden()
-            }
-            .padding(.horizontal, 14).frame(minHeight: 46)
-            if !last { RowDivider(inset: 14) }
+        SettingRow(title: title, subtitle: subtitle, subtitleColor: subtitleColor, last: last) {
+            Toggle("", isOn: $isOn).toggleStyle(.switch).controlSize(.small).labelsHidden()
         }
     }
 }

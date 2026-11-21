@@ -109,25 +109,31 @@ struct ConnectorsPane: View {
 
     // c0
     private var empty: some View {
-        SettingsEmpty(title: "Connect your apps", message: "Connect once and any conversation or agent can use it. Reading runs on its own; changes ask you first.") {
-            ForEach(engine.connectors) { c in
-                HStack(spacing: 12) {
-                    ConnectorTile(id: c.id, size: 34)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(c.name).font(.system(size: 14, weight: .semibold))
-                        Text(ConnectorCatalog.tagline(c.id)).font(.system(size: 12)).foregroundStyle(Color.dsFg3)
-                    }
-                    Spacer()
-                    Button("Connect") { adding = .connect(c.id) }.buttonStyle(PillStyle(kind: c.id == engine.connectors.first?.id ? .primary : .secondary, compact: true))
-                }
-                .padding(.horizontal, 14).frame(minHeight: 60)
-                .settingsRows()
+        VStack(alignment: .leading, spacing: 0) {
+            SettingsHeader(title: "Connectors", summary: "Connect once and any conversation or agent can use it.") {
+                AddButton(title: "Add connector") { adding = .catalog }
             }
+            CardTitle("Your apps")
             if engine.connectors.isEmpty {
                 FinePrint(engine.client == nil ? "The engine isn't running." : "Loading…")
+            } else {
+                ListCard {
+                    ForEach(Array(engine.connectors.enumerated()), id: \.element.id) { i, c in
+                        HStack(spacing: 12) {
+                            ConnectorTile(id: c.id, size: 34)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(c.name).font(.system(size: 13.5, weight: .semibold))
+                                Text(ConnectorCatalog.tagline(c.id)).font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                            }
+                            Spacer()
+                            Button("Connect") { adding = .connect(c.id) }.buttonStyle(PillStyle(compact: true))
+                        }
+                        .padding(.horizontal, 14).frame(minHeight: 56)
+                        if i < engine.connectors.count - 1 { RowDivider() }
+                    }
+                }
             }
-            Button("Browse all connectors…") { adding = .catalog }
-                .buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.accentColor).padding(.top, 6)
+            FinePrint("Reading runs on its own; anything that changes something asks you first.").padding(.top, 12)
         }
     }
 }
@@ -141,7 +147,7 @@ private struct ConnectorAccountRow: View {
     let open: () -> Void
 
     var body: some View {
-        SettingsListRow(name: connector.name, dot: account.problem == nil ? .dsFg3 : .dsAmber, highlighted: highlighted, open: open) {
+        SettingsListRow(name: connector.name, dot: account.problem == nil ? nil : .dsAmber, highlighted: highlighted, open: open) {
             ConnectorTile(id: connector.id, size: 34)
         } subtitle: {
             if account.problem != nil {

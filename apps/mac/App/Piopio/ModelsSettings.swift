@@ -101,41 +101,30 @@ struct ModelsPane: View {
     // m1
     private var page: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Models").font(.system(size: 24, weight: .bold)).tracking(-0.4)
-                    Text(subtitle).font(.system(size: 13.5)).foregroundStyle(Color.dsFg2)
-                }
-                Spacer()
-                Button { adding = .catalog } label: {
-                    Label("Add provider", systemImage: "plus").font(.system(size: 12.5, weight: .semibold))
-                }
-                .buttonStyle(PillStyle(kind: .strong))
+            SettingsHeader(title: "Models", summary: subtitle) {
+                AddButton(title: "Add provider") { adding = .catalog }
             }
-            .padding(.bottom, 20)
 
             // Only coding agents on this Mac (docs/spec/31): no empty Connected list.
             if !connected.isEmpty {
-                Text("Connected").font(.system(size: 13, weight: .semibold)).padding(.bottom, 7)
+                CardTitle("Connected")
                 ListCard {
                     ForEach(Array(connected.enumerated()), id: \.element.id) { i, p in
                         ConnectedProviderRow(engine: engine, provider: p) { detail = p.id }
-                        if i < connected.count - 1 { Rectangle().fill(Color.dsLine).frame(height: 0.5).padding(.leading, 62) }
+                        if i < connected.count - 1 { RowDivider() }
                     }
                 }
             }
 
             if !agents.isEmpty {
-                HStack {
-                    Text("Agents on this Mac").font(.system(size: 13, weight: .semibold))
-                    Spacer()
+                CardTitle(title: "Agents on this Mac") {
                     Text("Each runs a whole conversation on your own plan").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
                 }
-                .padding(.top, connected.isEmpty ? 0 : 22).padding(.bottom, 7)
+                .padding(.top, connected.isEmpty ? 0 : 22)
                 ListCard {
                     ForEach(Array(agents.enumerated()), id: \.element.id) { i, p in
                         CodingAgentRow(provider: p)
-                        if i < agents.count - 1 { Rectangle().fill(Color.dsLine).frame(height: 0.5).padding(.leading, 62) }
+                        if i < agents.count - 1 { RowDivider() }
                     }
                 }
             }
@@ -145,12 +134,10 @@ struct ModelsPane: View {
                     .padding(.top, 14)
             }
 
-            HStack {
-                Text("Default model").font(.system(size: 13, weight: .semibold))
-                Spacer()
+            CardTitle(title: "Default model") {
                 Text("Any chat can still switch").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
             }
-            .padding(.top, 22).padding(.bottom, 7)
+            .padding(.top, 22)
             ListCard {
                 roleRow(.build, "Build sessions")
                 roleRow(.chat, "Conversations")
@@ -159,7 +146,7 @@ struct ModelsPane: View {
             }
             Text("Billed to your own accounts. Keys stay in the macOS Keychain.").font(.system(size: 12)).foregroundStyle(Color.dsFg3).padding(.top, 12)
 
-            Text("Background work").font(.system(size: 13, weight: .semibold)).padding(.top, 22).padding(.bottom, 7)
+            CardTitle("Background work").padding(.top, 22)
             ListCard {
                 HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 2) {
@@ -189,7 +176,8 @@ struct ModelsPane: View {
         let count = connected.count
         let models = engine.models.filter { $0.provider != "faux" }.count
         let ready = agents.filter { $0.status == .connected }.count
-        var parts = (count > 0 || ready == 0 ? ["\(count) provider\(count == 1 ? "" : "s")"] : []) + (ready > 0 ? ["\(ready) agent\(ready == 1 ? "" : "s")"] : []) + ["\(models) model\(models == 1 ? "" : "s")"]
+        // The models the picker offers: a provider's whole catalog (its row) minus the ones you hid, plus the agents'.
+        var parts = (count > 0 || ready == 0 ? ["\(count) provider\(count == 1 ? "" : "s")"] : []) + (ready > 0 ? ["\(ready) agent\(ready == 1 ? "" : "s")"] : []) + ["\(models) model\(models == 1 ? "" : "s") in the picker"]
         if let month = engine.usage?.monthUsd, month > 0 { parts.append("\(MainSidebar.money(month)) this month") }
         return parts.joined(separator: " · ")
     }
@@ -217,7 +205,7 @@ struct ModelsPane: View {
                 }
             }
             .padding(.horizontal, 14).frame(minHeight: 46)
-            if !last { Rectangle().fill(Color.dsLine).frame(height: 0.5).padding(.leading, 14) }
+            if !last { RowDivider(inset: 14) }
         }
     }
 
@@ -227,52 +215,64 @@ struct ModelsPane: View {
 
     // m0
     private var empty: some View {
-        VStack(spacing: 0) {
-            Text("Connect a model to get started").font(.system(size: 20, weight: .bold)).padding(.top, 40)
-            Text("Piopio uses your own accounts. Pick one; you can add more later.").font(.system(size: 13.5)).foregroundStyle(Color.dsFg2).padding(.top, 6)
-            VStack(spacing: 10) {
-                optionRow(tile: "OR", color: Color(red: 0.39, green: 0.40, blue: 0.95), title: "OpenRouter", badge: "Recommended", line: "One key, 300+ models from every lab", action: "Connect", primary: true) {
+        VStack(alignment: .leading, spacing: 0) {
+            SettingsHeader(title: "Models", summary: "Piopio uses your own accounts. Pick one to start; you can add more later.") {
+                AddButton(title: "Add provider") { adding = .catalog }
+            }
+            CardTitle("Start with")
+            ListCard {
+                optionRow(tile: "OR", title: "OpenRouter", badge: "Recommended", line: "One key, 300+ models from every lab", action: "Connect") {
                     adding = .provider("openrouter")
                 }
                 if let chatgpt = engine.providers.first(where: { $0.id == "openai" }) {
-                    optionRow(tile: "GPT", color: Color(red: 0.06, green: 0.64, blue: 0.5), title: "ChatGPT subscription", badge: nil, line: "Sign in; usage counts against your plan", action: "Sign in", primary: false) {
+                    RowDivider()
+                    optionRow(tile: "GPT", title: "ChatGPT subscription", badge: nil, line: "Sign in; usage counts against your plan", action: "Sign in") {
                         Task { await engine.connect(chatgpt, method: .oauth) }
                     }
                 }
                 if let found = detected.first {
-                    optionRow(tile: String(found.name.prefix(2)).uppercased(), color: .gray, title: found.name, badge: "Found on this Mac", line: "\(found.models) model\(found.models == 1 ? "" : "s") · free and private", action: "Add", primary: false, yolk: true) {
+                    RowDivider()
+                    optionRow(tile: String(found.name.prefix(2)).uppercased(), title: found.name, badge: "Found on this Mac", line: "\(found.models) model\(found.models == 1 ? "" : "s") · free and private", action: "Add") {
                         addDetected(found)
                     }
                 }
             }
-            .frame(maxWidth: 460)
-            .padding(.top, 24)
-            HStack(spacing: 18) {
-                Button("Browse all providers…") { adding = .catalog }
-                Button("Custom endpoint…") { adding = .custom(nil) }
+            HStack(spacing: 4) {
+                FinePrint("Running your own server?")
+                Button("Add a custom endpoint…") { adding = .custom(nil) }
+                    .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Color.accentColor)
             }
-            .buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.accentColor)
-            .padding(.top, 16)
+            .padding(.top, 12)
+            if !agents.isEmpty {
+                CardTitle(title: "Agents on this Mac") {
+                    Text("Each runs a whole conversation on your own plan").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                }
+                .padding(.top, 22)
+                ListCard {
+                    ForEach(Array(agents.enumerated()), id: \.element.id) { i, p in
+                        CodingAgentRow(provider: p)
+                        if i < agents.count - 1 { RowDivider() }
+                    }
+                }
+            }
         }
-        .frame(maxWidth: .infinity)
     }
 
-    private func optionRow(tile: String, color: Color, title: String, badge: String?, line: String, action: String, primary: Bool, yolk: Bool = false, perform: @escaping () -> Void) -> some View {
+    private func optionRow(tile: String, title: String, badge: String?, line: String, action: String, perform: @escaping () -> Void) -> some View {
         HStack(spacing: 12) {
             Text(tile).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.dsFg2)
                 .frame(width: 34, height: 34).background(Color.dsChip, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text(title).font(.system(size: 14, weight: .semibold))
+                    Text(title).font(.system(size: 13.5, weight: .semibold))
                     if let badge { Text(badge).font(.system(size: 12)).foregroundStyle(Color.dsFg3) }
                 }
                 Text(line).font(.system(size: 12)).foregroundStyle(Color.dsFg3)
             }
             Spacer()
-            Button(action, action: perform).buttonStyle(PillStyle(kind: primary ? .primary : .secondary, compact: true))
+            Button(action, action: perform).buttonStyle(PillStyle(compact: true))
         }
-        .padding(.horizontal, 14).frame(minHeight: 60)
-        .settingsRows()
+        .padding(.horizontal, 14).frame(minHeight: 56)
     }
 }
 
@@ -288,8 +288,9 @@ private struct ConnectedProviderRow: View {
                 ProviderGlyph(provider: provider, size: 34)
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
-                        Text(provider.name).font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.dsFg)
-                        Circle().fill(dotColor).frame(width: 7, height: 7)
+                        Text(provider.name).font(.system(size: 13.5, weight: .semibold)).foregroundStyle(Color.dsFg)
+                        // Only what needs you gets a dot; a working provider has none.
+                        if provider.status == .needsAttention { Circle().fill(dotColor).frame(width: 6, height: 6) }
                         if provider.endpoint != nil {
                             Text("Custom").font(.system(size: 10.5, weight: .semibold)).foregroundStyle(Color.dsFg2)
                                 .padding(.horizontal, 6).frame(height: 18).background(Color.dsChip, in: Capsule())
@@ -299,9 +300,9 @@ private struct ConnectedProviderRow: View {
                 }
                 Spacer(minLength: 12)
                 spend
-                Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.dsFg3)
+                Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).foregroundStyle(Color.dsFg3)
             }
-            .padding(.horizontal, 14).frame(minHeight: 62)
+            .padding(.horizontal, 14).frame(minHeight: 56)
             .contentShape(Rectangle())
         }
         .buttonStyle(HoverRowStyle())
@@ -361,8 +362,8 @@ private struct CodingAgentRow: View {
                 .overlay(AgentGlyph(size: 15))
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text(provider.name).font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.dsFg)
-                    Circle().fill(provider.status == .needsAttention ? Color.dsAmber : Color.dsFg3).frame(width: 7, height: 7)
+                    Text(provider.name).font(.system(size: 13.5, weight: .semibold)).foregroundStyle(Color.dsFg)
+                    if provider.status == .needsAttention { Circle().fill(Color.dsAmber).frame(width: 6, height: 6) }
                 }
                 Text(line).font(.system(size: 12)).foregroundStyle(provider.status == .needsAttention ? Color.dsAmber : Color.dsFg3).lineLimit(1)
             }
@@ -382,7 +383,7 @@ private struct CodingAgentRow: View {
                 .help(command.text)
             }
         }
-        .padding(.horizontal, 14).frame(minHeight: 62)
+        .padding(.horizontal, 14).frame(minHeight: 56)
     }
 
     private var line: String {
@@ -638,7 +639,7 @@ struct ProviderDetailView: View {
                 if let action { Button(action, action: perform).buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.accentColor) }
             }
             .padding(.horizontal, 14).frame(minHeight: 40)
-            if !last { Rectangle().fill(Color.dsLine).frame(height: 0.5).padding(.leading, 14) }
+            if !last { RowDivider(inset: 14) }
         }
     }
 

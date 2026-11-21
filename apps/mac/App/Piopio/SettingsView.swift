@@ -19,20 +19,21 @@ struct SettingsView: View {
             }
         }
         static let groups: [(String?, [Section])] = [(nil, [.general, .providers, .connectors, .chat, .browser, .memory, .approvals, .github, .data]), ("Extend", [.mcp, .extensions]), ("Where it runs", [.engines])]
-        var icon: (String, Color) {
+        /// The sidebar's symbol, in ink like the text (docs/design/grey: nothing gets a color but status).
+        var icon: String {
             switch self {
-            case .data: ("externaldrive.fill", .blue)
-            case .general: ("gearshape.fill", .gray)
-            case .providers: ("key.fill", .blue)
-            case .connectors: ("app.connected.to.app.below.fill", .teal)
-            case .chat: ("bubble.left.and.bubble.right.fill", .teal)
-            case .memory: ("brain.head.profile", .pink)
-            case .extensions: ("shippingbox.fill", .indigo)
-            case .approvals: ("checkmark.shield.fill", .orange)
-            case .github: ("arrow.triangle.pull", .gray)
-            case .mcp: ("puzzlepiece.extension.fill", .purple)
-            case .browser: ("globe", .blue)
-            case .engines: ("cpu.fill", .green)
+            case .data: "externaldrive"
+            case .general: "gearshape"
+            case .providers: "sparkles"
+            case .connectors: "app.connected.to.app.below.fill"
+            case .chat: "bubble.left.and.bubble.right"
+            case .memory: "brain.head.profile"
+            case .extensions: "shippingbox"
+            case .approvals: "checkmark.shield"
+            case .github: "arrow.triangle.pull"
+            case .mcp: "puzzlepiece.extension"
+            case .browser: "globe"
+            case .engines: "cpu"
             }
         }
     }
@@ -47,7 +48,8 @@ struct SettingsView: View {
                     }
                     ForEach(group.1) { s in
                     Button { section = s } label: {
-                        HStack(spacing: 10) {
+                        HStack(spacing: 8) {
+                            Image(systemName: s.icon).font(.system(size: 12.5)).foregroundStyle(section == s ? Color.dsFg : Color.dsFg2).frame(width: 18)
                             Text(s.rawValue).font(.system(size: 13)).foregroundStyle(section == s ? Color.dsFg : Color.dsFg2)
                             // Nothing to think with yet (design m0): an amber dot on Models.
                             if s == .providers, !engine.faux, !engine.providers.isEmpty, !engine.providers.contains(where: \.isConnected) {
@@ -115,41 +117,12 @@ struct SettingsView: View {
     }
 }
 
-struct PaneTitle: View {
-    let title: String
-    let subtitle: String
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title).font(.system(size: 20, weight: .bold))
-            Text(subtitle).font(.system(size: 13)).foregroundStyle(Color.dsFg2)
-        }
-        .padding(.bottom, 18)
-    }
-}
-
 /// Rows inside a card list, separated by hairlines.
 struct ListCard<Content: View>: View {
     @ViewBuilder var content: Content
     var body: some View {
         VStack(spacing: 0) { content }
             .settingsRows()
-    }
-}
-
-struct Row<Trailing: View>: View {
-    let title: String
-    var last = false
-    @ViewBuilder var trailing: Trailing
-    var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 12) {
-                Text(title).font(.system(size: 13, weight: .semibold)).frame(width: 110, alignment: .leading)
-                trailing
-            }
-            .padding(.horizontal, 14)
-            .frame(minHeight: 44)
-            if !last { Rectangle().fill(Color.dsLine).frame(height: 0.5) }
-        }
     }
 }
 
@@ -161,21 +134,20 @@ private struct GeneralPane: View {
     private let updater = AppUpdater.shared
 
     var body: some View {
-        PaneTitle(title: "General", subtitle: "Areas, appearance, shortcuts, notifications and updates.")
+        SettingsHeader(title: "General", summary: "What Piopio shows, how it looks, and how it reaches you.")
         AreasCard(engine: engine) {
             NSApp.keyWindow?.performClose(nil)
             NotificationCenter.default.post(name: .runSetupAgain, object: nil)
         }
+        CardTitle("App")
         ListCard {
-            Row(title: "Appearance") {
+            SettingRow(title: "Appearance", subtitle: AppAppearance.current == .system ? "Follows macOS" : "Just for Piopio") {
                 NeutralSegmented(selection: Binding(get: { AppAppearance.current }, set: { $0.save(); tick += 1 }),
                                  options: AppAppearance.allCases.map { (value: $0, title: $0.title) })
                     .frame(width: 220)
                     .accessibilityLabel("Appearance")
-                Text(AppAppearance.current == .system ? "Follows macOS" : "Just for Piopio").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
-                Spacer()
             }
-            Row(title: "Quick Chat") {
+            SettingRow(title: "Quick Chat", subtitle: "Opens from any app") {
                 Picker("", selection: Binding(get: { QuickChatShortcut.current }, set: { value in
                     UserDefaults.standard.set(value.rawValue, forKey: "quickChatShortcut")
                     QuickChatController.shared?.applyShortcut()
@@ -185,44 +157,27 @@ private struct GeneralPane: View {
                 }
                 .labelsHidden()
                 .fixedSize()
-                Text("Opens from any app").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
-                Spacer()
             }
-            Row(title: "Notifications") {
-                Toggle("When an answer finishes or fails while I'm elsewhere", isOn: Binding(get: { Notifier.enabled }, set: { UserDefaults.standard.set($0, forKey: "notifyAnswers"); tick += 1 }))
-                    .toggleStyle(.switch)
-                    .controlSize(.small)
-                    .font(.system(size: 13))
-                Spacer()
-            }
-            Row(title: "Open files in") {
-                if Editor.installed.isEmpty {
-                    Text("No supported editor found (Zed, VS Code, Cursor, Xcode, Sublime Text)").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
-                } else {
+            ToggleRow(title: "Notifications", subtitle: "When an answer finishes or fails while I'm elsewhere", isOn: Binding(get: { Notifier.enabled }, set: { UserDefaults.standard.set($0, forKey: "notifyAnswers"); tick += 1 }))
+            SettingRow(title: "Open files in", subtitle: Editor.installed.isEmpty ? "No supported editor found (Zed, VS Code, Cursor, Xcode, Sublime Text)" : "Build's “Open in” and the file viewer") {
+                if !Editor.installed.isEmpty {
                     Picker("", selection: Binding(get: { Editor.preferred?.id ?? "" }, set: { UserDefaults.standard.set($0, forKey: "editor"); tick += 1 })) {
                         ForEach(Editor.installed) { Text($0.name).tag($0.id) }
                     }
                     .labelsHidden()
                     .fixedSize()
-                    Text("Build's “Open in” and the file viewer").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
                 }
-                Spacer()
             }
-            Row(title: "Updates", last: true) {
-                if updater.isConfigured {
-                    Toggle("Check automatically", isOn: Binding(get: { updater.checksAutomatically }, set: { updater.checksAutomatically = $0 }))
-                        .toggleStyle(.switch)
-                        .controlSize(.small)
-                        .font(.system(size: 13))
-                    Spacer()
-                    Text(updater.version).font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+            if updater.isConfigured {
+                SettingRow(title: "Check for updates automatically", subtitle: "Version \(updater.version)", last: true) {
                     Button("Check Now") { updater.checkForUpdates() }
                         .buttonStyle(PillStyle(compact: true))
                         .disabled(!updater.canCheck)
-                } else {
-                    Text("Version \(updater.version) · this build doesn't update itself").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
-                    Spacer()
+                    Toggle("", isOn: Binding(get: { updater.checksAutomatically }, set: { updater.checksAutomatically = $0 }))
+                        .toggleStyle(.switch).controlSize(.small).labelsHidden()
                 }
+            } else {
+                SettingRow(title: "Updates", subtitle: "Version \(updater.version) · this build doesn't update itself", last: true) { EmptyView() }
             }
         }
         .id(tick)
@@ -236,9 +191,9 @@ private struct ApprovalsPane: View {
     let engine: EngineController
 
     var body: some View {
-        PaneTitle(title: "Approvals", subtitle: "What Build sessions may do without asking. Risky commands and writes outside the project always ask.")
-        VStack(alignment: .leading, spacing: 6) {
-            SectionLabel("All projects")
+        SettingsHeader(title: "Approvals", summary: "What Build sessions may do without asking. Risky commands and writes outside the project always ask.")
+        VStack(alignment: .leading, spacing: 0) {
+            CardTitle("All projects")
             ListCard {
                 ToggleRow(title: "Keep commands inside the project", subtitle: "Commands run in macOS's sandbox: they can read and use the network, but only write in the project, temporary folders and package caches. To write elsewhere they ask you first. Full access runs them as before.", isOn: Binding(get: { engine.settings?.build?.sandbox ?? true }, set: { v in
                     Task { await engine.updateSettings(SettingsPatch(build: .init(sandbox: v))) }
@@ -248,18 +203,18 @@ private struct ApprovalsPane: View {
                 }))
             }
         }
-        .padding(.bottom, 18)
+        .padding(.bottom, 22)
         .task { if engine.settings == nil { await engine.loadSettings() } }
         if engine.projects.isEmpty {
             Text("Add a project in Build to set its approvals.").font(.system(size: 13)).foregroundStyle(Color.dsFg3)
         }
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 22) {
             ForEach(engine.projects) { project in
-                VStack(alignment: .leading, spacing: 6) {
-                    SectionLabel(project.name)
+                VStack(alignment: .leading, spacing: 0) {
+                    CardTitle(project.name)
                     ListCard {
                         if project.needsTrust || project.trust != .undecided {
-                            Row(title: "Project setup") {
+                            SettingRow(title: "Project setup", subtitle: "Loads the project's .pi extensions, MCP servers, prompts and skills. Shared with the pi CLI.") {
                                 Picker("", selection: Binding(get: { project.trust }, set: { value in
                                     if value != .undecided { Task { await engine.setTrust(value == .trusted, for: project) } }
                                 })) {
@@ -269,24 +224,17 @@ private struct ApprovalsPane: View {
                                 }
                                 .labelsHidden()
                                 .fixedSize()
-                                Text("Loads the project's .pi extensions, MCP servers, prompts and skills. Shared with the pi CLI.").font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(2)
-                                Spacer()
                             }
                         }
-                        Row(title: "New sessions", last: project.rules.isEmpty) {
+                        SettingRow(title: "New sessions", subtitle: ApprovalModeMenu.summary(project.approvalMode), last: project.rules.isEmpty) {
                             Picker("", selection: Binding(get: { project.approvalMode }, set: { mode in Task { await engine.setApprovalMode(mode, for: project) } })) {
                                 ForEach(ApprovalMode.allCases) { Text(ApprovalModeMenu.title($0)).tag($0) }
                             }
                             .labelsHidden()
                             .fixedSize()
-                            Text(ApprovalModeMenu.summary(project.approvalMode)).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(2)
-                            Spacer()
                         }
                         ForEach(project.rules) { rule in
-                            Row(title: rule.kind == .command ? "Command" : rule.kind == .tool ? "Tool" : "Path", last: rule.id == project.rules.last?.id) {
-                                Text(rule.pattern).font(.system(size: 12, design: .monospaced)).foregroundStyle(Color.dsFg).lineLimit(1).truncationMode(.middle)
-                                Spacer()
-                                Text(rule.kind == .command ? "and its arguments" : "always allowed").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                            SettingRow(title: rule.pattern, subtitle: rule.kind == .command ? "Command, with any arguments" : rule.kind == .tool ? "Tool, always allowed" : "Path, always allowed", last: rule.id == project.rules.last?.id) {
                                 Button { Task { await engine.removeRule(rule, from: project) } } label: {
                                     Image(systemName: "minus.circle.fill").foregroundStyle(Color.dsFg3)
                                 }
@@ -318,11 +266,11 @@ private struct CloudCard: View {
         VStack(alignment: .leading, spacing: 8) {
             ListCard {
                 HStack(spacing: 12) {
-                    Image(systemName: "cloud.fill").font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.dsFg2)
+                    Image(systemName: "cloud.fill").font(.system(size: 15, weight: .semibold)).foregroundStyle(Color.dsFg2)
                         .frame(width: 34, height: 34).background(Color.dsChip, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 8) {
-                            Text("Cloudflare").font(.system(size: 14, weight: .semibold))
+                            Text("Cloudflare").font(.system(size: 13.5, weight: .semibold))
                             if cloud?.connected == true {
                                 if cloud?.reachable == true { StatusText(color: .dsFg3, text: "Connected").font(.system(size: 12)).foregroundStyle(Color.dsFg2) }
                                 else { StatusText(color: .dsFg, text: "Can't reach it").font(.system(size: 12, weight: .medium)).foregroundStyle(Color.dsFg) }
@@ -536,7 +484,7 @@ private struct EnginesPane: View {
                         .frame(width: 34, height: 34).background(Color.dsChip, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 8) {
-                            Text("Local engine").font(.system(size: 14, weight: .semibold))
+                            Text("Local engine").font(.system(size: 13.5, weight: .semibold))
                             state
                         }
                         Text(line).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1)

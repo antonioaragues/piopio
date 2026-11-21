@@ -133,20 +133,18 @@ struct AreasCard: View {
     private var areas: Areas { Areas.shared }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Areas").font(.system(size: 13, weight: .semibold))
-                Text("Conversations are always on. Build adds code tools to project folders (editing, commands, git, the terminal); without it, folders are Read only. Hiding an area keeps everything in it, and nothing that runs stops.")
-                    .font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+        VStack(alignment: .leading, spacing: 0) {
+            CardTitle(title: "Areas") {
+                Button("Run setup again…", action: rerunSetup)
+                    .buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.accentColor)
             }
             ListCard {
                 ForEach(AreaSet.switchable) { area in
                     row(area, last: area == AreaSet.switchable.last)
                 }
             }
-            Button("Run setup again…", action: rerunSetup)
-                .buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.accentColor)
-                .padding(.top, 2)
+            FinePrint("Conversations are always on. Build adds code tools to project folders (editing, commands, git, the terminal); without it, folders are Read only. Hiding an area keeps everything in it, and nothing that runs stops.")
+                .padding(.top, 12)
         }
         .padding(.bottom, 22)
         .sheet(isPresented: $confirmingAgents) {
@@ -159,10 +157,10 @@ struct AreasCard: View {
         let locked = on && !areas.set.canTurnOff(area)
         return VStack(spacing: 0) {
             HStack(spacing: 12) {
-                AreaTile(area: area, size: 28).saturation(on ? 1 : 0).opacity(on ? 1 : 0.55)
+                AreaTile(area: area, size: 34).saturation(on ? 1 : 0).opacity(on ? 1 : 0.55)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(area.title).font(.system(size: 13, weight: .semibold))
-                    Text(holds(area)).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
+                    Text(area.title).font(.system(size: 13.5, weight: .semibold))
+                    Text(holds(area)).font(.system(size: 12)).foregroundStyle(Color.dsFg3)
                 }
                 Spacer()
                 if let note = note(area, on: on, locked: locked) {
@@ -173,8 +171,8 @@ struct AreasCard: View {
                     .disabled(locked)
                     .help(locked ? "At least one area stays on" : on ? "Hide \(area.title)" : "Show \(area.title)")
             }
-            .padding(.horizontal, 14).frame(minHeight: 54)
-            if !last { Rectangle().fill(Color.dsLine).frame(height: 0.5).padding(.leading, 54) }
+            .padding(.horizontal, 14).frame(minHeight: 56)
+            if !last { RowDivider() }
         }
     }
 

@@ -23,46 +23,35 @@ struct BrowserSettingsPane: View {
     @State private var cleared = false
 
     var body: some View {
-        PaneTitle(title: "Browser", subtitle: "The browser in your conversations reads pages freely. The first time it would click or type on a site, it asks.")
-        VStack(alignment: .leading, spacing: 6) {
-            SectionLabel("Sites")
+        SettingsHeader(title: "Browser", summary: "The browser in your conversations reads pages freely. The first time it would click or type on a site, it asks.")
+        VStack(alignment: .leading, spacing: 0) {
+            CardTitle("Sites")
             ListCard {
                 if sites.isEmpty {
-                    Row(title: "No sites yet", last: false) {
-                        Text("“Allow, don't ask again” on a card adds a site here.").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
-                        Spacer()
-                    }
+                    SettingRow(title: "No sites yet", subtitle: "“Allow, don't ask again” on a card adds a site here.") { EmptyView() }
                 }
                 ForEach(sites, id: \.self) { s in
-                    Row(title: s.site, last: false) {
-                        Text(s.level == "allowed" ? "Always allowed" : "Blocked: never clicks or types here")
-                            .font(.system(size: 12)).foregroundStyle(Color.dsFg3)
-                        Spacer()
+                    SettingRow(title: s.site, subtitle: s.level == "allowed" ? "Always allowed" : "Blocked: never clicks or types here") {
                         Button { Task { await set(s.site, "ask") } } label: { Image(systemName: "minus.circle.fill").foregroundStyle(Color.dsFg3) }
                             .buttonStyle(.plain)
                             .help("Remove: acting here asks again")
                     }
                 }
-                Row(title: "Block a site", last: true) {
+                SettingRow(title: "Block a site", last: true) {
                     TextField("bank.example", text: $blocking)
                         .textFieldStyle(.roundedBorder).frame(width: 220)
                         .onSubmit { block() }
-                    Button("Block") { block() }.disabled(blocking.trimmingCharacters(in: .whitespaces).isEmpty)
-                    Spacer()
+                    Button("Block") { block() }.buttonStyle(PillStyle(compact: true)).disabled(blocking.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
-            Text("Passwords, one-time codes and card details are always yours to type, on every site.")
-                .font(.system(size: 12)).foregroundStyle(Color.dsFg3).padding(.top, 4)
+            FinePrint("Passwords, one-time codes and card details are always yours to type, on every site.").padding(.top, 12)
         }
-        .padding(.bottom, 18)
-        VStack(alignment: .leading, spacing: 6) {
-            SectionLabel("Browsing data")
+        .padding(.bottom, 22)
+        VStack(alignment: .leading, spacing: 0) {
+            CardTitle("Browsing data")
             ListCard {
-                Row(title: "Sign-ins and cookies", last: true) {
-                    Text(cleared ? "Cleared." : "Kept on this Mac, for every conversation's browser. Not shared with Safari.")
-                        .font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(2)
-                    Spacer()
-                    Button("Clear…") { confirmClear = true }
+                SettingRow(title: "Sign-ins and cookies", subtitle: cleared ? "Cleared." : "Kept on this Mac, for every conversation's browser. Not shared with Safari.", last: true) {
+                    Button("Clear…") { confirmClear = true }.buttonStyle(PillStyle(compact: true))
                 }
             }
         }

@@ -49,7 +49,7 @@ struct ChatPane: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SettingsHeader(title: "Chat", summary: "Conversations")
+            SettingsHeader(title: "Chat", summary: "How conversations suggest replies and split off side conversations.")
             CardTitle("Suggestions")
             ListCard {
                 ToggleRow(title: "Suggest follow-up messages", subtitle: "A few replies under each answer", last: true, isOn: Binding(get: { settings?.chat.followUps ?? true }, set: { v in
@@ -60,24 +60,15 @@ struct ChatPane: View {
             // Side conversations (docs/spec/24 §6): what happens when you bring up something unrelated.
             CardTitle("Side conversations")
             ListCard {
-                VStack(spacing: 0) {
-                    HStack(spacing: 12) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("When I bring up something unrelated").font(.system(size: 13))
-                            Text("A new subject can get its own conversation, linked to this one").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
-                        }
-                        Spacer()
-                        Picker("", selection: Binding(get: { settings?.chat.sideOnUnrelated ?? "ask" }, set: { v in
-                            Task { await engine.updateSettings(SettingsPatch(chat: .init(sideOnUnrelated: v))) }
-                        })) {
-                            Text("Ask").tag("ask")
-                            Text("Always start one").tag("start")
-                            Text("Do nothing").tag("off")
-                        }
-                        .labelsHidden().fixedSize()
+                SettingRow(title: "When I bring up something unrelated", subtitle: "A new subject can get its own conversation, linked to this one") {
+                    Picker("", selection: Binding(get: { settings?.chat.sideOnUnrelated ?? "ask" }, set: { v in
+                        Task { await engine.updateSettings(SettingsPatch(chat: .init(sideOnUnrelated: v))) }
+                    })) {
+                        Text("Ask").tag("ask")
+                        Text("Always start one").tag("start")
+                        Text("Do nothing").tag("off")
                     }
-                    .padding(.horizontal, 14).frame(minHeight: 46)
-                    RowDivider(inset: 14)
+                    .labelsHidden().fixedSize()
                 }
                 ToggleRow(title: "Propose follow-ups", subtitle: "Work Piopio notices along the way, as cards you can start", isOn: Binding(get: { settings?.chat.sidePropose ?? true }, set: { v in
                     Task { await engine.updateSettings(SettingsPatch(chat: .init(sidePropose: v))) }
@@ -86,18 +77,12 @@ struct ChatPane: View {
                     Task { await engine.updateSettings(SettingsPatch(chat: .init(sideWake: v))) }
                 }))
             }
-            .padding(.bottom, 22)
-            CardTitle("About me")
-            ListCard {
-                HStack(spacing: 12) {
-                    Image(systemName: "brain.head.profile").font(.system(size: 14)).foregroundStyle(Color.dsFg3).frame(width: 20)
-                    Text("About me and memory search moved to Memory.").font(.system(size: 13))
-                    Spacer()
-                    Button("Open Memory") { NotificationCenter.default.post(name: .settingsSection, object: "Memory") }
-                        .buttonStyle(PillStyle(compact: true))
-                }
-                .padding(.horizontal, 14).frame(minHeight: 50)
+            HStack(spacing: 4) {
+                FinePrint("What conversations know about you is in")
+                Button("Memory") { NotificationCenter.default.post(name: .settingsSection, object: "Memory") }
+                    .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Color.accentColor)
             }
+            .padding(.top, 12)
         }
         .task { await engine.loadSettings() }
     }

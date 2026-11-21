@@ -8,25 +8,29 @@ struct DataPane: View {
     @State private var failure: String?
     @State private var result: URL?
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            PaneTitle(title: "Backup & costs", subtitle: "Keep a recoverable copy of Piopio and understand what its requests cost.")
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Back up Piopio").font(.headline)
-                Text("Includes conversations, projects without a folder, local agent data and definitions, Build conversation history, drafts, memory, and settings. External project folders and Keychain secrets stay where they are. Remote memory services need their own backup.")
-                Text("The backup is an unencrypted folder containing personal conversations and any secrets you put in files or settings. Keep it somewhere private. The engine stops briefly so its databases can be copied safely.")
-                    .foregroundStyle(Color.dsFg2)
-                HStack {
-                    Button("Create backup…", action: backup).buttonStyle(PillStyle(kind: .primary))
-                    Button("Restore backup…", action: restore).buttonStyle(PillStyle())
+        VStack(alignment: .leading, spacing: 0) {
+            SettingsHeader(title: "Backup & costs", summary: "Keep a recoverable copy of Piopio and understand what its requests cost.")
+            CardTitle("Backup")
+            ListCard {
+                SettingRow(title: "Back up Piopio", subtitle: "Conversations, projects without a folder, agents, Build history, drafts, memory and settings. Project folders and Keychain secrets stay where they are; remote memory services need their own backup.", last: true) {
                     if busy { ProgressView().controlSize(.small) }
-                }.disabled(busy || engine.isMaintaining)
-                if let message { Text(message).foregroundStyle(Color.dsFg2).textSelection(.enabled) }
-                if let failure { Text(failure).foregroundStyle(Color.dsFg2).textSelection(.enabled) }
-                if let result { Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([result]) }.buttonStyle(.link) }
+                    Button("Restore…", action: restore).buttonStyle(PillStyle(compact: true))
+                    Button("Back Up…", action: backup).buttonStyle(PillStyle(kind: .primary, compact: true))
+                }
+                .disabled(busy || engine.isMaintaining)
             }
-            .font(.system(size: 12)).padding(16)
-            .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 12))
-            CostDetails(engine: engine)
+            VStack(alignment: .leading, spacing: 6) {
+                FinePrint("The backup is an unencrypted folder with your conversations and any secrets you put in files or settings: keep it somewhere private. The engine stops briefly so its databases copy safely.")
+                if let message { Text(message).font(.system(size: 12)).foregroundStyle(Color.dsFg2).textSelection(.enabled) }
+                if let failure { Text(failure).font(.system(size: 12)).foregroundStyle(Color.dsWarn).textSelection(.enabled) }
+                if let result {
+                    Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([result]) }
+                        .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Color.accentColor)
+                }
+            }
+            .padding(.top, 12).padding(.bottom, 22)
+            CardTitle("Request costs")
+            ListCard { CostDetails(engine: engine).frame(maxWidth: .infinity, alignment: .leading) }
         }
     }
     private func confirm(_ title: String, _ detail: String) -> Bool {

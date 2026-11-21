@@ -82,12 +82,7 @@ struct ExtensionsPane: View {
             if let id = detail, let p = packages.first(where: { $0.id == id }) {
                 PackageDetail(engine: engine, package: p, back: { detail = nil }, changed: { Task { await load() } })
             } else if loaded, packages.isEmpty {
-                SettingsEmpty(title: "Add skills and commands", message: "pi packages add skills and templates you can use in any chat, and extensions for Build. Piopio shares them with the pi CLI.") {
-                    HStack(spacing: 10) {
-                        Button { NSWorkspace.shared.open(galleryURL) } label: { Label("Browse pi.dev", systemImage: "arrow.up.right") }.buttonStyle(PillStyle(kind: .toolbar))
-                        Button { installing = true } label: { Label("Install", systemImage: "plus").font(.system(size: 12.5, weight: .semibold)) }.buttonStyle(PillStyle(kind: .strong))
-                    }
-                }
+                empty
             } else {
                 page
             }
@@ -103,6 +98,40 @@ struct ExtensionsPane: View {
                 Task { await load() }
             }
         }
+    }
+
+    /// No packages yet: what each kind adds, so the page says what installing one would change.
+    private var empty: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            SettingsHeader(title: "Extensions", summary: "pi packages add skills and commands to any chat, and extensions to Build. Shared with the pi CLI.") {
+                Button { NSWorkspace.shared.open(galleryURL) } label: { Label("Browse pi.dev", systemImage: "arrow.up.right").font(.system(size: 12.5)) }
+                    .buttonStyle(PillStyle(kind: .toolbar))
+                AddButton(title: "Install") { installing = true }
+            }
+            CardTitle("What a package can add")
+            ListCard {
+                kind(PackageTile(extensions: 0, skills: 1), "Skills", "Know-how the model loads for a kind of task, like reviewing a PR", "Everywhere")
+                RowDivider()
+                kind(PackageTile(extensions: 0, skills: 0), "Templates", "Prompts you run as /commands, with blanks to fill in", "Everywhere")
+                RowDivider()
+                kind(PackageTile(extensions: 1, skills: 0), "Extensions", "Code that adds tools and behavior to Build sessions", "Build only")
+            }
+            FinePrint("Install from npm, a git repository or a folder on this Mac. Extensions run with your permissions: only install packages you trust.")
+                .padding(.top, 12)
+        }
+    }
+
+    private func kind(_ tile: PackageTile, _ title: String, _ line: String, _ where_: String) -> some View {
+        HStack(spacing: 12) {
+            tile
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.system(size: 13.5, weight: .semibold))
+                Text(line).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1)
+            }
+            Spacer()
+            Text(where_).font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+        }
+        .padding(.horizontal, 14).frame(minHeight: 56)
     }
 
     private var page: some View {
@@ -169,7 +198,7 @@ private struct PackageRow: View {
                 PackageTile(extensions: r.extensions.count, skills: r.skills.count)
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
-                        Text(PackageText.name(package)).font(.system(size: 14, weight: .semibold)).foregroundStyle(package.enabled ? Color.dsFg : Color.dsFg3)
+                        Text(PackageText.name(package)).font(.system(size: 13.5, weight: .semibold)).foregroundStyle(package.enabled ? Color.dsFg : Color.dsFg3)
                         if !package.installed { Text("Not installed").font(.system(size: 11.5)).foregroundStyle(Color.dsFg2) } else if !package.enabled { Text("Off").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3) }
                     }
                     HStack(spacing: 6) {

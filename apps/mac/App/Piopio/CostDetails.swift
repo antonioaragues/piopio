@@ -9,7 +9,8 @@ struct CostDetails: View {
     @State private var error: String?
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(thread == nil ? "Piopio request costs" : "Cost estimate").font(.headline)
+            // Settings › Backup & costs titles it itself.
+            if thread != nil { Text("Cost estimate").font(.headline) }
             if let thread {
                 LabeledContent("Conversation model estimate", value: money(thread.state?.usage.costUsd ?? 0))
                 Text("Includes model usage reported in this conversation. Subagent costs may already be included.").font(.caption)
@@ -28,7 +29,7 @@ struct CostDetails: View {
             Text("Provider billing is authoritative. OpenRouter key totals can include other apps and exclude other providers. Missing or subscription pricing is not a promise of zero cost.")
                 .font(.caption).foregroundStyle(Color.dsFg2)
         }
-        .font(.system(size: 12)).padding(18).frame(width: 340)
+        .font(.system(size: 12)).padding(thread == nil ? 14 : 18).frame(width: thread == nil ? nil : 340, alignment: .leading)
         .task {
             do {
                 guard let client = engine.client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Connect to the engine to view costs.") }

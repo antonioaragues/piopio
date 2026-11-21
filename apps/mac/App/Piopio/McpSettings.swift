@@ -28,6 +28,20 @@ struct McpEntry: Identifiable, Hashable {
     }
 }
 
+/// A well-known server the page offers to add: the Add sheet opens with its name and command filled in.
+struct McpPreset: Identifiable, Hashable {
+    let name: String
+    let command: String
+    let line: String
+    var id: String { name }
+
+    static let common: [McpPreset] = [
+        McpPreset(name: "playwright", command: "npx @playwright/mcp@latest", line: "A browser the agent drives: open pages, click, fill forms"),
+        McpPreset(name: "context7", command: "npx -y @upstash/context7-mcp", line: "Current docs and examples for the libraries you use"),
+        McpPreset(name: "filesystem", command: "npx -y @modelcontextprotocol/server-filesystem \(NSHomeDirectory())/Documents", line: "Read and write files in the folders you name"),
+    ]
+}
+
 // MARK: - p1 / p0 · MCP servers page
 
 struct McpPane: View {
@@ -40,6 +54,7 @@ struct McpPane: View {
     @State private var loaded = false
     @State private var detail: String?
     @State private var adding = false
+    @State private var preset: McpPreset?
     @State private var importing: McpDetectResult.Found?
     @State private var showWaiting = false
 
@@ -62,7 +77,7 @@ struct McpPane: View {
             if let name = env["PIOPIO_DEMO_MCP_DETAIL"] { detail = entries.first { $0.server.name == name }?.id }
         }
         .sheet(isPresented: $adding) {
-            AddMcpServerView(engine: engine, back: nil) {
+            AddMcpServerView(engine: engine, back: nil, preset: preset) {
                 adding = false
                 Task { await refresh() }
             }
@@ -75,7 +90,7 @@ struct McpPane: View {
     private var page: some View {
         VStack(alignment: .leading, spacing: 0) {
             SettingsHeader(title: "MCP servers", summary: summary) {
-                AddButton(title: "Add server") { adding = true }
+                AddButton(title: "Add server") { add(nil) }
             }
             let global = entries.filter { $0.project == nil }
             if !global.isEmpty { group("For all projects", global) }
@@ -83,12 +98,8 @@ struct McpPane: View {
                 group("In \(project.name) only", entries.filter { $0.project?.id == project.id })
             }
             if !waiting.isEmpty { waitingGroup }
-            ForEach(found) { f in
-                FoundCard(title: "\(f.servers.count) server\(f.servers.count == 1 ? "" : "s") in \(f.app)", detail: f.servers.map(\.name).joined(separator: ", ")) {
-                    Button("Review & import") { importing = f }.buttonStyle(PillStyle(kind: .toolbar, compact: true))
-                }
-                .padding(.bottom, 14)
-            }
+            foundGroup
+            commonGroup
             ForEach(errors, id: \.self) { Text($0).font(.system(size: 12)).foregroundStyle(Color.dsFg2).padding(.bottom, 6) }
             FinePrint("Changes apply to sessions you start or reopen.")
         }
@@ -151,21 +162,62 @@ struct McpPane: View {
 
     // p0
     private var empty: some View {
-        SettingsEmpty(title: "Give the agent more tools", message: "MCP servers add tools like a browser, a database or your company's APIs. Piopio shares them with the pi CLI.") {
-            Button { adding = true } label: { Label("Add server", systemImage: "plus").font(.system(size: 12.5, weight: .semibold)) }
-                .buttonStyle(PillStyle(kind: .strong))
-            if !found.isEmpty {
-                VStack(alignment: .leading, spacing: 7) {
-                    Text("Found in other apps").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.dsFg3)
+        VStack(alignment: .leading, spacing: 0) {
+            SettingsHeader(title: "MCP servers", summary: "Give the agent tools like a browser, a database or your company's APIs. Shared with the pi CLI.") {
+                AddButton(title: "Add server") { add(nil) }
+            }
+            foundGroup
+            commonGroup
+        }
+    }
+
+    /// Servers set up in other apps, offered for import (never imported on their own).
+    @ViewBuilder private var foundGroup: some View {
+        if !found.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                CardTitle("Found in other apps")
+                VStack(spacing: 8) {
                     ForEach(found) { f in
                         FoundCard(title: "\(f.servers.count) server\(f.servers.count == 1 ? "" : "s") in \(f.app)", detail: f.servers.map(\.name).joined(separator: ", ")) {
-                            Button("Review & import") { importing = f }.buttonStyle(PillStyle(kind: .toolbar, compact: true))
+                            Button("Review & import") { importing = f }.buttonStyle(PillStyle(compact: true))
                         }
                     }
                 }
-                .padding(.top, 22)
             }
+            .padding(.bottom, 22)
         }
+    }
+
+    /// Well-known servers you don't have yet, one click from a filled-in Add sheet.
+    @ViewBuilder private var commonGroup: some View {
+        let have = Set(entries.map(\.server.name))
+        let offered = McpPreset.common.filter { !have.contains($0.name) }
+        if !offered.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                CardTitle("Popular servers")
+                ListCard {
+                    ForEach(Array(offered.enumerated()), id: \.element.id) { i, p in
+                        HStack(spacing: 12) {
+                            LetterTile(text: LetterTile.initials(p.name), color: .gray)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(p.name).font(.system(size: 13.5, weight: .semibold))
+                                Text(p.line).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1)
+                            }
+                            Spacer()
+                            Button("Add…") { add(p) }.buttonStyle(PillStyle(compact: true))
+                        }
+                        .padding(.horizontal, 14).frame(minHeight: 56)
+                        if i < offered.count - 1 { RowDivider() }
+                    }
+                }
+            }
+            .padding(.bottom, 22)
+        }
+    }
+
+    private func add(_ p: McpPreset?) {
+        preset = p
+        adding = true
     }
 
     private func trust(_ project: ProjectInfo) {
@@ -238,8 +290,8 @@ private struct McpServerRow: View {
     /// Green: started. Amber: wants a sign-in. Red: didn't start. None while starting.
     static func dot(_ status: McpProbe?) -> Color? {
         guard let status else { return nil }
-        if status.ok { return .dsFg3 }
-        return status.error?.contains("sign in") == true ? .dsAmber : .dsFg2
+        // Only what needs you gets a dot.
+        return status.ok ? nil : .dsAmber
     }
 }
 
@@ -457,6 +509,8 @@ struct AddMcpServerView: View {
     let engine: EngineController
     /// Back to the Add connector catalog, when opened from there.
     let back: (() -> Void)?
+    /// A popular server picked on the page: its name and command start filled in.
+    var preset: McpPreset?
     let done: () -> Void
     @State private var mode: Mode = .command
     @State private var name = ""
@@ -509,6 +563,11 @@ struct AddMcpServerView: View {
         }
         .padding(22)
         .background(Color.dsWin)
+        .onAppear {
+            guard let preset else { return }
+            name = preset.name
+            command = preset.command
+        }
         .task(id: probeKey) {
             // The server is started a moment after you stop typing.
             probe = nil
