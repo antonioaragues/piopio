@@ -30,7 +30,6 @@ struct AutomationsPage: View {
     /// New automation with nothing yet: the box on the page lights up instead of a second box in a popover.
     @State private var nudge = false
     @FocusState private var composerFocused: Bool
-    @State private var chick = Piopio(napping: true)
 
     private var shown: [Automation] {
         guard let filter else { return engine.automations }
@@ -168,11 +167,16 @@ struct AutomationsPage: View {
 
     // MARK: Nothing yet
 
-    /// Nothing yet: piopio asleep, a box to ask in, four ideas that fill it, and setting one up by hand.
+    /// Nothing yet: the sidebar's Automations glyph (piopio stays on Home), a box to ask in, four ideas that fill it,
+    /// and setting one up by hand.
     private var empty: some View {
         let name = engine.runnerName(runner)
         return VStack(spacing: 0) {
-            PiopioPerch(model: chick, size: 54)
+            Image(systemName: "clock.arrow.circlepath")
+                .font(.system(size: 22, weight: .regular)).foregroundStyle(Color.dsFg2)
+                .frame(width: 52, height: 52)
+                .background(Circle().fill(Color.dsChip))
+                .accessibilityHidden(true)
             Text(fixedRunner.map { "\(engine.runnerName($0)) doesn't run anything on its own yet" } ?? "What should happen without you?")
                 .font(.system(size: 19, weight: .semibold)).foregroundStyle(Color.dsFg)
                 .multilineTextAlignment(.center)

@@ -29,15 +29,11 @@ final class Piopio {
     private var typingTask: Task<Void, Never>?
     private var pointerTask: Task<Void, Never>?
 
-    /// Asleep whatever the time (the empty Automations page: nothing runs on its own yet); a tap wakes it.
-    private let napping: Bool
-
     /// A chick with a job doesn't nap.
-    var asleep: Bool { job == nil && (mood == .morning || napping) && !woke }
+    var asleep: Bool { job == nil && mood == .morning && !woke }
 
-    init(job: PiopioJob? = nil, napping: Bool = false) {
+    init(job: PiopioJob? = nil) {
         self.job = job
-        self.napping = napping
     }
 
     /// Puts on another job's outfit: it hops and says the job's line.

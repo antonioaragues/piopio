@@ -107,7 +107,7 @@ Slack"). The model makes it and answers with a card:
 - Filter chips by runner (All · Piopio · each agent) and the "Runs on This Mac, only while it's awake" line.
 - One row per automation: its name and when; who runs it (with the project, for Piopio); where it tells you; the last
   or next run; an on/off switch. A paused row is dimmed. A new one has a "New" badge until it's opened.
-- **Nothing yet** (docs/design/automations/prototype): piopio asleep, "What should happen without you?", a box to ask
+- **Nothing yet** (docs/design/automations/prototype): the Automations glyph (piopio stays on Home), "What should happen without you?", a box to ask
   in with who sets it up (Piopio or an agent; the agent when the list shows one), four ideas that fill the box, and
   "Set one up yourself". Asking sends what you wrote to a new conversation with Piopio, or to the agent's chat, and
   stays on the list: once the runner has answered, a note at the foot says what it set up (Open, Undo) or, when it
