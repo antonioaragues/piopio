@@ -1450,6 +1450,15 @@ export class Engine {
 				const p = params as Params<"sessions.processStop">;
 				return (await (await this.sessions.build(p.ref)).processStop(p.id)) satisfies Result<"sessions.processStop">;
 			}
+			case "sessions.review": {
+				const p = params as Params<"sessions.review">;
+				return { ref: await this.sessions.review(p.ref, p.pr) } satisfies Result<"sessions.review">;
+			}
+			case "sessions.reviewFinding": {
+				const p = params as Params<"sessions.reviewFinding">;
+				this.sessions.reviewFinding(p.ref, p.id, p.state);
+				return {} satisfies Result<"sessions.reviewFinding">;
+			}
 			case "sessions.respond": {
 				const p = params as Params<"sessions.respond">;
 				await this.sessions.respond(p.ref, p.promptId, p.response);

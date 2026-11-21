@@ -506,6 +506,38 @@ final class ThreadModel {
     var prompts: [PendingPrompt] { state?.prompts ?? [] }
     var approvalMode: ApprovalMode { state?.approvalMode ?? .autoEdit }
 
+    /// Asks an agent to review this session's changes, or pull request `pr` (05-build "Review by an agent"). The review's
+    /// own session, or nil with the error shown.
+    func review(pr: Int? = nil) async -> ContainerRef? {
+        guard let client = engine?.client else { return nil }
+        do {
+            let ref = try await client.call("sessions.review", ReviewParams(ref: ref, pr: pr), as: CreateSessionResult.self).ref
+            error = nil
+            return ref
+        } catch {
+            report(error)
+            return nil
+        }
+    }
+
+    func setFinding(_ finding: ReviewFinding, _ state: ReviewFinding.State) async {
+        await call("sessions.reviewFinding", ReviewFindingParams(ref: ref, id: finding.id, state: state))
+    }
+
+    /// Sends findings to this session to fix, and marks them.
+    func fix(_ findings: [ReviewFinding], from review: ReviewInfo) async {
+        guard !findings.isEmpty else { return }
+        let items = findings.map { f in
+            var text = "- **\(f.title)** (`\(f.file)\(f.line.map { ":\($0)" } ?? "")`, \(f.severity.rawValue)): \(f.detail)"
+            if let s = f.suggestion, !s.isEmpty { text += " Suggested fix: \(s)" }
+            return text
+        }
+        let intro = findings.count == 1 ? "Fix this from the review of \(review.target):" : "Fix these from the review of \(review.target):"
+        if await send("\(intro)\n\n\(items.joined(separator: "\n"))") {
+            for f in findings { await setFinding(f, .fixing) }
+        }
+    }
+
     /// The agent's background commands (docs/spec/05-build §9 TM4).
     var processes: [BackgroundProcess] { state?.processes ?? [] }
 

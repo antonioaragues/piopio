@@ -606,6 +606,32 @@ export const CloudStatus = Type.Object({
 });
 export type CloudStatus = Static<typeof CloudStatus>;
 
+/** A finding of a review by an agent (docs/spec/05-build "Review by an agent"). */
+export const ReviewFinding = Type.Object({
+	id: Type.String(),
+	severity: literals("bug", "risk", "nit"),
+	file: Type.String(),
+	line: Type.Optional(Type.Number()),
+	title: Type.String(),
+	detail: Type.String(),
+	suggestion: Type.Optional(Type.String()),
+	/** Sent to the session to fix, or set aside. */
+	state: literals("open", "fixing", "dismissed"),
+});
+export type ReviewFinding = Static<typeof ReviewFinding>;
+/** A review of a session's changes or a pull request, and what it found. */
+export const ReviewInfo = Type.Object({
+	/** The review's own session. */
+	reviewer: ContainerRef,
+	/** "This session's changes", "Branch fix-export against main", "PR #42 · Fix export". */
+	target: Type.String(),
+	status: literals("running", "done", "failed"),
+	summary: Type.Optional(Type.String()),
+	findings: Type.Array(ReviewFinding),
+	at: Type.String(),
+});
+export type ReviewInfo = Static<typeof ReviewInfo>;
+
 export const SessionSummary = Type.Object({
 	ref: ContainerRef,
 	title: Type.String(),
@@ -615,6 +641,8 @@ export const SessionSummary = Type.Object({
 	model: Type.Optional(ModelRef),
 	/** Build: the project folder (differs from `cwd` for worktree sessions). */
 	projectPath: Type.Optional(Type.String()),
+	/** Build: the latest review by an agent of this session's changes (or, for a review of a pull request, its own). */
+	review: Type.Optional(ReviewInfo),
 	worktree: Type.Optional(WorktreeInfo),
 	/** Project sessions: the profile they were created with (04-chat P2). */
 	profile: Type.Optional(literals("build", "chat")),
@@ -1495,6 +1523,15 @@ export const methods = {
 		result: Type.Object({ files: Type.Array(FileChange), turns: Type.Number(), editorText: Type.Optional(Type.String()) }),
 	},
 	/** Answers a pending prompt (approval, question, confirm, select, input). */
+	/** Asks an agent to review this session's changes, or the pull request `pr` (05-build "Review by an agent"). */
+	"sessions.review": {
+		params: Type.Object({ ref: ContainerRef, pr: Type.Optional(Type.Number()) }),
+		result: Type.Object({ ref: ContainerRef }),
+	},
+	"sessions.reviewFinding": {
+		params: Type.Object({ ref: ContainerRef, id: Type.String(), state: literals("open", "fixing", "dismissed") }),
+		result: Type.Object({}),
+	},
 	"sessions.respond": {
 		params: Type.Object({ ref: ContainerRef, promptId: Type.String(), response: PromptResponse }),
 		result: Type.Object({}),

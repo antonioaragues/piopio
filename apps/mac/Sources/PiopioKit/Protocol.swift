@@ -523,6 +523,8 @@ public struct SessionSummary: Codable, Sendable, Hashable {
     public var model: ModelRef?
     /// Build: the project folder (differs from `cwd` for worktree sessions), and the worktree if any.
     public var projectPath: String?
+    /// Build: the latest review by an agent of this session (05-build "Review by an agent").
+    public var review: ReviewInfo?
     public var worktree: WorktreeInfo?
     /// A subagent's session: the parent session and its `task` call.
     /// A subagent's parent, and its state (queued, working, done, failed, stopped) with a line while it works (17 §3).
@@ -1448,6 +1450,37 @@ public struct FinishParams: Encodable, Sendable {
     public init(ref: ContainerRef, action: Action) { self.ref = ref; self.action = action }
 }
 public struct CreateSessionResult: Decodable, Sendable { public var ref: ContainerRef }
+
+/// A finding of a review by an agent (docs/spec/05-build "Review by an agent").
+public struct ReviewFinding: Codable, Sendable, Hashable, Identifiable {
+    public enum Severity: String, Codable, Sendable { case bug, risk, nit }
+    public enum State: String, Codable, Sendable { case open, fixing, dismissed }
+    public var id: String
+    public var severity: Severity
+    public var file: String
+    public var line: Int?
+    public var title: String
+    public var detail: String
+    public var suggestion: String?
+    public var state: State
+}
+public struct ReviewInfo: Codable, Sendable, Hashable {
+    public enum Status: String, Codable, Sendable { case running, done, failed }
+    public var reviewer: ContainerRef
+    public var target: String
+    public var status: Status
+    public var summary: String?
+    public var findings: [ReviewFinding]
+    public var at: String
+}
+public struct ReviewParams: Encodable, Sendable {
+    public var ref: ContainerRef; public var pr: Int?
+    public init(ref: ContainerRef, pr: Int?) { self.ref = ref; self.pr = pr }
+}
+public struct ReviewFindingParams: Encodable, Sendable {
+    public var ref: ContainerRef; public var id: String; public var state: ReviewFinding.State
+    public init(ref: ContainerRef, id: String, state: ReviewFinding.State) { self.ref = ref; self.id = id; self.state = state }
+}
 public struct RefParams: Encodable, Sendable { public var ref: ContainerRef; public init(ref: ContainerRef) { self.ref = ref } }
 public struct SubscribeResult: Decodable, Sendable { public var subscriptionId: String; public var snapshot: Snapshot }
 public struct ListSessionsParams: Encodable, Sendable { public var kind: ContainerKind?; public init(kind: ContainerKind? = nil) { self.kind = kind } }

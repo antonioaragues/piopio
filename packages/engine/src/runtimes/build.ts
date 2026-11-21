@@ -18,6 +18,7 @@ import {
 	type ExtensionFactory,
 } from "@earendil-works/pi-coding-agent";
 import { backgroundExtension, ProcessManager, type BackgroundProcess } from "@piopio/pi-extensions";
+import { codeReviewExtension, type ReviewBridge } from "../code-review.js";
 import { approvalsExtension, checkpointsExtension, goalExtension, notifyExtension, planExtension, presentExtension, sandboxExtension, subagentsExtension, todosExtension, type ApprovalMode, type Question, type Rule, type SubagentBridge, type Verdict } from "@piopio/pi-extensions";
 import type { ApprovalItem, ApprovalRule, BranchInfo, CheckpointItem, ContainerRef, FileChange, ModelRef, PromptResponse, SessionState, Snapshot } from "@piopio/protocol";
 import { existsSync, readFileSync, realpathSync } from "node:fs";
@@ -119,6 +120,8 @@ export type BuildOpenOptions = {
 	tasks?: Required<Pick<SubagentBridge, "start" | "wait" | "stop">>;
 	/** The board's tools: Piopio's in a project with parallel work on, or a reviewer helper's verdict (docs/spec/26). */
 	board?: BoardBridge;
+	/** A review by an agent (05-build "Review by an agent"): this session reports its findings with report_findings. */
+	codeReview?: ReviewBridge;
 	/** Your agents, asked from this conversation with ask_agent or @Name (docs/spec/21 D6). */
 	consult?: { bridge: ConsultBridge; from: () => string };
 	/** Piopio's offers in a project: parallel work for divisible work, an agent or a routine for repeated work. */
@@ -196,6 +199,7 @@ export class BuildRuntime implements Runtime {
 					: []),
 				guardsExtension(),
 				...(o.board ? [boardExtension(o.board)] : []),
+				...(o.codeReview ? [codeReviewExtension(o.codeReview)] : []),
 				...(o.consult ? [consultExtension(o.consult.bridge, o.consult.from)] : []),
 				...(o.offers ? [offersExtension(o.offers)] : []),
 				// Full access runs commands as before; otherwise they write only inside the project.

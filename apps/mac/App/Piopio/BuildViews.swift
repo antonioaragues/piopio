@@ -81,6 +81,8 @@ struct BuildSessionView: View {
     @State private var git: GitModel?
     @State private var committing = false
     @State private var creatingPR = false
+    /// Review a pull request: its number (05-build "Review by an agent").
+    @State private var reviewingPR = false
     @AppStorage("buildTerminal") private var showTerminal = false
 
     private var project: ProjectInfo? { engine.projects.first { $0.path == (summary.projectPath ?? summary.cwd) } }
@@ -106,6 +108,12 @@ struct BuildSessionView: View {
                 }
                 if let project, project.needsTrust, project.trust == .undecided {
                     TrustBanner(engine: engine, project: project)
+                        .padding(.horizontal, 24).padding(.bottom, 8)
+                }
+                // A review by an agent of this session (or this review's own findings, for a pull request).
+                if !reviewing, !chatLens, let review = summary.review {
+                    ReviewPanel(review: review, session: session)
+                        .frame(maxWidth: DS.column)
                         .padding(.horizontal, 24).padding(.bottom, 8)
                 }
                 if reviewing {
@@ -249,6 +257,7 @@ struct BuildSessionView: View {
             if note.object as? String == summary.ref.id { creatingPR = true }
         }
         .sheet(isPresented: $creatingPR) { CreatePRSheet(engine: engine, ref: summary.ref) { creatingPR = false } }
+        .sheet(isPresented: $reviewingPR) { ReviewPullRequestSheet(session: session) }
         .onReceive(NotificationCenter.default.publisher(for: .transcriptOffer)) { note in
             guard note.object as? String == summary.ref.id, let kind = note.userInfo?["kind"] as? String, let call = note.userInfo?["call"] as? String else { return }
             takeOffer(kind, call: call)
@@ -365,6 +374,10 @@ struct BuildSessionView: View {
             ToolbarDivider()
             Menu {
                 Button("Review All Changes") { review(nil) }
+                if !chatLens {
+                    Button("Ask an Agent to Review") { Task { _ = await session.review() } }
+                    if git?.status?.repo == true { Button("Review a Pull Request…") { reviewingPR = true } }
+                }
                 if summary.pr == nil, git?.status?.repo == true { Button("Create Pull Request…") { creatingPR = true } }
                 if let cwd = summary.cwd {
                     Divider()

@@ -21,6 +21,7 @@ import { ClaudeCodeRuntime, type ToolAsk } from "./runtimes/claude-code.js";
 import { AcpRuntime } from "./runtimes/acp.js";
 import { acpSpec } from "./acp.js";
 import { ToolServer } from "./tool-server.js";
+import { codeReviewExtension, MAX_DIFF, reviewPrompt as codeReviewPrompt, type ReviewBridge } from "./code-review.js";
 import type { ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import { codingBrowserExtension } from "./tools/browser-tools.js";
 import { codingConnectorsExtension } from "./connectors/extension.js";
@@ -76,6 +77,8 @@ type CatalogEntry = SessionSummary & {
 	segments?: Segment[];
 	/** The current part hasn't sent its first message yet: it carries the summary of the earlier ones. */
 	handoff?: boolean;
+	/** A review by an agent (05-build "Review by an agent"): the session whose `review` its findings go to. */
+	reviewFor?: ContainerRef;
 	/** Chats moved from pi-durable (2026-11-15): the old SQLite file, kept until the chat is deleted. */
 	migratedFrom?: string;
 	/** Original CLI file for recovered history; avoid importing a duplicate after restore. */
@@ -268,6 +271,109 @@ export class Sessions {
 			await this.runtime(ref);
 			this.onRuntimeReplaced?.(ref);
 		}
+	}
+
+	// ── Review by an agent (docs/spec/05-build, roadmap PAR4) ─────────────────────────────────────
+
+	/**
+	 * Asks an agent to review this session's changes (since its first checkpoint; with none, its branch against the
+	 * base), or pull request `pr` of the project's repository. The review is a Read-only session of its own; its findings
+	 * land on this session's `review` (a pull request's, on the review's own).
+	 */
+	async review(ref: ContainerRef, pr?: number): Promise<ContainerRef> {
+		const entry = this.entry(ref);
+		if (entry.ref.kind !== "build" || !entry.cwd) throw new EngineError("INVALID", "Reviews are for Build sessions.");
+		const cwd = entry.cwd;
+		let target: string;
+		let diff: string;
+		let notes = "";
+		if (pr !== undefined) {
+			if (!this.github) throw new EngineError("INTERNAL", "GitHub isn't set up in this engine.");
+			const repo = await this.github.repoOf(entry.projectPath ?? cwd);
+			const p = await this.github.pullRequestDiff(`${repo.owner}/${repo.name}`, pr);
+			target = `PR #${pr} · ${p.title}`;
+			diff = p.diff;
+			notes = `it's pull request #${pr} of ${repo.owner}/${repo.name} (${p.head} into ${p.base}), “${p.title}”. This folder may not have that branch checked out: judge the diff, and read files only for context${p.body.trim() ? `. Its description:\n\n${p.body.trim().slice(0, 4000)}` : ""}`;
+		} else {
+			const runtime = innerOf(await this.runtime(ref));
+			const changes = runtime instanceof BuildRuntime ? await runtime.changes("session") : { files: [] };
+			if (runtime instanceof BuildRuntime && changes.files.length) {
+				target = "this session's changes";
+				diff = (await Promise.all(changes.files.map((f) => runtime.diff(f.path, "session").catch(() => "")))).join("\n");
+			} else {
+				const head = (await runGit(cwd, ["rev-parse", "--abbrev-ref", "HEAD"]).catch(() => "")).trim();
+				const origin = (await runGit(cwd, ["rev-parse", "--abbrev-ref", "origin/HEAD"]).catch(() => "")).trim();
+				const candidates = [origin, "origin/main", "main", "origin/master", "master"].filter((b) => b && b !== head);
+				let base = "";
+				for (const b of candidates) {
+					base = (await runGit(cwd, ["merge-base", "HEAD", b]).catch(() => "")).trim();
+					if (base) {
+						target = `branch ${head || "HEAD"} against ${b.replace(/^origin\//, "")}`;
+						break;
+					}
+				}
+				if (!base) throw new EngineError("INVALID", "There's nothing to review: this session changed nothing, and there's no base branch to compare with.");
+				diff = await runGit(cwd, ["diff", base]);
+				target ??= "this branch";
+			}
+		}
+		if (!diff.trim()) throw new EngineError("INVALID", "There's nothing to review: no changes.");
+		if (diff.length > MAX_DIFF) {
+			diff = diff.slice(0, MAX_DIFF);
+			notes = `${notes ? `${notes}; ` : ""}the diff was cut at ${MAX_DIFF.toLocaleString("en")} characters, so read the remaining files yourself`;
+		}
+		const reviewer = await this.create({ kind: "build", cwd: pr !== undefined ? (entry.projectPath ?? cwd) : cwd, title: pr !== undefined ? `Review · PR #${pr}` : `Review · ${entry.title}`, approvalMode: "read_only", ...(entry.model ? { model: entry.model } : {}) });
+		const reviewerEntry = this.entry(reviewer);
+		const owner = pr !== undefined ? reviewerEntry : entry;
+		reviewerEntry.reviewFor = owner.ref;
+		owner.review = { reviewer, target: target!, status: "running", findings: [], at: new Date().toISOString() };
+		this.save();
+		this.changed(owner);
+		if (owner !== reviewerEntry) this.changed(reviewerEntry);
+		const runtime = await this.runtime(reviewer);
+		// A review that ends without reporting failed (its conversation says why).
+		let started = false;
+		const off = runtime.onEvents((events) => {
+			for (const e of events) {
+				if (e.type !== "state") continue;
+				if (e.state.status === "running") started = true;
+				if (started && e.state.status === "idle") {
+					off();
+					if (owner.review?.reviewer.id === reviewer.id && owner.review.status === "running") {
+						owner.review = { ...owner.review, status: "failed", summary: "The review ended without reporting findings." };
+						this.save();
+						this.changed(owner);
+					}
+				}
+			}
+		});
+		await runtime.submit(codeReviewPrompt(target!, notes), { whenBusy: "reject", attachments: [{ kind: "text", name: "changes.diff", mimeType: "text/x-diff", text: diff }] });
+		this.touch(reviewer);
+		return reviewer;
+	}
+
+	/** Fixing or setting aside one finding of a session's review. */
+	reviewFinding(ref: ContainerRef, id: string, state: "open" | "fixing" | "dismissed"): void {
+		const entry = this.entry(ref);
+		const finding = entry.review?.findings.find((f) => f.id === id);
+		if (!entry.review || !finding) throw new EngineError("NOT_FOUND", "That finding isn't in this session's review.");
+		finding.state = state;
+		this.save();
+		this.changed(entry);
+	}
+
+	/** Where a review session's report_findings goes. */
+	private reviewBridge(entry: CatalogEntry): ReviewBridge {
+		return {
+			report: (summary, findings) => {
+				const owner = entry.reviewFor ? this.entries.get(entry.reviewFor.id) : undefined;
+				if (!owner?.review || owner.review.reviewer.id !== entry.ref.id) return "This review was replaced by a newer one: nothing was reported.";
+				owner.review = { ...owner.review, status: "done", summary, findings: findings.map((f, i) => ({ ...f, id: `f${i + 1}`, state: "open" as const })), at: new Date().toISOString() };
+				this.save();
+				this.changed(owner);
+				return findings.length ? `Reported ${findings.length} finding${findings.length === 1 ? "" : "s"} to the user, who will fix or dismiss each one. You're done.` : "Reported: nothing to fix. You're done.";
+			},
+		};
 	}
 
 	/** A conversation's runtime was replaced (the server moves its subscriptions to the new one). */
@@ -2693,6 +2799,7 @@ export class Sessions {
 					}),
 			// The board (docs/spec/26): Piopio's tools where parallel work is on, a reviewer's verdict.
 			...(entry.helper?.kind === "review" && this.work ? { board: this.boardBridge(entry, "review") } : {}),
+			...(entry.reviewFor ? { codeReview: this.reviewBridge(entry) } : {}),
 			// Piopio's board tools are declared each turn only while parallel work is on in the project (work/extension.ts).
 			...(!entry.parent && !entry.helper && this.work && this.policy.projectFor(entry.projectPath ?? entry.cwd!) ? { board: this.boardBridge(entry, "piopio") } : {}),
 			// Side conversations (docs/spec/24): your own conversations, not a helper's or a subagent's.
@@ -2881,6 +2988,8 @@ export class Sessions {
 			codingVisualsExtension(visuals),
 			...(history ? [historySdkExtension(history)] : []),
 			...(entry.ref.kind === "thread" && this.aboutMeSdk ? [this.aboutMeSdk] : []),
+			// A review on a coding agent reports its findings the same way (05-build "Review by an agent").
+			...(entry.reviewFor ? [codeReviewExtension(this.reviewBridge(entry))] : []),
 		];
 	}
 
@@ -2891,7 +3000,7 @@ export class Sessions {
 	}
 }
 
-function summary({ file: _f, sessionFile: _s, agentFile: _af, segments: _sg, handoff: _h, restoredFromSessionFile: _recovered, onDisk: _d, thinking: _t, migratedFrom: _m, sideBrief: _b, sideBy: _y, sideWoke: _w, sidePending: _p, sideOffers: _o, sideBriefs: _sb, prSeen: _ps, prFailedSha: _pf, ...rest }: CatalogEntry): SessionSummary {
+function summary({ file: _f, sessionFile: _s, agentFile: _af, segments: _sg, handoff: _h, reviewFor: _rf, restoredFromSessionFile: _recovered, onDisk: _d, thinking: _t, migratedFrom: _m, sideBrief: _b, sideBy: _y, sideWoke: _w, sidePending: _p, sideOffers: _o, sideBriefs: _sb, prSeen: _ps, prFailedSha: _pf, ...rest }: CatalogEntry): SessionSummary {
 	// Proposals go after a week (docs/spec/24 §3).
 	if (rest.sideProposals) {
 		const live = rest.sideProposals.filter((p) => Date.parse(p.expiresAt) > Date.now());

@@ -134,6 +134,28 @@ Three modes, set per session (default per project; global default = **Auto-edit*
 ### Later
 - Issues → session ("Work on #42"). PR review mode (agent reviews someone else's PR). Auto-fix loop. GitLab.
 
+### Review by an agent (roadmap PAR4, 2026-11-21)
+- **RV1 Start.** In a Build session's ⋯ menu: **Ask an Agent to Review** reviews this session's changes (since its first
+  checkpoint), or, with none, the branch against its base; **Review a Pull Request…** takes a number and reviews any
+  pull request of the project's GitHub repository, yours or someone else's.
+- **RV2 Runs** as a session of its own in the project folder, in Read only, on the session's model: "Review · <title>"
+  or "Review · PR #42". Its first message carries the diff (`changes.diff`, up to 200 KB) and what it's for; it reads
+  the files it needs and reports with `report_findings`. Correctness first: bugs that would break something, then
+  risks (security, data loss, races, missing error handling), then a few nits at most. A finding names the file and the
+  line, says what goes wrong and when, and suggests a fix.
+- **RV3 Findings** show on the session that was reviewed (for a pull request, on the review itself) as a Review panel
+  above the conversation: severity, title, `file:line` (opens the file at that line), the explanation, and **Fix**
+  (sends the finding to the session as a message, and marks it fixing) or **Dismiss**; **Fix all** sends the open ones
+  together. While the review runs the panel says so, with a link to it.
+- **RV4** Posting the findings to GitHub as review comments is not built: it publishes on the user's behalf and needs
+  its own confirmation design.
+- **As built (2026-11-21):** `code-review.ts` (the reviewer's message and `report_findings`, which never asks),
+  `sessions.review` / `sessions.reviewFinding`, the summary's `review` (target, status, summary, findings with their
+  state), GitHub's `pullRequestDiff`, and the app's `ReviewPanel.swift` with the two ⋯ menu items. A review on a coding
+  agent (Claude Code, Codex, Antigravity) reports through Piopio's tool server. A review that ends without reporting
+  is marked failed. Tried for real: Claude Code (Sonnet) reviewing a branch with two planted bugs found both, with the
+  right lines and fixes, and said both edits were regressions.
+
 ## 9. Terminal
 - **TM1** Drawer terminal per project (SwiftTerm, local PTY, cwd = project/worktree). Multiple tabs.
 - **TM2** "Send selection to agent" and "Send last command output to agent".

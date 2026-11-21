@@ -66,12 +66,12 @@ export class GitHub {
 		return saved ? { token: saved, via: "token" } : undefined;
 	}
 
-	private async request<T>(path: string, init: { method?: string; body?: unknown; text?: boolean } = {}): Promise<T> {
+	private async request<T>(path: string, init: { method?: string; body?: unknown; text?: boolean; accept?: string } = {}): Promise<T> {
 		const auth = await this.token();
 		if (!auth) throw new EngineError("AUTH", "Not signed in to GitHub: sign in with `gh auth login`, or add a token in Settings › Git & GitHub.");
 		const res = await fetch(`${this.api}${path}`, {
 			method: init.method ?? "GET",
-			headers: { Authorization: `Bearer ${auth.token}`, Accept: init.text ? "application/vnd.github.v3.raw" : "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "Piopio", ...(init.body ? { "Content-Type": "application/json" } : {}) },
+			headers: { Authorization: `Bearer ${auth.token}`, Accept: init.accept ?? (init.text ? "application/vnd.github.v3.raw" : "application/vnd.github+json"), "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "Piopio", ...(init.body ? { "Content-Type": "application/json" } : {}) },
 			...(init.body ? { body: JSON.stringify(init.body) } : {}),
 			redirect: "follow",
 		});
@@ -154,6 +154,15 @@ export class GitHub {
 		await this.git(cwd, ["push", "--quiet", "-u", "origin", `${input.head}:${input.head}`]);
 		const pr = await this.request<RawPr>(`/repos/${repo.owner}/${repo.name}/pulls`, { method: "POST", body: { title: input.title, body: input.body, head: input.head, base: input.base, draft: input.draft ?? false } });
 		return toPr(`${repo.owner}/${repo.name}`, pr);
+	}
+
+	// ── Review (PAR4) ──
+
+	/** A pull request's title, description and diff, for a review by an agent. */
+	async pullRequestDiff(repo: string, number: number): Promise<{ title: string; body: string; head: string; base: string; diff: string }> {
+		const pr = await this.request<RawPr & { body?: string | null }>(`/repos/${repo}/pulls/${number}`);
+		const diff = await this.request<string>(`/repos/${repo}/pulls/${number}`, { text: true, accept: "application/vnd.github.diff" });
+		return { title: pr.title, body: pr.body ?? "", head: pr.head.ref, base: pr.base.ref, diff };
 	}
 
 	// ── G7 ──
