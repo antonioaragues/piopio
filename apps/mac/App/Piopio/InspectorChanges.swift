@@ -124,9 +124,11 @@ struct ChangesBlock: View {
                 Text(Self.count(unsaved.count, "file")).font(.system(size: 12)).foregroundStyle(Color.dsFg3)
             }
             ForEach(unsaved) { file in
-                FileLine(path: file.path, added: file.added ?? 0, removed: file.removed ?? 0, note: file.status == .deleted ? "deleted" : nil) { onReview(file.path) }
+                FileLine(path: file.path, added: file.added ?? 0, removed: file.removed ?? 0, note: file.status == .deleted ? "deleted" : nil,
+                         preview: preview(file.path, deleted: file.status == .deleted)) { onReview(file.path) }
                     .contextMenu {
                         Button("Review Diff") { onReview(file.path) }
+                        if let preview = preview(file.path, deleted: file.status == .deleted) { Button("Preview", action: preview) }
                         Button("Revert…") { reverting = file.path }
                     }
             }
@@ -174,14 +176,22 @@ struct ChangesBlock: View {
         }
     }
 
+    /// A web page the session changed opens as a page, not only as a diff.
+    private func preview(_ path: String, deleted: Bool) -> (() -> Void)? {
+        guard !deleted, FileKind.of(URL(fileURLWithPath: path)) == .html else { return nil }
+        return { session.viewing = FileTarget(path: path) }
+    }
+
     /// No git: the session's changes as one node.
     private var sessionNode: some View {
         TimelineNode(dot: .ring(Color.dsWarn), last: true) {
             Text("Changed in this session").font(.system(size: 13, weight: .semibold))
             ForEach(files) { file in
-                FileLine(path: file.path, added: file.added, removed: file.removed, note: file.status == .deleted ? "deleted" : nil) { onReview(file.path) }
+                FileLine(path: file.path, added: file.added, removed: file.removed, note: file.status == .deleted ? "deleted" : nil,
+                         preview: preview(file.path, deleted: file.status == .deleted)) { onReview(file.path) }
                     .contextMenu {
                         Button("Review Diff") { onReview(file.path) }
+                        if let preview = preview(file.path, deleted: file.status == .deleted) { Button("Preview", action: preview) }
                         Button("Revert…") { reverting = file.path }
                     }
             }
@@ -248,20 +258,29 @@ struct FileLine: View {
     let added: Int
     let removed: Int
     let note: String?
+    /// A page: an eye beside its counts shows it rendered.
+    var preview: (() -> Void)? = nil
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                Text(URL(fileURLWithPath: path).lastPathComponent).font(.system(size: 12, design: .monospaced)).foregroundStyle(Color.dsFg)
-                    .lineLimit(1).truncationMode(.middle)
-                Spacer(minLength: 6)
-                if let note { Text(note).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3) }
-                DiffCounts(added: added, removed: removed)
+        HStack(spacing: 6) {
+            Button(action: action) {
+                HStack(spacing: 6) {
+                    Text(URL(fileURLWithPath: path).lastPathComponent).font(.system(size: 12, design: .monospaced)).foregroundStyle(Color.dsFg)
+                        .lineLimit(1).truncationMode(.middle)
+                    Spacer(minLength: 6)
+                    if let note { Text(note).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3) }
+                    DiffCounts(added: added, removed: removed)
+                }
+                .contentShape(Rectangle())
             }
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .help("\(path): review the diff")
+            if let preview {
+                Button(action: preview) { Image(systemName: "eye").font(.system(size: 11)) }
+                    .buttonStyle(.plain).foregroundStyle(Color.dsFg2)
+                    .help("Preview the page").accessibilityLabel("Preview \(URL(fileURLWithPath: path).lastPathComponent)")
+            }
         }
-        .buttonStyle(.plain)
-        .help("\(path): review the diff")
     }
 }

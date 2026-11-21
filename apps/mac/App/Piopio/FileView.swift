@@ -65,20 +65,10 @@ struct FileContentView: View {
         let kind = FileKind.of(url)
         return VStack(spacing: 0) {
             if kind == .markdown || kind == .html {
-                HStack(spacing: 8) {
-                    if kind == .html, !showSource {
-                        Image(systemName: "wifi.slash").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
-                            .help("Offline: this preview reads only the files in this file's folder, nothing from the internet. Open in browser for the full page.")
-                            .accessibilityLabel("Offline preview")
-                    }
-                    Spacer(minLength: 0)
-                    if kind == .html {
-                        Button("Open in browser") { HTMLFile.openInBrowser(url) }.buttonStyle(PillStyle(compact: true))
-                            .help("Open in your default browser, with the network")
-                    }
-                    NeutralSegmented(selection: $showSource, options: [(value: false, title: "Rendered"), (value: true, title: "Source")])
-                        .frame(width: 170)
-                        .accessibilityLabel(kind == .html ? "Show the page rendered or as source" : "Show the Markdown rendered or as source")
+                // Build's Files panel is narrow: there Open in browser gives way to its icon.
+                ViewThatFits(in: .horizontal) {
+                    sourceBar(kind, compact: false)
+                    sourceBar(kind, compact: true)
                 }
                 .padding(.horizontal, 14).padding(.vertical, 8)
                 Rectangle().fill(Color.dsLine).frame(height: 0.5)
@@ -96,6 +86,33 @@ struct FileContentView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .id(url)
+    }
+}
+
+extension FileContentView {
+    fileprivate func sourceBar(_ kind: FileKind, compact: Bool) -> some View {
+        HStack(spacing: 8) {
+            if kind == .html, !showSource {
+                Image(systemName: "wifi.slash").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                    .help("Offline: this preview reads only the files in this file's folder, nothing from the internet. Open in browser for the full page.")
+                    .accessibilityLabel("Offline preview")
+            }
+            Spacer(minLength: 0)
+            if kind == .html {
+                Group {
+                    if compact {
+                        Button { HTMLFile.openInBrowser(url) } label: { Image(systemName: "arrow.up.forward.app") }
+                            .buttonStyle(IconButtonStyle()).accessibilityLabel("Open in browser")
+                    } else {
+                        Button("Open in browser") { HTMLFile.openInBrowser(url) }.buttonStyle(PillStyle(compact: true))
+                    }
+                }
+                .help("Open in your default browser, with the network")
+            }
+            NeutralSegmented(selection: $showSource, options: [(value: false, title: "Rendered"), (value: true, title: "Source")])
+                .frame(width: compact ? 150 : 170)
+                .accessibilityLabel(kind == .html ? "Show the page rendered or as source" : "Show the Markdown rendered or as source")
+        }
     }
 }
 
@@ -187,11 +204,17 @@ struct HTMLFile: NSViewRepresentable {
         if context.coordinator.loaded != url { context.coordinator.load(url, in: view) }
     }
 
+    static func dismantleNSView(_ view: WKWebView, coordinator: Coordinator) { coordinator.stopWatching() }
+
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     @MainActor final class Coordinator: NSObject, WKNavigationDelegate {
         var loaded: URL?
         private var offline = false
+        /// The files the page was drawn from (itself, its CSS, scripts and images) and when each last changed: when
+        /// the agent edits one, the page loads again (Build's preview follows the work without a Reload button).
+        private var watched: [URL: Date] = [:]
+        private var watching: Task<Void, Never>?
 
         func load(_ url: URL, in view: WKWebView) {
             loaded = url
@@ -206,6 +229,40 @@ struct HTMLFile: NSViewRepresentable {
                 let file = url.resolvingSymlinksInPath()
                 view.loadFileURL(file, allowingReadAccessTo: HTMLFile.readable(for: file))
             }
+        }
+
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            Task { [weak self, weak webView] in
+                guard let webView else { return }
+                let names = (try? await webView.callAsyncJavaScript(
+                    "return [...document.querySelectorAll('link[href], script[src], img[src], source[src]')].map(e => e.href || e.src)", arguments: [:], in: nil, contentWorld: .page
+                )) as? [String] ?? []
+                self?.watch([webView.url].compactMap { $0 } + names.compactMap(URL.init(string:)), in: webView)
+            }
+        }
+
+        private func watch(_ urls: [URL], in view: WKWebView) {
+            watched = Dictionary(urls.filter(\.isFileURL).map { ($0, Self.modified($0) ?? .distantPast) }, uniquingKeysWith: { a, _ in a })
+            watching?.cancel()
+            watching = Task { [weak self, weak view] in
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .seconds(1))
+                    guard let self, let view else { return }
+                    // A file saved in two steps (written, then renamed into place) can be missing for a moment.
+                    if self.watched.contains(where: { url, seen in Self.modified(url).map { $0 != seen } ?? false }) {
+                        self.watching = nil
+                        view.reload()
+                        return
+                    }
+                }
+            }
+        }
+
+        func stopWatching() { watching?.cancel(); watching = nil }
+
+        private static func modified(_ url: URL) -> Date? {
+            // Not URL.resourceValues: a URL keeps the values it read once, and this asks every second.
+            (try? FileManager.default.attributesOfItem(atPath: url.path))?[.modificationDate] as? Date
         }
 
         /// The file itself, other pages and anchors in its folder: yes. A web link you clicked: your browser. Anything

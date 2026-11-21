@@ -46,7 +46,7 @@ export function presentExtension(): ExtensionFactory {
 				name: "present_files",
 				label: "Present files",
 				description:
-					"Hand the user the files you made for them (a report, a document, an export, an image, a build) as cards they can open. Call it once, at the end, with the final files only: not for every file you edited, and not for source code changes, which the user reviews in the diff.",
+					"Hand the user the files you made for them (a report, a document, an export, an image, a build) as cards they can open. Call it once, at the end, with the final files only: not for every file you edited, and not for source code changes, which the user reviews in the diff. A web page the user asked for is something to see, not only a diff: hand over its HTML file, and its card opens the page rendered.",
 				promptSnippet: "present_files: hand the user the files you made for them",
 				parameters: Type.Object({
 					files: Type.Array(

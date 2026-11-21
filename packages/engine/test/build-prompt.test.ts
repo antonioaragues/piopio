@@ -28,7 +28,7 @@ test("Build's prompt: Piopio's preamble and guidelines replace pi's, and pi's to
 });
 
 test("the guidelines carry the rules from real runs: stop when done, one push, no timers, others' changes, unrelated bugs", () => {
-	for (const rule of ["then stop and report", "another push needs their go-ahead", "gh run watch", "Never revert or overwrite them", "mention it in your answer instead of fixing it", "Look before you ask", "`path:line`", "[Piopio: …]"]) {
+	for (const rule of ["then stop and report", "another push needs their go-ahead", "gh run watch", "Never revert or overwrite them", "mention it in your answer instead of fixing it", "Look before you ask", "`path:line`", "[Piopio: …]", "hand over its HTML file with present_files", "file:// address"]) {
 		expect(PIOPIO_GUIDELINES).toContain(rule);
 	}
 	// Short enough to stay a few clear rules.

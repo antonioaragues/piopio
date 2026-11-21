@@ -252,7 +252,15 @@ struct FilePreviewPane: View {
     init(engine: EngineController, session: ThreadModel, cwd: String, path: String, change: FileChange?, mark: TouchMark?, back: @escaping () -> Void, mention: @escaping (String) -> Void) {
         self.engine = engine; self.session = session; self.cwd = cwd; self.path = path; self.change = change; self.mark = mark
         self.back = back; self.mention = mention
-        _showDiff = State(initialValue: change != nil && change?.status != .deleted)
+        _showDiff = State(initialValue: Self.startsOnDiff(path, change))
+    }
+
+    /// A changed file opens on its diff, except a page, document or picture the agent just made: that one opens as
+    /// itself, since 75 green lines say less about a new page than the page does.
+    static func startsOnDiff(_ path: String, _ change: FileChange?) -> Bool {
+        guard let change, change.status != .deleted else { return false }
+        if change.status == .added, [.html, .markdown, .pdf, .image].contains(FileKind.of(URL(fileURLWithPath: path))) { return false }
+        return true
     }
 
     private var url: URL { URL(fileURLWithPath: cwd).appending(path: path) }
@@ -263,7 +271,8 @@ struct FilePreviewPane: View {
             header
             Rectangle().fill(Color.dsLine).frame(height: 0.5)
             Group {
-                if showDiff { diff } else { FileContentView(url: url) }
+                // Keyed on the change: a file opened here before the agent wrote it is read again once it exists.
+                if showDiff { diff } else { FileContentView(url: url).id(change?.status) }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             Rectangle().fill(Color.dsLine).frame(height: 0.5)
@@ -277,7 +286,7 @@ struct FilePreviewPane: View {
         }
         .id(path)
         .task(id: showDiff) { if showDiff { rows = UnifiedDiff(await session.diff(path, since: .session)).rows } }
-        .onChange(of: change) { _, change in if !chosen { showDiff = change != nil && change?.status != .deleted } }
+        .onChange(of: change) { _, change in if !chosen { showDiff = Self.startsOnDiff(path, change) } }
         .onExitCommand(perform: back)
     }
 
@@ -291,6 +300,11 @@ struct FilePreviewPane: View {
                 Text(URL(fileURLWithPath: path).lastPathComponent).fontWeight(.semibold).lineLimit(1).truncationMode(.middle)
                     .layoutPriority(1)
                 Spacer(minLength: 0)
+                // The panel is narrow: the viewer sheet shows the file at a size a page can be read at.
+                Button { session.viewing = FileTarget(path: path) } label: {
+                    Image(systemName: "arrow.up.left.and.arrow.down.right").font(.system(size: 11, weight: .semibold))
+                }
+                .buttonStyle(.plain).foregroundStyle(Color.dsFg2).help("Open larger").accessibilityLabel("Open larger")
             }
             .font(.system(size: 13))
             HStack(spacing: 6) {
