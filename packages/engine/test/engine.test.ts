@@ -1956,7 +1956,7 @@ describe("Agents: proactivity (milestone 4.3)", () => {
 		const { ref } = await a.client.call("agents.create", { name: "Helper", owner: "Antonio", instructions: "Help Antonio.", model: { provider: "faux", id: "faux-1" } });
 		const got = await a.client.call("agents.get", { ref });
 		// A webhook trigger written into the definition becomes an automation the agent runs (docs/spec/27 §6).
-		const base = { ...(got.definition as object), timezone: "UTC", tools: { builtin: ["memory", "schedule", "send_message"] } };
+		const base = { ...(got.definition as object), timezone: "UTC", tools: { builtin: ["memory", "schedule", "send_message", "files"] } };
 		const save = async (policies: object, more: object = {}) => expect(await a.client.call("agents.save", { ref, definition: { ...base, ...more, policies }, instructions: got.instructions })).toEqual({ saved: true, errors: [] });
 		await save({ maxOutboundPerDay: 2 }, { triggers: [{ id: "strava", type: "webhook", prompt: "New activity: {{body}}" }] });
 		expect((await a.client.call("agents.get", { ref })).definition).not.toHaveProperty("triggers");

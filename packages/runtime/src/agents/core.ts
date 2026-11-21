@@ -18,6 +18,7 @@ import { Peers, type Directory, type Envelope, type PeerState } from "./peers.js
 import { localDate } from "../context/clock.js";
 import { dropEarlierReasoning, guardMessages, trimResult } from "../context/extension.js";
 import { FailureGuard } from "../context/failures.js";
+import { filesSection, fileTools, type AgentFilesBridge } from "./files.js";
 
 type AgentState = ProactiveState & SafetyState & PeerState & {
 	/** contact id → conversation id. */
@@ -109,6 +110,8 @@ export type AgentCoreOptions = {
 	onWatches?: () => void;
 	/** Automations (docs/spec/27), kept by the host: the agent gets automate and friends in place of schedule and watch. */
 	automations?: AutomationsBridge;
+	/** Files kept in its folder (docs/spec/06-agents §14), by the host; absent where it runs without them (the cloud). */
+	files?: AgentFilesBridge;
 };
 
 /** What `set_up` changes. `instructions` is the body of instructions.md, without its heading. */
@@ -143,6 +146,7 @@ const SETUP_SWITCHES: { title: string; does: string; builtin?: string; apple?: s
 	{ title: "Remember things", does: "remember things between conversations", builtin: "memory" },
 	{ title: "Send messages", does: "message the owner or people you know on your own", builtin: "send_message" },
 	{ title: "Make its own automations", does: "do work on your own later or regularly (every day at 3, when an email arrives…), reminders included", builtin: "schedule" },
+	{ title: "Keep files", does: "keep the files your owner sends you, and read them later", builtin: "files" },
 	{ title: "Reminders", does: "read and add Apple Reminders", apple: "reminders" },
 	{ title: "Calendar", does: "read Calendar events and free time", apple: "calendar" },
 	{ title: "Contacts", does: "look people up in Contacts", apple: "contacts" },
@@ -152,7 +156,8 @@ const SETUP_SWITCHES: { title: string; does: string; builtin?: string; apple?: s
 
 /** The switches that apply here (Apple apps only on a Mac), and whether each is on. */
 function setupSwitches(tools: AgentDefinition["tools"], where: { mac: boolean }): { title: string; does: string; on: boolean }[] {
-	return SETUP_SWITCHES.filter((s) => s.builtin || where.mac).map((s) => ({
+	// Files and Mac apps are kept on a Mac: the cloud has neither.
+	return SETUP_SWITCHES.filter((s) => (s.builtin && s.builtin !== "files") || where.mac).map((s) => ({
 		title: s.title,
 		does: s.does,
 		on: s.builtin ? tools.builtin.includes(s.builtin as never) : (tools.apple ?? []).includes(s.apple as never),
@@ -196,6 +201,7 @@ export class AgentCore {
 	readonly failures = new FailureGuard();
 	readonly peers: Peers;
 	private memoryTools: { name: string }[] = [];
+	private fileTools: { name: string }[] = [];
 	private readonly apple: ReturnType<typeof appleTools>;
 
 	constructor(private readonly options: AgentCoreOptions) {
@@ -344,6 +350,9 @@ export class AgentCore {
 				return;
 			case "memory.unlearn":
 				return unlearn(this.options.memory(), String(d.bank), d.changes as never);
+			case "file.restore":
+				if (!this.options.files) throw new Error("Its files aren't kept here.");
+				return this.options.files.restore(String(d.token));
 			case "app.tool": {
 				let result: AppToolResult;
 				try {
@@ -447,6 +456,7 @@ export class AgentCore {
 		const off = [
 			...(builtin.includes("memory") ? [] : this.memoryTools),
 			...(builtin.includes("send_message") ? [] : [p.send]),
+			...(builtin.includes("files") && this.options.files ? [] : this.fileTools),
 			// "schedule" turns on making its own work for later: automations where the host keeps them (docs/spec/27),
 			// else the older schedule and watch tools.
 			...(this.options.automations ? [p.schedule, p.list, p.cancel, p.watch] : [p.automate, p.listAutomations, p.changeAutomation, p.cancelAutomation]),
@@ -739,10 +749,16 @@ export class AgentCore {
 			}),
 			execute: async () => ({ output: [{ type: "text", text: "Asked. Wait for their answer before you go on." }] }),
 		});
+		const files = fileTools({
+			bridge: () => core.options.files,
+			allowed: async (conversationId) => (await core.contactOf(conversationId as ConversationId))?.role === "owner" || Boolean(await core.proactive.runOf(conversationId as ConversationId)),
+			recordUndo: (token, title, conversationId) => core.safety.recordUndo("file.restore", { token }, title, conversationId as ConversationId),
+		});
+		this.fileTools = files.all;
 		const p = this.proactive.tools;
 		return defineExtension({
 			name: "piopio-agent",
-			tools: [remember, recall, forget, setUp, askOwner, p.send, p.schedule, p.list, p.cancel, p.watch, p.automate, p.listAutomations, p.changeAutomation, p.cancelAutomation, ...this.apple, this.peers.tools.ask, this.peers.tools.tell],
+			tools: [remember, recall, forget, ...files.all, setUp, askOwner, p.send, p.schedule, p.list, p.cancel, p.watch, p.automate, p.listAutomations, p.changeAutomation, p.cancelAutomation, ...this.apple, this.peers.tools.ask, this.peers.tools.tell],
 			tasks: [this.proactive.scheduleTask, this.proactive.outboxTask],
 			// Approvals, the pause and the budget apply to every tool call (06 §9).
 			hooks: [
@@ -820,6 +836,14 @@ export class AgentCore {
 					if (!list.trim() || list.trim() === "No automations.") return undefined;
 					const shown = list.length > AUTOMATIONS_IN_PROMPT ? `${list.slice(0, list.lastIndexOf("\n", AUTOMATIONS_IN_PROMPT))}\n- … more: list_automations` : list;
 					return `Your automations (each runs its prompt as written, on its day):\n${shown}\n\nKeep them true to what you know. When you learn something that changes one or makes it pointless (a date moved, an appointment booked, the thing done, sold or cancelled), change_automation or cancel_automation it in the same turn, and say so in a line.`;
+				}),
+				// Its files (docs/spec/06-agents §14), in the owner's chat and runs: what it has, so it reads before it guesses.
+				section("agent-files", async (input, context) => {
+					const bridge = core.options.files;
+					if (!bridge || !core.def.tools.builtin.includes("files")) return undefined;
+					const contact = await core.contactOf(input.conversationId, context);
+					if (contact ? contact.role !== "owner" : !(await core.proactive.runOf(input.conversationId))) return undefined;
+					return filesSection(await bridge.list().catch(() => []));
 				}),
 				section("agent-memory", async (input, context) => {
 					if (!core.usesMemory) return undefined;

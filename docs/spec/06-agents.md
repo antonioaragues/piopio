@@ -95,7 +95,7 @@ Custom entries: `piopio.channel-in` / `piopio.channel-out` (delivery metadata), 
 | `web_search`, `web_fetch` | As in Chat. |
 | `http_request(method, url, headers, body)` | Domain allowlist per agent. Non-GET requests need approval by default. |
 | `codemode` | pi-durable codemode (QuickJS sandbox; `RemoteCodemodeSandbox` on Cloudflare) that can call the agent's other tools. |
-| `files_*` | Agent workspace files (R2-backed in the cloud). |
+| `read_file`, `note_file`, `present_files`, `delete_file`, `list_files` | Files kept in its folder: everything the owner sends it, kept on its own (§14). Not in the cloud yet. |
 | `save_skill(name, description, body)` | Writes `skills/<name>/SKILL.md` in the agent's folder, so "remember how to do this" becomes a skill. Only from the owner's conversation or a run. The owner sees the new file as a diff with Keep / Undo, and the definition's git history records it (§2). |
 | MCP tools | From remote MCP servers in the definition. |
 | `apple_*`, `shortcuts_run` | Apple apps on the user's Mac (§4.1). Local agents directly; cloud agents through the Mac Bridge (§10). |
@@ -296,3 +296,48 @@ Noted on 2026-11-03 (docs/research/grok-bot.md) and not scheduled:
 - **AQ2** WhatsApp → **one number for a single front agent** in v1 (§5.3).
 - **AQ3** Identity → **one conversation per person across channels** (§3).
 - **AQ4** Spaces vs Agents → **kept separate**. They share runtime code only (04-chat §3.8).
+
+## 14. Files kept per agent (2026-11-21)
+
+From the car-keeper trial (27 §13): an agent that keeps everything about your car has to keep the insurance policy,
+the ITV report and a photo of the tyres, and find them again months later. Until now a file you sent was in that one
+message only: after compaction, in a run, or the next week, the agent couldn't see it, and `files` was refused on save.
+
+**Decisions**
+- **FL1 Where.** In the agent's folder, `files/`, next to `agent.json` (`~/Piopio/Agents/coche/files/poliza.pdf`).
+  Reveal in Finder shows them, and a file you drop there is the agent's too. `files/` is in the folder's
+  `.gitignore`: the definition's history stays about the definition, and a 5 MB photo isn't a commit.
+  Piopio's own notes on them live in `files/.piopio/`: `index.json` (each file's note, kind, size, date and who sent
+  it) and what the model reads, a PDF's text or an image's sent size.
+- **FL2 Kept on its own.** Every file the owner sends in the agent's chat is kept, with no tool call to forget: a
+  model that has to call `keep_file` will sometimes not, and the policy is lost. The message says what it was kept
+  as. Files sent by contacts stay in their conversation only: they're that person's, not the owner's (06 §8).
+- **FL3 What it knows it has.** A system section lists its files (name · its note · date, newest first, up to about
+  1,000 tokens, then "more: list_files"), in the owner's chat and in runs, like its automations (27 §13). Not in
+  contacts' or other agents' conversations.
+- **FL4 Tools** (builtin `files`, on by default for new agents; Setup › What it can use › "Keep files"):
+  - `read_file(name)`: a text or PDF's text (up to about 60,000 characters, with where it was cut), an image as an
+    image the model looks at.
+  - `note_file(name, note?, rename?)`: what the file is ("Póliza Mapfre 2026–27"), so the list says it. Silent: no card.
+  - `present_files(names)`: hands files to the owner as file cards they open, reveal or drag out (the same card as
+    Build's `present_files`).
+  - `delete_file(name)`: moves it to `files/.piopio/deleted/`; a card with Undo (24 h, 06 §4.2), then it goes.
+  - `list_files()`: all of them, for when the section was cut.
+- **FL5 In the app.** Setup › Who it is gets a **Files** row ("3 files · View", or "No files yet. Send them in its
+  chat"), next to Memory. View opens a sheet: each file with its icon, name, note, size and date; Open, Reveal in
+  Finder, Delete; **Add…** keeps files from disk the same way a sent one is (a PDF's text is read by the app, as for
+  attachments).
+- **FL6 Not yet.** Files don't go to the cloud: a cloud agent has no files tools, and moving one up says its files
+  stay on this Mac (30 K1). Photos from Telegram (CH3) will land here the same way once channel media exist. Files the
+  agent makes itself (a report it writes) wait for UI9's library. A PDF dropped in Finder has no text until it's sent
+  or added from the app: `read_file` says so.
+
+**As built (2026-11-21).** Runtime: `packages/runtime/src/agents/files.ts` (the tools, the section, the bridge type);
+engine: `agent-file-store.ts` (the folder, `index.json`, views, deleted files), kept on submit in the owner's chat
+(`AgentRuntime.keepFiles`), RPC `agents.files`, `.add`, `.note`, `.delete`; app: Setup › Who it is › Files and
+`AgentFilesView` (Add…, drop, open, reveal, drag out, note, delete). The durable timeline now keeps a tool result's
+details, so `present_files` shows its cards in agents' chats. Checked: scripted tests (store, a faux agent through
+read, present, delete and Undo, the app's RPC) and a real-model trial on Coche (Haiku 5.5, about $0.006): the policy
+PDF and a tyre photo sent in the chat were kept; it read the photo and noted it on its own; a Run now with no chat
+history read the PDF to answer "replacement car?" ("No incluye", and the assistance phone); "pásame la póliza" came
+back as a file card. Not checked: the Files sheet on screen, and a file from Telegram (channel media don't exist yet).

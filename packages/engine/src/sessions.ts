@@ -13,7 +13,7 @@ import type { ApprovalMode, ApprovalRule, ContainerRef, ModelRef, ProjectInfo, P
 import { EngineError, type ModelHub } from "./models.js";
 import type { EnginePaths } from "./paths.js";
 import { CheckpointStore } from "./checkpoints.js";
-import { attachmentsDir, copyAttachments, deleteAttachments, toolImageKeeper } from "./attachment-files.js";
+import { attachmentsDir, copyAttachments, deleteAttachments, toolImageKeeper, type KeptAttachment } from "./attachment-files.js";
 import { draftAgent, type AgentDraft } from "./agent-draft.js";
 import { addWorktree, checkout, git as runGit, mergeWorktree, removeWorktree, status as gitStatus } from "./git.js";
 import { BuildRuntime } from "./runtimes/build.js";
@@ -39,6 +39,7 @@ import { AgentRuntime, type AgentOpenOptions } from "./runtimes/agent.js";
 import { writingExtension } from "./tools/writing.js";
 import { durableVisualsExtension, visualChecker, type VisualCheck } from "./tools/visuals.js";
 import type { AgentFiles } from "./agent-files.js";
+import { AgentFileStore } from "./agent-file-store.js";
 import type { AppServices } from "./app-services.js";
 import type { MemoryProviders } from "./memory.js";
 import { alwaysLabel, type Envelope, type PeerLog, newDefinition, modelOf, nextFire, validate, TEMPLATES, type AgentDefinition, type DefinitionError, type Watch } from "@piopio/runtime";
@@ -2682,6 +2683,23 @@ export class Sessions {
 		return entry.segments?.length ? [...pastItems(entry.ref, entry.segments, entry.model ?? this.hub.defaultModel), ...current] : current;
 	}
 
+	/** An agent's kept files (docs/spec/06-agents §14), one store per folder. */
+	agentFileStore(entry: CatalogEntry): AgentFileStore | undefined {
+		return entry.agentFolder ? new AgentFileStore(entry.agentFolder) : undefined;
+	}
+
+	/** The app's Files (06 §14 FL5). */
+	agentFiles(ref: ContainerRef): AgentFileStore {
+		const store = this.agentFileStore(this.entry({ kind: "agent", id: ref.id }));
+		if (!store) throw new EngineError("NOT_FOUND", "This agent has no folder.");
+		return store;
+	}
+
+	private agentFileHandle(entry: CatalogEntry) {
+		const store = this.agentFileStore(entry)!;
+		return { bridge: store, keep: (attachments: readonly KeptAttachment[], from: string) => store.keep(attachments, { attachmentsRoot: attachmentsDir(this.paths.home, entry.ref.id), from }) };
+	}
+
 	private async createRuntime(entry: CatalogEntry): Promise<Runtime> {
 		const model = entry.ref.kind === "agent" ? (entry.model ?? this.hub.defaultModel) : await this.conversationModel(entry);
 		if (entry.ref.kind === "agent") {
@@ -2735,6 +2753,8 @@ export class Sessions {
 				...(this.hookUrl ? { watchUrl: (watchId: string) => this.hookUrl!(id, watchId) } : {}),
 				onWatches: () => void this.watchers?.sync().catch(() => undefined),
 				updateSelf: (change) => this.updateAgentSelf(id, change),
+				// Files kept in its folder (docs/spec/06-agents §14).
+				...(entry.agentFolder ? { files: this.agentFileHandle(entry) } : {}),
 				...(automations
 					? {
 							automations: agentBridge(automations, id),

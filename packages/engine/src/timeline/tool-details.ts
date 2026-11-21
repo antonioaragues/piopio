@@ -30,6 +30,8 @@ export function startDetails(tool: string, args: unknown): ToolDetails | undefin
 		case "ask_agent":
 			return typeof a.agent === "string" ? { type: "agent", agent: { id: "", name: a.agent } } : undefined;
 		case "present_files":
+			// An agent hands over its kept files by name (06 §14): where they are comes with the result.
+			if (Array.isArray(a.names)) return { type: "files", files: [] };
 			return Array.isArray(a.files) ? { type: "files", files: (a.files as { path?: unknown; description?: unknown }[]).flatMap((f) => (typeof f?.path === "string" ? [{ path: f.path, name: f.path.split("/").pop() || f.path, ...(typeof f.description === "string" ? { description: f.description } : {}) }] : [])) } : undefined;
 		case "propose_plan": {
 			const strings = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);

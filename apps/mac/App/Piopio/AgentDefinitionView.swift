@@ -31,6 +31,9 @@ struct AgentDefinitionView: View {
     @State private var pickingModel = false
     @State private var jump: String?
     @State private var showingMemory = false
+    /// Its kept files (docs/spec/06-agents §14): how many, and the sheet that lists them.
+    @State private var showingFiles = false
+    @State private var fileCount: Int?
     /// Facts it learned with you (the owner's partition), for "14 things learned".
     @State private var learned: Int?
 
@@ -88,6 +91,7 @@ struct AgentDefinitionView: View {
             runs = await engine.agentRuns(summary.ref)
             if let section { jump = nil; DispatchQueue.main.async { jump = section } }
             await countLearned()
+            fileCount = await engine.agentFiles(summary.ref)?.files.count
         }
         .onChange(of: section) { _, s in if let s { jump = nil; DispatchQueue.main.async { jump = s } } }
         .onChange(of: def) { _, _ in scheduleSave() }
@@ -99,6 +103,19 @@ struct AgentDefinitionView: View {
                 def?.models.default = modelString(ref)
                 pickingModel = false
             }
+        }
+        .sheet(isPresented: $showingFiles) {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack {
+                    Text("\(summary.title)'s files").font(.system(size: 15, weight: .semibold))
+                    Spacer()
+                    Button("Done") { showingFiles = false }.buttonStyle(PillStyle(kind: .strong, compact: true)).keyboardShortcut(.defaultAction)
+                }
+                .padding(.horizontal, 16).padding(.top, 16)
+                AgentFilesView(engine: engine, summary: summary) { fileCount = $0 }
+            }
+            .frame(width: 640, height: 520)
+            .background(Color.dsWin)
         }
         .sheet(isPresented: $showingMemory) {
             VStack(alignment: .leading, spacing: 0) {
@@ -228,6 +245,7 @@ struct AgentDefinitionView: View {
         .init(title: "Remember things", detail: "remember, recall, forget", tools: ["memory"], apple: nil),
         .init(title: "Send messages", detail: "to you, and to people it knows", tools: ["send_message"], apple: nil),
         .init(title: "Make its own automations", detail: "times and events, run as itself", tools: ["schedule"], apple: nil),
+        .init(title: "Keep files", detail: "what you send it, to read later", tools: ["files"], apple: nil),
         .init(title: "Reminders", detail: "read, add, tick", tools: [], apple: "reminders"),
         .init(title: "Calendar", detail: "events and free time", tools: [], apple: "calendar"),
         .init(title: "Contacts", detail: "look people up", tools: [], apple: "contacts"),
@@ -351,6 +369,16 @@ struct AgentDefinitionView: View {
                     Button("View") { showingMemory = true }.buttonStyle(.plain).foregroundStyle(Color.accentColor)
                 }
                 .font(.system(size: 12.5))
+            }
+            if def?.tools.builtin.contains("files") == true {
+                SetupRow("Files", subtitle: fileCount == 0 ? "Send them in its chat" : nil) {
+                    HStack(spacing: 4) {
+                        Text(fileCount.map { $0 == 0 ? "No files yet" : "\($0) file\($0 == 1 ? "" : "s")" } ?? "…").foregroundStyle(Color.dsFg)
+                        Text("·").foregroundStyle(Color.dsFg3)
+                        Button("View") { showingFiles = true }.buttonStyle(.plain).foregroundStyle(Color.accentColor)
+                    }
+                    .font(.system(size: 12.5))
+                }
             }
         }
     }

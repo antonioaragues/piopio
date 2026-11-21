@@ -31,6 +31,8 @@ export class AgentFiles {
 		mkdirSync(join(dir, "knowledge"), { recursive: true });
 		writeFileSync(join(dir, "skills", ".keep"), "");
 		writeFileSync(join(dir, "knowledge", ".keep"), "");
+		// Files it keeps (06 §14) stay out of the definition's history.
+		writeFileSync(join(dir, ".gitignore"), "files/\n");
 		this.write(dir, folder);
 		await git(dir, ["init", "-q", "-b", "main"]);
 		await this.commit(dir, `Create ${folder.definition.name}`);

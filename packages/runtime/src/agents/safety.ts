@@ -40,13 +40,13 @@ export type Approval = {
 /** What a tool changed (RC1). */
 /** `automation`: an automation made or changed (docs/spec/27), with what the app's card shows. */
 export type ResultCard = {
-	kind: "reminder" | "message" | "memory" | "event" | "contact" | "note" | "music" | "shortcut" | "setup" | "automation";
+	kind: "reminder" | "message" | "memory" | "event" | "contact" | "note" | "music" | "shortcut" | "setup" | "automation" | "file";
 	title: string;
 	detail?: string;
 	automation?: { id: string; name: string; when: string; runsAs: string; does: string; tellsYou: string; runsOn: string; url?: string };
 };
 /** `app.tool`: an Apple app call that reverses another (§4.1). `automation.*`: undoing an automation made or changed. */
-export type UndoKind = "reminder.cancel" | "reminder.restore" | "watch.cancel" | "watch.restore" | "self.restore" | "memory.forget" | "memory.restore" | "memory.unlearn" | "outbox.withdraw" | "app.tool" | "automation.remove" | "automation.restore";
+export type UndoKind = "reminder.cancel" | "reminder.restore" | "watch.cancel" | "watch.restore" | "self.restore" | "memory.forget" | "memory.restore" | "memory.unlearn" | "outbox.withdraw" | "app.tool" | "automation.remove" | "automation.restore" | "file.restore";
 export type UndoRecord = { id: string; kind: UndoKind; data: JsonObject; title: string; conversationId: string; at: string; until: number; status: "available" | "undone" | "failed"; error?: string };
 
 export type InboxKind = "approval" | "message" | "run_failed" | "budget" | "paused";

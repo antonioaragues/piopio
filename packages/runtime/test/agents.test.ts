@@ -14,12 +14,12 @@ describe("agent definitions", () => {
 		const { definition } = newDefinition({ id: "agt_1", slug: "coach", name: "Coach", owner: "Antonio", model: "m" });
 		const planned = {
 			...definition,
-			tools: { ...definition.tools, builtin: [...definition.tools.builtin, "http_request", "files"], mcp: [{ name: "notion", url: "https://example.com/mcp" }] },
+			tools: { ...definition.tools, builtin: [...definition.tools.builtin, "http_request"], mcp: [{ name: "notion", url: "https://example.com/mcp" }] },
 			channels: { telegram: { bot: "secret:telegram_bot" }, whatsapp: { phoneNumberId: "1", token: "secret:wa" } },
 		};
 		expect(validate(planned)).toEqual([]);
 		const n = definition.tools.builtin.length;
-		expect(validate(planned, { unsupported: true }).map((e) => e.path)).toEqual([`/tools/builtin/${n}`, `/tools/builtin/${n + 1}`, "/tools/mcp", "/channels/whatsapp"]); // Telegram works from the Mac (docs/spec/19 S4)
+		expect(validate(planned, { unsupported: true }).map((e) => e.path)).toEqual([`/tools/builtin/${n}`, "/tools/mcp", "/channels/whatsapp"]); // Telegram works from the Mac (docs/spec/19 S4); files are kept (06 §14)
 	});
 
 	test("schema and semantic errors carry paths", () => {

@@ -129,6 +129,17 @@ export const Attachment = Type.Union([
 ]);
 export type Attachment = Static<typeof Attachment>;
 
+/** A file an agent keeps (06 §14). */
+export const AgentFile = Type.Object({
+	name: Type.String(),
+	note: Type.Optional(Type.String()),
+	kind: literals("image", "pdf", "text", "other"),
+	size: Type.Number(),
+	addedAt: Type.String(),
+	path: Type.String(),
+	readable: Type.Boolean(),
+});
+
 export const UserItem = Type.Object({
 	kind: Type.Literal("user"),
 	id: Type.String(),
@@ -240,7 +251,7 @@ export const ResultItem = Type.Object({
 	at: Type.String(),
 	callId: Type.String(),
 	card: Type.Object({
-		kind: literals("reminder", "message", "memory", "event", "contact", "note", "music", "shortcut", "setup", "automation"),
+		kind: literals("reminder", "message", "memory", "event", "contact", "note", "music", "shortcut", "setup", "automation", "file"),
 		title: Type.String(),
 		detail: Type.Optional(Type.String()),
 		/** An automation made or changed (docs/spec/27 §4): what its card shows. */
@@ -1938,6 +1949,13 @@ export const methods = {
 		params: Type.Object({ ref: ContainerRef }),
 		result: Type.Object({ provider: Type.String(), partitions: Type.Array(Type.Object({ id: Type.String(), label: Type.String(), bank: Type.String() })) }),
 	},
+	/** Its kept files (06 §14): what it has, newest first. */
+	"agents.files": { params: Type.Object({ ref: ContainerRef }), result: Type.Object({ files: Type.Array(AgentFile), folder: Type.String() }) },
+	/** Files added from the app (Files › Add…), kept as a sent one is. */
+	"agents.files.add": { params: Type.Object({ ref: ContainerRef, attachments: Type.Array(Attachment) }), result: Type.Object({ files: Type.Array(AgentFile) }) },
+	/** What a file is, or a new name. */
+	"agents.files.note": { params: Type.Object({ ref: ContainerRef, name: Type.String(), note: Type.Optional(Type.String()), rename: Type.Optional(Type.String()) }), result: AgentFile },
+	"agents.files.delete": { params: Type.Object({ ref: ContainerRef, name: Type.String() }), result: Type.Object({}) },
 	/** A memory provider's records (the memory views). */
 	"memory.list": {
 		params: Type.Object({

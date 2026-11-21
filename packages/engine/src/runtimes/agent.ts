@@ -16,6 +16,8 @@ import { ConversationBusy, createRegistry, Harness, type Conversation, type Conv
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
 import { createToolSearchExtension } from "@earendil-works/pi-durable/tool-search";
 import type { ApprovalItem, ContainerRef, ModelRef, ResultItem, SessionEvent, Snapshot, TimelineItem, UtilityChoice } from "@piopio/protocol";
+import type { AgentFileInfo, AgentFilesBridge } from "@piopio/runtime";
+import type { KeptAttachment } from "../attachment-files.js";
 import { AGENT_ENTRY, AgentCore, type AgentCoreOptions, alwaysLabel, modelOf, type Envelope, LEARN_ENTRY, NOTICE_ENTRY, OUT_ENTRY, type AgentDefinition, type Approval, type MemoryProvider, type ResultCard, type RunRecord, type UndoRecord } from "@piopio/runtime";
 import { BOT_TOKEN } from "../channels/telegram.js";
 import { buildInput } from "../input.js";
@@ -65,6 +67,8 @@ export type AgentOpenOptions = {
 	automations?: AgentCoreOptions["automations"];
 	/** A run started or settled (an automation's run follows it). */
 	onRun?: (run: RunRecord) => void;
+	/** Files kept in its folder (docs/spec/06-agents §14): what it reads, and keeping what the owner sends. */
+	files?: { bridge: AgentFilesBridge; keep(attachments: readonly KeptAttachment[], from: string): AgentFileInfo[] };
 	/** Apple app tools through the Mac app (06 §4.1). */
 	appTool?: AgentCoreOptions["appTool"];
 	/** The other agents (06 §7). */
@@ -173,6 +177,7 @@ export class AgentRuntime implements Runtime {
 			...(options.watchUrl ? { watchUrl: options.watchUrl } : {}),
 			...(options.onWatches ? { onWatches: options.onWatches } : {}),
 			...(options.automations ? { automations: options.automations } : {}),
+			...(options.files ? { files: options.files.bridge } : {}),
 			...(options.updateSelf ? { updateSelf: options.updateSelf } : {}),
 		});
 		for (const e of [web, core.extension, ...appExtensions()]) registry.install(e as never);
@@ -186,6 +191,14 @@ export class AgentRuntime implements Runtime {
 
 	definition(): AgentDefinition {
 		return this.options.definition();
+	}
+
+	/** Keeps the files the owner sent (06 §14 FL2) and says, for the model, what each was kept as. */
+	keepFiles(attachments: readonly KeptAttachment[], contactId: string): string | undefined {
+		const def = this.options.definition();
+		if (!this.options.files || !attachments.length || !def.tools.builtin.includes("files") || contactId !== ownerOf(def)) return undefined;
+		const kept = this.options.files.keep(attachments, contactId);
+		return kept.length ? `[Kept in your files: ${kept.map((f) => f.name).join(", ")}]` : undefined;
 	}
 
 	/** A run's conversation, read-only. */
@@ -596,7 +609,8 @@ export class AgentView implements Runtime {
 	private group(items: readonly TimelineItem[]): TimelineItem[] {
 		const out: TimelineItem[] = [];
 		// A question to the owner stays on its own: the app shows it with answers to tap (docs/spec/21 D4).
-		for (const item of groupSteps(items, (tool) => tool.tool === "ask_owner")) {
+		// Files it handed over (06 §14) are cards of their own too.
+		for (const item of groupSteps(items, (tool) => tool.tool === "ask_owner" || tool.tool === "present_files")) {
 			out.push(item);
 			if (item.kind !== "steps") continue;
 			for (const tool of item.tools) {
@@ -739,6 +753,9 @@ export class AgentView implements Runtime {
 		await this.agent.ensureCredential();
 		await this.agent.core.beforeTurn(this.contactId, this.conversation.id, text).catch(() => undefined);
 		const input = buildInput(text, options.attachments);
+		// What the owner sent is kept in its files (06 §14): the model reads where, just before the words.
+		const kept = this.agent.keepFiles(options.attachments ?? [], this.contactId);
+		if (kept && Array.isArray(input.content)) input.content.splice(input.content.length - 1, 0, { type: "text", text: kept });
 		try {
 			const submission = await this.conversation.submit(
 				{ type: "input", content: input.content, ...(input.entry ? { entry: input.entry } : {}), whenBusy: options.whenBusy, ...(options.requestId ? { requestId: options.requestId } : {}) } as SubmissionDraft,

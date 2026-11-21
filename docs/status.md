@@ -7,7 +7,7 @@ they do not establish that every provider, OS permission flow or production serv
 |---|---|---|
 | Build | Projects/CLI sessions, tools, approvals, plans, rewind, reviews, git/worktrees, terminal, MCP, subagents, sandboxed commands, `/goal`, auto review, Claude Code/Codex tasks | Daily real-model work on Piopio; large repositories; real OAuth MCP and project-skill combinations; cargo inside the sandbox; a real Codex task |
 | Chat | Streaming, attachments, branches, export, Quick Chat, New project makes a folder in ~/Piopio (AGENTS.md, shared NOTES.md), global search; since 2026-11-15 on the same engine as folder conversations (pi-coding-agent), old chats moved at start | A week of daily use; provider/web-search compatibility; a real project with several conversations; long conversation usability; moving a real set of old chats |
-| Local Agents | Definitions, conversations, memory, schedules/reminders, approvals, budgets, Mac-app abilities, peers | Real schedules across sleep/wake; permission prompts and real Mac apps; paid-model budgets and peer behavior |
+| Local Agents | Definitions, conversations, memory, files kept in its folder (06 §14), schedules/reminders, approvals, budgets, Mac-app abilities, peers | Real schedules across sleep/wake; permission prompts and real Mac apps; paid-model budgets and peer behavior |
 | Reliability | Conservative command rules, private-address checks with DNS pinning, persistent drafts, input receipts, verified offline backup/restore | Extended failure/recovery soak and usability review with personal data |
 | Distribution | Bundled engine/Node, release scripts, background engine and update infrastructure | Developer ID/notarization/Gatekeeper validation and public distribution |
 | Cloud | The Worker on a real account (owner token, a real model, alarms, Telegram by webhook); K1: Settings › This Mac & cloud deploys it with one Cloudflare token, agents move up and back with memory and automations, their conversations through the Mac's engine (docs/spec/30 §13) | K1 on the account (the Worker there needs a redeploy); a real approval from a cloud agent; deploy from the app; chats and the phone app (K2–K3); real billing and long runs |
@@ -69,7 +69,7 @@ Steps, pass criteria, evidence and a results table for each item: [acceptance.md
   become an agent (File › Turn Conversation into Agent…).
   Home is the one start, with the project and permissions in the box; Read only replaces the Chat lens (folders
   of documents start in it); a chat can continue in a project folder or move into a project without one.
-- Agent definitions refuse fields that nothing runs yet (http_request, codemode, files, tools.mcp, channels) on save.
+- Agent definitions refuse fields that nothing runs yet (http_request, codemode, tools.mcp, WhatsApp) on save.
 - The browser (spec 22 W1–W2, §14–15): a WebKit view per conversation tab, in your profile, shown in the
   conversation's Browser panel. It reads freely; clicking and typing ask per site (Settings › Browser keeps the
   answers). Passwords, codes and card details are always yours. It needs the app open; agents don't have it yet.

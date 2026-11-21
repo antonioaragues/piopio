@@ -124,7 +124,7 @@ export type DefinitionError = { path: string; message: string };
 export function unsupported(def: AgentDefinition): DefinitionError[] {
 	const errors: DefinitionError[] = [];
 	def.tools.builtin.forEach((t, i) => {
-		if (t === "http_request" || t === "codemode" || t === "files") errors.push({ path: `/tools/builtin/${i}`, message: `“${t}” isn't available yet: remove it.` });
+		if (t === "http_request" || t === "codemode") errors.push({ path: `/tools/builtin/${i}`, message: `“${t}” isn't available yet: remove it.` });
 	});
 	if (def.tools.mcp?.length) errors.push({ path: "/tools/mcp", message: "MCP servers for agents aren't available yet: remove tools.mcp." });
 	// Telegram works from the Mac by polling (docs/spec/19 S4); WhatsApp needs the cloud (13 §5.5).

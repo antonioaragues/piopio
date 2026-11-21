@@ -171,6 +171,7 @@ const RESULT: Record<ResultItem["card"]["kind"], string> = {
 	shortcut: "Shortcut",
 	setup: "Set up",
 	automation: "Automation",
+	file: "File",
 };
 
 /**

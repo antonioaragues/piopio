@@ -401,4 +401,5 @@ invented facts, every stale reminder changed or cancelled, both old ITV facts re
 - `cancel_automation` once with id "none", and a question card offering Telegram when it isn't connected. Harmless.
 - **What a car needs that it can't do yet:** keep a photo or a PDF (the policy, the tyres) to look at months later
   (06's `files` is refused on save), and read photos sent on Telegram. Neither was tried; the user put in-app
-  agents first (2026-11-21).
+  agents first (2026-11-21). Files in the app were built the same day (06 §14): what the owner sends is kept in
+  the agent's folder, and it reads, notes, hands over and deletes them.

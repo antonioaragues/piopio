@@ -1022,6 +1022,25 @@ final class EngineController {
         try? await client?.call("agents.memory", RefParams(ref: ref), as: AgentMemoryResult.self)
     }
 
+    // MARK: An agent's files (docs/spec/06-agents §14)
+
+    func agentFiles(_ ref: ContainerRef) async -> AgentFilesResult? {
+        try? await client?.call("agents.files", RefParams(ref: ContainerRef(kind: .agent, id: ref.id)), as: AgentFilesResult.self)
+    }
+
+    func addAgentFiles(_ ref: ContainerRef, _ attachments: [Attachment]) async throws -> [AgentFile] {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        return try await client.call("agents.files.add", AgentFilesAddParams(ref: ContainerRef(kind: .agent, id: ref.id), attachments: attachments), as: AgentFilesAdded.self).files
+    }
+
+    func noteAgentFile(_ ref: ContainerRef, name: String, note: String) async throws {
+        try await spaceCall("agents.files.note", AgentFileParams(ref: ContainerRef(kind: .agent, id: ref.id), name: name, note: note))
+    }
+
+    func deleteAgentFile(_ ref: ContainerRef, name: String) async throws {
+        try await spaceCall("agents.files.delete", AgentFileParams(ref: ContainerRef(kind: .agent, id: ref.id), name: name))
+    }
+
     func memoryList(provider: String, bank: String) async -> MemoryListResult? {
         try? await client?.call("memory.list", MemoryListParams(provider: provider, bank: bank), as: MemoryListResult.self)
     }

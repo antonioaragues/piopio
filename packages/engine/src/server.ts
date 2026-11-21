@@ -1329,6 +1329,24 @@ export class Engine {
 				await this.cloud.disconnect();
 				return {} satisfies Result<"cloud.disconnect">;
 			}
+			case "agents.files": {
+				const p = params as Params<"agents.files">;
+				const store = this.sessions.agentFiles(p.ref);
+				return { files: store.listSync(), folder: store.dir } satisfies Result<"agents.files">;
+			}
+			case "agents.files.add": {
+				const p = params as Params<"agents.files.add">;
+				return { files: this.sessions.agentFiles(p.ref).keep(p.attachments, { from: "owner" }) } satisfies Result<"agents.files.add">;
+			}
+			case "agents.files.note": {
+				const p = params as Params<"agents.files.note">;
+				return (await this.sessions.agentFiles(p.ref).note(p.name, { ...(p.note !== undefined ? { note: p.note } : {}), ...(p.rename ? { rename: p.rename } : {}) })) satisfies Result<"agents.files.note">;
+			}
+			case "agents.files.delete": {
+				const p = params as Params<"agents.files.delete">;
+				await this.sessions.agentFiles(p.ref).remove(p.name);
+				return {} satisfies Result<"agents.files.delete">;
+			}
 			case "agents.memory": {
 				const p = params as Params<"agents.memory">;
 				return this.sessions.agentMemory(p.ref) satisfies Result<"agents.memory">;

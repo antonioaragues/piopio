@@ -970,6 +970,33 @@ public struct AgentMemoryResult: Decodable, Sendable {
     public var provider: String
     public var partitions: [Partition]
 }
+/// A file an agent keeps (docs/spec/06-agents §14).
+public struct AgentFile: Decodable, Sendable, Hashable, Identifiable {
+    public var name: String
+    public var note: String?
+    /// image, pdf, text or other.
+    public var kind: String
+    public var size: Double
+    public var addedAt: String
+    public var path: String
+    /// Whether the agent can read it (a PDF dropped in Finder has no text yet).
+    public var readable: Bool
+    public var id: String { name }
+}
+public struct AgentFilesResult: Decodable, Sendable { public var files: [AgentFile]; public var folder: String }
+public struct AgentFilesAdded: Decodable, Sendable { public var files: [AgentFile] }
+public struct AgentFilesAddParams: Encodable, Sendable {
+    public var ref: ContainerRef
+    public var attachments: [Attachment]
+    public init(ref: ContainerRef, attachments: [Attachment]) { self.ref = ref; self.attachments = attachments }
+}
+public struct AgentFileParams: Encodable, Sendable {
+    public var ref: ContainerRef
+    public var name: String
+    public var note: String?
+    public var rename: String?
+    public init(ref: ContainerRef, name: String, note: String? = nil, rename: String? = nil) { self.ref = ref; self.name = name; self.note = note; self.rename = rename }
+}
 public struct MemoryListParams: Encodable, Sendable {
     public var provider, bank: String
     public var cursor: String?

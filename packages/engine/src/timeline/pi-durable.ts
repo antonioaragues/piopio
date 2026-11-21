@@ -6,6 +6,7 @@
  */
 import type { AttachmentInfo } from "@piopio/protocol";
 import { contentText, type PiContentBlock, type PiMessage, type TimelineBuilder } from "./builder.js";
+import type { PiToolResult } from "./tool-details.js";
 
 const USER_ENTRY = "piopio.user";
 type UserData = { text: string; attachments?: AttachmentInfo[] };
@@ -218,7 +219,9 @@ export class DurableViewMapper {
 				const call = this.calls.get(m.toolCallId);
 				b.toolStart(m.toolCallId, call?.name ?? m.toolName ?? "tool", call?.args ?? {});
 			}
-			this.end(m.toolCallId, contentText(m.content), m.isError ?? false);
+			// Its details too: a file card's files (06 §14), a plan's outcome.
+			const details = (m as { details?: unknown }).details;
+			this.end(m.toolCallId, contentText(m.content), m.isError ?? false, details === undefined ? undefined : { details });
 		}
 	}
 
@@ -244,9 +247,9 @@ export class DurableViewMapper {
 		else if (slot.entry === undefined && this.started.has(id)) this.end(id, undefined, true);
 	}
 
-	private end(callId: string, output: string | undefined, isError: boolean): void {
+	private end(callId: string, output: string | undefined, isError: boolean, result?: PiToolResult): void {
 		this.ended.add(callId);
 		this.outputs.delete(callId);
-		this.builder.toolEnd(callId, output, isError);
+		this.builder.toolEnd(callId, output, isError, undefined, result);
 	}
 }
