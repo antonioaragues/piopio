@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Piopio · Session panel › Tools, three options</title>
+<style>
+  :root {
+    --win: #FCFCFB; --side: #F4F4F2; --field: #E9E9E6; --sel: rgba(0,0,0,.05);
+    --fg: #1F1F1E; --fg2: #6B6B67; --fg3: #9B9B96; --line: rgba(0,0,0,.08);
+    --inv: #1F1F1E; --invfg: #FCFCFB; --accent: #2F6FEB;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #E4E4E0; font: 13px/1.35 -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif; color: var(--fg); -webkit-font-smoothing: antialiased; }
+  header.page { padding: 28px 36px 8px; max-width: 1400px; }
+  header.page h1 { font-size: 20px; margin: 0 0 6px; font-weight: 650; }
+  header.page p { margin: 0; color: var(--fg2); max-width: 820px; }
+  .row { display: flex; gap: 28px; padding: 24px 36px 48px; align-items: flex-start; flex-wrap: wrap; row-gap: 40px; }
+  .col { flex: 0 0 300px; }
+  .col h2 { font-size: 14px; margin: 0 0 3px; font-weight: 650; }
+  .col .tag { font-size: 12px; color: var(--fg2); margin: 0 0 12px; min-height: 32px; }
+  .notes { font-size: 12.5px; color: var(--fg2); margin-top: 14px; }
+  .notes b { color: var(--fg); font-weight: 600; }
+  .notes ul { margin: 4px 0 0; padding-left: 16px; }
+  .notes li { margin: 3px 0; }
+
+  /* The panel */
+  .panel { width: 300px; height: 760px; background: var(--side); border-radius: 10px; box-shadow: 0 0 0 .5px rgba(0,0,0,.1), 0 6px 20px rgba(0,0,0,.06); display: flex; flex-direction: column; position: relative; }
+  .pbody { flex: 1; padding: 0 18px; overflow: hidden; }
+  .block { padding: 18px 0; border-bottom: .5px solid var(--line); }
+  .block.last { border-bottom: 0; }
+  .btitle { font-weight: 600; font-size: 13px; }
+  .hrow { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .fg2 { color: var(--fg2); } .fg3 { color: var(--fg3); }
+  .grid { display: grid; grid-template-columns: 72px 1fr; column-gap: 8px; row-gap: 8px; margin-top: 10px; align-items: baseline; }
+  .lbl { color: var(--fg3); }
+  .link { color: var(--accent); font-size: 12px; cursor: pointer; white-space: nowrap; }
+  .fold { cursor: pointer; display: inline-flex; align-items: baseline; gap: 6px; user-select: none; }
+  .chev { font-size: 13px; line-height: 1; color: var(--fg3); display: inline-block; transition: transform .15s; }
+  .open > .fold .chev, .open > .fold-head .chev, .fold.open .chev { transform: rotate(90deg); }
+  .foot { height: 44px; border-top: .5px solid var(--line); display: flex; align-items: center; justify-content: space-between; padding: 0 18px; color: var(--fg2); font-size: 12.5px; }
+  .meter { display: inline-block; width: 60px; height: 3px; border-radius: 2px; background: var(--line); margin-right: 10px; vertical-align: middle; position: relative; }
+  .meter::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: var(--fg2); border-radius: 2px; }
+  .small { font-size: 11.5px; }
+
+  /* Mini switch, black when on */
+  .sw { width: 26px; height: 15px; border-radius: 8px; background: rgba(0,0,0,.12); position: relative; flex: 0 0 auto; cursor: pointer; transition: background .15s; }
+  .sw::after { content: ""; position: absolute; top: 1.5px; left: 1.5px; width: 12px; height: 12px; border-radius: 50%; background: #fff; box-shadow: 0 .5px 1.5px rgba(0,0,0,.25); transition: left .15s; }
+  .sw.on { background: var(--inv); }
+  .sw.on::after { left: 12.5px; }
+  .sw.dis { opacity: .35; cursor: default; }
+
+  /* Tool rows */
+  .trow { display: flex; align-items: center; gap: 9px; min-height: 28px; }
+  .trow .name { flex: 1; min-width: 0; padding: 3px 0; }
+  .trow .name .n { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .trow .name .d { font-size: 11.5px; color: var(--fg3); }
+  .trow.offset .n { color: var(--fg3); }
+  .trow.offhere .n { color: var(--fg2); }
+  .ico { width: 16px; height: 16px; flex: 0 0 16px; color: var(--fg2); display: grid; place-items: center; }
+  .ico svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; }
+  .sub { font-size: 12px; color: var(--fg3); margin: 12px 0 2px; }
+  .sub:first-child { margin-top: 0; }
+  .hint { font-size: 11.5px; color: var(--fg3); margin-top: 10px; display: flex; gap: 6px; flex-wrap: wrap; align-items: baseline; }
+  .hide { display: none !important; }
+
+  /* "Before" reproduction: the nested CardRow */
+  .before .nest { display: grid; grid-template-columns: 68px 1fr; column-gap: 10px; row-gap: 8px; margin-top: 8px; align-items: baseline; }
+  .before .squash { font-size: 11.5px; color: var(--fg3); width: 40px; word-break: break-all; }
+
+  /* Option C: selector + popover */
+  .selector { padding: 1px 6px; margin: -1px -6px; border-radius: 6px; cursor: pointer; display: inline-block; max-width: 100%; margin: -1px 0 -1px -6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
+  .selector:hover, .selector.active { background: var(--sel); }
+  .pop { position: absolute; left: 14px; right: 14px; top: 150px; background: var(--win); border-radius: 12px; box-shadow: 0 0 0 .5px var(--line), 0 10px 30px rgba(0,0,0,.12); padding: 6px; z-index: 5; }
+  .pop .ph { padding: 8px 8px 6px; font-size: 12px; color: var(--fg3); }
+  .pop .trow { padding: 0 8px; border-radius: 7px; min-height: 30px; }
+  .pop .trow:hover { background: var(--sel); }
+  .pop .sep { height: .5px; background: var(--line); margin: 6px 8px; }
+  .pop .pf { padding: 6px 8px 6px; display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; }
+  .scrim { position: absolute; inset: 0; border-radius: 10px; }
+</style>
+</head>
+<body>
+
+<header class="page">
+  <h1>Session panel › Tools — three options</h1>
+  <p>Example conversation with more than the screenshot so the states show up: two apps on (Linear, Notion), one switched off here (GitHub), one off in Settings (Sentry), a project MCP server (playwright), and no skills. Switches and folds are clickable.</p>
+</header>
+
+<div class="row">
+
+  <!-- BEFORE -->
+  <div class="col">
+    <h2>Now</h2>
+    <p class="tag">Tools › Uses › switches: three columns in 264pt, the same list named twice, and a footnote broken one letter per line.</p>
+    <div class="panel before">
+      <div class="pbody">
+        <section class="block">
+          <div class="btitle">Setup</div>
+          <div class="grid">
+            <span class="lbl">Project</span><span>test-linear <span class="fg3">· no git</span></span>
+            <span class="lbl">Runs on</span><span>This Mac</span>
+            <span class="lbl">Tools</span>
+            <div>
+              <span class="fold open">Linear, Notion <span class="chev">›</span></span>
+              <div class="nest">
+                <span class="lbl">Uses</span>
+                <div>
+                  <span class="fold open">Linear, Notion <span class="chev">›</span></span>
+                  <div class="trow"><span class="name">Linear</span><span class="sw on"></span></div>
+                  <div class="trow"><span class="name">Notion</span><span class="sw on"></span></div>
+                  <div style="display:flex;gap:8px;align-items:center"><span class="squash">Only here. Settings decides the rest.</span><span class="link">Connect…</span></div>
+                </div>
+                <span class="lbl">Skills</span><span><span class="fg3">None</span> <span class="link">Add skills…</span></span>
+              </div>
+            </div>
+          </div>
+        </section>
+        <section class="block hrow"><span class="btitle">Read</span><span class="fg3">Nothing yet</span></section>
+        <section class="block hrow"><span class="btitle">Changes</span><span class="fg3">1 file ›</span></section>
+        <section class="block last"><div class="hrow"><span class="btitle">Plan</span><span class="fg3">None</span></div><div class="fg3" style="margin-top:8px">Short task — no plan needed. <span class="link" style="font-size:13px">Ask for one</span></div></section>
+      </div>
+      <div class="foot"><span><span class="meter"></span>38,2k of 1M ⌃</span><span>$0.26</span></div>
+    </div>
+  </div>
+
+  <!-- OPTION A -->
+  <div class="col">
+    <h2>A · Tools as its own block</h2>
+    <p class="tag">Tools moves out of Setup and becomes a block like Read, Changes and Plan. When open, it uses the full width.</p>
+    <div class="panel" id="A">
+      <div class="pbody">
+        <section class="block">
+          <div class="btitle">Setup</div>
+          <div class="grid">
+            <span class="lbl">Project</span><span>test-linear <span class="fg3">· no git</span></span>
+            <span class="lbl">Runs on</span><span>This Mac</span>
+          </div>
+        </section>
+        <section class="block open" data-fold>
+          <div class="hrow fold-head" style="cursor:pointer" onclick="toggleFold(this)">
+            <span class="btitle">Tools</span>
+            <span class="fg3"><span data-summary="A"></span> <span class="chev">›</span></span>
+          </div>
+          <div class="fold-body" style="margin-top:12px">
+            <div class="sub">Apps</div>
+            <div data-list="A-apps"></div>
+            <div class="sub">MCP servers</div>
+            <div data-list="A-mcp"></div>
+            <div class="sub">Skills</div>
+            <div class="trow"><span class="ico"><svg viewBox="0 0 16 16"><path d="M4 2.5h6l2.5 2.5v8.5H4z"/><path d="M6.5 8h4M6.5 10.5h3"/></svg></span><span class="name fg3">None yet</span><span class="link">Add…</span></div>
+            <div class="hint">Only this conversation. <span class="link">Settings…</span></div>
+            <div class="hint" data-list="A-off" style="margin-top:4px"></div>
+          </div>
+        </section>
+        <section class="block hrow"><span class="btitle">Read</span><span class="fg3">Nothing yet</span></section>
+        <section class="block hrow"><span class="btitle">Changes</span><span class="fg3">1 file ›</span></section>
+        <section class="block last"><div class="hrow"><span class="btitle">Plan</span><span class="fg3">None</span></div><div class="fg3" style="margin-top:8px">Short task — no plan needed. <span class="link" style="font-size:13px">Ask for one</span></div></section>
+      </div>
+      <div class="foot"><span><span class="meter"></span>38,2k of 1M ⌃</span><span>$0.26</span></div>
+    </div>
+    <div class="notes">
+      <b>Folded:</b> one line, “Tools  3 on ›”, the same pattern as Read and Changes.
+      <ul>
+        <li>One fold instead of two, and no nested labels.</li>
+        <li>Grouped by kind, so the list scales to many apps and servers.</li>
+        <li>The list holds only what can be switched here. Connected apps that Settings keeps off get one grey line at the end, with Turn on….</li>
+        <li>Cost: Setup gets shorter, and the panel gets one more block.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- OPTION B -->
+  <div class="col">
+    <h2>B · Apps and Skills as Setup rows</h2>
+    <p class="tag">“Tools” splits into two Setup rows, Apps and Skills. The Apps switches unfold under the value, with no second label column.</p>
+    <div class="panel" id="B">
+      <div class="pbody">
+        <section class="block">
+          <div class="btitle">Setup</div>
+          <div class="grid">
+            <span class="lbl">Project</span><span>test-linear <span class="fg3">· no git</span></span>
+            <span class="lbl">Runs on</span><span>This Mac</span>
+            <span class="lbl">Apps</span>
+            <div class="open" data-fold>
+              <span class="fold" onclick="toggleFold(this)"><span data-summary="B"></span> <span class="chev">›</span></span>
+              <div class="fold-body" style="margin-top:6px">
+                <div data-list="B-all"></div>
+                <div class="hint">Only this conversation. <span class="link">Settings…</span></div>
+              </div>
+            </div>
+            <span class="lbl">Skills</span><span><span class="fg3">None ·</span> <span class="link">Add…</span></span>
+          </div>
+        </section>
+        <section class="block hrow"><span class="btitle">Read</span><span class="fg3">Nothing yet</span></section>
+        <section class="block hrow"><span class="btitle">Changes</span><span class="fg3">1 file ›</span></section>
+        <section class="block last"><div class="hrow"><span class="btitle">Plan</span><span class="fg3">None</span></div><div class="fg3" style="margin-top:8px">Short task — no plan needed. <span class="link" style="font-size:13px">Ask for one</span></div></section>
+      </div>
+      <div class="foot"><span><span class="meter"></span>38,2k of 1M ⌃</span><span>$0.26</span></div>
+    </div>
+    <div class="notes">
+      <b>Smallest change:</b> keeps the Setup layout and makes each row answer one question.
+      <ul>
+        <li>The list is 220pt wide: name + switch fit, and the reason sits under the name.</li>
+        <li>Apps and MCP servers share one list. A server says “MCP” in grey, so there are no subheadings.</li>
+        <li>Skills shows a count or “None · Add…”, without opening anything.</li>
+        <li>Cost: with 6+ apps the open list pushes Read and Changes down a lot.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- OPTION C -->
+  <div class="col">
+    <h2>C · A line plus a popover</h2>
+    <p class="tag">Setup stays four rows tall. Clicking the Tools value (a selector, no chevron) opens the switches in a floating menu.</p>
+    <div class="panel" id="C">
+      <div class="pbody">
+        <section class="block">
+          <div class="btitle">Setup</div>
+          <div class="grid">
+            <span class="lbl">Project</span><span>test-linear <span class="fg3">· no git</span></span>
+            <span class="lbl">Runs on</span><span>This Mac</span>
+            <span class="lbl">Tools</span><span style="min-width:0;display:block;padding-left:6px;margin-left:-6px"><span class="selector active" id="C-sel" onclick="togglePop()"><span data-summary="C"></span></span></span>
+          </div>
+        </section>
+        <section class="block hrow"><span class="btitle">Read</span><span class="fg3">Nothing yet</span></section>
+        <section class="block hrow"><span class="btitle">Changes</span><span class="fg3">1 file ›</span></section>
+        <section class="block last"><div class="hrow"><span class="btitle">Plan</span><span class="fg3">None</span></div><div class="fg3" style="margin-top:8px">Short task — no plan needed. <span class="link" style="font-size:13px">Ask for one</span></div></section>
+      </div>
+      <div class="foot"><span><span class="meter"></span>38,2k of 1M ⌃</span><span>$0.26</span></div>
+
+      <div class="pop" id="C-pop">
+        <div class="ph">In this conversation</div>
+        <div data-list="C-on"></div>
+        <div class="sep"></div>
+        <div data-list="C-off"></div>
+        <div class="sep"></div>
+        <div class="trow" style="padding:0 8px"><span class="ico"><svg viewBox="0 0 16 16"><path d="M4 2.5h6l2.5 2.5v8.5H4z"/><path d="M6.5 8h4M6.5 10.5h3"/></svg></span><span class="name"><div class="n">Skills</div><div class="d">None yet</div></span><span class="link">Add…</span></div>
+        <div class="sep"></div>
+        <div class="pf"><span class="fg3">Settings decides what's available.</span><span class="link">Manage…</span></div>
+      </div>
+    </div>
+    <div class="notes">
+      <b>Most compact:</b> the panel never changes height; the switches live in a menu, like the composer's +.
+      <ul>
+        <li>The same menu could be reused from the composer's + › “Connectors and MCP”: one component, two entry points.</li>
+        <li>Things off in Settings go to a second section, greyed, so the switchable ones come first.</li>
+        <li>Cost: you can't see the switches at a glance without opening the menu.</li>
+      </ul>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const icons = {
+  app: '<svg viewBox="0 0 16 16"><rect x="2.5" y="2.5" width="11" height="11" rx="3"/><path d="M5.5 8h5"/></svg>',
+  mcp: '<svg viewBox="0 0 16 16"><rect x="2.5" y="3" width="11" height="4" rx="1.2"/><rect x="2.5" y="9" width="11" height="4" rx="1.2"/><path d="M5 5h.01M5 11h.01"/></svg>',
+};
+// state: on = switched on here; avail = on in Settings
+const tools = [
+  { id: 'linear', name: 'Linear', kind: 'app', avail: true, on: true },
+  { id: 'notion', name: 'Notion', kind: 'app', avail: true, on: true },
+  { id: 'github', name: 'GitHub', kind: 'app', avail: true, on: false },
+  { id: 'sentry', name: 'Sentry', kind: 'app', avail: false, on: false, note: 'Off in Settings' },
+  { id: 'playwright', name: 'playwright', kind: 'mcp', avail: true, on: true },
+];
+
+function row(t, opts = {}) {
+  const cls = !t.avail ? 'offset' : !t.on ? 'offhere' : '';
+  const detail = !t.avail ? t.note : (opts.kindNote && t.kind === 'mcp' ? 'MCP server' : (!t.on && opts.offNote ? 'Off here' : ''));
+  const right = !t.avail
+    ? (opts.linkFix ? '<span class="link">Turn on…</span>' : '<span class="sw dis"></span>')
+    : `<span class="sw ${t.on ? 'on' : ''}" onclick="flip('${t.id}')"></span>`;
+  return `<div class="trow ${cls}">${opts.icon !== false ? `<span class="ico">${icons[t.kind]}</span>` : ''}
+    <span class="name"><div class="n">${t.name}</div>${detail ? `<div class="d">${detail}</div>` : ''}</span>${right}</div>`;
+}
+
+function summary(style) {
+  const on = tools.filter(t => t.avail && t.on);
+  if (style === 'A') return `${on.length} on`;
+  if (style === 'B') return on.map(t => t.name).join(', ');
+  if (style === 'C') return on.map(t => t.name).join(', ') + ' <span class="fg3">· no skills</span>';
+}
+
+function render() {
+  const set = (k, html) => document.querySelectorAll(`[data-list="${k}"]`).forEach(e => e.innerHTML = html);
+  set('A-apps', tools.filter(t => t.kind === 'app' && t.avail).map(t => row(t)).join(''));
+  const offA = tools.filter(t => !t.avail).map(t => t.name);
+  set('A-off', offA.length ? `${offA.join(', ')} ${offA.length === 1 ? 'is' : 'are'} off in Settings · <span class="link">Turn on…</span>` : '');
+  set('A-mcp', tools.filter(t => t.kind === 'mcp').map(t => row(t)).join(''));
+  set('B-all', tools.map(t => row(t, { icon: false, kindNote: true, linkFix: true })).join(''));
+  set('C-on', tools.filter(t => t.avail).map(t => row(t)).join(''));
+  set('C-off', tools.filter(t => !t.avail).map(t => row(t, { linkFix: true })).join(''));
+  for (const s of ['A', 'B', 'C']) document.querySelectorAll(`[data-summary="${s}"]`).forEach(e => e.innerHTML = summary(s));
+}
+function flip(id) { const t = tools.find(t => t.id === id); t.on = !t.on; render(); }
+function toggleFold(el) {
+  const box = el.closest('[data-fold]');
+  box.classList.toggle('open');
+  box.querySelector('.fold-body').classList.toggle('hide', !box.classList.contains('open'));
+}
+function togglePop() {
+  document.getElementById('C-pop').classList.toggle('hide');
+  document.getElementById('C-sel').classList.toggle('active');
+}
+render();
+</script>
+</body>
+</html>

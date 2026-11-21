@@ -128,6 +128,7 @@ struct SessionTab: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             setup.inspectorBlock()
+            ToolsBlock(engine: engine, thread: session, summary: summary).inspectorBlock()
             read.inspectorBlock()
             if !chatLens {
                 ChangesBlock(engine: engine, session: session, summary: summary, git: git, files: files,
@@ -151,10 +152,6 @@ struct SessionTab: View {
                 GridRow {
                     label("Runs on")
                     Text("This Mac").font(.system(size: 13))
-                }
-                GridRow {
-                    label("Tools")
-                    ToolsSummary(engine: engine, thread: session, summary: summary)
                 }
             }
         }
@@ -210,45 +207,120 @@ struct SessionTab: View {
     }
 }
 
-/// Setup › Tools: the apps and skills it can use, in one line; unfolds into the switches for this conversation.
-struct ToolsSummary: View {
+/// Tools, a block of its own (docs/design/tools-panel, option A): folded, how many apps and servers are on and the
+/// skills; open, at full width, the apps and MCP servers this session can switch (only for itself), then its skills.
+/// Connected apps or servers that Settings keeps off aren't switches here: one grey line at the end names them.
+struct ToolsBlock: View {
     let engine: EngineController
     let thread: ThreadModel
     let summary: SessionSummary
     @State private var servers: [McpServerInfo] = []
-    @State private var skills = 0
-    @State private var open = false
+    @State private var skills: [SessionCommand] = []
+    /// PIOPIO_DEMO_TOOLS_OPEN=1: captures open with Tools unfolded.
+    @State private var open = ProcessInfo.processInfo.environment["PIOPIO_DEMO_TOOLS_OPEN"] == "1"
 
     var body: some View {
         let choices = ToolChoices.compute(engine: engine, ref: summary.ref, servers: servers)
         let off = Set(summary.toolsOff ?? [])
-        let names = choices.filter { $0.available && !off.contains($0.id) }.map(\.title)
-        VStack(alignment: .leading, spacing: 8) {
-            if choices.isEmpty && skills == 0 {
-                HStack(spacing: 4) {
-                    Text("No apps or skills ·").font(.system(size: 13)).foregroundStyle(Color.dsFg3)
-                    SummaryLink("Add…") { ToolChoices.openSettings("Connectors") }.help("Connect apps and MCP servers, or add skills, in Settings")
+        let switchable = choices.filter(\.available)
+        let unavailable = choices.filter { !$0.available }
+        let on = switchable.filter { !off.contains($0.id) }.count
+        VStack(alignment: .leading, spacing: 0) {
+            if switchable.isEmpty && skills.isEmpty {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Tools").font(.system(size: 13, weight: .semibold))
+                    Spacer(minLength: 8)
+                    Text("None ·").font(.system(size: 13)).foregroundStyle(Color.dsFg3)
+                    SummaryLink("Add…") { ToolChoices.openSettings("Connectors") }
+                        .help("Connect apps and MCP servers, or add skills, in Settings")
                 }
             } else {
-                FoldButton(open: open, help: "What it can use, and switches for this conversation") { open.toggle() } label: {
-                    Text(Self.line(names: names, skills: skills)).font(.system(size: 13)).lineLimit(2).multilineTextAlignment(.leading)
+                Button { withAnimation(.easeOut(duration: 0.15)) { open.toggle() } } label: {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text("Tools").font(.system(size: 13, weight: .semibold))
+                        Spacer(minLength: 8)
+                        Text(Self.line(on: on, of: switchable.count, skills: skills.count)).font(.system(size: 13)).foregroundStyle(Color.dsFg3)
+                        Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).foregroundStyle(Color.dsFg3)
+                            .rotationEffect(.degrees(open ? 90 : 0))
+                    }
+                    .contentShape(Rectangle())
                 }
-                if open {
-                    UsesRow(engine: engine, thread: thread, summary: summary)
-                    SkillsRow(thread: thread)
-                }
+                .buttonStyle(.plain)
+                .help(open ? "Hide the tools" : "What it can use, and switches for this session")
+                .accessibilityValue(open ? "Expanded" : "Collapsed")
+                if open { list(switchable: switchable, unavailable: unavailable, off: off).padding(.top, 10) }
             }
         }
         .task(id: summary.ref.id) {
             servers = await ToolChoices.load(engine: engine, cwd: summary.ref.kind == .build ? summary.cwd : nil)
-            skills = await thread.commands().filter { $0.kind == .skill }.count
+            skills = await thread.commands().filter { $0.kind == .skill }
         }
     }
 
-    /// "Gmail, Calendar · 3 skills", "No apps on · 1 skill".
-    static func line(names: [String], skills: Int) -> String {
-        let apps = names.isEmpty ? "No apps on" : names.joined(separator: ", ")
-        return skills == 0 ? apps : "\(apps) · \(skills == 1 ? "1 skill" : "\(skills) skills")"
+    private func list(switchable: [ToolChoice], unavailable: [ToolChoice], off: Set<String>) -> some View {
+        let apps = switchable.filter { $0.group == .app }, mcp = switchable.filter { $0.group == .mcp }
+        return VStack(alignment: .leading, spacing: 0) {
+            if !apps.isEmpty {
+                subheading("Apps")
+                ForEach(apps) { ToolChoiceRow(choice: $0, off: off, thread: thread) }
+            }
+            if !mcp.isEmpty {
+                subheading("MCP servers")
+                ForEach(mcp) { ToolChoiceRow(choice: $0, off: off, thread: thread) }
+            }
+            subheading("Skills")
+            if skills.isEmpty {
+                HStack(spacing: 9) {
+                    Image(systemName: "sparkles").font(.system(size: 12)).foregroundStyle(Color.dsFg3).frame(width: 18)
+                    Text("None yet").font(.system(size: 13)).foregroundStyle(Color.dsFg3)
+                    Spacer(minLength: 4)
+                    SummaryLink("Add…") { ToolChoices.openSettings("Extensions") }
+                }
+                .frame(minHeight: 26)
+            } else {
+                ForEach(skills) { skill in
+                    HStack(alignment: .firstTextBaseline, spacing: 9) {
+                        Image(systemName: "sparkles").font(.system(size: 12)).foregroundStyle(Color.dsFg2).frame(width: 18)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(SkillsRow.name(skill)).font(.system(size: 13)).lineLimit(1)
+                            if !skill.description.isEmpty {
+                                Text(skill.description).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).lineLimit(2)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    }
+                    .padding(.vertical, 4)
+                    .help("Type /\(skill.name) to use it\(skill.source.map { " · from \($0)" } ?? "")")
+                }
+            }
+            HStack(spacing: 6) {
+                Text("Switches apply to this session only.").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
+                SummaryLink("Settings…") { ToolChoices.openSettings("Connectors") }
+            }
+            .padding(.top, 10)
+            if !unavailable.isEmpty {
+                let names = unavailable.map(\.title)
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text("\(ListFormatter.localizedString(byJoining: names)) \(names.count == 1 ? "is" : "are") off in Settings.")
+                        .font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).fixedSize(horizontal: false, vertical: true)
+                    SummaryLink("Turn on…") { ToolChoices.openSettings(unavailable.contains { $0.group == .app } ? "Connectors" : "MCP servers") }
+                }
+                .padding(.top, 4)
+                .help(unavailable.compactMap(\.note).first ?? "")
+            }
+        }
+    }
+
+    private func subheading(_ text: String) -> some View {
+        Text(text).font(.system(size: 12)).foregroundStyle(Color.dsFg3).padding(.top, 8).padding(.bottom, 2)
+    }
+
+    /// "3 on", "2 of 3 on · 1 skill", "4 skills".
+    static func line(on: Int, of total: Int, skills: Int) -> String {
+        var parts: [String] = []
+        if total > 0 { parts.append(on == total ? "\(on) on" : "\(on) of \(total) on") }
+        if skills > 0 { parts.append(skills == 1 ? "1 skill" : "\(skills) skills") }
+        return parts.joined(separator: " · ")
     }
 }
 

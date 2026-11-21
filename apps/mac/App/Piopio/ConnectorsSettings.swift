@@ -599,17 +599,22 @@ struct ConnectorTile: View {
     let id: String
     var size: CGFloat = 32
 
-    var body: some View {
-        let (symbol, color): (String, Color) = switch id {
-        case "google-calendar": ("calendar", Color(red: 0.26, green: 0.52, blue: 0.96))
-        case "outlook": ("envelope.fill", Color(red: 0.0, green: 0.47, blue: 0.83))
-        case "linear": ("checklist", Color(red: 0.37, green: 0.42, blue: 0.82))
-        case "notion": ("doc.text", Color.gray)
-        case "atlassian": ("square.stack.3d.up", Color.blue)
-        case "github": ("chevron.left.forwardslash.chevron.right", Color.gray)
-        case "sentry": ("exclamationmark.triangle", Color.purple)
-        default: ("app.connected.to.app.below.fill", Color.gray)
+    /// The app's glyph, also used bare (no tile) in the session panel's Tools block.
+    static func symbol(_ id: String) -> String {
+        switch id {
+        case "google-calendar": "calendar"
+        case "outlook": "envelope"
+        case "linear": "checklist"
+        case "notion": "doc.text"
+        case "atlassian": "square.stack.3d.up"
+        case "github": "chevron.left.forwardslash.chevron.right"
+        case "sentry": "exclamationmark.triangle"
+        default: "app.connected.to.app.below.fill"
         }
+    }
+
+    var body: some View {
+        let symbol = id == "outlook" ? "envelope.fill" : Self.symbol(id)
         Image(systemName: symbol).font(.system(size: size * 0.45, weight: .semibold)).foregroundStyle(Color.dsFg2)
             .frame(width: size, height: size)
             .background(Color.dsChip, in: RoundedRectangle(cornerRadius: size / 4, style: .continuous))

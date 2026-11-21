@@ -75,7 +75,8 @@ struct ToolChoiceRow: View {
     var body: some View {
         HStack(spacing: 9) {
             if icon {
-                Image(systemName: choice.group == .app ? "calendar" : "server.rack").font(.system(size: 12)).foregroundStyle(Color.dsFg2).frame(width: 18)
+                Image(systemName: choice.group == .app ? ConnectorTile.symbol(String(choice.id.dropFirst("connector:".count))) : "server.rack")
+                    .font(.system(size: 12)).foregroundStyle(Color.dsFg2).frame(width: 18)
             }
             VStack(alignment: .leading, spacing: 1) {
                 Text(choice.title).font(.system(size: 13)).foregroundStyle(choice.available ? Color.dsFg : Color.dsFg3).lineLimit(1)
