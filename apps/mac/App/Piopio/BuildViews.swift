@@ -71,8 +71,28 @@ struct BuildSessionView: View {
     /// The conversation keeps at least this much beside the panel.
     static let minConversation = 460.0
     private var panelShown: Bool { showInspector && !panelAutoHidden }
-    private var panelWidth: Double { inspectorTab == .browser ? 440 : inspectorTab == .files ? 280 : 300 }
     @AppStorage("sessionPanel") private var inspectorTab = SessionPanel.inspector
+    /// Each panel's width as you last dragged it (every session shares them; the Browser's also with chats).
+    @AppStorage("filesWidth") private var filesPreferred = 280.0
+    @AppStorage("browserWidth") private var browserPreferred = 440.0
+    @AppStorage("inspectorWidth") private var inspectorPreferred = 300.0
+    @State private var panelDragStart: Double?
+    /// The narrowest each panel goes; below that line the window hides it instead.
+    private var panelMin: Double { inspectorTab == .browser ? 320 : inspectorTab == .files ? 240 : 280 }
+    /// The widest the panel may be: the conversation keeps at least `minConversation`.
+    private var panelMax: Double { max(panelMin, sessionWidth - CardLayout.margin - Self.minConversation) }
+    private var panelPreferred: Double {
+        get { inspectorTab == .browser ? browserPreferred : inspectorTab == .files ? filesPreferred : inspectorPreferred }
+        nonmutating set {
+            switch inspectorTab {
+            case .browser: browserPreferred = newValue
+            case .files: filesPreferred = newValue
+            case .inspector: inspectorPreferred = newValue
+            }
+        }
+    }
+    /// The panel's width: yours, narrower when the window can't fit it.
+    private var panelWidth: Double { min(max(panelMin, panelPreferred), panelMax) }
     /// The file the Files panel shows in place of its tree (a path chip, a file card, Read).
     @State private var previewing: String?
     @State private var filesFilter = FilesFilter.all
@@ -86,6 +106,22 @@ struct BuildSessionView: View {
     @AppStorage("buildTerminal") private var showTerminal = false
 
     private var project: ProjectInfo? { engine.projects.first { $0.path == (summary.projectPath ?? summary.cwd) } }
+
+    /// The panel's leading edge: drag to resize it, between its narrowest and what leaves the conversation its room.
+    private var panelResizeHandle: some View {
+        Rectangle().fill(Color.clear).frame(width: 7).contentShape(Rectangle())
+            .pointerStyle(.columnResize)
+            .gesture(DragGesture(coordinateSpace: .global).onChanged { value in
+                if panelDragStart == nil { panelDragStart = panelWidth }
+                panelPreferred = min(panelMax, max(panelMin, (panelDragStart ?? panelWidth) - value.translation.width))
+            }.onEnded { _ in panelDragStart = nil })
+            .accessibilityLabel("\(inspectorTab.title) width").accessibilityValue("\(Int(panelWidth)) points")
+            .accessibilityAdjustableAction { direction in
+                panelPreferred = min(panelMax, max(panelMin, panelWidth + (direction == .increment ? 40 : -40)))
+            }
+            .help("Drag to resize the \(inspectorTab.title.lowercased()) panel")
+            .offset(x: -7)
+    }
 
     var body: some View {
         // The session in its card, and the panel beside it (docs/design/card-layout): Files and the Inspector flat on
@@ -150,12 +186,13 @@ struct BuildSessionView: View {
                 .frame(width: panelWidth)
                 .frame(maxHeight: .infinity, alignment: .top)
                 .contentCard(inspectorTab == .browser)
+                .overlay(alignment: .leading) { panelResizeHandle }
             }
         }
         .ownsContentCard()
         .onGeometryChange(for: Double.self) { $0.size.width } action: { width in
             // Crossing the line hides or brings back the panel; opening it in between is yours and stays.
-            let line = panelWidth + CardLayout.margin + Self.minConversation
+            let line = panelMin + CardLayout.margin + Self.minConversation
             let wasNarrow = sessionWidth < line, narrow = width < line
             sessionWidth = width
             guard narrow != wasNarrow else { return }
