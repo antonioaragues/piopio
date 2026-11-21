@@ -9,8 +9,7 @@ struct DataPane: View {
     @State private var result: URL?
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SettingsHeader(title: "Backup & costs", summary: "Keep a recoverable copy of Piopio and understand what its requests cost.")
-            CardTitle("Backup")
+            SettingsHeader(title: "Backup", summary: "A copy of Piopio you can restore, on this Mac or another one.")
             ListCard {
                 SettingRow(title: "Back up Piopio", subtitle: "Conversations, projects without a folder, agents, Build history, drafts, memory and settings. Project folders and Keychain secrets stay where they are; remote memory services need their own backup.", last: true) {
                     if busy { ProgressView().controlSize(.small) }
@@ -28,9 +27,7 @@ struct DataPane: View {
                         .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Color.accentColor)
                 }
             }
-            .padding(.top, 12).padding(.bottom, 22)
-            CardTitle("Request costs")
-            ListCard { CostDetails(engine: engine).frame(maxWidth: .infinity, alignment: .leading) }
+            .padding(.top, 12)
         }
     }
     private func confirm(_ title: String, _ detail: String) -> Bool {

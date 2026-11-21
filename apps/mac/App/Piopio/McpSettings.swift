@@ -57,6 +57,8 @@ struct McpPane: View {
     @State private var preset: McpPreset?
     @State private var importing: McpDetectResult.Found?
     @State private var showWaiting = false
+    /// "Cursor/tolaria" per line: servers found in other apps that you hid. Only new ones are offered again.
+    @AppStorage("dismissedMcpImports") private var dismissedRaw = ""
 
     var body: some View {
         Group {
@@ -171,14 +173,28 @@ struct McpPane: View {
         }
     }
 
-    /// Servers set up in other apps, offered for import (never imported on their own).
+    private var dismissed: Set<String> { Set(dismissedRaw.split(separator: "\n").map(String.init)) }
+
+    /// What other apps have that you haven't hidden here.
+    private var offered: [McpDetectResult.Found] {
+        found.compactMap { f in
+            var left = f
+            left.servers = f.servers.filter { !dismissed.contains("\(f.app)/\($0.name)") }
+            return left.servers.isEmpty ? nil : left
+        }
+    }
+
+    /// Servers set up in other apps, offered for import (never imported on their own). Hide stops offering them;
+    /// a server added there later is offered again.
     @ViewBuilder private var foundGroup: some View {
-        if !found.isEmpty {
+        if !offered.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
                 CardTitle("Found in other apps")
                 VStack(spacing: 8) {
-                    ForEach(found) { f in
+                    ForEach(offered) { f in
                         FoundCard(title: "\(f.servers.count) server\(f.servers.count == 1 ? "" : "s") in \(f.app)", detail: f.servers.map(\.name).joined(separator: ", ")) {
+                            Button("Hide") { hide(f) }.buttonStyle(PillStyle(kind: .toolbar, compact: true))
+                                .help("Don't offer these again. Servers you add in \(f.app) later still show up.")
                             Button("Review & import") { importing = f }.buttonStyle(PillStyle(compact: true))
                         }
                     }
@@ -186,6 +202,11 @@ struct McpPane: View {
             }
             .padding(.bottom, 22)
         }
+    }
+
+    private func hide(_ f: McpDetectResult.Found) {
+        let keys = f.servers.map { "\(f.app)/\($0.name)" }
+        withAnimation(.easeOut(duration: 0.2)) { dismissedRaw = (dismissed.union(keys)).sorted().joined(separator: "\n") }
     }
 
     /// Well-known servers you don't have yet, one click from a filled-in Add sheet.

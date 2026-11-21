@@ -144,7 +144,7 @@ struct ModelsPane: View {
                 roleRow(.quick, "Quick Chat")
                 roleRow(.agent, "New agents", last: true)
             }
-            Text("Billed to your own accounts. Keys stay in the macOS Keychain.").font(.system(size: 12)).foregroundStyle(Color.dsFg3).padding(.top, 12)
+            Text("Keys stay in the macOS Keychain.").font(.system(size: 12)).foregroundStyle(Color.dsFg3).padding(.top, 12)
 
             CardTitle("Background work").padding(.top, 22)
             ListCard {
@@ -177,8 +177,7 @@ struct ModelsPane: View {
         let models = engine.models.filter { $0.provider != "faux" }.count
         let ready = agents.filter { $0.status == .connected }.count
         // The models the picker offers: a provider's whole catalog (its row) minus the ones you hid, plus the agents'.
-        var parts = (count > 0 || ready == 0 ? ["\(count) provider\(count == 1 ? "" : "s")"] : []) + (ready > 0 ? ["\(ready) agent\(ready == 1 ? "" : "s")"] : []) + ["\(models) model\(models == 1 ? "" : "s") in the picker"]
-        if let month = engine.usage?.monthUsd, month > 0 { parts.append("\(MainSidebar.money(month)) this month") }
+        let parts = (count > 0 || ready == 0 ? ["\(count) provider\(count == 1 ? "" : "s")"] : []) + (ready > 0 ? ["\(ready) agent\(ready == 1 ? "" : "s")"] : []) + ["\(models) model\(models == 1 ? "" : "s") in the picker"]
         return parts.joined(separator: " · ")
     }
 
@@ -332,9 +331,8 @@ private struct ConnectedProviderRow: View {
     }
 
     @ViewBuilder private var spend: some View {
-        if provider.id == "openrouter", let month = engine.usage?.monthUsd {
-            figure(MainSidebar.money(month), "this month")
-        } else if let e = provider.endpoint {
+        // No spending here: what requests cost lives with the app's usage, not in Models.
+        if let e = provider.endpoint {
             figure(e.local ? "Free" : "Yours", e.local ? "runs locally" : "your server")
         } else if provider.connectedWith == .oauth, provider.billing?.contains("subscription") == true {
             figure("Plan", "subscription")
@@ -548,15 +546,6 @@ struct ProviderDetailView: View {
                 if list.count > 200 { Text("Showing 200 of \(list.count). Search to find the rest.").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).padding(10) }
             }
 
-            if provider.id == "openrouter", let month = engine.usage?.monthUsd {
-                HStack {
-                    Text("This month").font(.system(size: 13))
-                    Text(MainSidebar.money(month)).font(.system(size: 13, weight: .semibold))
-                    Spacer()
-                    Link("Billing ›", destination: URL(string: "https://openrouter.ai/activity")!).font(.system(size: 12.5))
-                }
-                .padding(.top, 18)
-            }
 
             Rectangle().fill(Color.dsLine).frame(height: 0.5).padding(.top, 22)
             HStack(alignment: .center) {

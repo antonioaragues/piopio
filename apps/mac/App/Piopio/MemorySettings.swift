@@ -144,11 +144,11 @@ struct MemoryPane: View {
                 Task { await engine.updateSettings(SettingsPatch(aboutMe: .init(capture: v))) }
             }))
             ForEach(Array(agents.enumerated()), id: \.element.id) { i, agent in
-                ToggleRow(title: "\(agent.name) learns facts by itself", subtitle: agent.provider == nil || agent.provider == "builtin" ? "After a quiet moment, from what was said; newer facts replace older ones" : "Its MCP memory decides what it keeps", last: i == agents.count - 1, isOn: Binding(get: { agent.learns }, set: { v in setLearning(agent, v) }))
+                ToggleRow(title: "\(agent.name) learns facts by itself", subtitle: agent.provider == nil || agent.provider == "builtin" ? nil : "Its MCP memory decides what it keeps", last: i == agents.count - 1, isOn: Binding(get: { agent.learns }, set: { v in setLearning(agent, v) }))
                     .disabled(agent.provider != nil && agent.provider != "builtin")
             }
         }
-        FinePrint("Everything learned shows in the conversation with Undo, and in Browse with what it replaced.").padding(.top, 8)
+        FinePrint("What's learned shows in the conversation, with Undo.").padding(.top, 12)
     }
 
     private func setLearning(_ agent: MemoryBanksResult.Agent, _ learn: Bool) {
@@ -164,15 +164,18 @@ struct MemoryPane: View {
         let all = banks?.banks ?? []
         CardTitle("Your data")
         ListCard {
-            dataRow("Export built-in memory", "memory.json and memory.md: every fact and message Piopio's own memory keeps, and what replaced what. Not other providers; Settings › Backup & costs keeps everything.") {
+            dataRow("Export", "Piopio's own memory, as JSON and Markdown") {
                 Button("Export…", action: export).buttonStyle(PillStyle(compact: true)).disabled(all.isEmpty)
             }
             RowDivider(inset: 14)
-            dataRow("Rebuild search index", settings?.memory.searchesByMeaning == true ? "Computes the meaning again for memories that miss it" : "Only for searching by meaning") {
-                Button("Rebuild", action: reindex).buttonStyle(PillStyle(compact: true)).disabled(all.isEmpty || settings?.memory.searchesByMeaning != true)
+            // Only searching by meaning has an index to rebuild.
+            if settings?.memory.searchesByMeaning == true {
+                dataRow("Rebuild search index", "For memories still missing their meaning") {
+                    Button("Rebuild", action: reindex).buttonStyle(PillStyle(compact: true)).disabled(all.isEmpty)
+                }
+                RowDivider(inset: 14)
             }
-            RowDivider(inset: 14)
-            dataRow("Erase memory", "One part, or everything. About me's history goes with it.", last: true) {
+            dataRow("Erase", "One part, or everything", last: true) {
                 Menu {
                     ForEach(all) { b in
                         Button("\(b.agent.map { "\($0.name) · " } ?? "")\(b.label) (\(b.records.formatted()))") { erasing = EraseTarget(bank: b.bank, label: b.agent.map { "\($0.name) · \(b.label)" } ?? b.label, records: b.records) }

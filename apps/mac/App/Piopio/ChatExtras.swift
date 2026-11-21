@@ -359,8 +359,8 @@ private struct AboutMeHistorySheet: View {
     }
 }
 
-/// How memory is searched (docs/spec/14-memory M1, §7): by words on this Mac (the default), or by meaning through
-/// OpenRouter, each explained with the same example and what it costs.
+/// How memory is searched (docs/spec/14-memory M1, §7): by words on this Mac (the default), or also by meaning through
+/// OpenRouter. One switch; what it sends and costs is in its help.
 struct MemorySearchCard: View {
     let engine: EngineController
     /// Bumped by Rebuild index, so the counts refresh.
@@ -373,48 +373,26 @@ struct MemorySearchCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            CardTitle("How memory is searched")
+            CardTitle("Search")
             ListCard {
-                option(meaning: false, title: "By words", badge: "On this Mac",
-                       text: "Finds memories that use the words of the question. Asking where you live finds “I live in Madrid”, but not “First night in the new flat in Chamberí”. Nothing leaves your Mac.")
-                RowDivider(inset: 44)
-                option(meaning: true, title: "By meaning", badge: "OpenRouter",
-                       text: "Also finds memories that say the same thing in other words, like the Chamberí message. Each memory's text is sent once to OpenRouter, which turns it into numbers that capture what it means (an “embedding”); those stay on this Mac. About $0.002 per 1,000 messages.")
+                SettingRow(title: "Search by meaning", subtitle: subtitle, subtitleColor: warning ? .dsAmber : .dsFg3, last: true) {
+                    Toggle("", isOn: Binding(get: { byMeaning }, set: { choose($0) })).toggleStyle(.switch).controlSize(.small).labelsHidden()
+                        .disabled(!canUseMeaning && !byMeaning)
+                }
+                .help("Off, memory is found by the words of the question, on this Mac. On, it also finds the same idea said differently: each memory's text is sent once to OpenRouter to compute its meaning (about $0.002 per 1,000 messages), which stays on this Mac.")
             }
-            FinePrint("For About me and agents' memory. In Piopio's own test of 40 questions over six months of messages, right answers went from 25 by words to 38 by meaning. Turning it off goes back to words; nothing is lost.")
-                .padding(.top, 8)
         }
         .task(id: tick) { await refresh() }
     }
 
-    private func option(meaning: Bool, title: String, badge: String, text: String) -> some View {
-        let selected = byMeaning == meaning
-        let unavailable = meaning && !canUseMeaning && !selected
-        return Button { choose(meaning) } label: {
-            HStack(alignment: .top, spacing: 12) {
-                ZStack {
-                    Circle().strokeBorder(selected ? Color.accentColor : Color.dsFg3.opacity(0.5), lineWidth: selected ? 5 : 1.2)
-                }
-                .frame(width: 16, height: 16).padding(.top, 2)
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 8) {
-                        Text(title).font(.system(size: 13.5, weight: .semibold)).foregroundStyle(unavailable ? Color.dsFg3 : Color.dsFg)
-                        SettingsBadge(badge, tint: meaning ? nil : .green)
-                    }
-                    Text(text).font(.system(size: 12)).foregroundStyle(Color.dsFg2).fixedSize(horizontal: false, vertical: true)
-                    if unavailable {
-                        Text("Connect OpenRouter (or an OpenAI API key) in Models first.").font(.system(size: 11.5)).foregroundStyle(Color.dsAmber)
-                    } else if selected, meaning, let line = statusLine {
-                        Text(line).font(.system(size: 11.5)).foregroundStyle(status?.reason == "failing" || status?.reason == "no_key" ? Color.dsAmber : Color.dsFg3)
-                    }
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 14).padding(.vertical, 12)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .disabled(unavailable)
+    private var warning: Bool {
+        (!canUseMeaning && !byMeaning) || status?.reason == "failing" || status?.reason == "no_key"
+    }
+
+    private var subtitle: String {
+        if !canUseMeaning && !byMeaning { return "Needs OpenRouter (or an OpenAI API key) in Models" }
+        if byMeaning, let line = statusLine { return line }
+        return byMeaning ? "Also finds the same idea in other words, through OpenRouter" : "By the words of the question, on this Mac"
     }
 
     private func choose(_ meaning: Bool) {

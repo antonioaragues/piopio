@@ -9,7 +9,7 @@ struct SettingsView: View {
     @State private var section: Section = Section(demo: ProcessInfo.processInfo.environment["PIOPIO_DEMO_SETTINGS_SECTION"] ?? "") ?? .providers
 
     enum Section: String, CaseIterable, Identifiable {
-        case general = "General", providers = "Models", connectors = "Connectors", chat = "Chat", memory = "Memory", approvals = "Approvals", github = "Git & GitHub", mcp = "MCP servers", browser = "Browser", extensions = "Extensions", engines = "This Mac & cloud", data = "Backup & costs"
+        case general = "General", providers = "Models", connectors = "Connectors", chat = "Chat", memory = "Memory", approvals = "Approvals", github = "Git & GitHub", mcp = "MCP servers", browser = "Browser", extensions = "Extensions", engines = "This Mac & cloud", data = "Backup"
         var id: String { rawValue }
         init?(demo: String) {
             switch demo {
@@ -187,54 +187,128 @@ private struct GeneralPane: View {
 // MARK: Approvals
 
 /// Per project: the approval mode new sessions start with, and the "Always allow" rules (docs/spec/05-build §6, AP2).
+/// The page lists projects, one row each, with a search once there are many; each opens its own page, so the page
+/// stays the same size however many projects there are.
 private struct ApprovalsPane: View {
     let engine: EngineController
+    @State private var open: String?
+    @State private var query = ""
 
     var body: some View {
-        SettingsHeader(title: "Approvals", summary: "What Build sessions may do without asking. Risky commands and writes outside the project always ask.")
-        VStack(alignment: .leading, spacing: 0) {
-            CardTitle("All projects")
-            ListCard {
-                ToggleRow(title: "Keep commands inside the project", subtitle: "Commands run in macOS's sandbox: they can read and use the network, but only write in the project, temporary folders and package caches. To write elsewhere they ask you first. Full access runs them as before.", isOn: Binding(get: { engine.settings?.build?.sandbox ?? true }, set: { v in
-                    Task { await engine.updateSettings(SettingsPatch(build: .init(sandbox: v))) }
-                }))
-                ToggleRow(title: "Auto review", subtitle: "In Auto-edit, before asking you about a command, the session's own model looks at it and runs the clearly safe ones. It costs a request per command and can be wrong; risky commands still ask.", last: true, isOn: Binding(get: { engine.settings?.build?.autoReview ?? false }, set: { v in
-                    Task { await engine.updateSettings(SettingsPatch(build: .init(autoReview: v))) }
-                }))
+        Group {
+            if let id = open, let project = engine.projects.first(where: { $0.id == id }) {
+                ProjectApprovalsPage(engine: engine, project: project) { open = nil }
+            } else {
+                main
             }
         }
-        .padding(.bottom, 22)
         .task { if engine.settings == nil { await engine.loadSettings() } }
-        if engine.projects.isEmpty {
-            Text("Add a project in Build to set its approvals.").font(.system(size: 13)).foregroundStyle(Color.dsFg3)
+    }
+
+    private var shown: [ProjectInfo] {
+        let q = query.trimmingCharacters(in: .whitespaces)
+        return q.isEmpty ? engine.projects : engine.projects.filter { $0.name.localizedCaseInsensitiveContains(q) }
+    }
+
+    private var main: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            SettingsHeader(title: "Approvals", summary: "What Build sessions may do without asking. Risky commands always ask.")
+            CardTitle("All projects")
+            ListCard {
+                ToggleRow(title: "Keep commands inside the project", subtitle: "They read and use the network freely, but writing outside the project asks", isOn: Binding(get: { engine.settings?.build?.sandbox ?? true }, set: { v in
+                    Task { await engine.updateSettings(SettingsPatch(build: .init(sandbox: v))) }
+                }))
+                .help("Commands run in macOS's sandbox: they can read and use the network, but only write in the project, temporary folders and package caches. To write elsewhere they ask you first. Off, they run with full access.")
+                ToggleRow(title: "Auto review", subtitle: "In Auto-edit, the model runs clearly safe commands instead of asking you", last: true, isOn: Binding(get: { engine.settings?.build?.autoReview ?? false }, set: { v in
+                    Task { await engine.updateSettings(SettingsPatch(build: .init(autoReview: v))) }
+                }))
+                .help("Before asking you about a command, the session's own model looks at it and runs the clearly safe ones. It costs a request per command and can be wrong; risky commands still ask.")
+            }
+            CardTitle(title: "Projects", detail: engine.projects.isEmpty ? nil : "\(engine.projects.count)") {
+                if engine.projects.count > 6 {
+                    TextField("Search", text: $query).textFieldStyle(.roundedBorder).controlSize(.small).frame(width: 180)
+                }
+            }
+            .padding(.top, 22)
+            if engine.projects.isEmpty {
+                FinePrint("Add a project in Build to set its approvals.")
+            } else if shown.isEmpty {
+                FinePrint("No project matches “\(query)”.")
+            } else {
+                ListCard {
+                    ForEach(Array(shown.enumerated()), id: \.element.id) { i, project in
+                        SettingsListRow(name: project.name, dot: project.needsTrust && project.trust == .undecided ? .dsAmber : nil, open: { open = project.id }) {
+                            MemoryTile(symbol: "folder", color: .gray)
+                        } subtitle: {
+                            Text(Self.line(project))
+                        } trailing: { EmptyView() }
+                        if i < shown.count - 1 { RowDivider() }
+                    }
+                }
+            }
+            if !engine.projects.isEmpty {
+                FinePrint("Rules come from “Always for …” on an approval card and apply to every session in the project.").padding(.top, 12)
+            }
         }
-        VStack(alignment: .leading, spacing: 22) {
-            ForEach(engine.projects) { project in
-                VStack(alignment: .leading, spacing: 0) {
-                    CardTitle(project.name)
-                    ListCard {
-                        if project.needsTrust || project.trust != .undecided {
-                            SettingRow(title: "Project setup", subtitle: "Loads the project's .pi extensions, MCP servers, prompts and skills. Shared with the pi CLI.") {
-                                Picker("", selection: Binding(get: { project.trust }, set: { value in
-                                    if value != .undecided { Task { await engine.setTrust(value == .trusted, for: project) } }
-                                })) {
-                                    Text("Trusted").tag(ProjectInfo.Trust.trusted)
-                                    Text("Not trusted").tag(ProjectInfo.Trust.untrusted)
-                                    if project.trust == .undecided { Text("Not decided").tag(ProjectInfo.Trust.undecided) }
-                                }
-                                .labelsHidden()
-                                .fixedSize()
-                            }
-                        }
-                        SettingRow(title: "New sessions", subtitle: ApprovalModeMenu.summary(project.approvalMode), last: project.rules.isEmpty) {
-                            Picker("", selection: Binding(get: { project.approvalMode }, set: { mode in Task { await engine.setApprovalMode(mode, for: project) } })) {
-                                ForEach(ApprovalMode.allCases) { Text(ApprovalModeMenu.title($0)).tag($0) }
+    }
+
+    /// "Auto-edit · 3 rules", "Ask · not trusted".
+    static func line(_ project: ProjectInfo) -> String {
+        let rules = project.rules.count
+        var parts = [ApprovalModeMenu.title(project.approvalMode)]
+        if rules > 0 { parts.append("\(rules) rule\(rules == 1 ? "" : "s")") }
+        if project.needsTrust, project.trust == .undecided { parts.append("setup not decided") } else if project.trust == .untrusted { parts.append("not trusted") }
+        return parts.joined(separator: " · ")
+    }
+}
+
+/// One project's approvals: whether its .pi setup loads, the mode new sessions start in, and its "Always allow" rules.
+private struct ProjectApprovalsPage: View {
+    let engine: EngineController
+    let project: ProjectInfo
+    let back: () -> Void
+
+    var body: some View {
+        SettingsDetail(back: "Approvals", title: project.name, goBack: back) {
+            MemoryTile(symbol: "folder", color: .gray, size: 48)
+        } status: {
+            Text(project.path.replacingOccurrences(of: NSHomeDirectory(), with: "~")).truncationMode(.middle)
+        } actions: {
+            EmptyView()
+        } content: {
+            VStack(alignment: .leading, spacing: 0) {
+                CardTitle("Sessions")
+                ListCard {
+                    if project.needsTrust || project.trust != .undecided {
+                        SettingRow(title: "Project setup", subtitle: "Its .pi extensions, MCP servers, prompts and skills") {
+                            Picker("", selection: Binding(get: { project.trust }, set: { value in
+                                if value != .undecided { Task { await engine.setTrust(value == .trusted, for: project) } }
+                            })) {
+                                Text("Trusted").tag(ProjectInfo.Trust.trusted)
+                                Text("Not trusted").tag(ProjectInfo.Trust.untrusted)
+                                if project.trust == .undecided { Text("Not decided").tag(ProjectInfo.Trust.undecided) }
                             }
                             .labelsHidden()
                             .fixedSize()
                         }
+                    }
+                    SettingRow(title: "New sessions start in", subtitle: ApprovalModeMenu.summary(project.approvalMode), last: true) {
+                        Picker("", selection: Binding(get: { project.approvalMode }, set: { mode in Task { await engine.setApprovalMode(mode, for: project) } })) {
+                            ForEach(ApprovalMode.allCases) { Text(ApprovalModeMenu.title($0)).tag($0) }
+                        }
+                        .labelsHidden()
+                        .fixedSize()
+                    }
+                }
+            }
+            VStack(alignment: .leading, spacing: 0) {
+                CardTitle("Always allowed", detail: project.rules.isEmpty ? nil : "\(project.rules.count)")
+                if project.rules.isEmpty {
+                    FinePrint("Nothing yet. “Always for …” on an approval card adds a rule here.")
+                } else {
+                    ListCard {
                         ForEach(project.rules) { rule in
-                            SettingRow(title: rule.pattern, subtitle: rule.kind == .command ? "Command, with any arguments" : rule.kind == .tool ? "Tool, always allowed" : "Path, always allowed", last: rule.id == project.rules.last?.id) {
+                            SettingRow(title: rule.pattern, subtitle: rule.kind == .command ? "Command, with any arguments" : rule.kind == .tool ? "Tool" : "Path", last: rule.id == project.rules.last?.id) {
                                 Button { Task { await engine.removeRule(rule, from: project) } } label: {
                                     Image(systemName: "minus.circle.fill").foregroundStyle(Color.dsFg3)
                                 }
@@ -246,8 +320,6 @@ private struct ApprovalsPane: View {
                 }
             }
         }
-        Text("Rules come from “Always for …” on an approval card. They apply to every session in the project.")
-            .font(.system(size: 12)).foregroundStyle(Color.dsFg3).padding(.top, 10)
     }
 }
 

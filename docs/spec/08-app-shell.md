@@ -69,5 +69,5 @@ the user chose 1A · 2A · 3A.
   called "<agent> › Run <date time>". An untitled export is "Conversation".
 - **EX4 It works without the conversation open.** `sessions.export` also returns the visuals the export shows
   (`visuals: [{callId, title, html}]`), and the app draws them in their markers' places (docs/spec/25 §16).
-- Not part of this: memory export (Settings › Memory), backup (Settings › Backup & costs) and the usage CSV keep their
+- Not part of this: memory export (Settings › Memory), backup (Settings › Backup) and the usage CSV keep their
   own buttons.
