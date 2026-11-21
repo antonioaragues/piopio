@@ -10,6 +10,8 @@
  */
 import { durableConnectorsExtension } from "../connectors/extension.js";
 import type { ConnectorHub } from "../connectors/hub.js";
+import { modelName, moreName } from "../connectors/mcp-remote.js";
+import { isMcp } from "../connectors/types.js";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { ConversationBusy, createRegistry, Harness, type Conversation, type ConversationWatch, type Extension, type SubmissionDraft } from "@earendil-works/pi-durable";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
@@ -776,6 +778,12 @@ function withConnectorApprovals(def: AgentDefinition, hub: ConnectorHub | undefi
 			if (g.permission === "ask") for (const t of g.tools) asked.add(t);
 			// Sending and deleting (mail_send, calendar_delete_event, an MCP app's delete tools) ask whenever they're on.
 			if ((g.access === "send" || g.access === "destructive") && g.permission !== "off") for (const t of g.tools) asked.add(t);
+		}
+		// An MCP app's other tools go through one `<prefix>_more` tool: it asks when any tool behind it would.
+		const def = hub.definition(c.id);
+		if (def && isMcp(def) && def.mcp.core) {
+			const behind = new Set(hub.capabilities(c.id).flatMap((g) => g.tools).filter((t) => !def.mcp.core!.some((name) => modelName(def, name) === t)));
+			if ([...behind].some((t) => asked.has(t))) asked.add(moreName(def));
 		}
 	}
 	const rules = [...new Set([...(def.policies?.requireApproval ?? []), ...asked])];

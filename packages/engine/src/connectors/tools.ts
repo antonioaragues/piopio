@@ -6,9 +6,9 @@
  */
 import { Type, type TSchema } from "typebox";
 import type { Account, ConnectorHub } from "./hub.js";
-import { callTitle, modelName } from "./mcp-remote.js";
+import { callTitle, modelName, moreName, splitTools } from "./mcp-remote.js";
 import { effective, type Access } from "./permissions.js";
-import type { Calendar, CalendarEvent, EventInput, Mailbox } from "./types.js";
+import type { Calendar, CalendarEvent, EventInput, Mailbox, McpToolInfo } from "./types.js";
 
 export type { Access };
 
@@ -322,35 +322,72 @@ function mcpTools(hub: ConnectorHub, scope: "chat" | "agent", off: (connector: s
 	return [...byApp.values()].flatMap((accounts) => {
 		const { def, tools } = accounts[0]!;
 		const several = accounts.length > 1;
-		return tools.flatMap((tool): ConnectorTool[] => {
+		const on = tools.filter((t) => hub.permission(def.id, modelName(def, t.name)) !== "off");
+		const { core, rest } = splitTools(def, on);
+		const accountParam = { type: "string", description: `Which ${def.name} account: ${accounts.map((a) => a.account.label).join(", ")}.` };
+		/** The account a call is for, or why it can't tell. */
+		const pick = (wanted: unknown) => {
+			if (!several) return accounts[0]!;
+			const w = String(wanted ?? "").toLowerCase();
+			return accounts.find((a) => a.account.label.toLowerCase() === w || a.account.id.toLowerCase() === w) ?? accounts.find((a) => w && a.account.label.toLowerCase().includes(w));
+		};
+		const whichAccount = { text: `Say which ${def.name} account to use (the "account" argument): ${accounts.map((a) => a.account.label).join(", ")}.`, isError: true };
+		/** Runs one of the server's tools: off refuses, asks first where it should, then calls the account's server. */
+		const runTool = async (tool: McpToolInfo, account: (typeof accounts)[number], args: Record<string, unknown>, confirm: Confirm) => {
 			const name = modelName(def, tool.name);
-			if (hub.permission(def.id, name) === "off") return [];
+			if (hub.permission(def.id, name) === "off") return { text: offText(name, def.id) };
+			const declined = await gate(confirm, name, def.id, tool.access, callTitle(def, tool, args), args);
+			if (declined) return { text: declined };
+			const result = await account.call(tool.name, args);
+			return { text: result.text, ...(result.isError ? { isError: true } : {}) };
+		};
+
+		const direct = core.map((tool): ConnectorTool => {
 			const schema = tool.inputSchema as { properties?: Record<string, unknown>; required?: string[] };
 			const parameters = several
-				? { ...schema, type: "object", properties: { ...schema.properties, account: { type: "string", description: `Which ${def.name} account: ${accounts.map((a) => a.account.label).join(", ")}.` } }, required: [...(schema.required ?? []), "account"] }
+				? { ...schema, type: "object", properties: { ...schema.properties, account: accountParam }, required: [...(schema.required ?? []), "account"] }
 				: { ...schema, type: "object", properties: schema.properties ?? {} };
-			return [
-				{
-					name,
-					label: tool.title ?? `${def.name}: ${tool.name.replace(/[_-]+/g, " ")}`,
-					capability: "mcp",
-					description: `${def.name}: ${tool.description}`,
-					parameters: parameters as unknown as TSchema,
-					access: () => tool.access,
-					run: async (raw, confirm) => {
-						const { account: wanted, ...args } = raw;
-						const w = String(wanted ?? "").toLowerCase();
-						const use = several ? accounts.find((a) => a.account.label.toLowerCase() === w || a.account.id.toLowerCase() === w) ?? accounts.find((a) => w && a.account.label.toLowerCase().includes(w)) : accounts[0];
-						if (!use) return { text: `Say which ${def.name} account to use (the "account" argument): ${accounts.map((a) => a.account.label).join(", ")}.`, isError: true };
-						if (hub.permission(def.id, name) === "off") return { text: offText(name, def.id) };
-						const declined = await gate(confirm, name, def.id, tool.access, callTitle(def, tool, args), args);
-						if (declined) return { text: declined };
-						const result = await use.call(tool.name, args);
-						return { text: result.text, ...(result.isError ? { isError: true } : {}) };
-					},
+			return {
+				name: modelName(def, tool.name),
+				label: tool.title ?? `${def.name}: ${tool.name.replace(/[_-]+/g, " ")}`,
+				capability: "mcp",
+				description: `${def.name}: ${tool.description}`,
+				parameters: parameters as unknown as TSchema,
+				access: () => tool.access,
+				run: async (raw, confirm) => {
+					const { account: wanted, ...args } = raw;
+					const account = pick(wanted);
+					return account ? runTool(tool, account, args, confirm) : whichAccount;
 				},
-			];
+			};
 		});
+		if (!rest.length) return direct;
+
+		const brief = (t: McpToolInfo) => `${t.name}: ${(t.description.split(/(?<=\.)\s|\n/)[0] ?? t.name).slice(0, 90)}`;
+		const more: ConnectorTool = {
+			name: moreName(def),
+			label: `${def.name}: other tools`,
+			capability: "mcp",
+			description: [
+				`${def.name}'s other tools, by name. Call with only "tool" to see what it takes, then with "tool" and "arguments" to run it. Changes ask the user first, as with the other ${def.name} tools.`,
+				...rest.map(brief),
+			].join("\n"),
+			parameters: Type.Object({
+				tool: Type.String({ description: "One of the tool names listed above." }),
+				arguments: Type.Optional(Type.Record(Type.String(), Type.Unknown(), { description: "The tool's arguments, as its schema says." })),
+				...(several ? { account: Type.String({ description: accountParam.description }) } : {}),
+			}),
+			access: (args) => rest.find((t) => t.name === args.tool)?.access ?? "read",
+			run: async (raw, confirm) => {
+				const tool = rest.find((t) => t.name === raw.tool) ?? core.find((t) => t.name === raw.tool);
+				if (!tool) return { text: `${def.name} has no tool “${String(raw.tool)}” here. These are: ${rest.map((t) => t.name).join(", ")}.`, isError: true };
+				if (raw.arguments === undefined) return { text: `${tool.name}: ${tool.description}\n\nArguments (JSON Schema):\n${JSON.stringify(tool.inputSchema)}` };
+				const account = pick(raw.account);
+				if (!account) return whichAccount;
+				return runTool(tool, account, (raw.arguments ?? {}) as Record<string, unknown>, confirm);
+			},
+		};
+		return [...direct, more];
 	});
 }
 

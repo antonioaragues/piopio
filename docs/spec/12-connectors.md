@@ -76,9 +76,15 @@ adds a second account, and then the tools take an `account` argument.
   refresh. Its state (the registered client and the tokens) is kept in the Keychain as `connector.linear.<user id>`,
   never in `connectors.json`.
 - The server's tools reach conversations as `linear_<tool>`. Linear doesn't publish its tool list, so each tool is
-  sorted by what it does: the server's `readOnlyHint` / `destructiveHint`, then its name (`list_`, `get_`, `search_`…
-  read; `delete_`, `remove_`, `archive_` delete), and anything else counts as a change and asks. Settings shows three
-  rows: **Find and read**, **Create and change**, **Delete**.
+  sorted by what it does: a clear verb in its name first (`delete_`, `retire_`, `merge_` delete; `save_`, `create_`,
+  `update_`, `share_`… change), then the server's `readOnlyHint` / `destructiveHint`, then read verbs (`list_`, `get_`,
+  `search_`, `whoami`); anything else counts as a change and asks. Names come first because Linear marks its upserts
+  (`save_issue` creates or updates an issue) destructive: trusting the hint left creating issues in Delete, off, in the
+  first real run. Settings shows three rows: **Find and read**, **Create and change**, **Delete**.
+- Linear offers about **70 tools** (~100 KB of descriptions and schemas). Thirteen everyday ones go to conversations
+  directly (issues, comments, projects, teams, users, statuses, labels, cycles; ~30 KB), and one **`linear_more`**
+  tool reaches the others by name: called with a tool's name it returns that tool's schema, and with arguments it runs
+  it, asking first like the rest. In agents, `linear_more` asks whenever any tool behind it would.
 - Permissions are kept per row (`linear.read`, `linear.write`, `linear.delete`), not per tool, so a tool Linear adds
   later follows its row. A tool that's Off isn't offered to the model at all.
 - The tool list is kept in `connectors.json` so a conversation gets the tools without waiting for Linear, and is
@@ -87,12 +93,13 @@ adds a second account, and then the tools take an `account` argument.
   in Settings, like Google and Outlook.
 
 **Not done yet.**
-- Not tried against a real Linear workspace from the app yet (the engine test uses a fake Linear: discovery,
-  registration, sign-in, a read, an approval, "Don't ask again", disconnect).
+- Tried against a real workspace on 2026-11-21: sign-in, who signed in (`get_user` "me") and reads work. Creating
+  issues waits on the name-first sorting above (re-tried after the engine restarts). The engine test uses a fake Linear
+  that marks `save_*` destructive like the real one: sign-in, a read, `linear_more`, approvals, "Don't ask again",
+  disconnect.
 - Linear **as a trigger** (a label or an assignment starts a session) needs Linear to send events to a server; that
   waits for the user's own Cloudflare Worker (13, 30), since Piopio has no backend.
-- All of Linear's tools (about two dozen) go to every conversation where it's on; tool search for many tools (§4) is
-  still to come.
+- Which tools are core is fixed in `linear.ts`; general tool search for many tools (§4) is still to come.
 - A custom MCP connector from Settings (an address plus sign-in, §4 "Adding your own") can reuse this path; it isn't
   offered yet.
 

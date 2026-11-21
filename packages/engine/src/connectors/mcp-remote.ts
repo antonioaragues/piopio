@@ -52,15 +52,24 @@ export const memoryIO = (): StateIO & { state?: McpOAuthState } => {
 	return io;
 };
 
-/** What a server's tool does, from what the app says, the server's hints, then its name; unsure means it changes things. */
+const DELETES = /^(delete|remove|archive|retire|destroy|purge|trash|merge)$/;
+const CHANGES = /^(create|save|update|add|set|mark|share|unshare|restore|resolve|submit|prepare|upload|assign|move|edit|post|send|comment|link|unlink|close|reopen)$/;
+const READS = /^(list|get|search|find|read|fetch|query|show|view|lookup|whoami|extract|describe|count)$/;
+
+/**
+ * What a server's tool does: what the app says, then a clear verb in its name, then the server's hints, unsure meaning
+ * it changes things. Names come before hints because servers mark upserts destructive (Linear's save_issue creates or
+ * updates an issue, and is marked destructive because it can overwrite).
+ */
 export function accessOf(tool: Pick<Tool, "name" | "annotations">, overrides?: Record<string, Access>): Access {
 	const set = overrides?.[tool.name];
 	if (set) return set;
-	if (tool.annotations?.destructiveHint === true && tool.annotations.readOnlyHint !== true) return "destructive";
-	if (tool.annotations?.readOnlyHint === true) return "read";
 	const verb = tool.name.toLowerCase().split(/[_\-.]/)[0] ?? "";
-	if (/^(delete|remove|archive|destroy|purge|trash)$/.test(verb)) return "destructive";
-	if (/^(list|get|search|find|read|fetch|query|show|view|lookup)$/.test(verb)) return "read";
+	if (DELETES.test(verb)) return "destructive";
+	if (tool.annotations?.readOnlyHint === true) return "read";
+	if (CHANGES.test(verb)) return "write";
+	if (tool.annotations?.destructiveHint === true) return "destructive";
+	if (READS.test(verb)) return "read";
 	return "write";
 }
 
@@ -76,6 +85,16 @@ export function toolInfos(def: McpConnector, tools: Tool[]): McpToolInfo[] {
 
 /** The name a conversation sees: `<prefix>_<tool>`, as providers allow (64 characters of [A-Za-z0-9_-]). */
 export const modelName = (def: McpConnector, tool: string) => `${def.mcp.prefix}_${tool}`.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 64);
+
+/** The one tool that reaches an app's other tools by name (Linear has about 70; most conversations need a dozen). */
+export const moreName = (def: McpConnector) => `${def.mcp.prefix}_more`;
+
+/** The tools offered directly; the rest go through `<prefix>_more`. Without a core list, all of them. */
+export function splitTools(def: McpConnector, tools: McpToolInfo[]): { core: McpToolInfo[]; rest: McpToolInfo[] } {
+	const core = def.mcp.core;
+	if (!core) return { core: tools, rest: [] };
+	return { core: tools.filter((t) => core.includes(t.name)), rest: tools.filter((t) => !core.includes(t.name)) };
+}
 
 /** Settings' groups for an MCP app: its reading, changing and deleting tools (a kind with no tools isn't shown once connected). */
 export function mcpGroups(def: McpConnector, tools: McpToolInfo[] | undefined): CapabilityGroup[] {

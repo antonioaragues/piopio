@@ -116,6 +116,11 @@ export type McpConnector = ConnectorBase & {
 		labels: { read: string; write: string; destructive: string };
 		/** One line for the prompt: what the tools are for. */
 		prompt: string;
+		/**
+		 * Tools offered directly, by server name. The others are reached through one `<prefix>_more` tool, so a server
+		 * with many tools doesn't fill every conversation's prompt. Without it, all are offered directly.
+		 */
+		core?: string[];
 		/** Tools whose kind the server doesn't say right: by server name. */
 		access?: Record<string, Access>;
 		/** Who signed in, through its own tools; without it, one account. */

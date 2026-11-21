@@ -2740,8 +2740,12 @@ describe("connected apps (docs/spec/12-connectors C1)", () => {
 		const tools = [
 			{ name: "list_issues", description: "List issues", inputSchema: { type: "object", properties: { query: { type: "string" } } }, annotations: { readOnlyHint: true } },
 			{ name: "get_user", description: "Get a user", inputSchema: { type: "object", properties: { query: { type: "string" } } } },
-			{ name: "create_issue", title: "Create issue", description: "Create an issue", inputSchema: { type: "object", properties: { title: { type: "string" }, team: { type: "string" } }, required: ["title", "team"] } },
-			{ name: "delete_comment", description: "Delete a comment", inputSchema: { type: "object", properties: { id: { type: "string" } } } },
+			// Like the real Linear (2026-11-21): save_* creates or updates, and is marked destructive.
+			{ name: "save_issue", description: "Create or update an issue", inputSchema: { type: "object", properties: { title: { type: "string" }, team: { type: "string" } }, required: ["title", "team"] }, annotations: { destructiveHint: true } },
+			{ name: "delete_comment", description: "Delete a comment", inputSchema: { type: "object", properties: { id: { type: "string" } } }, annotations: { destructiveHint: true } },
+			// Outside Linear's core list: reached through linear_more.
+			{ name: "get_document", description: "Get a document. Returns its content.", inputSchema: { type: "object", properties: { id: { type: "string" } }, required: ["id"] }, annotations: { readOnlyHint: true } },
+			{ name: "save_document", description: "Create or update a document", inputSchema: { type: "object", properties: { title: { type: "string" } } }, annotations: { destructiveHint: true } },
 		];
 		const server = createServer((req, res) => {
 			let body = "";
@@ -2775,7 +2779,9 @@ describe("connected apps (docs/spec/12-connectors C1)", () => {
 					const name = msg.params?.name;
 					if (name === "get_user") return reply({ content: [{ type: "text", text: JSON.stringify({ id: "u-42", name: "Toño", email: "me@example.com" }) }] });
 					if (name === "list_issues") return reply({ content: [{ type: "text", text: "ENG-1 Fix the login (In Progress)" }] });
-					if (name === "create_issue") return reply({ content: [{ type: "text", text: `Created ENG-2 ${String(msg.params?.arguments?.title)}` }] });
+					if (name === "save_issue") return reply({ content: [{ type: "text", text: `Created ENG-2 ${String(msg.params?.arguments?.title)}` }] });
+					if (name === "get_document") return reply({ content: [{ type: "text", text: `Doc ${String(msg.params?.arguments?.id)}: the plan` }] });
+					if (name === "save_document") return reply({ content: [{ type: "text", text: `Saved ${String(msg.params?.arguments?.title)}` }] });
 					return reply({ content: [{ type: "text", text: "ok" }] });
 				}
 				send(200, { jsonrpc: "2.0", id: msg.id, error: { code: -32601, message: "no" } });
@@ -2798,13 +2804,13 @@ describe("connected apps (docs/spec/12-connectors C1)", () => {
 		expect(JSON.parse(a.client.secrets["connector.linear.u-42"]!)).toMatchObject({ clientInformation: { client_id: "dcr-client" }, tokens: { access_token: "lin1", refresh_token: "lin-refresh" } });
 		const saved = readFileSync(join(a.home, "connectors.json"), "utf8");
 		expect(saved).not.toContain("lin1");
-		expect(saved).toContain("create_issue");
+		expect(saved).toContain("save_issue");
 		const after = (await a.client.call("connectors.list", {})).connectors.find((c: { id: string }) => c.id === "linear")!;
 		expect(after.accounts).toMatchObject([{ id: "linear:u-42", label: "me@example.com" }]);
-		// get_user has no hint and reads by its name; delete_comment deletes.
+		// get_user has no hint and reads by its name; save_* changes despite its hint; delete_comment deletes.
 		expect(after.capabilities).toEqual([
-			expect.objectContaining({ id: "linear.read", tools: ["linear_list_issues", "linear_get_user"], permission: "runs", choices: ["runs", "ask", "off"] }),
-			expect.objectContaining({ id: "linear.write", tools: ["linear_create_issue"], permission: "ask" }),
+			expect.objectContaining({ id: "linear.read", tools: ["linear_list_issues", "linear_get_user", "linear_get_document"], permission: "runs", choices: ["runs", "ask", "off"] }),
+			expect.objectContaining({ id: "linear.write", tools: ["linear_save_issue", "linear_save_document"], permission: "ask" }),
 			expect.objectContaining({ id: "linear.delete", tools: ["linear_delete_comment"], permission: "off", choices: ["ask", "off"] }),
 		]);
 
@@ -2815,19 +2821,28 @@ describe("connected apps (docs/spec/12-connectors C1)", () => {
 		expect((await finishedTools(a, ref, 1))[0]?.output).toContain("ENG-1 Fix the login");
 		expect(linear.calls.find((c) => c.tool === "list_issues")).toMatchObject({ args: { query: "login" }, auth: "Bearer lin1" });
 
-		// Creating asks first; deleting is off, so it isn't offered at all.
+		// The core tools are offered directly, the rest through linear_more; deleting is off, so it isn't offered at all.
 		const hub = a.engine.connectors;
 		const asked: { tool: string; title: string }[] = [];
 		const tools = connectorTools(hub, "chat");
-		expect(tools.map((t) => t.name).filter((n) => n.startsWith("linear_"))).toEqual(["linear_list_issues", "linear_get_user", "linear_create_issue"]);
-		const create = tools.find((t) => t.name === "linear_create_issue")!;
-		const declined = await create.run({ title: "Fix the logout", team: "ENG" }, async (r) => (asked.push(r), { approved: false }));
-		expect(declined.text).toContain("declined");
-		expect(asked).toMatchObject([{ tool: "linear_create_issue", title: "Create issue in Linear: “Fix the logout”" }]);
-		expect(linear.calls.some((c) => c.tool === "create_issue")).toBe(false);
-		// "Don't ask again" covers the kind of tool, stored once for it.
-		expect((await create.run({ title: "Fix the logout", team: "ENG" }, async () => ({ approved: true, always: true }))).text).toContain("Created ENG-2");
+		expect(tools.map((t) => t.name).filter((n) => n.startsWith("linear_"))).toEqual(["linear_list_issues", "linear_get_user", "linear_save_issue", "linear_more"]);
+		const more = tools.find((t) => t.name === "linear_more")!;
+		expect(more.description).toContain("get_document: Get a document.");
+		expect(more.description).not.toContain("delete_comment");
+		const ask = async (r: { tool: string; title: string }) => (asked.push(r), { approved: false });
+		expect((await more.run({ tool: "get_document" }, ask)).text).toContain('"required":["id"]');
+		expect((await more.run({ tool: "get_document", arguments: { id: "d1" } }, ask)).text).toBe("Doc d1: the plan");
+		expect((await more.run({ tool: "save_document", arguments: { title: "Plan" } }, ask)).text).toContain("declined");
+		expect((await more.run({ tool: "delete_comment", arguments: { id: "c1" } }, ask)).isError).toBe(true);
+		// Creating asks first.
+		const save = tools.find((t) => t.name === "linear_save_issue")!;
+		expect((await save.run({ title: "Fix the logout", team: "ENG" }, ask)).text).toContain("declined");
+		expect(asked).toMatchObject([{ tool: "linear_save_document", title: "Save document in Linear: “Plan”" }, { tool: "linear_save_issue", title: "Save issue in Linear: “Fix the logout”" }]);
+		expect(linear.calls.some((c) => c.tool === "save_issue" || c.tool === "save_document")).toBe(false);
+		// "Don't ask again" covers the kind of tool, stored once for it: saving a document runs now too.
+		expect((await save.run({ title: "Fix the logout", team: "ENG" }, async () => ({ approved: true, always: true }))).text).toContain("Created ENG-2");
 		expect(hub.settings("linear").permissions).toEqual({ "linear.write": "runs" });
+		expect((await more.run({ tool: "save_document", arguments: { title: "Plan" } }, ask)).text).toBe("Saved Plan");
 		await a.client.call("connectors.configure", { connector: "linear", permissions: { linear_delete_comment: "runs" } });
 		expect(hub.settings("linear").permissions).toMatchObject({ "linear.delete": "ask" });
 
