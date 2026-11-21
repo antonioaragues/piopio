@@ -114,7 +114,7 @@ struct BuildSessionView: View {
                     conversation
                 }
                 if showTerminal, !chatLens, let cwd = summary.cwd {
-                    TerminalDrawer(cwd: cwd, session: session) { showTerminal = false }
+                    TerminalDrawer(cwd: cwd, session: session, previewProfile: summary.projectPath ?? cwd) { showTerminal = false }
                         .padding(.horizontal, 8)
                         .padding(.bottom, 8)
                 }

@@ -167,6 +167,25 @@ as untrusted content. It never counts as an instruction from you, and it can't g
 - "Pick an element": you click something in the preview and it goes into the composer as a reference (selector,
   text, a small screenshot). Later.
 
+### 6.1 As built (2026-11-21, roadmap PAR3)
+
+- **What opens as the preview.** In a Build session, a local address (`localhost`, `127.0.0.1`, `::1`, `*.localhost`)
+  opens without asking when one of the session's background commands (05-build §9 TM4) serves its port: a local
+  address the command printed, or a port its process group listens on (`lsof`). Any other local address asks the user
+  ("Let Piopio open localhost:9999, a local address"), and an allowed one stays allowed in that session. Chats and
+  agents still refuse local addresses.
+- **Where.** In a tab of its own with the project's profile (a WebKit store named from the project's folder, so it
+  lasts between launches and never holds your sign-ins). Other sites never open in that tab: they get an ordinary one.
+- **What the model reads.** A script in the page, run before the page's own, keeps its console (with uncaught errors
+  and rejected promises) and its own fetch/XMLHttpRequest calls, the last 300 of each, until the page reloads.
+  `browser_console` (`level`, `clear`) and `browser_requests` (`failed`, `filter`, `clear`) read them and never ask;
+  `browser_eval` runs a script there and asks unless the session is in Full auto. All three work only on the
+  preview tab showing a local page.
+- **From the app.** A background command's tab in the terminal drawer shows **Preview localhost:5173**, which opens it
+  in Piopio's browser in the project's profile.
+- **Not yet:** "pick an element", and a dev-server launcher from `package.json` scripts (the agent, or you in the
+  terminal, starts the server).
+
 ## 7. Sign-ins and profiles
 
 - A profile is a WebKit data store kept on this Mac under Piopio's app support folder: cookies, local storage,

@@ -33,7 +33,7 @@ const RUNNERS = new Set(["npm", "pnpm", "yarn", "npx", "bun", "bunx", "deno", "n
 // The browser's reading tools (docs/spec/22 W1) are network reads like web_fetch.
 /** The browser's acting tools (docs/spec/22 W2): each site asks first on its own, so Build's modes only keep them out of Read only. */
 const BROWSER_ACT_TOOLS = new Set(["browser_click", "browser_type", "browser_select", "browser_key"]);
-const READ_ONLY_TOOLS = new Set(["web_search", "web_fetch", "todo", "propose_plan", "read_skill", "task", "browser_open", "browser_read", "browser_map", "browser_find", "browser_screenshot", "browser_scroll", "browser_back", "browser_tabs", "browser_wait"]);
+const READ_ONLY_TOOLS = new Set(["browser_console", "browser_requests", "web_search", "web_fetch", "todo", "propose_plan", "read_skill", "task", "browser_open", "browser_read", "browser_map", "browser_find", "browser_screenshot", "browser_scroll", "browser_back", "browser_tabs", "browser_wait"]);
 
 export function decide(mode: ApprovalMode, tool: string, input: Record<string, unknown>, cwd: string, rules: readonly Rule[], home = homedir(), readOnlyTool: (tool: string) => boolean = () => false): Decision {
 	if (USER_TOOLS.has(tool)) return { action: "allow" };
@@ -51,6 +51,9 @@ export function decide(mode: ApprovalMode, tool: string, input: Record<string, u
 	if (tool === "task" && typeof input.agent === "string" && input.agent !== "piopio" && mode === "ask") {
 		return { action: "ask", reason: "Hands the task to another agent, which changes files without asking" };
 	}
+
+	// Running a script in the project preview (docs/spec/22 §6): it can change the app's state, so it asks unless Full auto.
+	if (tool === "browser_eval") return mode === "full_auto" ? { action: "allow" } : { action: "ask", ...(mode === "read_only" ? { reason: "Read only: a script may change the page" } : {}), rule: { kind: "tool", pattern: tool } };
 
 	if (BROWSER_ACT_TOOLS.has(tool)) {
 		return mode === "read_only" ? { action: "ask", reason: "Read only: clicking and typing on a page may change something" } : { action: "allow" };

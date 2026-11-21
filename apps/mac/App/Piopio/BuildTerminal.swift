@@ -126,6 +126,8 @@ private struct TerminalHost: NSViewRepresentable {
 struct TerminalDrawer: View {
     let cwd: String
     let session: ThreadModel
+    /// The project's preview profile: its folder, as the engine names it (docs/spec/22 §6).
+    var previewProfile: String = ""
     let close: () -> Void
     @State private var selected: UUID?
     /// A background command's tab (TM4), instead of a shell.
@@ -173,8 +175,11 @@ struct TerminalDrawer: View {
                 Spacer()
                 if let p = process {
                     if let url = p.urls.first.flatMap(URL.init(string:)) {
-                        Link(url.host.map { "\($0)\(url.port.map { ":\($0)" } ?? "")" } ?? url.absoluteString, destination: url)
-                            .help("Open \(url.absoluteString)")
+                        // The project preview (docs/spec/22 §6): in Piopio's browser, in the project's own profile.
+                        Button(url.host.map { "Preview \($0)\(url.port.map { ":\($0)" } ?? "")" } ?? "Preview") {
+                            BrowserCenter.shared.session(session.ref.id).openPreview(url, profile: previewProfile)
+                        }
+                        .help("Opens \(url.absoluteString) in Piopio's browser, in the project's own profile")
                     }
                     Button("Send to agent") {
                         Task {

@@ -92,7 +92,7 @@ final class BrowserCenter {
         let session = session(id)
         let sites = params["sites"]?.arrayValue?.compactMap(\.stringValue) ?? []
         do {
-            let r = try await session.run(name, args, sites: sites)
+            let r = try await session.run(name, args, sites: sites, preview: BrowserPreview(params["preview"]))
             return Self.reply(ok: true, r.text, images: r.images)
         } catch let need as NeedsSite {
             var o: [String: JSONValue] = ["ok": .bool(false), "output": .string("Acting on \(need.site) needs the user's permission.")]
@@ -175,7 +175,10 @@ final class BrowserSession {
     var acting = false
     var lastActed: Date?
 
-    func run(_ name: String, _ a: JSONValue, sites: [String] = []) async throws -> (text: String, images: [(mime: String, data: String)]) {
+    func run(_ name: String, _ a: JSONValue, sites: [String] = [], preview: BrowserPreview? = nil) async throws -> (text: String, images: [(mime: String, data: String)]) {
+        // The project preview (22 §6): its tab follows the engine's latest list of the project's addresses.
+        if let preview, let tab = tabs.first(where: { $0.preview?.profile == preview.profile }) { tab.preview = preview }
+        if ["browser_console", "browser_requests", "browser_eval"].contains(name) { return (try await previewTool(name, a), []) }
         if ["browser_click", "browser_type", "browser_select", "browser_key"].contains(name) {
             let tab = try active()
             // The page actually showing (the user may have gone elsewhere in the panel), checked against the grants.
@@ -191,7 +194,19 @@ final class BrowserSession {
             guard let raw = a["url"]?.stringValue, let url = URL(string: raw), ["http", "https"].contains(url.scheme?.lowercased() ?? "") else {
                 throw BrowserError(message: "The browser opens only http and https addresses.")
             }
-            let tab = (a["newTab"] == .bool(true) || current == nil) ? newTab() : current!
+            // A local address opens in the project preview, when the engine says it's the project's.
+            if let target = BrowserPreview.target(url) {
+                guard let preview, preview.local.contains(target) else {
+                    throw BrowserError(message: "\(target) is a local address: it opens only as the project preview of a Build session.")
+                }
+                let tab = previewTab(preview)
+                current = tab
+                center.reveal(id)
+                try await tab.load(url)
+                return (try await tab.summary(map: true), [])
+            }
+            // Other sites never open in the preview's profile.
+            let tab = (a["newTab"] == .bool(true) || current == nil || current?.preview != nil) ? newTab() : current!
             current = tab
             center.reveal(id)
             try await tab.load(url)
@@ -272,6 +287,8 @@ final class BrowserTab: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownload
     var isLoading = false
     var canGoBack = false
     var canGoForward = false
+    /// The project preview's tab (22 §6): the project's profile and the local addresses it may open.
+    var preview: BrowserPreview?
     @ObservationIgnored private var status: Int?
     @ObservationIgnored private var navError: String?
     @ObservationIgnored private var dialogs: [String] = []
@@ -554,7 +571,8 @@ final class BrowserTab: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownload
         let scheme = navigationAction.request.url?.scheme?.lowercased() ?? ""
         // Only web pages: links that would open other apps (mailto:, custom schemes) aren't followed (spec 22 §4.1).
         guard ["http", "https", "about", "data", "blob"].contains(scheme) else { return .cancel }
-        if navigationAction.targetFrame?.isMainFrame != false, let host = navigationAction.request.url?.host(), Self.isLocal(host) {
+        if navigationAction.targetFrame?.isMainFrame != false, let host = navigationAction.request.url?.host(), Self.isLocal(host),
+           !(preview.map { p in BrowserPreview.target(navigationAction.request.url).map { p.local.contains($0) } ?? false } ?? false) {
             dialogs.append("a link to \(host), a local address, was not followed")
             return .cancel
         }

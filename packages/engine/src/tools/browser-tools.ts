@@ -171,6 +171,49 @@ export const BROWSER_TOOLS: { name: string; label: string; description: string; 
 	},
 ];
 
+/** The project preview's tools (22 §6): Build sessions in a project only. */
+export const PREVIEW_TOOLS: { name: string; label: string; description: string; parameters: TSchema }[] = [
+	{
+		name: "browser_console",
+		label: "Read the preview's console",
+		description: "Console messages, uncaught errors and rejected promises of the project preview's page (your dev server's), oldest first. `clear` empties it after reading.",
+		parameters: Type.Object({ clear: opt(Type.Boolean()), level: opt(Type.Union([Type.Literal("error"), Type.Literal("warn"), Type.Literal("all")], { description: "Default all" })) }),
+	},
+	{
+		name: "browser_requests",
+		label: "Read the preview's requests",
+		description: "The project preview page's own fetch and XMLHttpRequest calls: method, URL, status, time. `failed` keeps only errors and 4xx/5xx; `filter` keeps URLs containing it.",
+		parameters: Type.Object({ failed: opt(Type.Boolean()), filter: opt(Type.String()), clear: opt(Type.Boolean()) }),
+	},
+	{
+		name: "browser_eval",
+		label: "Run a script in the preview",
+		description: "Runs JavaScript in the project preview's page (local addresses only) and returns its result as JSON. The body of an async function: use `return`. Asks the user first unless the session is in Full auto.",
+		parameters: Type.Object({ script: Type.String() }),
+	},
+];
+
+const PREVIEW_SECTION = `# Project preview
+Your dev server's pages open in the browser as the project preview: start the server with bash \`background: true\`
+(you get its address), then browser_open that address (localhost and the ports your commands serve open without
+asking; other local addresses ask the user). The preview has a profile of its own, without the user's sign-ins.
+browser_console and browser_requests show the page's errors and failed calls after you change the code; browser_eval
+runs a script in the page (it asks first).`;
+
+const LOCAL_HOST = /^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[?::1\]?|[a-z0-9-]+\.localhost)$/i;
+
+/** "localhost:5173" for a local http(s) URL, else undefined. */
+export function localTarget(raw: string): string | undefined {
+	try {
+		const url = new URL(raw);
+		if (!LOCAL_HOST.test(url.hostname)) return undefined;
+		const port = url.port || (url.protocol === "https:" ? "443" : "80");
+		return `${url.hostname.replace("0.0.0.0", "localhost")}:${port}`;
+	} catch {
+		return undefined;
+	}
+}
+
 const SECTION = `# Browser
 You have a real browser inside Piopio. The user watches it in the conversation's Browser panel and can use it too; it
 keeps the user's sign-ins. Read public pages with web_fetch (cheaper); open the browser when a page needs its scripts,
@@ -199,17 +242,40 @@ export async function checkUrl(raw: string, allowPrivate = false): Promise<strin
 	return undefined;
 }
 
+/**
+ * A Build session's project preview (22 §6): the project's profile, and the ports its commands serve (those open
+ * without asking).
+ */
+export type PreviewOptions = { profile: string; ports: () => Promise<number[]> };
+
 /** Browser calls for one conversation, through the app. */
-export function browserCaller(app: AppServices, ref: ContainerRef, options: { allowPrivate?: boolean; sites?: BrowserSites } = {}): BrowserCall {
+export function browserCaller(app: AppServices, ref: ContainerRef, options: { allowPrivate?: boolean; sites?: BrowserSites; preview?: PreviewOptions } = {}): BrowserCall {
+	// Local addresses the user let this session open (besides its own commands' ports).
+	const granted = new Set<string>();
+	const preview = options.preview;
 	return async (name, args, ask) => {
+		let local: string[] = [];
+		if (preview) {
+			const ports = await preview.ports().catch(() => []);
+			local = [...new Set([...ports.flatMap((p) => [`localhost:${p}`, `127.0.0.1:${p}`]), ...granted])];
+		}
 		if (name === "browser_open") {
-			const refused = await checkUrl(String(args.url ?? ""), options.allowPrivate);
+			const target = preview ? localTarget(String(args.url ?? "")) : undefined;
+			if (target && !local.includes(target)) {
+				if (!ask) return { text: `${target} is a local address none of this session's commands serves. Start the dev server with bash \`background: true\`, then open the address it prints.`, images: [], isError: true };
+				const answer = await ask({ site: target, tool: name, title: `Let Piopio open ${target}, a local address`, args });
+				if (!answer.approved) return { text: `The user didn't let Piopio open ${target}.`, images: [], isError: true };
+				granted.add(target);
+				local.push(target);
+			}
+			const refused = target ? undefined : await checkUrl(String(args.url ?? ""), options.allowPrivate);
 			if (refused) return { text: refused, images: [], isError: true };
 		}
+		if (PREVIEW_TOOLS.some((t) => t.name === name) && !preview) return { text: "The project preview is for Build sessions in a project.", images: [], isError: true };
 		const acting = BROWSER_ACT_TOOLS.includes(name);
 		try {
 			for (let attempt = 0; ; attempt++) {
-				const r = await app.tool({ name, args, ref, groups: ["browser"], shortcuts: [], ...(acting ? { sites: options.sites?.allowedFor(ref.id) ?? [] } : {}) });
+				const r = await app.tool({ name, args, ref, groups: ["browser"], shortcuts: [], ...(acting ? { sites: options.sites?.allowedFor(ref.id) ?? [] } : {}), ...(preview ? { preview: { profile: preview.profile, local } } : {}) });
 				if (!r.needsSite) return { text: r.output, images: r.images ?? [], ...(r.ok ? {} : { isError: true }) };
 				const site = r.needsSite;
 				if (options.sites?.blocked(site)) return { text: `Acting on ${site} is blocked in Settings › Browser. Read it, or ask the user to do this step.`, images: [], isError: true };
@@ -225,11 +291,11 @@ export function browserCaller(app: AppServices, ref: ContainerRef, options: { al
 	};
 }
 
-/** Build sessions (pi-coding-agent). `askFor` asks through Build's approval prompt. */
-export function codingBrowserExtension(call: BrowserCall, askFor?: (callId: string, signal: AbortSignal | undefined) => BrowserAsk): ExtensionFactory {
+/** Build sessions (pi-coding-agent). `askFor` asks through Build's approval prompt; `preview` adds the project preview. */
+export function codingBrowserExtension(call: BrowserCall, askFor?: (callId: string, signal: AbortSignal | undefined) => BrowserAsk, preview = false): ExtensionFactory {
 	return (pi) => {
-		pi.on("before_agent_start", (event) => ({ systemPrompt: `${event.systemPrompt}\n\n${SECTION}` }));
-		for (const tool of BROWSER_TOOLS) {
+		pi.on("before_agent_start", (event) => ({ systemPrompt: `${event.systemPrompt}\n\n${SECTION}${preview ? `\n\n${PREVIEW_SECTION}` : ""}` }));
+		for (const tool of preview ? [...BROWSER_TOOLS, ...PREVIEW_TOOLS] : BROWSER_TOOLS) {
 			pi.registerTool(
 				defineCodingTool({
 					name: tool.name,

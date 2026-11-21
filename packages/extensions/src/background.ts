@@ -4,7 +4,7 @@
  * `process_list` read, stop and list them. Each runs in a process group of its own, so stopping it stops whatever it
  * started (`npm run dev` and the server under it). They never outlive the session.
  */
-import { spawn, type ChildProcess } from "node:child_process";
+import { execFile, spawn, type ChildProcess } from "node:child_process";
 import type { ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 
@@ -158,6 +158,25 @@ export class ProcessManager {
 		const e = this.entries.get(id);
 		const until = Date.now() + ms;
 		while (e && Date.now() < until && e.info.status === "running" && !e.info.urls.length) await new Promise((r) => setTimeout(r, 100));
+	}
+
+	/**
+	 * Ports its running commands serve on this Mac: the local addresses they printed, and the ports their process groups
+	 * listen on (`lsof`), for the project preview (docs/spec/22 §6).
+	 */
+	async ports(): Promise<number[]> {
+		const running = [...this.entries.values()].filter((e) => e.info.status === "running");
+		const ports = new Set<number>();
+		for (const e of running) for (const u of e.info.urls) {
+			const port = Number(new URL(u).port || (u.startsWith("https") ? 443 : 80));
+			if (port) ports.add(port);
+		}
+		const groups = running.flatMap((e) => (e.child.pid ? [String(e.child.pid)] : []));
+		if (groups.length) {
+			const out = await new Promise<string>((resolve) => execFile("lsof", ["-a", "-nP", "-iTCP", "-sTCP:LISTEN", "-g", groups.join(",")], { timeout: 3000 }, (_e, stdout) => resolve(stdout ?? "")));
+			for (const m of out.matchAll(/:(\d+) \(LISTEN\)/g)) ports.add(Number(m[1]));
+		}
+		return [...ports].sort((a, b) => a - b);
 	}
 
 	async stopAll(): Promise<void> {

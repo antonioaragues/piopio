@@ -1720,9 +1720,26 @@ export class Sessions {
 	browserSites?: BrowserSites;
 
 	/** The browser for a conversation or Build session, through the Mac app (docs/spec/22). */
-	private browserFor(ref: ContainerRef): { browser?: BrowserCall } {
+	private browserFor(ref: ContainerRef): { browser?: BrowserCall; browserPreview?: boolean } {
 		const app = this.agentHost?.app;
-		return app ? { browser: browserCaller(app, ref, { allowPrivate: this.webOptions.allowPrivate ?? false, ...(this.browserSites ? { sites: this.browserSites } : {}) }) } : {};
+		if (!app) return {};
+		// A Build session's project preview (docs/spec/22 §6): the project's own profile, and its commands' ports.
+		const entry = this.entries.get(ref.id);
+		const preview =
+			entry?.ref.kind === "build"
+				? {
+						profile: entry.projectPath ?? entry.cwd ?? ref.id,
+						ports: async () => {
+							const open = this.open.get(ref.id);
+							const runtime = open ? innerOf(await open) : undefined;
+							return runtime instanceof BuildRuntime ? runtime.previewPorts() : [];
+						},
+					}
+				: undefined;
+		return {
+			browser: browserCaller(app, ref, { allowPrivate: this.webOptions.allowPrivate ?? false, ...(this.browserSites ? { sites: this.browserSites } : {}), ...(preview ? { preview } : {}) }),
+			...(preview ? { browserPreview: true } : {}),
+		};
 	}
 
 	/** The check of visuals for a conversation or Build session, by the Mac app (docs/spec/25 §3.2). */
@@ -2853,13 +2870,13 @@ export class Sessions {
 			const response = await ask({ title: request.title, tool: request.tool, callId }, signal);
 			return { approved: response?.decision === "allow" || response?.decision === "always", ...(response?.decision === "always" && canAlways ? { always: true } : {}), ...(response?.text ? { reason: response.text } : {}) };
 		};
-		const { browser } = this.browserFor(entry.ref);
+		const { browser, browserPreview } = this.browserFor(entry.ref);
 		const { visuals } = this.visualsFor(entry.ref);
 		const history = this.historyBridge(entry);
 		const off = () => [...(entry.toolsOff ?? []), ...(entry.ref.kind === "thread" ? (this.chat?.mcpOff() ?? []).map((name) => `mcp:${name}`) : [])];
 		this.aboutMeSdk ??= this.chat ? aboutMeSdkExtension(this.chat.aboutMe, this.chat.settings) : undefined;
 		return [
-			...(browser ? [codingBrowserExtension(browser, (callId, signal) => (request) => decision(request, callId, signal))] : []),
+			...(browser ? [codingBrowserExtension(browser, (callId, signal) => (request) => decision(request, callId, signal), browserPreview)] : []),
 			...(this.connectors ? [codingConnectorsExtension(this.connectors, (callId, signal) => (request) => decision(request, callId, signal, request.canAllowAlways), (id) => off().includes(`connector:${id}`))] : []),
 			codingVisualsExtension(visuals),
 			...(history ? [historySdkExtension(history)] : []),

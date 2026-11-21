@@ -85,6 +85,8 @@ export function describe(tool: string, input: Record<string, unknown>): { title:
 			return { title: "Read", detail: path || String(input.pattern ?? "") };
 		case "web_fetch":
 			return { title: "Open a web page", detail: String(input.url ?? "") };
+		case "browser_eval":
+			return { title: "Run a script in the preview", detail: String(input.script ?? "").slice(0, 400) };
 		case "web_search":
 			return { title: "Search the web", detail: String(input.query ?? "") };
 		case "task": {

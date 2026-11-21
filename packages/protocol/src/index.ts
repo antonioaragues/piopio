@@ -1978,6 +1978,11 @@ export const reverseMethods = {
 			ref: Type.Optional(ContainerRef),
 			/** Browser: the sites (registrable domains) the model may act on now (22 §4.1). */
 			sites: Type.Optional(Type.Array(Type.String())),
+			/**
+			 * Browser, a Build session in a project (22 §6): the project preview. `profile` names the project's own empty
+			 * profile (its folder); `local` the local addresses ("localhost:5173") its pages may open.
+			 */
+			preview: Type.Optional(Type.Object({ profile: Type.String(), local: Type.Array(Type.String()) })),
 			groups: Type.Array(Type.String()),
 			shortcuts: Type.Array(Type.String()),
 		}),

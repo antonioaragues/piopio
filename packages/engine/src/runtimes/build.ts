@@ -73,6 +73,8 @@ export type BuildOpenOptions = {
 	keepImages?: ToolImageKeeper;
 	/** The browser's tools (docs/spec/22), run by the Mac app for this session. */
 	browser?: BrowserCall;
+	/** A Build session in a project: the browser has the project preview (docs/spec/22 §6). */
+	browserPreview?: boolean;
 	/** Visuals drawn and checked by the Mac app (docs/spec/25 §3.2). */
 	visuals?: VisualCheck;
 	/** Connected apps: their tools, asking through Build's approval prompt before a change. */
@@ -189,7 +191,7 @@ export class BuildRuntime implements Runtime {
 							codingBrowserExtension(o.browser, (callId, signal) => async (request) => {
 								const response = await broker.ask({ kind: "approval", title: request.title, tool: request.tool, callId }, signal);
 								return { approved: response?.decision === "allow" || response?.decision === "always", ...(response?.decision === "always" ? { always: true } : {}), ...(response?.text ? { reason: response.text } : {}) };
-							}),
+							}, Boolean(o.browserPreview)),
 						]
 					: []),
 				guardsExtension(),
@@ -992,6 +994,11 @@ export class BuildRuntime implements Runtime {
 			this.builder.setState({ processes: list });
 			this.emitter.emit(this.builder.flush());
 		};
+	}
+
+	/** Ports this session's background commands serve on (the project preview, docs/spec/22 §6). */
+	previewPorts(): Promise<number[]> {
+		return this.processes?.ports() ?? Promise.resolve([]);
 	}
 
 	processOutput(id: string, since = 0) {
