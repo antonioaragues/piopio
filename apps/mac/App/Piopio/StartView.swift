@@ -653,7 +653,7 @@ private struct ChatStart: View {
             .buttonStyle(SelectorStyle())
             .help("The model for this chat")
             .popover(isPresented: $showModels, arrowEdge: .bottom) {
-                ModelPicker(engine: engine, selected: model ?? engine.preferredModel) { m in model = m; showModels = false }
+                ModelPicker(engine: engine, selected: model ?? engine.preferredModel, agents: true) { m in model = m; showModels = false }
             }
     }
 
