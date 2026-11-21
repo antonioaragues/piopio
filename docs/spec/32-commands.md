@@ -1,0 +1,124 @@
+# 32 · The / menu: commands as intents
+
+Proposed 2026-11-21, not decided. From the user's screenshots of Antigravity's composer and a read of Piopio's
+composer ([Composer.swift](../../apps/mac/App/Piopio/Composer.swift)), the engine's command list
+([build.ts](../../packages/engine/src/runtimes/build.ts) `commands()`) and the specs each command maps to.
+
+## 1. What Antigravity gets right
+
+- **A row says what a command does at a glance.** An icon, the name in the body font, a one-line description in
+  grey. Piopio's own commands come first, skills after.
+- **A picked command becomes a chip.** `/schedule` turns into a token (clock icon + "schedule") at the start of the
+  box, and its description floats above the box while you write the rest. You always know what your message will do.
+- **Commands are verbs that wrap the next instruction**, not settings: `/schedule <instruction>`, `/goal <done>`,
+  `/btw <question>`, `/plan <task>`, `/browser <task>`, `/teamwork <project>`. The menu teaches what the app can do.
+- **Worth having:** btw, goal, compact, schedule, browser, plan, grill-me, teamwork, learn.
+
+What not to copy:
+- **Three ways to say "several agents"**: teamwork, boost and swarm, one with "(Preview & Quota Heavy)" in its text.
+- **Skills in one alphabetical list**, user actions (automation, swarm) mixed with developer guides
+  (agy-customizations, antigravity-guide, migrate-workflows), most with the same generic `<>` icon.
+- **A callout that stays up the whole time you type.** It costs a line above the box for something you read once.
+
+## 2. Where Piopio is
+
+Most of the capabilities behind Antigravity's commands already exist in Piopio; the menu hides them.
+
+| What | Today |
+|---|---|
+| Rows | Name in monospace, description in fg3, no icon. `icon(_:)` exists (Composer.swift:909) but the list never calls it |
+| List | At most 12 rows, no scroll, no groups. Piopio's commands match by prefix, pi's by substring; descriptions aren't searched |
+| Skills | Shown as `/skill:name` |
+| Build | plan, compact, model, review, commit, new, side, then pi's templates, skills and extension commands. **/plan shows twice**: the built-in (toggles plan mode) and the `plan` extension (sent as text) |
+| Chat | Only /side, plus templates and skills. No /compact, though the context popover can compact |
+| Picking | A built-in runs at once (/side waits for words); a pi command inserts plain `/name ` text. Nothing says what it will do |
+| /goal | Built (`piopio-goal`, 05 §2), Build only, and only findable by typing it |
+
+## 3. Antigravity's commands in Piopio
+
+| Antigravity | Piopio today | Proposal |
+|---|---|---|
+| **btw** | `/side <what>` (24) | Keep `/side`; "btw" is a search keyword for it, not a second row |
+| **goal** | `/goal` in Build | Show it as a Piopio command with a chip and hint. Chat later, if the chat runtime loads `goalExtension` |
+| **compact** | Build built-in; popover in both | Also in Chat |
+| **schedule** | Automations are made by asking (27 §4); triggers include once (`at`) | **New.** `/automation <what and when>`: a bundled template that asks for an automation; 27's card answers. Named after what it makes, so the command, the sidebar and the card share one word; "schedule", "timer", "remind" and "every" find it. Antigravity's separate `automation` skill (a guided design) isn't needed: the model asks when details are missing. Both modes, since both load the automation tools |
+| **browser** | Browser tools and pane (22) | **New, small.** `/browser <task>`: do this in the browser pane, and show it |
+| **plan** | Build: plan mode | Keep; one row (§4.3) |
+| **grill-me** | `ask_user` exists | **New, cheap, high value.** `/grill-me <idea>`: the agent asks one question at a time with `ask_user` until it can state the plan back, then writes it. A bundled template, both modes |
+| **teamwork / boost / swarm** | Parallel work board, off by default ([swarms](../research/swarms.md)) | **One command**, `/parallel <task>`: the board on for this request, with its budget shown in the chip's hint. After daily use of the board says it's worth a command |
+| **learn** | Memory (14); [self-improvement](../research/self-improvement.md) research; creating skills is PAR12 | **New.** `/learn`: look back at this conversation (corrections, what worked) and propose a skill, an AGENTS.md rule or a memory, as a card you approve or dismiss. Nothing is saved without you. Waits on PAR12's skill writing |
+| automation, generative_ui skills | Automations (27), visuals (25) | Nothing: the model already has these |
+| agy-customizations, antigravity-guide | — | Optional: a bundled `piopio-guide` skill so "how do I…" questions about Piopio get answered from its docs |
+
+Piopio's own that Antigravity lacks stay: /model, /review, /commit, /new. PAR12's `/init` (write AGENTS.md) joins
+them when built.
+
+## 4. Proposal
+
+### 4.1 The menu
+
+- **Row:** SF Symbol (11 pt, fg3), the name in the body font (13, fg), the description (12, fg3), one line,
+  truncated. 30 pt high, radius 8, the highlighted row on `dsChip`, as today.
+- **Groups:** Piopio's commands first, in a fixed order by use (plan, goal, side, automation, grill-me, compact,
+  review, commit, model, new, …), then **Skills**, then **Templates** and extension commands, each after a small fg3
+  label. Groups are hidden while filtering leaves one.
+- **Scroll:** about 8 rows visible; ↑/↓ keep the highlighted row in view. No 12-row cap.
+- **Matching, the same for every kind:** name prefix, then name substring, then keywords and description words.
+  Keywords are per command ("btw" for side, "schedule", "timer", "remind", "every" for automation).
+- **Skills by their name**, without `skill:`; the folder it came from in the row's help tag.
+- **One row per name.** A Piopio command wins over a pi command of the same name (fixes the double /plan).
+- **Icons:** Piopio's commands each have their own (plan `list.bullet.rectangle`, goal `scope`, side
+  `bubble.left.and.text.bubble.right`, automation `clock`, grill-me `questionmark.bubble`, compact
+  `arrow.down.right.and.arrow.up.left`, review `checklist`, commit `arrow.triangle.branch`, browser `globe`, learn
+  `lightbulb`); skills `sparkles`; templates `text.badge.plus`; extension commands `puzzlepiece.extension`.
+
+### 4.2 The chip
+
+- Picking a command that takes words (side, goal, automation, grill-me, browser, parallel, a template with an
+  argument hint, a skill) puts a **chip** at the start of the box: its icon and name on `dsChip`, radius 6, the same
+  height as a line of text. The chip is a view before the text field, not text inside it.
+- **The box's placeholder becomes the command's hint**: "What done looks like…" for goal, "What, and when or how
+  often…" for automation, "The idea to pressure-test…" for grill-me. That replaces Antigravity's floating callout; the
+  chip's help tag has the full description.
+- **Backspace** in an empty field, or **Esc** with the field empty, removes the chip. Clicking the chip's × does too.
+- Typing a known command and a space by hand (`/goal `) makes the chip the same way.
+- **Nothing new is sent.** The message still goes out as `/name words`; the chip is how the composer shows a
+  leading command. A saved draft ([ComposerDraft](../../apps/mac/Sources/PiopioKit/ComposerDraft.swift)) keeps the
+  text, and the chip comes back from it.
+- Commands that act on their own (model, compact, review, commit, new, plan's toggle) run when picked, as today.
+
+### 4.3 Where each runs
+
+| Command | Mode | Kind | Runs in |
+|---|---|---|---|
+| /plan | Build | Acts | App (`setPlanMode`); the extension's row is hidden |
+| /goal | Build (Chat later) | Words | `piopio-goal` extension |
+| /side | Both | Words | App (24) |
+| /automation | Both | Words | Bundled template → automation tools (27) |
+| /grill-me | Both | Words | Bundled template → `ask_user` |
+| /browser | Both | Words | Bundled template → browser tools (22) |
+| /compact | Both | Acts | App |
+| /review, /commit, /model, /new | Build | Acts | App, as today |
+| /learn | Both | Acts | Engine: a utility pass over the conversation → a proposal card (needs PAR12) |
+| /parallel | Build | Words | Engine: the board on for this request |
+
+Bundled templates live with Piopio's own resources, so both runtimes' resource loaders list them, and they show in
+the Piopio group with their own icons rather than as templates.
+
+## 5. Phases
+
+| Phase | What | Size |
+|---|---|---|
+| **CM1 · The menu** | §4.1: icons, body font, groups, scroll, one matching rule, keywords, skill names, dedupe; /compact in Chat | S |
+| **CM2 · The chip** | §4.2, for every command that takes words, including pi templates and skills | S–M |
+| **CM3 · Cheap commands** | /automation, /grill-me, /browser as bundled templates; /goal shown as a Piopio command | S |
+| **CM4 · Commands with engine work** | /learn (after PAR12's skill writing), /parallel (after real use of the board), /goal in Chat | M each |
+
+CM1 and CM2 are app-only and change nothing in the protocol. CM3 adds three template files and their rows.
+
+## 6. Open questions
+
+- **CM-Q1.** The hint in the placeholder (proposed) or Antigravity's callout above the box?
+- **CM-Q2.** `/side` or rename it `/btw`? Proposed: keep `/side`, find it by "btw".
+- **CM-Q3.** `/parallel` as a command at all, or only the project's Parallel work setting?
+- **CM-Q4.** A bundled `piopio-guide` skill: worth its context cost on every request?
