@@ -46,7 +46,7 @@ What this costs:
 | AU1 | **One test.** If a person started it, it's a conversation, on whatever channel. If nobody did, it's an automation. A Slack or Telegram message to an agent is a conversation with the agent. "Check in every hour and message me only if something matters" is an automation. | Proactivity as a property of the agent (06 §6) |
 | AU2 | **An automation is its own object.** It holds a trigger, who runs it (Piopio or one of your agents), the prompt, a project (optional), where the result goes, what it may do while you're away, on or off, and its runs. It replaces definition schedules, the heartbeat, webhook triggers, reminders, watches and project routines. | Eight kinds with two owners (§1) |
 | AU3 | **Agents keep who.** An agent has instructions, a model, tools and the data it may use, memory, channels, and limits (quiet hours, send limits, budget). Setup loses "When it acts". The agent's page links to its automations ("2 automations ›"), and the Agents list loses its schedule column. | 21 D3's Setup with routines; the list's schedule column |
-| AU4 | **You make one by asking, anywhere.** In an agent's chat, in a conversation with Piopio, or in a project. The answer is a card with **Open in Automations** and **Undo** (AQ6). The Automations section is for seeing, pausing, editing and running now. Its **New automation** is a form for when you'd rather not ask, not the main way in. | Agents' and projects' own tools; a schedule form in Setup |
+| AU4 | **You make one by asking, anywhere.** In an agent's chat, in a conversation with Piopio, or in a project. The answer is a card with **Open in Automations** and **Undo** (AQ6). The Automations section is for seeing, pausing, editing and running now. You can ask there too (a box on the empty list, and in New automation's popover); setting one up by hand is a draft of its page, for when you'd rather not ask. | Agents' and projects' own tools; a schedule form in Setup |
 | AU5 | **Who may make one.** You may make any automation. Piopio may make one for any runner when you ask (for example "every Monday, ask Rita…"). An agent may make one only for itself. An agent never makes one that runs as another agent or as Piopio, so CL12 holds: agents don't hand out work. | An agent's reminders and watches; Piopio's project routines |
 | AU6 | **A project needs Piopio as the runner, in v1.** An automation with a project runs as Piopio there, as a project routine does today. An agent's automation has no project. Agents stay contacts (CL2) and don't work in a project's folder (CL8). Piopio's prompt can still ask an agent ("ask @Rita for this week's prices, then update the sheet"). §9 asks whether "Rita in shop" should become Piopio with an `ask_agent` first. | 26 §10, open |
 | AU7 | **Where the result goes** depends on who runs it. An agent can post in its chat with you (the default), send on one of its connected channels, or stay quiet unless it needs you. Piopio can open a conversation (in the project, or loose; the default) or stay quiet unless it needs you. Piopio has no channels, because it isn't a contact. Every run is recorded, quiet ones too. | `deliverTo`, `send_message` and `[Routine]` conversations, set separately |
@@ -107,6 +107,18 @@ Slack"). The model makes it and answers with a card:
 - Filter chips by runner (All · Piopio · each agent) and the "Runs on This Mac, only while it's awake" line.
 - One row per automation: its name and when; who runs it (with the project, for Piopio); where it tells you; the last
   or next run; an on/off switch. A paused row is dimmed. A new one has a "New" badge until it's opened.
+- **Nothing yet** (docs/design/automations/prototype): piopio asleep, "What should happen without you?", a box to ask
+  in with who sets it up (Piopio or an agent; the agent when the list shows one), four ideas that fill the box, and
+  "Set one up yourself". Asking sends what you wrote to a new conversation with Piopio, or to the agent's chat, and
+  stays on the list: once the runner has answered, a note at the foot says what it set up (Open, Undo) or, when it
+  asked you something instead or waits for your OK, opens that conversation.
+- **New automation**: with automations, a popover with the same box, three ideas and "Set it up yourself"; with none,
+  it puts you in the box on the page. **Set it up yourself** opens a draft of the automation's page: "New
+  automation" as its title, the sentence with its choices (every day at 09:00, who you'd picked, without a project
+  unless the list showed one, the usual result and budget), What it's told with the cursor in it, While you're away,
+  and "First run would be …" in Runs. **Discard** and **Turn on** replace Run now; Turn on with nothing to say says
+  so. Nothing reaches the engine until Turn on, which names it after its first words unless you named it and opens
+  its page.
 
 **An automation's page:**
 - Its name and on/off switch.
@@ -250,7 +262,7 @@ automations; the cloud keeps `schedule` and `watch` for now. An agent's run stop
 Home's agenda reads automations; each line carries its automation.
 
 **App:** Automations in the sidebar, the list (filters by runner or project, a switch per row), an automation's page
-(the sentence with menus, When, What it's told, While you're away, Runs, Delete), New Automation, the creation card in
+(the sentence with menus, When, What it's told, While you're away, Runs, Delete), asking on the list, New automation's popover and draft page, the creation card in
 chats (an agent's with its Undo, Piopio's with Undo as removal), "From <name>" on an agent's run lines, the agent
 page's header link and glance cell, Setup's Automations section (quiet hours and time zone moved to Limits), the
 project settings' link, Home lines that open their automation, and the migration report. Captures:

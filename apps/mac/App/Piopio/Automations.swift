@@ -10,12 +10,27 @@ import SwiftUI
 
 /// The list (the agents and automations handoff, screen 4): a title and line, New automation, chips by who runs it,
 /// and the automations in three groups, Needs you · On · Paused, each group's header naming the columns.
+///
+/// You make one by asking (AU4), so asking is here too (docs/design/automations/prototype): with nothing yet, the page
+/// is a box to ask in; New automation asks in a popover, or sets one up by hand on a draft of its page.
 struct AutomationsPage: View {
     let engine: EngineController
     /// "piopio", an agent's id or a project's id: only those.
     let filter: String?
     @Binding var item: SidebarItem
-    @State private var making = false
+    /// New automation by hand: a draft of its page, nothing saved until Turn on.
+    @State private var draft: AutomationDraft?
+    @State private var showNew = false
+    @State private var askText = ""
+    @State private var askRunner = "piopio"
+    /// Who's setting one up right now.
+    @State private var asking: String?
+    @State private var askError: String?
+    @State private var toast: AutomationToast?
+    /// New automation with nothing yet: the box on the page lights up instead of a second box in a popover.
+    @State private var nudge = false
+    @FocusState private var composerFocused: Bool
+    @State private var chick = Piopio(napping: true)
 
     private var shown: [Automation] {
         guard let filter else { return engine.automations }
@@ -23,6 +38,10 @@ struct AutomationsPage: View {
     }
 
     private var project: ProjectInfo? { filter.flatMap { f in engine.projects.first { $0.id == f } } }
+
+    /// The list filtered to an agent asks that agent; otherwise you choose.
+    private var fixedRunner: String? { filter.flatMap { f in project == nil ? f : nil } }
+    private var runner: String { fixedRunner ?? askRunner }
 
     /// All, Piopio, then each agent that runs one (and the one filtered on, even with none).
     private var runners: [String] {
@@ -32,6 +51,23 @@ struct AutomationsPage: View {
     }
 
     var body: some View {
+        Group {
+            if let draft {
+                AutomationPage(engine: engine, id: nil, item: $item, draft: draft) { self.draft = nil }
+            } else {
+                list
+            }
+        }
+        .onChange(of: filter) { draft = nil; showNew = false }
+        .onReceive(NotificationCenter.default.publisher(for: .automationsDemo)) { note in
+            guard let what = note.object as? String else { return }
+            if what == "new" { newAutomation() }
+            else if what == "draft" { startDraft() }
+            else if what.hasPrefix("ask:") { askText = String(what.dropFirst(4)); send() }
+        }
+    }
+
+    private var list: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 HStack(alignment: .top, spacing: 20) {
@@ -41,26 +77,29 @@ struct AutomationsPage: View {
                             .font(.system(size: 14)).foregroundStyle(Color.dsFg2).fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer()
-                    Button("New automation") { making = true }.buttonStyle(OutlineButtonStyle())
+                    Button("New automation", action: newAutomation).buttonStyle(OutlineButtonStyle())
+                        .popover(isPresented: $showNew, arrowEdge: .bottom) { askPopover }
                 }
-                HStack(spacing: 6) {
-                    chip(nil, "All")
-                    ForEach(runners, id: \.self) { id in chip(id, engine.runnerName(id), tile: id) }
-                    if let project {
-                        Button { item = .automations(nil) } label: {
-                            HStack(spacing: 5) {
-                                Text("In \(project.name)")
-                                Image(systemName: "xmark").font(.system(size: 8.5, weight: .bold))
+                if !engine.automations.isEmpty || filter != nil {
+                    HStack(spacing: 6) {
+                        chip(nil, "All")
+                        ForEach(runners, id: \.self) { id in chip(id, engine.runnerName(id), tile: id) }
+                        if let project {
+                            Button { item = .automations(nil) } label: {
+                                HStack(spacing: 5) {
+                                    Text("In \(project.name)")
+                                    Image(systemName: "xmark").font(.system(size: 8.5, weight: .bold))
+                                }
+                                .font(.system(size: 12)).foregroundStyle(Color.dsInvFg)
+                                .padding(.horizontal, 11).frame(height: 26)
+                                .background(Capsule().fill(Color.dsInv))
                             }
-                            .font(.system(size: 12)).foregroundStyle(Color.dsInvFg)
-                            .padding(.horizontal, 11).frame(height: 26)
-                            .background(Capsule().fill(Color.dsInv))
+                            .buttonStyle(.plain)
+                            .help("Show every project's")
                         }
-                        .buttonStyle(.plain)
-                        .help("Show every project's")
+                        Spacer(minLength: 12)
+                        RunsOnNote()
                     }
-                    Spacer(minLength: 12)
-                    RunsOnNote()
                 }
                 if shown.isEmpty {
                     empty
@@ -73,14 +112,21 @@ struct AutomationsPage: View {
                 }
             }
             .padding(.horizontal, 56)
-            .padding(.vertical, 44)
+            .padding(.top, 44)
+            .padding(.bottom, 90)
             .frame(maxWidth: 1180)
             .frame(maxWidth: .infinity)
         }
         .background(Color.dsWin)
-        .sheet(isPresented: $making) {
-            AutomationEditor(engine: engine, preset: filter) { made in item = .automation(made.id) }
+        .overlay(alignment: .bottom) {
+            if let toast {
+                AutomationToastView(toast: toast) { self.toast = nil }
+                    .padding(.bottom, 22)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .id(toast.id)
+            }
         }
+        .animation(.easeOut(duration: 0.2), value: toast?.id)
     }
 
     /// A filter chip: inverse when chosen, the field grey otherwise; an agent's has its tile.
@@ -120,31 +166,274 @@ struct AutomationsPage: View {
         }
     }
 
-    /// Nothing yet: what to ask, in two examples (the handoff's empty state).
+    // MARK: Nothing yet
+
+    /// Nothing yet: piopio asleep, a box to ask in, four ideas that fill it, and setting one up by hand.
     private var empty: some View {
-        VStack(spacing: 12) {
-            Text(filter == nil ? "Nothing runs on its own yet" : "Nothing here runs on its own yet").font(.system(size: 18, weight: .semibold)).foregroundStyle(Color.dsFg)
-            Text("Ask Piopio or any of your agents in plain words. They set it up and it shows here.")
+        let name = engine.runnerName(runner)
+        return VStack(spacing: 0) {
+            PiopioPerch(model: chick, size: 54)
+            Text(fixedRunner.map { "\(engine.runnerName($0)) doesn't run anything on its own yet" } ?? "What should happen without you?")
+                .font(.system(size: 19, weight: .semibold)).foregroundStyle(Color.dsFg)
+                .multilineTextAlignment(.center)
+                .padding(.top, 14)
+            Text("Say when and what, in plain words. \(name) sets it up and it shows here.")
                 .font(.system(size: 13.5)).foregroundStyle(Color.dsFg2).multilineTextAlignment(.center)
-            VStack(spacing: 8) {
-                example("“Every Monday at 9, send me what competitors shipped last week.”")
-                example("“When an invoice arrives by email, file it and tell me the total.”")
+                .padding(.top, 6)
+            composer(size: 14)
+                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.accentColor, lineWidth: 2).opacity(nudge ? 1 : 0))
+                .animation(.easeOut(duration: 0.25), value: nudge)
+                .padding(.top, 18)
+            if let askError {
+                Text(askError).font(.system(size: 12.5)).foregroundStyle(Color.dsRed).frame(maxWidth: .infinity, alignment: .leading).padding(.top, 6)
             }
-            .padding(.top, 6)
-            (Text("Or use ") + Text("New automation").fontWeight(.semibold) + Text(" above."))
-                .font(.system(size: 12.5)).foregroundStyle(Color.dsFg3).padding(.top, 4)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 6) { suggestions(Self.ideas) }
+                VStack(spacing: 6) {
+                    HStack(spacing: 6) { suggestions(Array(Self.ideas.prefix(2))) }
+                    HStack(spacing: 6) { suggestions(Array(Self.ideas.suffix(2))) }
+                }
+            }
+            .padding(.top, 12)
+            HStack(spacing: 8) {
+                RunsOnNote()
+                Text("·").foregroundStyle(Color.dsFg3)
+                Button("Set one up yourself") { startDraft() }
+                    .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Color.accentColor)
+            }
+            .padding(.top, 20)
         }
-        .frame(maxWidth: 520)
+        .frame(maxWidth: 580)
         .frame(maxWidth: .infinity)
-        .padding(.top, 70)
+        .padding(.top, 36)
     }
 
-    private func example(_ text: String) -> some View {
-        Text(text).font(.system(size: 13)).foregroundStyle(Color.dsFg)
-            .padding(.horizontal, 14).padding(.vertical, 10)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(nsColor: DS.bubble), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .textSelection(.enabled)
+    /// What to ask, in plain words: the chip's title, and what it fills the box with.
+    static let ideas: [(String, String)] = [
+        ("Morning brief", "Every weekday at 8, send me today's calendar and anything urgent in my inbox."),
+        ("File invoices from email", "When an invoice arrives by email, file it and tell me the total."),
+        ("Tidy Downloads", "When a file appears in Downloads, rename it sensibly and tell me what it is."),
+        ("Weekly recap", "Every Friday at 17:00, recap what I worked on this week."),
+    ]
+
+    private func suggestions(_ list: [(String, String)]) -> some View {
+        ForEach(list, id: \.0) { title, text in
+            Button { askText = text; askError = nil; composerFocused = true } label: {
+                Text(title).font(.system(size: 12.5)).foregroundStyle(Color.dsFg)
+                    .padding(.horizontal, 12).frame(height: 28)
+                    .background(Capsule().fill(Color.dsChip))
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .help(text)
+        }
+    }
+
+    // MARK: Asking
+
+    /// The box: what to set up, who sets it up (fixed when the list is filtered to an agent), and send. While the runner
+    /// works, the send button says so.
+    private func composer(size: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            TextField("", text: $askText, prompt: Text("Every weekday at 8, send me today's calendar and anything urgent in my inbox").foregroundStyle(Color.dsFg3), axis: .vertical)
+                .textFieldStyle(.plain).font(.system(size: size)).lineLimit(2...6)
+                .focused($composerFocused)
+                .disabled(asking != nil)
+                .onSubmit(send)
+                .onChange(of: askText) { if askError != nil { askError = nil } }
+            HStack(spacing: 8) {
+                runnerMenu
+                if let project {
+                    Text("Piopio can set it up in \(project.name)").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).lineLimit(1)
+                }
+                Spacer()
+                if let asking {
+                    HStack(spacing: 6) {
+                        ProgressView().controlSize(.mini)
+                        Text("\(engine.runnerName(asking)) is setting it up…").font(.system(size: 12)).foregroundStyle(Color.dsFg2)
+                    }
+                } else {
+                    SendButton(enabled: !askText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, action: send)
+                        .accessibilityLabel("Set it up")
+                }
+            }
+        }
+        .padding(.leading, 14).padding(.trailing, 10).padding(.top, 12).padding(.bottom, 10)
+        .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.dsFg.opacity(0.14)))
+        .contentShape(Rectangle())
+        .onTapGesture { composerFocused = true }
+    }
+
+    @ViewBuilder private var runnerMenu: some View {
+        let label = HStack(spacing: 6) {
+            RunnerTile(engine: engine, runsAs: runner, size: 18)
+            Text(engine.runnerName(runner)).font(.system(size: 12.5)).foregroundStyle(Color.dsFg)
+            if fixedRunner == nil { Image(systemName: "chevron.down").font(.system(size: 8.5, weight: .semibold)).foregroundStyle(Color.dsFg3) }
+        }
+        .padding(.leading, 4).padding(.trailing, 10).frame(height: 26)
+        .background(Capsule().fill(Color.dsChip))
+        if fixedRunner != nil || engine.agents.isEmpty || project != nil {
+            label.help("\(engine.runnerName(runner)) sets it up")
+        } else {
+            Menu {
+                Button("Piopio") { askRunner = "piopio" }
+                ForEach(engine.agents.filter { $0.agent?.draft != true }, id: \.ref.id) { agent in
+                    Button(agent.title) { askRunner = agent.ref.id }
+                }
+            } label: { label }
+            .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
+            .help("Who sets it up, and runs it")
+        }
+    }
+
+    /// New automation with automations: ask in a popover, or set one up by hand.
+    private var askPopover: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("What should run on its own?").font(.system(size: 13.5, weight: .semibold))
+            composer(size: 13)
+            if let askError { Text(askError).font(.system(size: 12)).foregroundStyle(Color.dsRed).fixedSize(horizontal: false, vertical: true) }
+            Flow(spacing: 6, lineSpacing: 6) { suggestions(Array(Self.ideas.prefix(3))) }
+            Divider().padding(.top, 2)
+            Button { startDraft() } label: {
+                HStack { Text("Set it up yourself"); Spacer(); Image(systemName: "arrow.right").font(.system(size: 11, weight: .semibold)) }
+                    .font(.system(size: 12.5)).foregroundStyle(Color.accentColor).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(16)
+        .frame(width: 400)
+        .onAppear { composerFocused = true }
+    }
+
+    private func newAutomation() {
+        if shown.isEmpty {
+            // The box is right there: light it up rather than open a second one.
+            composerFocused = true
+            nudge = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { nudge = false }
+        } else {
+            askError = nil
+            showNew.toggle()
+        }
+    }
+
+    private func startDraft() {
+        showNew = false
+        draft = AutomationDraft(preset: filter, runsAs: runner, prompt: askText.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    /// Sends what you wrote to the runner (a new conversation with Piopio, or the agent's chat) and stays here. When it
+    /// has answered: what it set up, with Open and Undo; or, when it asked you something instead, a way to that answer.
+    private func send() {
+        let message = askText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !message.isEmpty, asking == nil else { return }
+        let who = runner
+        let name = engine.runnerName(who)
+        let before = Set(engine.automations.map(\.id))
+        asking = who
+        askError = nil
+        toast = nil
+        Task {
+            defer { asking = nil }
+            let ref: ContainerRef
+            if who == "piopio" {
+                guard let made = await engine.createThread() else {
+                    askError = "Couldn't start a conversation with Piopio. Try again when the engine is connected."
+                    return
+                }
+                ref = made
+            } else {
+                ref = ContainerRef(kind: .agent, id: who)
+            }
+            let thread = engine.thread(ref)
+            await thread.open()
+            guard await thread.send(message) else {
+                askError = thread.error ?? "Couldn't send. What you wrote is still here."
+                return
+            }
+            askText = ""
+            showNew = false
+            // Its answer: it sets one up, asks you something, or waits for your OK (two minutes at most).
+            var started = false
+            for tick in 0..<600 {
+                try? await Task.sleep(for: .milliseconds(200))
+                let status = thread.state?.status
+                if status == .running { started = true; continue }
+                if started || tick > 15 { break }
+            }
+            await engine.loadAutomations()
+            try? await engine.refreshCatalog()
+            let open: () -> Void = {
+                if who == "piopio" { item = .chat(ref.id) } else { UserDefaults.standard.set("Chat", forKey: "agentTab"); item = .agent(who) }
+            }
+            if let made = engine.automations.first(where: { !before.contains($0.id) }) {
+                let first = made.next.map { " · first run \(MainSidebar.when(AutomationText.date($0)))" } ?? ""
+                show(AutomationToast(title: "\(name) set up “\(made.name)”", line: made.label + first, actions: [
+                    .init(title: "Open") { item = .automation(made.id) },
+                    .init(title: "Undo") { Task { try? await engine.removeAutomation(made.id) } },
+                ]))
+            } else if thread.state?.status == .waitingApproval {
+                show(AutomationToast(title: "\(name) needs your OK to set it up", line: nil, actions: [.init(title: "Open conversation", action: open)]))
+            } else {
+                show(AutomationToast(title: "\(name) answered instead of setting it up", line: "It may need a detail from you.", actions: [.init(title: "Open conversation", action: open)]))
+            }
+        }
+    }
+
+    private func show(_ next: AutomationToast) {
+        toast = next
+        let id = next.id
+        DispatchQueue.main.asyncAfter(deadline: .now() + 8) { if toast?.id == id { toast = nil } }
+    }
+}
+
+extension Notification.Name {
+    /// Captures (DebugAutomation): "new", "draft" or "ask:<what to ask>" on the Automations list.
+    static let automationsDemo = Notification.Name("piopio.automationsDemo")
+}
+
+/// New automation by hand: what the draft starts from (the list's filter, who you'd picked, what you'd typed).
+struct AutomationDraft: Equatable {
+    var preset: String?
+    var runsAs: String
+    var prompt: String
+}
+
+/// What just happened, at the foot of the list: a line, and what to do about it.
+struct AutomationToast: Identifiable {
+    struct Action { let title: String; let action: () -> Void }
+    let id = UUID()
+    let title: String
+    let line: String?
+    let actions: [Action]
+}
+
+struct AutomationToastView: View {
+    let toast: AutomationToast
+    let dismiss: () -> Void
+
+    var body: some View {
+        HStack(spacing: 14) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(toast.title).font(.system(size: 13, weight: .medium))
+                if let line = toast.line { Text(line).font(.system(size: 12)).opacity(0.65).lineLimit(1) }
+            }
+            ForEach(Array(toast.actions.enumerated()), id: \.offset) { _, a in
+                Button { a.action(); dismiss() } label: {
+                    Text(a.title).font(.system(size: 12.5, weight: .medium))
+                        .padding(.horizontal, 11).frame(height: 28)
+                        .background(Color.dsInvFg.opacity(0.14), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .foregroundStyle(Color.dsInvFg)
+        .padding(.leading, 16).padding(.trailing, 10).padding(.vertical, 10)
+        .background(Color.dsInv, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .shadow(color: .black.opacity(0.16), radius: 14, y: 6)
+        .frame(maxWidth: 640)
     }
 }
 
@@ -307,8 +596,18 @@ struct EnabledSwitch: View {
 /// away; and its runs, in a column of their own.
 struct AutomationPage: View {
     let engine: EngineController
-    let id: String
+    /// nil: a draft (New automation by hand), held here until Turn on.
+    let id: String?
     @Binding var item: SidebarItem
+    var draft: AutomationDraft? = nil
+    /// Discard, or back, on a draft.
+    var leaveDraft: () -> Void = {}
+    /// The draft's record, as the engine will get it; and the draft as an automation, worded here.
+    @State private var pending = AutomationChange()
+    @State private var drafted: Automation?
+    @State private var turningOn = false
+    @State private var promptError: String?
+    @FocusState private var promptFocused: Bool
     @State private var detail: AutomationDetail?
     @State private var missing = false
     @State private var name = ""
@@ -326,7 +625,8 @@ struct AutomationPage: View {
 
     enum Pop: String, Identifiable { case when, who, whereTo, result; var id: String { rawValue } }
 
-    private var a: Automation? { detail?.automation }
+    private var a: Automation? { id == nil ? drafted : detail?.automation }
+    private var isDraft: Bool { id == nil }
 
     var body: some View {
         Group {
@@ -354,8 +654,15 @@ struct AutomationPage: View {
         }
         .background(Color.dsWin)
         .task(id: engine.automationsGeneration) { await load() }
+        .onReceive(NotificationCenter.default.publisher(for: .automationsDemo)) { note in
+            // Captures: "turn-on:<what it's told>" on a draft.
+            guard isDraft, let what = note.object as? String, what.hasPrefix("turn-on:") else { return }
+            prompt = String(what.dropFirst(8))
+            turnOn()
+        }
         .confirmationDialog("Delete “\(a?.name ?? "")”?", isPresented: $confirmDelete) {
             Button("Delete", role: .destructive) {
+                guard let id else { return }
                 Task {
                     do {
                         try await engine.removeAutomation(id)
@@ -374,6 +681,7 @@ struct AutomationPage: View {
     }
 
     private func load() async {
+        guard let id else { await loadDraft(); return }
         guard let got = await engine.automation(id) else { missing = true; return }
         let first = detail == nil
         let before = detail?.automation
@@ -382,7 +690,11 @@ struct AutomationPage: View {
         if first || name == before?.name { name = got.automation.name }
         if first || prompt == before?.prompt { prompt = got.automation.prompt }
         if first || before.map(TriggerChoice.init) == trigger { trigger = TriggerChoice(got.automation) }
-        if let agent = engine.agents.first(where: { $0.ref.id == got.automation.runsAs }), let def = await engine.agentDefinition(agent.ref) {
+        await loadRunner(got.automation.runsAs)
+    }
+
+    private func loadRunner(_ runsAs: String) async {
+        if let agent = engine.agents.first(where: { $0.ref.id == runsAs }), let def = await engine.agentDefinition(agent.ref) {
             runnerDef = AgentDef(def.definition)
         } else {
             runnerDef = nil
@@ -393,28 +705,38 @@ struct AutomationPage: View {
         VStack(alignment: .leading, spacing: 26) {
             VStack(alignment: .leading, spacing: 14) {
                 HStack {
-                    Button { item = .automations(nil) } label: {
+                    Button { if isDraft { leaveDraft() } else { item = .automations(nil) } } label: {
                         HStack(spacing: 3) { Image(systemName: "chevron.left").font(.system(size: 10.5, weight: .semibold)); Text("Automations") }
                             .font(.system(size: 13)).foregroundStyle(Color.dsFg2).contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     Spacer()
-                    Button(running ? "Running…" : "Run now") { run() }.buttonStyle(PillStyle(kind: .primary)).disabled(running)
-                        .help("Run it once now, even while it's paused")
+                    if isDraft {
+                        Button("Discard", action: leaveDraft).buttonStyle(PillStyle()).keyboardShortcut(.cancelAction)
+                        Button(turningOn ? "Turning on…" : "Turn on") { turnOn() }.buttonStyle(PillStyle(kind: .primary)).disabled(turningOn)
+                            .keyboardShortcut(.return, modifiers: .command)
+                            .help("Save it and turn it on (⌘↩)")
+                    } else {
+                        Button(running ? "Running…" : "Run now") { run() }.buttonStyle(PillStyle(kind: .primary)).disabled(running)
+                            .help("Run it once now, even while it's paused")
+                    }
                 }
                 HStack(spacing: 12) {
-                    TextField("Name", text: $name)
+                    TextField("", text: $name, prompt: Text(isDraft ? "New automation" : "Name").foregroundStyle(Color.dsFg3))
                         .textFieldStyle(.plain).font(.system(size: 28, weight: .bold)).tracking(-0.6)
-                        .opacity(a.enabled ? 1 : 0.5)
-                        .onSubmit { save(AutomationChange(name: name)) }
+                        .opacity(a.enabled || isDraft ? 1 : 0.5)
+                        .onSubmit { if !isDraft { save(AutomationChange(name: name)) } }
                     Spacer()
-                    Text(a.enabled ? "On" : "Paused").font(.system(size: 12)).foregroundStyle(Color.dsFg2)
-                    EnabledSwitch(engine: engine, automation: a, size: .regular)
+                    if !isDraft {
+                        Text(a.enabled ? "On" : "Paused").font(.system(size: 12)).foregroundStyle(Color.dsFg2)
+                        EnabledSwitch(engine: engine, automation: a, size: .regular)
+                    }
                 }
             }
             VStack(alignment: .leading, spacing: 10) {
                 sentence(a)
-                Text("Blue words are choices. Click the time to change when; to change what it does, edit the prompt below or ask \(a.isPiopio ? "Piopio" : engine.runnerName(a.runsAs)).")
+                Text(isDraft ? "Blue words are choices. Click the time to change when, and say below what it should do."
+                             : "Blue words are choices. Click the time to change when; to change what it does, edit the prompt below or ask \(a.isPiopio ? "Piopio" : engine.runnerName(a.runsAs)).")
                     .font(.system(size: 12)).foregroundStyle(Color.dsFg3).fixedSize(horizontal: false, vertical: true)
                 if let url = a.url {
                     HStack(spacing: 8) {
@@ -432,11 +754,22 @@ struct AutomationPage: View {
                 VStack(alignment: .trailing, spacing: 8) {
                     TextEditor(text: $prompt)
                         .font(.system(size: 13)).lineSpacing(2).scrollContentBackground(.hidden)
-                        .frame(minHeight: 70)
+                        .frame(minHeight: isDraft ? 96 : 70)
                         .padding(.horizontal, 9).padding(.vertical, 8)
+                        .focused($promptFocused)
+                        .overlay(alignment: .topLeading) {
+                            if prompt.isEmpty {
+                                Text("Summarise what competitors shipped last week, with links.").font(.system(size: 13)).foregroundStyle(Color.dsFg3)
+                                    .padding(.horizontal, 14).padding(.vertical, 8).allowsHitTesting(false)
+                            }
+                        }
                         .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.dsLine))
-                    if prompt != a.prompt {
+                        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(promptFocused && isDraft ? Color.accentColor : Color.dsLine, lineWidth: promptFocused && isDraft ? 1.5 : 1))
+                        .onChange(of: prompt) { promptError = nil }
+                    if let promptError {
+                        Text(promptError).font(.system(size: 12.5)).foregroundStyle(Color.dsRed).frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    if !isDraft, prompt != a.prompt {
                         HStack {
                             Button("Cancel") { prompt = a.prompt }.buttonStyle(PillStyle(compact: true))
                             Button("Save") { save(AutomationChange(prompt: prompt)) }.buttonStyle(PillStyle(kind: .strong, compact: true))
@@ -446,8 +779,10 @@ struct AutomationPage: View {
                 }
             }
             away(a)
-            Button("Delete automation") { confirmDelete = true }
-                .buttonStyle(.plain).font(.system(size: 13)).foregroundStyle(Color.dsRed)
+            if !isDraft {
+                Button("Delete automation") { confirmDelete = true }
+                    .buttonStyle(.plain).font(.system(size: 13)).foregroundStyle(Color.dsRed)
+            }
         }
     }
 
@@ -459,7 +794,8 @@ struct AutomationPage: View {
         let piopio = a.isPiopio
         let runner = piopio ? "Piopio" : engine.runnerName(a.runsAs)
         let project = a.project.flatMap { p in engine.projects.first { $0.id == p }?.name }
-        let words = Self.lowerFirst(Self.gist(a.prompt)).split(separator: " ").map(String.init)
+        let told = Self.gist(isDraft ? prompt : a.prompt)
+        let words = told.isEmpty ? ["…"] : Self.lowerFirst(told).split(separator: " ").map(String.init)
         return Flow(spacing: 6, lineSpacing: 8) {
             HStack(spacing: 0) {
                 choice(.when, a.label, bold: true) { triggerChoices(a) }
@@ -470,7 +806,7 @@ struct AutomationPage: View {
             glue("to")
             // What it does, word by word so it wraps; the comma rides on the last word.
             ForEach(Array(words.enumerated()), id: \.offset) { i, w in
-                Text(i == words.count - 1 ? "\(w)," : w).font(.system(size: 23, weight: .semibold)).tracking(-0.2).foregroundStyle(Color.dsFg)
+                Text(i == words.count - 1 ? "\(w)," : w).font(.system(size: 23, weight: told.isEmpty ? .regular : .semibold)).tracking(-0.2).foregroundStyle(told.isEmpty ? Color.dsFg3 : Color.dsFg)
             }
             HStack(spacing: 0) {
                 choice(.whereTo, project.map { "in \($0)" } ?? "without a project", grey: !piopio) { whereChoices(a, runner: runner) }
@@ -731,8 +1067,17 @@ struct AutomationPage: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {
                 Text("Runs").font(.system(size: 13, weight: .semibold)).padding(.bottom, 2)
-                let list = detail?.runs ?? []
-                if list.isEmpty {
+                let list = isDraft ? [] : detail?.runs ?? []
+                if isDraft {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Not on yet.").font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
+                        Text(a.next.map { "First run would be \(Self.firstRun($0))" } ?? (a.on == "time" ? "Not scheduled" : "It starts \(Self.lowerFirst(a.label))"))
+                            .font(.system(size: 12.5, weight: .semibold)).foregroundStyle(Color.dsFg).fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.horizontal, 14).padding(.vertical, 12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.dsFg.opacity(0.18), style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
+                } else if list.isEmpty {
                     VStack(alignment: .leading, spacing: 3) {
                         Text("No runs yet.").font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
                         if let next = a.next {
@@ -809,6 +1154,12 @@ struct AutomationPage: View {
     }
 
     private func save(_ change: AutomationChange) {
+        guard let id else {
+            pending.merge(change)
+            drafted = draftAutomation()
+            if change.runsAs != nil { Task { await loadRunner(pending.runsAs ?? "piopio") } }
+            return
+        }
         Task {
             do {
                 error = nil
@@ -817,7 +1168,76 @@ struct AutomationPage: View {
         }
     }
 
+    // MARK: The draft
+
+    /// A new one starts every day at 09:00, run by who you'd picked (or the agent the list showed), without a project
+    /// unless the list showed one, telling you the usual way, with the usual budget.
+    private func loadDraft() async {
+        if drafted == nil {
+            let start = draft ?? AutomationDraft(runsAs: "piopio", prompt: "")
+            let project = start.preset.flatMap { p in engine.projects.first { $0.id == p }?.id }
+            let runsAs = project == nil && engine.agents.contains(where: { $0.ref.id == start.preset }) ? start.preset! : project == nil ? start.runsAs : "piopio"
+            let agent = runsAs != "piopio"
+            pending = AutomationChange(on: "time", when: "0 9 * * *", runsAs: runsAs, project: project.map { .set($0) }, result: agent ? "chat" : "conversation",
+                                       approval: "wait", budgetPerRunUsd: .set(agent ? 0.25 : 0.50))
+            prompt = start.prompt
+            drafted = draftAutomation()
+            if let drafted { trigger = TriggerChoice(drafted) }
+            promptFocused = true
+        } else {
+            drafted = draftAutomation()
+        }
+        await loadRunner(pending.runsAs ?? "piopio")
+    }
+
+    /// The draft as the page shows it, in the engine's words (packages/engine/src/automations/model.ts).
+    private func draftAutomation() -> Automation {
+        let c = pending
+        let runsAs = c.runsAs ?? "piopio"
+        let on = c.on ?? "time"
+        let project: String? = if case .set(let p)? = c.project { p } else { nil }
+        let budget: Double? = if case .set(let b)? = c.budgetPerRunUsd { b } else { nil }
+        let when = c.when ?? ""
+        let cron = on == "time" && when.split(separator: " ").count == 5 ? when : nil
+        let at = on == "time" && cron == nil ? AutomationWords.localDate(when).map { $0.timeIntervalSince1970 * 1000 } : nil
+        let next = on == "time" ? AutomationWords.next(cron: cron, at: at).map { $0.timeIntervalSince1970 * 1000 } : nil
+        let runnerName = engine.runnerName(runsAs)
+        let projectName = project.flatMap { p in engine.projects.first { $0.id == p }?.name }
+        return Automation(id: "draft", name: name, on: on, runsAs: runsAs, prompt: prompt, result: c.result ?? "conversation", approval: c.approval ?? "wait",
+                          cron: cron, at: at, folder: c.folder, from: c.from, subject: c.subject, project: project, budgetPerRunUsd: budget, next: next,
+                          label: AutomationWords.when(on: on, cron: cron, at: at, folder: c.folder, from: c.from, subject: c.subject),
+                          runnerName: runnerName,
+                          resultLabel: AutomationWords.result(c.result ?? "conversation", piopio: runsAs == "piopio", runner: runnerName, project: projectName))
+    }
+
+    /// Turn on: the engine gets it (named after its first words unless you named it) and its page opens.
+    private func turnOn() {
+        let told = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !told.isEmpty else {
+            promptError = "Say what it should do. That's the one thing it needs."
+            promptFocused = true
+            return
+        }
+        var change = pending
+        change.prompt = told
+        change.enabled = true
+        let named = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        change.name = named.isEmpty ? nil : named
+        if case .clear? = change.project { change.project = nil }
+        if case .clear? = change.budgetPerRunUsd { change.budgetPerRunUsd = nil }
+        turningOn = true
+        Task {
+            defer { turningOn = false }
+            do {
+                error = nil
+                let made = try await engine.addAutomation(change)
+                item = .automation(made.id)
+            } catch { self.error = (error as? EngineError)?.message ?? error.localizedDescription }
+        }
+    }
+
     private func run() {
+        guard let id else { return }
         running = true
         Task {
             defer { running = false }
@@ -1027,117 +1447,97 @@ struct TriggerEditor: View {
     }
 }
 
-// MARK: New automation
+// MARK: The draft's words
 
-/// New Automation (27 §4): for when you'd rather not ask. Who runs it, when, what it's told, where it works and where
-/// the result goes.
-struct AutomationEditor: View {
-    let engine: EngineController
-    /// The list's filter: an agent's id, "piopio" or a project's id, to start from.
-    var preset: String?
-    let made: (Automation) -> Void
-    @Environment(\.dismiss) private var dismiss
-    @State private var name = ""
-    @State private var runsAs = "piopio"
-    @State private var project: String?
-    @State private var prompt = ""
-    @State private var result = "conversation"
-    @State private var trigger = TriggerChoice()
-    @State private var error: String?
-    @State private var saving = false
+extension AutomationChange {
+    /// A change on top of the draft's record: a new trigger replaces the old one whole.
+    mutating func merge(_ c: AutomationChange) {
+        if c.on != nil { on = c.on; when = c.when; folder = c.folder; from = c.from; subject = c.subject }
+        if let v = c.name { name = v }
+        if let v = c.runsAs { runsAs = v }
+        if let v = c.prompt { prompt = v }
+        if let v = c.result { result = v }
+        if let v = c.approval { approval = v }
+        if let v = c.project { project = v }
+        if let v = c.budgetPerRunUsd { budgetPerRunUsd = v }
+        if let v = c.enabled { enabled = v }
+    }
+}
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("New Automation").font(.system(size: 18, weight: .semibold))
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    SetupGroup("Who runs it") {
-                        SetupRow("Runs as") {
-                            Picker("", selection: $runsAs) {
-                                Text("Piopio").tag("piopio")
-                                ForEach(engine.agents, id: \.ref.id) { Text($0.title).tag($0.ref.id) }
-                            }
-                            .labelsHidden().fixedSize()
-                        }
-                        if runsAs == "piopio" {
-                            SetupRow("Works in") {
-                                Picker("", selection: $project) {
-                                    Text("No project").tag(String?.none)
-                                    ForEach(engine.projects) { Text($0.name).tag(String?.some($0.id)) }
-                                }
-                                .labelsHidden().fixedSize()
-                            }
-                        }
-                        SetupRow("Tells you") {
-                            Picker("", selection: $result) {
-                                if runsAs == "piopio" {
-                                    Text("In a new conversation").tag("conversation")
-                                } else {
-                                    Text("In \(engine.runnerName(runsAs))’s chat").tag("chat")
-                                    Text("On Telegram").tag("telegram")
-                                }
-                                Text("Only if it needs me").tag("quiet")
-                            }
-                            .labelsHidden().fixedSize()
-                        }
-                    }
-                    SetupGroup("When") { TriggerEditor(choice: $trigger) }
-                    SetupGroup("What it's told") {
-                        TextEditor(text: $prompt)
-                            .font(.system(size: 13)).scrollContentBackground(.hidden)
-                            .frame(minHeight: 90)
-                            .padding(.horizontal, 10).padding(.vertical, 8)
-                            .overlay(alignment: .topLeading) {
-                                if prompt.isEmpty {
-                                    Text("Summarise what competitors shipped last week, with links.").font(.system(size: 13)).foregroundStyle(Color.dsFg3)
-                                        .padding(.horizontal, 15).padding(.vertical, 8).allowsHitTesting(false)
-                                }
-                            }
-                    }
-                    SetupGroup("Name", footer: "Optional: its first words otherwise.") {
-                        TextField("Weekly competitor brief", text: $name).textFieldStyle(.plain).padding(.horizontal, 14).padding(.vertical, 10)
-                    }
-                    RunsOnNote()
-                }
-            }
-            if let error { Text(error).font(.system(size: 12.5)).foregroundStyle(Color.dsRed).fixedSize(horizontal: false, vertical: true) }
-            HStack {
-                Spacer()
-                Button("Cancel") { dismiss() }.buttonStyle(PillStyle()).keyboardShortcut(.cancelAction)
-                Button(saving ? "Making…" : "Make It") { make() }.buttonStyle(PillStyle(kind: .strong)).keyboardShortcut(.defaultAction)
-                    .disabled(saving || prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !trigger.isComplete)
-            }
+/// The engine's words for an automation it doesn't have yet (whenLabel, resultLabel and nextOf in
+/// packages/engine/src/automations/model.ts), for the schedules the app's trigger editor makes.
+enum AutomationWords {
+    private static let days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+
+    static func when(on: String, cron: String?, at: Double?, folder: String?, from: String?, subject: String?) -> String {
+        switch on {
+        case "folder": return "When a file appears or changes in \(folder ?? "a folder")"
+        case "email":
+            let who = from.flatMap { $0.isEmpty ? nil : " from \($0)" } ?? ""
+            let about = subject.flatMap { $0.isEmpty ? nil : " about “\($0)”" } ?? ""
+            return "When an email\(who)\(about) arrives"
+        case "webhook": return "When its URL is called"
+        default: break
         }
-        .padding(24)
-        .frame(width: 560, height: 640)
-        .background(Color.dsWin)
-        .onAppear {
-            if let preset {
-                if engine.projects.contains(where: { $0.id == preset }) { project = preset }
-                else if engine.agents.contains(where: { $0.ref.id == preset }) { runsAs = preset; result = "chat" }
-            }
+        if let at {
+            let d = Date(timeIntervalSince1970: at / 1000)
+            let sameYear = Calendar.current.isDate(d, equalTo: Date(), toGranularity: .year)
+            let day = d.formatted(sameYear ? .dateTime.weekday(.abbreviated).day().month(.abbreviated) : .dateTime.weekday(.abbreviated).day().month(.abbreviated).year())
+            return "Once, \(day), \(hm(d))"
         }
-        .onChange(of: runsAs) { _, now in
-            if now == "piopio" { if result != "quiet" { result = "conversation" } }
-            else { project = nil; if result != "quiet" { result = "chat" } }
+        guard let cron else { return "At a time" }
+        let f = cron.split(separator: " ").map(String.init)
+        guard f.count == 5, let m = Int(f[0]), let h = Int(f[1]), f[2] == "*", f[3] == "*" else { return "On the schedule “\(cron)”" }
+        let at = String(format: "%02d:%02d", h, m)
+        switch f[4] {
+        case "*": return "Every day at \(at)"
+        case "1-5": return "Every weekday at \(at)"
+        case "0,6", "6,0": return "Every weekend day at \(at)"
+        default: return Int(f[4]).map { "Every \(days[$0 % 7]) at \(at)" } ?? "On the schedule “\(cron)”"
         }
     }
 
-    private func make() {
-        saving = true
-        Task {
-            defer { saving = false }
-            var change = trigger.change
-            change.runsAs = runsAs
-            change.prompt = prompt
-            change.result = result
-            if let project, runsAs == "piopio" { change.project = .set(project) }
-            if !name.trimmingCharacters(in: .whitespaces).isEmpty { change.name = name }
-            do {
-                let a = try await engine.addAutomation(change)
-                dismiss()
-                made(a)
-            } catch { self.error = error.localizedDescription }
+    static func result(_ result: String, piopio: Bool, runner: String, project: String?) -> String {
+        switch result {
+        case "quiet": "Only if it needs you"
+        case "telegram": "Telegram"
+        default: piopio ? project.map { "A conversation in \($0)" } ?? "A new conversation" : "\(runner)’s chat"
         }
+    }
+
+    /// The next time it would run, from now.
+    static func next(cron: String?, at: Double?) -> Date? {
+        if let at { let d = Date(timeIntervalSince1970: at / 1000); return d > Date() ? d : nil }
+        guard let cron else { return nil }
+        let f = cron.split(separator: " ").map(String.init)
+        guard f.count == 5, let m = Int(f[0]), let h = Int(f[1]), f[2] == "*", f[3] == "*" else { return nil }
+        let cal = Calendar.current
+        let now = Date()
+        for offset in 0..<8 {
+            guard let day = cal.date(byAdding: .day, value: offset, to: now),
+                  let d = cal.date(bySettingHour: h, minute: m, second: 0, of: day), d > now else { continue }
+            let wd = cal.component(.weekday, from: d) - 1
+            let fits = switch f[4] {
+            case "*": true
+            case "1-5": (1...5).contains(wd)
+            case "0,6", "6,0": wd == 0 || wd == 6
+            default: Int(f[4]).map { $0 % 7 == wd } ?? false
+            }
+            if fits { return d }
+        }
+        return nil
+    }
+
+    /// "2026-11-23T09:00", local.
+    static func localDate(_ text: String) -> Date? {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd'T'HH:mm"
+        return f.date(from: text)
+    }
+
+    private static func hm(_ d: Date) -> String {
+        let c = Calendar.current.dateComponents([.hour, .minute], from: d)
+        return String(format: "%02d:%02d", c.hour ?? 0, c.minute ?? 0)
     }
 }

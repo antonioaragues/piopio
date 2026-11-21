@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Piopio · Automations prototype</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root{
+  --side:#F4F4F2; --win:#FCFCFB; --card:#FFFFFF; --bubble:#F0F0ED; --sel:#EAEAE6;
+  --fg:#1F1F1E; --fg2:#6B6B67; --fg3:#9B9B96; --line:rgba(0,0,0,.09); --line2:rgba(0,0,0,.16);
+  --accent:#2F6FEB; --accentBg:rgba(47,111,235,.08); --inv:#1F1F1E; --invFg:#FFFFFF;
+  --amber:#B86E00; --amberBg:rgba(232,154,23,.12); --green:#2E9E5B; --red:#D0453B;
+  --pop:#FFFFFF; --shadow:0 10px 30px rgba(0,0,0,.12),0 2px 6px rgba(0,0,0,.06);
+}
+@media (prefers-color-scheme: dark){:root{
+  --side:#191918; --win:#1E1E1D; --card:#252524; --bubble:#2B2B29; --sel:#333331;
+  --fg:#ECECEA; --fg2:#A6A6A1; --fg3:#77776F; --line:rgba(255,255,255,.10); --line2:rgba(255,255,255,.18);
+  --accent:#5B8DF0; --accentBg:rgba(91,141,240,.14); --inv:#ECECEA; --invFg:#1E1E1D;
+  --amber:#E8A33A; --amberBg:rgba(232,163,58,.14); --pop:#2B2B29; --shadow:0 10px 30px rgba(0,0,0,.5);
+}}
+*{box-sizing:border-box}
+html,body{margin:0;background:#D9D9D6;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;color:var(--fg);-webkit-font-smoothing:antialiased}
+@media (prefers-color-scheme: dark){html,body{background:#0E0E0D}}
+button{white-space:nowrap;font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+input,textarea,select{font:inherit;color:inherit}
+
+.proto{display:flex;gap:10px;align-items:center;justify-content:center;padding:12px;font-size:12px;color:#55554F}
+@media (prefers-color-scheme: dark){.proto{color:#9B9B96}}
+.proto b{font-weight:600}
+.proto button{border:1px solid rgba(0,0,0,.15);border-radius:6px;padding:3px 9px;background:rgba(255,255,255,.6)}
+@media (prefers-color-scheme: dark){.proto button{border-color:rgba(255,255,255,.15);background:rgba(255,255,255,.06)}}
+
+.app{width:min(1240px,calc(100vw - 24px));height:min(780px,calc(100vh - 64px));min-height:560px;min-width:1060px;margin:0 auto 30px;background:var(--side);border-radius:12px;display:flex;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.18),0 0 0 .5px rgba(0,0,0,.2)}
+.side{width:250px;flex:none;padding:14px 10px;display:flex;flex-direction:column;font-size:13.5px}
+.lights{display:flex;gap:8px;padding:2px 6px 18px}
+.lights i{width:12px;height:12px;border-radius:50%;display:block}
+.search{display:flex;gap:8px;align-items:center}
+.search .box{flex:1;background:var(--sel);opacity:.8;border-radius:16px;height:32px;display:flex;align-items:center;padding:0 12px;color:var(--fg3);font-size:13px;gap:8px}
+.search .plus{width:32px;height:32px;border-radius:50%;background:var(--inv);color:var(--invFg);display:flex;align-items:center;justify-content:center;font-size:18px}
+.nav{margin-top:14px}
+.row{display:flex;align-items:center;gap:9px;height:30px;padding:0 8px;border-radius:7px;color:var(--fg)}
+.row.on{background:var(--sel)}
+.row .n{margin-left:auto;color:var(--fg3);font-size:12px}
+.sec{color:var(--fg3);font-size:12px;margin:18px 8px 6px;display:flex;justify-content:space-between}
+.sub{padding-left:30px;color:var(--fg2);font-size:13px;height:26px;display:flex;align-items:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.me{margin-top:auto;display:flex;gap:9px;align-items:center;padding:6px 8px;font-size:13px}
+.me .av{width:26px;height:26px;border-radius:50%;background:var(--sel);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--fg2)}
+.me small{display:block;color:var(--fg3);font-size:11px}
+
+.content{flex:1;margin:8px 8px 8px 0;background:var(--win);border-radius:10px;box-shadow:0 0 0 .5px var(--line);position:relative;overflow:hidden;display:flex}
+.page{flex:1;overflow:auto;padding:38px 56px 40px}
+.h1{font-size:30px;font-weight:700;letter-spacing:-.4px;margin:0}
+.lede{color:var(--fg2);font-size:14px;margin:6px 0 0}
+.head{display:flex;justify-content:space-between;align-items:flex-start;gap:20px}
+.bbtn{height:32px;padding:0 14px;border-radius:8px;box-shadow:0 0 0 .5px var(--line2);background:var(--card);font-size:13.5px}
+.bbtn:hover{background:var(--bubble)}
+.bbtn.pressed{background:var(--sel)}
+.black{height:32px;padding:0 16px;border-radius:8px;background:var(--inv);color:var(--invFg);font-size:13.5px;font-weight:500}
+.black:disabled{opacity:.6}
+.ghost{height:32px;padding:0 12px;border-radius:8px;font-size:13.5px;color:var(--fg2)}
+.ghost:hover{background:var(--bubble)}
+
+.chips{display:flex;gap:6px;align-items:center;margin-top:22px}
+.chip{height:26px;display:inline-flex;align-items:center;gap:6px;padding:0 11px;border-radius:13px;background:var(--bubble);font-size:12.5px}
+.chip.with{padding-left:4px}
+.chip.on{background:var(--inv);color:var(--invFg)}
+.awake{margin-left:auto;font-size:12.5px;color:var(--fg2);display:flex;align-items:center;gap:7px}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block}
+
+.grp{margin-top:26px}
+.cols{display:grid;grid-template-columns:1.7fr 1fr 1fr 1.25fr 40px;gap:16px;align-items:center;padding:0 14px}
+.ghead{font-size:11.5px;color:var(--fg3);padding-bottom:8px;border-bottom:.5px solid var(--line)}
+.ghead b{font-weight:600}
+.arow{padding:14px;border-bottom:.5px solid var(--line);cursor:pointer;border-radius:0}
+.arow:hover{background:var(--bubble)}
+.arow .nm{font-size:14px;font-weight:600;display:flex;gap:8px;align-items:center}
+.arow .wh{font-size:13px;color:var(--fg2);margin-top:2px}
+.arow .cell{font-size:13.5px;color:var(--fg2)}
+.arow .cell small{display:block;color:var(--fg3);font-size:12px;margin-top:2px}
+.arow.paused .fade{opacity:.45}
+.newb{font-size:10.5px;font-weight:600;color:var(--accent);background:var(--accentBg);border-radius:5px;padding:1px 6px}
+.runas{display:flex;gap:8px;align-items:center;color:var(--fg)}
+.waiting{color:var(--amber)!important;font-weight:500}
+
+.sw{width:38px;height:22px;border-radius:11px;background:var(--line2);position:relative;transition:background .15s;flex:none}
+.sw::after{content:"";position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:left .15s}
+.sw.on{background:var(--inv)}
+.sw.on::after{left:18px}
+@media (prefers-color-scheme: dark){.sw::after{background:#1E1E1D}.sw.on::after{background:#1E1E1D}.sw{background:#444}}
+
+.empty{max-width:560px;margin:64px auto 0;text-align:center}
+.empty h2{font-size:19px;font-weight:600;margin:14px 0 6px}
+.empty p{color:var(--fg2);font-size:13.5px;margin:0}
+.composer{background:var(--card);border-radius:14px;box-shadow:0 0 0 .5px var(--line2),0 1px 2px rgba(0,0,0,.04);padding:12px 12px 10px 14px;text-align:left}
+.composer.nudge{box-shadow:0 0 0 2px var(--accent);transition:box-shadow .3s}
+.composer textarea{width:100%;border:0;outline:0;resize:none;background:transparent;font-size:14px;line-height:1.45;min-height:44px}
+.composer textarea::placeholder{color:var(--fg3)}
+.cbar{display:flex;justify-content:space-between;align-items:center;margin-top:6px}
+.send{width:28px;height:28px;border-radius:50%;background:var(--inv);color:var(--invFg);display:flex;align-items:center;justify-content:center}
+.send.busy{opacity:.5}
+.thinking{font-size:12.5px;color:var(--fg2);display:flex;gap:7px;align-items:center}
+.spin{width:12px;height:12px;border-radius:50%;border:1.5px solid var(--line2);border-top-color:var(--fg2);animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.sugg{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:12px}
+.sugg button{height:28px;padding:0 12px;border-radius:14px;background:var(--bubble);font-size:12.5px;color:var(--fg)}
+.sugg button:hover{background:var(--sel)}
+.foot{font-size:12px;color:var(--fg3);margin-top:18px;display:flex;justify-content:center;gap:7px;align-items:center}
+.foot a{color:var(--accent);text-decoration:none;cursor:pointer}
+.err{color:var(--red);font-size:12.5px;margin-top:6px;text-align:left}
+
+.pop{position:absolute;z-index:20;background:var(--pop);border-radius:12px;box-shadow:var(--shadow),0 0 0 .5px var(--line2);padding:14px;font-size:13px}
+.pop h4{margin:0 0 10px;font-size:13.5px;font-weight:600}
+.pop .opt{display:flex;gap:9px;align-items:center;padding:7px 8px;border-radius:7px;width:100%;text-align:left}
+.pop .opt:hover{background:var(--bubble)}
+.pop .opt .ck{margin-left:auto;color:var(--accent)}
+.pop .opt small{display:block;color:var(--fg3);font-size:11.5px}
+.pop .link{display:flex;justify-content:space-between;width:100%;color:var(--accent);font-size:12.5px;border-top:.5px solid var(--line);margin-top:12px;padding-top:10px}
+.seg{display:flex;background:var(--bubble);border-radius:8px;padding:2px;gap:2px;margin-bottom:12px}
+.seg button{flex:1;height:26px;border-radius:6px;font-size:12.5px}
+.seg button.on{background:var(--card);box-shadow:0 0 0 .5px var(--line2),0 1px 2px rgba(0,0,0,.06)}
+.fld{display:flex;justify-content:space-between;align-items:center;margin-top:8px;gap:12px;color:var(--fg2)}
+.fld select,.fld input{background:var(--bubble);border:0;border-radius:6px;height:28px;padding:0 8px;color:var(--fg);min-width:150px}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;background:var(--bubble);border-radius:6px;padding:6px 8px;color:var(--fg2);word-break:break-all;margin-top:8px}
+
+.detail{display:flex;flex:1;min-width:0}
+.dmain{flex:1;overflow:auto;padding:28px 56px 40px}
+.back{color:var(--fg2);font-size:13.5px;display:inline-flex;gap:5px;align-items:center}
+.back:hover{color:var(--fg)}
+.titlein{font-size:30px;font-weight:700;letter-spacing:-.4px;border:0;outline:0;background:transparent;width:100%;padding:0;margin:0}
+.titlein::placeholder{color:var(--fg3)}
+.sentence{background:var(--card);border-radius:14px;box-shadow:0 0 0 .5px var(--line);padding:22px 28px;font-size:26px;line-height:1.55;letter-spacing:-.3px;color:var(--fg2);margin-top:22px}
+.sentence .w{color:var(--accent);border-bottom:1.5px dashed color-mix(in srgb,var(--accent) 60%,transparent);cursor:pointer}
+.sentence .w:hover{background:var(--accentBg);border-radius:4px}
+.sentence .k{color:var(--fg);font-weight:600;border-bottom:1.5px dashed var(--line2);cursor:pointer}
+.sentence .what{color:var(--fg);font-weight:600}
+.sentence .blank{color:var(--fg3);font-weight:400}
+.hint{color:var(--fg3);font-size:12.5px;margin-top:10px}
+.lbl{font-size:14px;font-weight:600;margin:30px 0 10px}
+.prompt{width:100%;min-height:110px;background:var(--card);border-radius:12px;box-shadow:0 0 0 .5px var(--line);border:0;outline:0;padding:14px 16px;font-size:14px;line-height:1.5;resize:vertical}
+.prompt:focus{box-shadow:0 0 0 1.5px var(--accent)}
+.prompt::placeholder{color:var(--fg3)}
+.away{display:grid;grid-template-columns:200px 1fr;row-gap:22px;align-items:start;font-size:14px}
+.away .k{color:var(--fg2);padding-top:6px}
+.cards{display:flex;gap:10px}
+.ocard{width:280px;text-align:left;border-radius:12px;padding:12px 16px;box-shadow:0 0 0 .5px var(--line2);background:var(--card)}
+.ocard.on{box-shadow:0 0 0 2px var(--accent)}
+.ocard b{font-weight:600;font-size:14px;display:block}
+.ocard span{color:var(--fg2);font-size:13px}
+.pills{display:flex;gap:6px}
+.pills button{height:30px;padding:0 14px;border-radius:15px;background:var(--bubble);font-size:13.5px}
+.pills button.on{background:var(--inv);color:var(--invFg)}
+.note{color:var(--fg3);font-size:12.5px;margin-top:6px}
+.del{color:var(--red);font-size:14px;margin-top:34px;display:inline-block}
+.confirm{display:inline-flex;gap:10px;align-items:center;font-size:13.5px;margin-top:34px}
+.confirm .yes{color:#fff;background:var(--red);border-radius:7px;padding:5px 11px}
+
+.runs{width:300px;flex:none;background:var(--side);border-left:.5px solid var(--line);padding:28px 18px;overflow:auto}
+.runs h3{margin:0 0 14px;font-size:15px;font-weight:600}
+.ph{border:1px dashed var(--line2);border-radius:10px;padding:12px 14px;font-size:13px;color:var(--fg2)}
+.ph b{color:var(--fg);font-weight:600}
+.run{background:var(--card);border-radius:10px;box-shadow:0 0 0 .5px var(--line);padding:10px 12px;margin-bottom:8px;font-size:13px;cursor:pointer}
+.run:hover{box-shadow:0 0 0 .5px var(--line2)}
+.run .t{display:flex;justify-content:space-between;color:var(--fg2);font-size:12px}
+.run .o{margin-top:4px;display:flex;gap:7px;align-items:center}
+.run.wait{box-shadow:0 0 0 1px var(--amber)}
+.run .acts{display:flex;gap:6px;margin-top:9px}
+.run .acts button{height:26px;padding:0 10px;border-radius:7px;font-size:12.5px;background:var(--bubble)}
+.run .acts button.pri{background:var(--inv);color:var(--invFg)}
+.ok{color:var(--green)} .am{color:var(--amber)} .sk{color:var(--fg3)}
+
+.toast{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);z-index:30;background:var(--inv);color:var(--invFg);border-radius:12px;padding:10px 10px 10px 14px;display:flex;gap:14px;align-items:center;font-size:13px;box-shadow:var(--shadow);max-width:640px;animation:up .2s ease-out}
+.toast .tl small{display:block;opacity:.65;font-size:12px;margin-top:1px}
+.toast button{height:28px;padding:0 11px;border-radius:7px;background:rgba(255,255,255,.14);font-size:12.5px}
+@media (prefers-color-scheme: dark){.toast button{background:rgba(0,0,0,.1)}}
+@keyframes up{from{opacity:0;transform:translate(-50%,8px)}}
+.tile{flex:none;display:inline-flex;align-items:center;justify-content:center;border-radius:50%}
+.tile.agent{border-radius:6px;background:#E9E3FB;color:#6B4FD8;font-weight:700}
+@media (prefers-color-scheme: dark){.tile.agent{background:#3A3352;color:#B8A8F5}}
+.flash{animation:flash 1.6s ease-out}
+@keyframes flash{0%{background:var(--accentBg)}100%{background:transparent}}
+</style>
+</head>
+<body>
+<div class="proto">
+  <b>Prototype</b><span>·</span>
+  <button data-act="seed-empty">Start empty</button>
+  <button data-act="seed-samples">With 4 automations</button>
+  <span style="opacity:.7">Everything is clickable. Nothing leaves this page.</span>
+</div>
+<div class="app">
+  <aside class="side" id="side"></aside>
+  <main class="content" id="content"></main>
+</div>
+
+<script>
+const DAYS=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const RUNNERS={piopio:{name:'Piopio',agent:false},pinpin:{name:'Pinpin',agent:true}};
+const PROJECTS=['piopio','test-linear','taller-la-web'];
+const RESULTS={
+  piopio:[['conversation','start a conversation','A new conversation','In the project, or loose'],['quiet','only tell me if it needs me','Only if it needs you','Otherwise it stays in Runs']],
+  pinpin:[['chat','post in its chat with me','Its chat with you','Where you already talk'],['telegram','tell me on Telegram','Telegram','One of Pinpin’s channels'],['quiet','only tell me if it needs me','Only if it needs you','Otherwise it stays in Runs']]
+};
+const SUGGESTIONS=[
+  ['Morning brief','Every weekday at 8, send me today’s calendar and anything urgent in my inbox.'],
+  ['File invoices from email','When an invoice arrives by email, file it and tell me the total.'],
+  ['Tidy Downloads','When a file appears in Downloads, rename it sensibly and sort it into a folder.'],
+  ['Weekly project recap','Every Friday at 17:00, recap what changed in piopio this week.']
+];
+
+let S=null;
+function fresh(){return {list:[],view:{page:'list'},filter:null,pop:null,toast:null,busy:false,draft:null,confirmDel:false,err:null,askRunner:'piopio',askText:''}}
+function ago(h){return new Date(Date.now()-h*3600e3)}
+function samples(){return [
+  {id:'a1',name:'Competitor brief',runner:'piopio',trigger:{kind:'time',repeat:'weekly',day:1,time:'09:00'},prompt:'Summarise what competitors shipped last week, with links.',project:null,result:'conversation',on:true,approval:'wait',budget:.5,runs:[{at:ago(26),outcome:'done',note:'Opened “Competitors · week 47”',cost:.18}]},
+  {id:'a2',name:'Invoice filing',runner:'pinpin',trigger:{kind:'email',about:'invoices'},prompt:'File the invoice in Documents/Invoices and tell me the total.',project:null,result:'chat',on:true,approval:'wait',budget:.25,runs:[{at:ago(5),outcome:'done',note:'Filed Hetzner, €38.20',cost:.03},{at:ago(52),outcome:'done',note:'Filed Figma, $45.00',cost:.04}]},
+  {id:'a3',name:'Inbox sweep',runner:'pinpin',trigger:{kind:'time',repeat:'weekdays',time:'08:00'},prompt:'Archive newsletters and receipts I haven’t opened in a week. Tell me if anything looks urgent.',project:null,result:'quiet',on:true,approval:'wait',budget:.25,runs:[{at:ago(2),outcome:'waiting',note:'Wants to archive 14 emails',cost:.02}]},
+  {id:'a4',name:'Nightly tests',runner:'piopio',trigger:{kind:'time',repeat:'daily',time:'23:00'},prompt:'Run the test suite and summarise any failures.',project:'piopio',result:'quiet',on:false,approval:'skip',budget:1,runs:[{at:ago(80),outcome:'done',note:'All 412 tests passed',cost:.11}]}
+]}
+
+/* ---------- words ---------- */
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function hm(t){const [h,m]=t.split(':').map(Number);return {h,m}}
+function short(t){const {h,m}=hm(t);return h+':'+String(m).padStart(2,'0')}
+function whenPhrase(tr){
+  if(tr.kind==='time'){
+    if(tr.repeat==='daily')return 'Every day at '+tr.time;
+    if(tr.repeat==='weekdays')return 'Every weekday at '+tr.time;
+    return 'Every '+DAYS[tr.day]+' at '+tr.time;
+  }
+  if(tr.kind==='email')return tr.about?'When an email about '+tr.about+' arrives':'When an email arrives';
+  if(tr.kind==='file')return 'When a file appears in '+tr.folder;
+  return 'When its URL is called';
+}
+function nextDate(tr){
+  if(tr.kind!=='time')return null;
+  const {h,m}=hm(tr.time),now=new Date();
+  for(let d=0;d<8;d++){const c=new Date(now);c.setDate(now.getDate()+d);c.setHours(h,m,0,0);
+    if(c<=now)continue;const wd=c.getDay();
+    if(tr.repeat==='daily'||(tr.repeat==='weekdays'&&wd>0&&wd<6)||(tr.repeat==='weekly'&&wd===tr.day))return c;}
+  return null;
+}
+function relDay(d){
+  const now=new Date(),a=new Date(now.getFullYear(),now.getMonth(),now.getDate()),b=new Date(d.getFullYear(),d.getMonth(),d.getDate());
+  const diff=Math.round((b-a)/864e5),t=d.getHours()+':'+String(d.getMinutes()).padStart(2,'0');
+  if(diff===0)return 'today '+t; if(diff===1)return 'tomorrow '+t; if(diff===-1)return 'yesterday '+t;
+  if(Math.abs(diff)<7)return DAYS[d.getDay()].slice(0,3)+' '+t;
+  return d.getDate()+' '+d.toLocaleString('en',{month:'short'})+' '+t;
+}
+function longDay(d){return DAYS[d.getDay()].slice(0,3)+', '+d.getDate()+' '+d.toLocaleString('en',{month:'short'})+', '+d.getHours()+':'+String(d.getMinutes()).padStart(2,'0')}
+function since(d){const m=Math.round((Date.now()-d)/6e4);if(m<1)return 'just now';if(m<60)return m+' min ago';const h=Math.round(m/60);if(h<24)return h+'h ago';return relDay(d)}
+function waitingLabel(tr){return tr.kind==='email'?'Waiting for an email':tr.kind==='file'?'Watching '+tr.folder:'Waiting for a call'}
+function tells(a){return (RESULTS[a.runner].find(r=>r[0]===a.result)||RESULTS[a.runner][0])[2]}
+function resultPhrase(a){return (RESULTS[a.runner].find(r=>r[0]===a.result)||RESULTS[a.runner][0])[1]}
+function needsYou(a){return a.runs.some(r=>r.outcome==='waiting')}
+function money(n){return '$'+n.toFixed(2)}
+
+function tile(r,size=18){
+  if(r==='pinpin')return `<span class="tile agent" style="width:${size}px;height:${size}px;font-size:${Math.round(size*.55)}px">P</span>`;
+  return `<span class="tile" style="width:${size}px;height:${size}px"><svg viewBox="0 0 20 20" width="${size}" height="${size}"><circle cx="10" cy="10.5" r="8.5" fill="#F7C948"/><circle cx="12.6" cy="8.6" r="1.25" fill="#2B2B29"/><path d="M15.3 10.6l3 .9-3 1z" fill="#E8891C"/><path d="M5 12.5c1.4 1.6 3.4 1.9 5 .9" stroke="#E2AE2E" stroke-width="1.2" fill="none" stroke-linecap="round"/></svg></span>`;
+}
+
+/* ---------- asking: a tiny stand-in for Piopio ---------- */
+function parse(text,runner){
+  const t=text.trim(),low=t.toLowerCase();let trigger,rest=t;
+  const at=low.match(/\bat (\d{1,2})(?:[:.](\d{2}))?\s*(am|pm)?/);
+  let time='09:00';
+  if(at){let h=+at[1];const m=at[2]?+at[2]:0;if(at[3]==='pm'&&h<12)h+=12;if(at[3]==='am'&&h===12)h=0;time=String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')}
+  if(/\b(email|e-mail|mail)\b/.test(low)&&/\b(when|arrives?|comes in)\b/.test(low)){
+    const ab=low.match(/\b(invoice|receipt|order|newsletter|booking)s?\b/);
+    trigger={kind:'email',about:ab?ab[1]+'s':''};
+  }else if(/\b(downloads|desktop|folder|file appears|file lands)\b/.test(low)){
+    const f=low.match(/\b(downloads|desktop|documents)\b/);
+    trigger={kind:'file',folder:f?f[1][0].toUpperCase()+f[1].slice(1):'Downloads'};
+  }else if(/\b(webhook|deploy|url is called|is called)\b/.test(low)){
+    trigger={kind:'url'};
+  }else{
+    const d=DAYS.findIndex(x=>low.includes(x.toLowerCase()));
+    trigger={kind:'time',repeat:/weekday/.test(low)?'weekdays':d>=0?'weekly':'daily',time};
+    if(d>=0)trigger.day=d;
+  }
+  rest=rest.replace(/^(every|each|on)\b[^,]*,\s*/i,'').replace(/^when\b[^,]*,\s*/i,'');
+  rest=rest.charAt(0).toUpperCase()+rest.slice(1);
+  const names=[[/competitor/,'Competitor brief'],[/invoice/,'Invoice filing'],[/calendar|inbox|urgent/,'Morning brief'],[/downloads|folder/,'Tidy Downloads'],[/recap|this week/,'Weekly recap'],[/test/,'Test run']];
+  let name=(names.find(([r])=>r.test(low))||[])[1];
+  if(!name){name=rest.replace(/[.,].*$/,'').split(/\s+/).slice(0,4).join(' ');}
+  const project=!RUNNERS[runner].agent?(PROJECTS.find(p=>low.includes(p))||null):null;
+  return {id:'a'+Date.now(),name,runner,trigger,prompt:rest,project,result:RUNNERS[runner].agent?'chat':'conversation',on:true,approval:'wait',budget:RUNNERS[runner].agent?.25:.5,runs:[],isNew:true};
+}
+function ask(text,runner){
+  if(!text.trim()){S.err='Say when it should run and what it should do.';render();return}
+  S.err=null;S.busy=true;S.pop=null;render();
+  setTimeout(()=>{
+    const a=parse(text,runner);S.list.unshift(a);S.busy=false;S.askText='';
+    const nd=nextDate(a.trigger);
+    S.toast={text:`${RUNNERS[runner].name} set up “${a.name}”`,sub:whenPhrase(a.trigger)+(nd?' · first run '+relDay(nd):''),acts:[['Open','open:'+a.id],['Undo','undo-new:'+a.id]]};
+    S.flash=a.id;render();toastTimer();
+  },1100);
+}
+
+/* ---------- render ---------- */
+function render(){
+  document.getElementById('side').innerHTML=sidebar();
+  const c=document.getElementById('content');
+  c.innerHTML=(S.view.page==='list'?listPage():detailPage())+popover()+toast();
+  placePop();
+  if(S.focus){const el=document.querySelector(S.focus);if(el){el.focus();if(el.setSelectionRange){const n=el.value.length;el.setSelectionRange(n,n)}}S.focus=null}
+}
+function sidebar(){
+  const count=S.list.length;
+  return `<div class="lights"><i style="background:#FF5F57"></i><i style="background:#FEBC2E"></i><i style="background:#28C840"></i></div>
+  <div class="search"><div class="box">⌕ Search<span style="margin-left:auto;font-size:11px">⌘K</span></div><div class="plus">+</div></div>
+  <div class="nav">
+    <div class="row">⌂&nbsp; Home</div>
+    <div class="row on" data-act="go-list" style="cursor:pointer">◷&nbsp; Automations${count?`<span class="n">${count}</span>`:''}</div>
+  </div>
+  <div class="sec"><span>Agents</span><span>+</span></div>
+  <div class="row">${tile('pinpin',18)} Pinpin</div>
+  <div class="sec"><span>Projects</span><span>+</span></div>
+  <div class="row">□&nbsp; test-linear</div><div class="sub">Quiero probar el conector…</div>
+  <div class="row">□&nbsp; piopio <span class="n" style="font-family:ui-monospace,monospace">main</span></div>
+  <div class="sub">Puedes revisar los ultimo…</div><div class="sub">evaluate the code</div>
+  <div class="sec"><span>Conversations</span></div>
+  <div class="row">▭&nbsp; hi</div><div class="row">▭&nbsp; hazme una grafica del ti…</div>
+  <div class="me"><span class="av">A</span><span>Antonio<small>This Mac · $0.76 today</small></span><span style="margin-left:auto;color:var(--fg3)">⚙</span></div>`;
+}
+function visible(){return S.list.filter(a=>!S.filter||a.runner===S.filter)}
+function listPage(){
+  const v=visible();
+  const filterChips=`<div class="chips">
+    <button class="chip ${!S.filter?'on':''}" data-act="filter:">All</button>
+    <button class="chip with ${S.filter==='piopio'?'on':''}" data-act="filter:piopio">${tile('piopio',18)} Piopio</button>
+    <button class="chip with ${S.filter==='pinpin'?'on':''}" data-act="filter:pinpin">${tile('pinpin',18)} Pinpin</button>
+    <span class="awake"><span class="dot"></span>Runs on this Mac, only while it’s awake</span></div>`;
+  const head=`<div class="head"><div><h1 class="h1">Automations</h1><p class="lede">Work that runs when nobody started it. Ask Piopio or any agent to set one up, or make one here.</p></div>
+    <button class="bbtn ${S.pop?.kind==='new'?'pressed':''}" data-act="pop:new" data-anchor="new">New automation</button></div>`;
+  if(!v.length)return `<div class="page">${head}${S.list.length?filterChips:''}${emptyState()}</div>`;
+  const needs=v.filter(a=>a.on&&needsYou(a)),on=v.filter(a=>a.on&&!needsYou(a)),off=v.filter(a=>!a.on);
+  return `<div class="page">${head}${filterChips}${group('Needs you','var(--amber)',needs)}${group('On','var(--fg)',on)}${group('Paused','var(--fg3)',off)}</div>`;
+}
+function group(title,tone,list){
+  if(!list.length)return '';
+  return `<div class="grp"><div class="cols ghead"><b style="color:${tone}">${title}</b><span>Runs as</span><span>Tells you</span><span>Last or next run</span><span></span></div>${list.map(rowHTML).join('')}</div>`;
+}
+function rowHTML(a){
+  const nd=nextDate(a.trigger),last=a.runs[0];let lastNext;
+  if(needsYou(a))lastNext=`<span class="waiting">Waiting on you</span><small>${esc(a.runs.find(r=>r.outcome==='waiting').note)}</small>`;
+  else if(!a.on)lastNext=last?`Paused<small>Last: ${relDay(last.at)}</small>`:'Paused';
+  else lastNext=`${nd?'Next: '+relDay(nd):waitingLabel(a.trigger)}${last?`<small>Last: ${since(last.at)} · ${money(last.cost)}</small>`:''}`;
+  return `<div class="cols arow ${a.on?'':'paused'} ${S.flash===a.id?'flash':''}" data-act="open:${a.id}">
+    <div class="fade"><div class="nm">${esc(a.name)}${a.isNew?'<span class="newb">New</span>':''}</div><div class="wh">${esc(whenPhrase(a.trigger))}${a.project?' · in '+esc(a.project):''}</div></div>
+    <div class="cell runas fade">${tile(a.runner,22)} ${RUNNERS[a.runner].name}</div>
+    <div class="cell fade">${tells(a)}</div>
+    <div class="cell fade">${lastNext}</div>
+    <div style="display:flex;justify-content:flex-end"><button class="sw ${a.on?'on':''}" data-act="toggle:${a.id}" aria-label="On"></button></div></div>`;
+}
+function emptyState(){
+  const r=S.filter||S.askRunner;
+  const title=S.filter?`${RUNNERS[S.filter].name} doesn’t run anything on its own yet`:'What should happen without you?';
+  return `<div class="empty">
+    ${sleepy()}
+    <h2>${title}</h2>
+    <p>Say when and what, in plain words. ${RUNNERS[r].name} sets it up and it shows here.</p>
+    <div class="composer ${S.nudge?'nudge':''}" style="margin-top:18px">${composerInner('empty',r)}</div>
+    ${S.err&&!S.pop?`<div class="err">${S.err}</div>`:''}
+    <div class="sugg">${SUGGESTIONS.map((s,i)=>`<button data-act="suggest:${i}">${s[0]}</button>`).join('')}</div>
+    <div class="foot"><span class="dot"></span>Runs on this Mac, only while it’s awake · <a data-act="draft">Set one up yourself</a></div>
+  </div>`;
+}
+function composerInner(where,r){
+  return `<textarea id="ask-${where}" rows="2" placeholder="Every weekday at 8, send me today’s calendar and anything urgent in my inbox" ${S.busy?'disabled':''}>${esc(S.askText)}</textarea>
+  <div class="cbar">
+    ${S.filter&&where==='empty'?`<span class="chip with">${tile(r,18)} ${RUNNERS[r].name}</span>`:
+      `<span style="position:relative"><button class="chip with" data-act="runnermenu:${where}">${tile(r,18)} ${RUNNERS[r].name} ▾</button>${S.runnerMenu===where?`<div class="pop menu" style="left:0;top:32px;width:230px;padding:6px">${Object.keys(RUNNERS).map(k=>`<button class="opt" data-act="askrunner:${k}">${tile(k,20)}<span>${RUNNERS[k].name}<small>${RUNNERS[k].agent?'Your agent':'The app’s assistant'}</small></span>${S.askRunner===k?'<span class="ck">✓</span>':''}</button>`).join('')}</div>`:''}</span>`}
+    ${S.busy?`<span class="thinking"><span class="spin"></span>${RUNNERS[r].name} is setting it up…</span>`:`<button class="send" data-act="ask:${where}" aria-label="Set it up">↑</button>`}
+  </div>`;
+}
+function sleepy(){
+  return `<svg width="72" height="64" viewBox="0 0 72 64" aria-hidden="true"><ellipse cx="36" cy="58" rx="18" ry="3" fill="var(--line)"/><circle cx="36" cy="36" r="20" fill="#F7C948"/><path d="M38 33q3 2.2 6 0" stroke="#2B2B29" stroke-width="1.8" fill="none" stroke-linecap="round"/><path d="M52 37l6 2-6 2z" fill="#E8891C"/><path d="M24 42c3 4 9 5 13 2" stroke="#E2AE2E" stroke-width="2" fill="none" stroke-linecap="round"/><text x="54" y="18" font-size="11" fill="var(--fg3)" font-weight="600">z</text><text x="61" y="10" font-size="8" fill="var(--fg3)" font-weight="600">z</text></svg>`;
+}
+
+function current(){return S.view.draft?S.draft:S.list.find(a=>a.id===S.view.id)}
+function detailPage(){
+  const a=current();if(!a)return listPage();
+  const draft=!!S.view.draft,nd=nextDate(a.trigger);
+  const proj=RUNNERS[a.runner].agent?'':`, <span class="w" data-act="pop:project" data-anchor="project">${a.project?'in '+esc(a.project):'without a project'}</span>`;
+  const what=a.prompt.trim()?`<span class="what" id="s-what">${esc(trimWhat(a.prompt))}</span>`:`<span class="what blank" id="s-what">…</span>`;
+  return `<div class="detail"><div class="dmain">
+    <div style="display:flex;justify-content:space-between;align-items:center;height:32px">
+      <button class="back" data-act="go-list">‹ Automations</button>
+      ${draft?`<div style="display:flex;gap:8px"><button class="ghost" data-act="discard">Discard</button><button class="black" data-act="turn-on">Turn on</button></div>`
+             :`<button class="black" data-act="run-now">Run now</button>`}
+    </div>
+    <div style="display:flex;align-items:center;gap:16px;margin-top:14px">
+      <input class="titlein" id="title" value="${esc(a.name)}" placeholder="New automation" spellcheck="false">
+      ${draft?'':`<span style="color:var(--fg2);font-size:13.5px">${a.on?'On':'Off'}</span><button class="sw ${a.on?'on':''}" data-act="toggle:${a.id}" aria-label="On" style="transform:scale(1.25)"></button>`}
+    </div>
+    <div class="sentence"><span class="k" data-act="pop:when" data-anchor="when">${esc(whenPhrase(a.trigger))}</span>, ask <span class="w" data-act="pop:runner" data-anchor="runner">${RUNNERS[a.runner].name}</span> to ${what}${proj}, and <span class="w" data-act="pop:result" data-anchor="result">${resultPhrase(a)}</span>.</div>
+    <div class="hint">Blue words are choices. Click the time to change when; to change what it does, edit the prompt below${draft?'':' or ask '+RUNNERS[a.runner].name}.</div>
+    <div class="lbl">What it’s told</div>
+    <textarea class="prompt" id="prompt" placeholder="Summarise what competitors shipped last week, with links.">${esc(a.prompt)}</textarea>
+    ${S.err?`<div class="err">${S.err}</div>`:''}
+    <div class="lbl" style="margin-top:34px">While you’re away</div>
+    <div class="away">
+      <div class="k">If it needs your OK</div>
+      <div class="cards">
+        <button class="ocard ${a.approval==='wait'?'on':''}" data-act="approval:wait"><b>Wait for me</b><span>Shows in Home, under Waiting on you</span></button>
+        <button class="ocard ${a.approval==='skip'?'on':''}" data-act="approval:skip"><b>Skip this run</b><span>Tries again next time</span></button>
+      </div>
+      <div class="k">Budget per run</div>
+      <div><div class="pills">${[.1,.25,.5,1].map(b=>`<button class="${a.budget===b?'on':''}" data-act="budget:${b}">${money(b)}</button>`).join('')}</div><div class="note">It stops and tells you before going over.</div></div>
+      <div class="k">It may use</div>
+      <div>${RUNNERS[a.runner].agent?'What Pinpin may use in its Setup.':a.project?'This project’s permissions in '+esc(a.project)+'.':'What Piopio can do in a new conversation.'}<div class="note">${RUNNERS[a.runner].agent?'Never more than Pinpin has.':a.project?'Never more than the project allows.':'It can’t see your files without a project.'}</div></div>
+      <div class="k">Runs on</div>
+      <div>This Mac, only while it’s awake.<div class="note">If your Mac is asleep at run time, it runs as soon as it wakes.</div></div>
+    </div>
+    ${draft?'':S.confirmDel?`<div class="confirm">Delete “${esc(a.name)}” and its schedule? Its past conversations stay. <button class="yes" data-act="delete">Delete</button><button class="ghost" data-act="cancel-del">Cancel</button></div>`:`<button class="del" data-act="ask-del">Delete automation</button>`}
+  </div>
+  <aside class="runs"><h3>Runs</h3>${runsPanel(a,draft,nd)}</aside></div>`;
+}
+function trimWhat(p){const s=p.trim().replace(/\s+/g,' ');const one=s.charAt(0).toLowerCase()+s.slice(1).replace(/[.]$/,'');return one.length>70?one.slice(0,68)+'…':one}
+function runsPanel(a,draft,nd){
+  const first=nd?`First run: ${longDay(nd)}`:waitingLabel(a.trigger);
+  if(draft)return `<div class="ph">Not on yet.<br><b>${nd?'First run would be '+longDay(nd):'It starts '+whenPhrase(a.trigger).replace(/^When /,'when ')}</b></div>`;
+  if(!a.runs.length)return `<div class="ph">No runs yet.<br><b>${a.on?first:'Turn it on to schedule it.'}</b></div>`;
+  return (a.on&&nd?`<div class="note" style="margin:0 0 10px">Next: ${relDay(nd)}</div>`:'')+a.runs.map((r,i)=>{
+    const o=r.outcome==='done'?`<span class="ok">●</span> ${esc(r.note)}`:r.outcome==='waiting'?`<span class="am">●</span> <b style="font-weight:600">${esc(r.note)}</b>`:r.outcome==='running'?`<span class="spin"></span> Running…`:`<span class="sk">●</span> ${esc(r.note)}`;
+    return `<div class="run ${r.outcome==='waiting'?'wait':''}" data-act="run-open:${i}"><div class="t"><span>${relDay(r.at)}</span><span>${r.outcome==='running'?'':money(r.cost)}</span></div><div class="o">${o}</div>
+      ${r.outcome==='waiting'?`<div class="acts"><button class="pri" data-act="approve:${i}">Approve</button><button data-act="skip:${i}">Skip</button></div>`:''}</div>`;
+  }).join('');
+}
+
+/* ---------- popovers ---------- */
+function popover(){
+  const p=S.pop;if(!p)return '';
+  const a=current();let body='',w=280;
+  if(p.kind==='new'){w=380;body=`<h4>What should run on its own?</h4><div class="composer">${composerInner('pop',S.askRunner)}</div>${S.err?`<div class="err">${S.err}</div>`:''}
+      <div class="sugg" style="justify-content:flex-start;margin-top:10px">${SUGGESTIONS.slice(0,3).map((s,i)=>`<button data-act="suggest:${i}">${s[0]}</button>`).join('')}</div>
+      <button class="link" data-act="draft"><span>Set it up yourself</span><span>→</span></button>`;}
+  else if(p.kind==='runner'){w=250;body=`<h4>Who runs it</h4>`+Object.keys(RUNNERS).map(k=>`<button class="opt" data-act="set-runner:${k}">${tile(k,20)}<span>${RUNNERS[k].name}<small>${RUNNERS[k].agent?'Never works in a project':'Can work in a project'}</small></span>${a.runner===k?'<span class="ck">✓</span>':''}</button>`).join('');}
+  else if(p.kind==='project'){w=250;body=`<h4>Works in</h4>`+[null,...PROJECTS].map(k=>`<button class="opt" data-act="set-project:${k??''}"><span>${k?esc(k):'No project'}<small>${k?'Its folder and permissions':'Can’t see your files'}</small></span>${a.project===k?'<span class="ck">✓</span>':''}</button>`).join('');}
+  else if(p.kind==='result'){w=280;body=`<h4>Tells you</h4>`+RESULTS[a.runner].map(r=>`<button class="opt" data-act="set-result:${r[0]}"><span>${r[2]}<small>${r[3]}</small></span>${a.result===r[0]?'<span class="ck">✓</span>':''}</button>`).join('')+(a.runner==='piopio'?`<div class="note" style="padding:4px 8px 0">Piopio has no channels. Agents can tell you on Telegram.</div>`:'');}
+  else if(p.kind==='when'){w=360;const t=a.trigger;
+    body=`<h4>When it starts</h4><div class="seg">${[['time','At a time'],['email','An email'],['file','A file'],['url','A URL']].map(([k,l])=>`<button class="${t.kind===k?'on':''}" data-act="kind:${k}">${l}</button>`).join('')}</div>`;
+    if(t.kind==='time')body+=`<div class="fld">Repeats<select data-set="repeat"><option value="daily" ${t.repeat==='daily'?'selected':''}>Every day</option><option value="weekdays" ${t.repeat==='weekdays'?'selected':''}>Weekdays</option><option value="weekly" ${t.repeat==='weekly'?'selected':''}>Every week</option></select></div>
+      ${t.repeat==='weekly'?`<div class="fld">On<select data-set="day">${DAYS.map((d,i)=>`<option value="${i}" ${t.day===i?'selected':''}>${d}</option>`).join('')}</select></div>`:''}
+      <div class="fld">At<input type="time" data-set="time" value="${t.time}"></div>`;
+    if(t.kind==='email')body+=`<div class="fld">About<input data-set="about" value="${esc(t.about)}" placeholder="anything"></div><div class="note">From the mail account you connected in Settings.</div>`;
+    if(t.kind==='file')body+=`<div class="fld">In<select data-set="folder">${['Downloads','Desktop','Documents'].map(f=>`<option ${t.folder===f?'selected':''}>${f}</option>`).join('')}</select></div>`;
+    if(t.kind==='url')body+=`<div class="note">Anything that calls this URL starts a run. Its body goes into the prompt.</div><div class="mono">http://localhost:4317/hook/${a.id.slice(-6)}</div>`;
+  }
+  return `<div class="pop" id="pop" style="width:${w}px;visibility:hidden">${body}</div>`;
+}
+function placePop(){
+  const pop=document.getElementById('pop');if(!pop)return;
+  const anchor=document.querySelector(`[data-anchor="${S.pop.kind}"]`),c=document.getElementById('content');
+  if(!anchor){S.pop=null;pop.remove();return}
+  const ar=anchor.getBoundingClientRect(),cr=c.getBoundingClientRect();
+  let left=ar.left-cr.left;if(S.pop.kind==='new')left=ar.right-cr.left-pop.offsetWidth;
+  left=Math.max(12,Math.min(left,cr.width-pop.offsetWidth-12));
+  let top=ar.bottom-cr.top+8;if(top+pop.offsetHeight>cr.height-12)top=ar.top-cr.top-pop.offsetHeight-8;
+  pop.style.left=left+'px';pop.style.top=top+'px';pop.style.visibility='visible';
+  if(S.pop.kind==='new'&&!S.busy){const t=document.getElementById('ask-pop');t&&t.focus()}
+}
+function toast(){const t=S.toast;if(!t)return '';
+  return `<div class="toast"><div class="tl">${esc(t.text)}${t.sub?`<small>${esc(t.sub)}</small>`:''}</div>${(t.acts||[]).map(([l,act])=>`<button data-act="${act}">${l}</button>`).join('')}</div>`}
+let tt;function toastTimer(){clearTimeout(tt);tt=setTimeout(()=>{S.toast=null;S.flash=null;render()},6000)}
+function say(text,sub,acts){S.toast={text,sub,acts};render();toastTimer()}
+
+/* ---------- actions ---------- */
+function act(name,arg,el){
+  const a=current();
+  switch(name){
+    case 'seed-empty':S=fresh();break;
+    case 'seed-samples':S=fresh();S.list=samples();break;
+    case 'go-list':S.view={page:'list'};S.pop=null;S.err=null;S.confirmDel=false;S.draft=null;break;
+    case 'filter':S.filter=arg||null;S.askRunner=arg||'piopio';break;
+    case 'pop':if(arg==='new'&&!visible().length&&S.view.page==='list'){S.focus='#ask-empty';S.nudge=true;setTimeout(()=>{S.nudge=false;document.querySelector('.empty .composer')?.classList.remove('nudge')},900);break}
+      if(S.pop?.kind===arg){S.pop=null}else{S.pop={kind:arg};S.err=null}if(arg==='new'&&S.filter)S.askRunner=S.filter;break;
+    case 'runnermenu':{const t=document.getElementById('ask-'+arg);if(t)S.askText=t.value;S.runnerMenu=S.runnerMenu===arg?null:arg;break}
+    case 'askrunner':S.askRunner=arg;S.runnerMenu=null;break;
+    case 'suggest':S.askText=SUGGESTIONS[+arg][1];S.err=null;S.focus=S.pop?.kind==='new'?'#ask-pop':'#ask-empty';break;
+    case 'ask':{const t=document.getElementById('ask-'+arg);S.askText=t.value;ask(t.value,(S.filter&&arg==='empty')?S.filter:S.askRunner);return}
+    case 'open':S.list.forEach(x=>{if(x.id===arg)x.isNew=false});S.view={page:'detail',id:arg};S.pop=null;S.toast=null;S.confirmDel=false;S.err=null;break;
+    case 'undo-new':S.list=S.list.filter(x=>x.id!==arg);S.toast=null;break;
+    case 'toggle':{const x=S.list.find(x=>x.id===arg);x.on=!x.on;const nd=nextDate(x.trigger);
+      S.toast={text:x.on?`“${x.name}” is on`:`“${x.name}” is paused`,sub:x.on?(nd?'Next run '+relDay(nd):waitingLabel(x.trigger)):'It won’t run until you turn it back on.'};toastTimer();break}
+    case 'draft':{const r=S.filter||S.askRunner;S.draft={id:'d'+Date.now(),name:'',runner:r,trigger:{kind:'time',repeat:'daily',time:'09:00'},prompt:S.askText||'',project:null,result:RUNNERS[r].agent?'chat':'conversation',on:true,approval:'wait',budget:RUNNERS[r].agent?.25:.5,runs:[]};
+      S.view={page:'detail',draft:true};S.pop=null;S.err=null;S.focus='#prompt';break}
+    case 'discard':S.draft=null;S.view={page:'list'};S.err=null;break;
+    case 'turn-on':{const d=S.draft;if(!d.prompt.trim()){S.err='Say what it should do. That’s the one thing it needs.';S.focus='#prompt';break}
+      if(!d.name.trim())d.name=parse(d.prompt,d.runner).name;d.isNew=false;S.list.unshift(d);S.draft=null;S.view={page:'detail',id:d.id};S.err=null;
+      const nd=nextDate(d.trigger);S.toast={text:`“${d.name}” is on`,sub:nd?'First run '+relDay(nd):waitingLabel(d.trigger)};toastTimer();break}
+    case 'run-now':{const r={at:new Date(),outcome:'running',note:'',cost:0};a.runs.unshift(r);
+      setTimeout(()=>{r.outcome='done';r.cost=Math.round((.02+Math.random()*.16)*100)/100;r.note=a.result==='conversation'?'Opened a new conversation':a.result==='quiet'?'Nothing needed you':'Posted in Pinpin’s chat';render()},1600);break}
+    case 'approve':a.runs[+arg].outcome='done';a.runs[+arg].note='Archived 14 emails';say('Approved','It finished the run.');return;
+    case 'skip':a.runs[+arg].outcome='skipped';a.runs[+arg].note='Skipped by you';say('Skipped','It tries again next time.');return;
+    case 'run-open':if(el.closest('[data-act^="approve"],[data-act^="skip"]'))return;say('Would open this run’s conversation','In the app, a run opens where its answer went.');return;
+    case 'approval':a.approval=arg;break;
+    case 'budget':a.budget=+arg;break;
+    case 'set-runner':a.runner=arg;if(RUNNERS[arg].agent){a.project=null;if(a.result==='conversation')a.result='chat'}else if(a.result!=='quiet')a.result='conversation';S.pop=null;break;
+    case 'set-project':a.project=arg||null;S.pop=null;break;
+    case 'set-result':a.result=arg;S.pop=null;break;
+    case 'kind':{const k=arg;a.trigger=k==='time'?{kind:'time',repeat:'daily',time:'09:00'}:k==='email'?{kind:'email',about:''}:k==='file'?{kind:'file',folder:'Downloads'}:{kind:'url'};break}
+    case 'ask-del':S.confirmDel=true;break;
+    case 'cancel-del':S.confirmDel=false;break;
+    case 'delete':{const idx=S.list.indexOf(a),gone=a;S.list.splice(idx,1);S.view={page:'list'};S.confirmDel=false;
+      S.undoDel={gone,idx};S.toast={text:`Deleted “${gone.name}”`,acts:[['Undo','undo-del']]};toastTimer();break}
+    case 'undo-del':S.list.splice(S.undoDel.idx,0,S.undoDel.gone);S.toast=null;break;
+  }
+  render();
+}
+document.addEventListener('click',e=>{
+  const el=e.target.closest('[data-act]');
+  if(!el){if((S.pop&&!e.target.closest('#pop'))||S.runnerMenu){if(!e.target.closest('#pop'))S.pop=null;S.runnerMenu=null;render()}return}
+  if(S.pop&&!el.closest('#pop')&&!el.dataset.act.startsWith('pop:'))S.pop=null;
+  if(S.runnerMenu&&!el.closest('.menu')&&!el.dataset.act.startsWith('runnermenu'))S.runnerMenu=null;
+  e.stopPropagation();
+  const [n,...rest]=el.dataset.act.split(':');act(n,rest.join(':'),el);
+});
+document.addEventListener('change',e=>{
+  const k=e.target.dataset.set;if(!k)return;const t=current().trigger;
+  t[k]=k==='day'?+e.target.value:e.target.value;if(k==='repeat'&&t.repeat==='weekly'&&t.day==null)t.day=1;render();
+});
+document.addEventListener('input',e=>{
+  const a=current();
+  if(e.target.id==='prompt'&&a){a.prompt=e.target.value;if(S.err){S.err=null;document.querySelector('.err')?.remove()}
+    const w=document.getElementById('s-what');w.textContent=a.prompt.trim()?trimWhat(a.prompt):'…';w.classList.toggle('blank',!a.prompt.trim())}
+  if(e.target.id==='title'&&a)a.name=e.target.value;
+  if(e.target.id&&e.target.id.startsWith('ask-')){S.askText=e.target.value;if(S.err){S.err=null;document.querySelector('.err')?.remove()}}
+});
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'&&(S.pop||S.runnerMenu)){if(S.runnerMenu)S.runnerMenu=null;else S.pop=null;render()}
+  if(e.key==='Enter'&&!e.shiftKey&&e.target.id&&e.target.id.startsWith('ask-')){e.preventDefault();act('ask',e.target.id.slice(4))}
+});
+S=fresh();render();
+</script>
+</body>
+</html>

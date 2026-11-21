@@ -29,7 +29,15 @@ enum DebugAutomation {
 
     private static func seedAutomations(_ engine: EngineController, screen: String) async {
         let select = { (item: SidebarItem) in NotificationCenter.default.post(name: .selectItem, object: item.raw) }
+        let demo = { (what: String) in NotificationCenter.default.post(name: .automationsDemo, object: what) }
         if screen == "empty" { select(.automations(nil)); return }
+        // ask: the empty page asks Piopio for one in plain words (the scripted model calls automate). draft-empty: by hand.
+        if screen == "ask" || screen == "draft-empty" {
+            select(.automations(nil))
+            try? await Task.sleep(for: .seconds(1.5))
+            demo(screen == "ask" ? "ask:call: automate | {\"when\":\"0 8 * * 1-5\",\"name\":\"Morning brief\",\"prompt\":\"Send me today's calendar and anything urgent in my inbox.\"}" : "draft")
+            return
+        }
         guard let rita = try? await engine.createAgent(name: "Rita", template: nil, avatar: "", instructions: "Watch what Acme, Brightly and Northwind ship and what they charge. Tell me what changed, briefly.", schedule: .none),
               let coach = try? await engine.createAgent(name: "Coach", template: nil, avatar: "", instructions: "Keep me to my training plan.", schedule: .none) else { return }
         for (ref, line) in [(rita, "Watches Acme, Brightly and Northwind"), (coach, "Keeps you to your training plan")] {
@@ -63,6 +71,16 @@ enum DebugAutomation {
         case "page": if let a = engine.automations.first(where: { $0.name == "Weekly competitor brief" }) { select(.automation(a.id)) }
         case "chat": UserDefaults.standard.set("Chat", forKey: "agentTab"); select(.agent(rita.id))
         case "setup": UserDefaults.standard.set("Setup", forKey: "agentTab"); select(.agent(rita.id))
+        // new: New automation's popover over the list; draft: setting one up by hand.
+        case "new", "draft", "draft-on":
+            select(.automations(nil))
+            try? await Task.sleep(for: .seconds(1))
+            demo(screen == "new" ? "new" : "draft")
+            // draft-on: then it's told something and turned on (its page opens).
+            if screen == "draft-on" {
+                try? await Task.sleep(for: .seconds(1.5))
+                demo("turn-on:Check the weather in Madrid and tell me if I need an umbrella.")
+            }
         default: select(.automations(nil))
         }
     }
@@ -254,7 +272,7 @@ enum DebugAutomation {
                 ThreadModel.openSettings()
             }
         }
-        // PIOPIO_DEMO_AUTOMATIONS=list|page|chat|setup|empty: two agents (Rita, Coach) and a few automations, one made in
+        // PIOPIO_DEMO_AUTOMATIONS=list|page|chat|setup|empty|ask|new|draft|draft-on|draft-empty: two agents (Rita, Coach) and a few automations, one made in
         // Rita's chat (its card) and one run that wrote to her (its "From" label), then that screen (the agents and
         // automations handoff's captures).
         if let screen = env["PIOPIO_DEMO_AUTOMATIONS"], engine.status == .ready {

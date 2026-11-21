@@ -825,6 +825,16 @@ public struct Automation: Codable, Sendable, Hashable, Identifiable {
     public var lastStatus: String?
     public var lastSummary: String?
     public var isPiopio: Bool { runsAs == "piopio" }
+
+    /// One the app holds before the engine has it (the New automation draft): the engine's words come from the app.
+    public init(id: String, name: String, on: String, runsAs: String, prompt: String, result: String, approval: String, by: String = "you", createdAt: String = "",
+                cron: String? = nil, at: Double? = nil, folder: String? = nil, from: String? = nil, subject: String? = nil, project: String? = nil,
+                budgetPerRunUsd: Double? = nil, enabled: Bool = false, next: Double? = nil, label: String, runnerName: String, resultLabel: String) {
+        self.id = id; self.name = name; self.on = on; self.runsAs = runsAs; self.prompt = prompt; self.result = result; self.approval = approval
+        self.by = by; self.createdAt = createdAt; self.cron = cron; self.at = at; self.folder = folder; self.from = from; self.subject = subject
+        self.project = project; self.budgetPerRunUsd = budgetPerRunUsd; self.enabled = enabled; self.next = next; self.runCount = 0
+        self.label = label; self.runnerName = runnerName; self.resultLabel = resultLabel
+    }
 }
 public struct AutomationRun: Codable, Sendable, Hashable, Identifiable {
     public var id, automation, firedAt, cause, status: String
