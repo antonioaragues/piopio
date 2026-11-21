@@ -6,7 +6,8 @@ import SwiftTerm
 import SwiftUI
 
 // Terminal drawer (docs/spec/05-build §9 TM1–TM2, docs/design 6b): local shells in the session's folder,
-// several tabs, and "Send to agent". The agent's own bash runs in the engine (TM3), not here.
+// several tabs, and "Send to agent". The agent's own bash runs in the engine (TM3), not here; the commands it leaves
+// running (TM4) show as tabs of their own, with their output, Stop and Send to agent.
 
 /// One shell. Kept by `TerminalStore`, so switching sessions or closing the drawer doesn't end it.
 @MainActor
@@ -127,7 +128,10 @@ struct TerminalDrawer: View {
     let session: ThreadModel
     let close: () -> Void
     @State private var selected: UUID?
+    /// A background command's tab (TM4), instead of a shell.
+    @State private var selectedProcess: String?
     private let store = TerminalStore.shared
+    private var process: BackgroundProcess? { selectedProcess.flatMap { id in session.processes.first { $0.id == id } } }
 
     private var tabs: [TerminalTab] { store.tabs(for: cwd) }
     private var current: TerminalTab? { tabs.first { $0.id == selected } ?? tabs.last }
@@ -146,15 +150,45 @@ struct TerminalDrawer: View {
                     .foregroundStyle(Color(red: 0xE5 / 255, green: 0xE5 / 255, blue: 0xEA / 255).opacity(tab.id == current?.id ? 1 : 0.6))
                     .padding(.horizontal, 10)
                     .frame(height: 24)
-                    .background(tab.id == current?.id ? Color.white.opacity(0.1) : .clear, in: Capsule())
-                    .onTapGesture { selected = tab.id }
+                    .background(tab.id == current?.id && process == nil ? Color.white.opacity(0.1) : .clear, in: Capsule())
+                    .onTapGesture { selected = tab.id; selectedProcess = nil }
                 }
-                Button { selected = store.open(in: cwd).id } label: { Image(systemName: "plus").font(.system(size: 10, weight: .semibold)) }
+                // What the agent left running (TM4).
+                ForEach(session.processes) { p in
+                    HStack(spacing: 6) {
+                        Circle().fill(p.status == .running ? Color(white: 0.85) : Color(white: 0.45)).frame(width: 6, height: 6)
+                        Text("\(Self.label(p)) · agent").font(.system(size: 11.5, weight: .medium)).lineLimit(1)
+                    }
+                    .foregroundStyle(Color(red: 0xE5 / 255, green: 0xE5 / 255, blue: 0xEA / 255).opacity(p.id == process?.id ? 1 : 0.6))
+                    .padding(.horizontal, 10)
+                    .frame(height: 24)
+                    .background(p.id == process?.id ? Color.white.opacity(0.1) : .clear, in: Capsule())
+                    .onTapGesture { selectedProcess = p.id }
+                    .help(p.command)
+                }
+                Button { selected = store.open(in: cwd).id; selectedProcess = nil } label: { Image(systemName: "plus").font(.system(size: 10, weight: .semibold)) }
                     .buttonStyle(.plain)
                     .foregroundStyle(Color(red: 0x8E / 255, green: 0x8E / 255, blue: 0x93 / 255))
                     .help("New terminal")
                 Spacer()
-                if let tab = current {
+                if let p = process {
+                    if let url = p.urls.first.flatMap(URL.init(string:)) {
+                        Link(url.host.map { "\($0)\(url.port.map { ":\($0)" } ?? "")" } ?? url.absoluteString, destination: url)
+                            .help("Open \(url.absoluteString)")
+                    }
+                    Button("Send to agent") {
+                        Task {
+                            let out = await session.processOutput(p.id, since: 0)
+                            let lines = (out?.text ?? "").split(separator: "\n", omittingEmptySubsequences: false).suffix(60).joined(separator: "\n")
+                            session.draft = "Output of `\(p.command)` (\(p.id)):\n```\n\(lines)\n```\n"
+                        }
+                    }
+                    .help("Puts its last lines of output in the composer")
+                    if p.status == .running {
+                        Button("Stop") { Task { await session.stopProcess(p.id) } }
+                            .help("Stops it and what it started")
+                    }
+                } else if let tab = current {
                     Button("Send to agent") {
                         let text = tab.textForAgent()
                         session.draft = "Terminal output (\(URL(fileURLWithPath: cwd).lastPathComponent)):\n```\n\(text)\n```\n"
@@ -171,7 +205,12 @@ struct TerminalDrawer: View {
             .foregroundStyle(Color(red: 0xE5 / 255, green: 0xE5 / 255, blue: 0xEA / 255))
             .padding(.horizontal, 10)
             .frame(height: 34)
-            if let tab = current {
+            if let p = process {
+                ProcessOutputView(session: session, process: p)
+                    .id(p.id)
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 8)
+            } else if let tab = current {
                 TerminalHost(tab: tab)
                     .id(tab.id)
                     .padding(.horizontal, 8)
@@ -181,5 +220,51 @@ struct TerminalDrawer: View {
         .frame(height: 300)
         .background(Color(red: 0x14 / 255, green: 0x14 / 255, blue: 0x16 / 255), in: RoundedRectangle(cornerRadius: DS.Radius.panel))
         .onAppear { if tabs.isEmpty { selected = store.open(in: cwd).id } }
+        // Captures: PIOPIO_DEMO_PROCESS_TAB=1 opens the first background command's tab once there is one.
+        .onChange(of: session.processes.first?.id) { _, id in
+            if ProcessInfo.processInfo.environment["PIOPIO_DEMO_PROCESS_TAB"] == "1", let id { selectedProcess = id }
+        }
+    }
+
+    /// "npm run dev", or the agent's label for it, short enough for a tab.
+    static func label(_ p: BackgroundProcess) -> String {
+        let text = p.command.count <= 28 ? p.command : (p.description ?? String(p.command.prefix(26)) + "…")
+        return text
+    }
+}
+
+/// A background command's output (TM4), read from the engine as it comes while the tab is open.
+private struct ProcessOutputView: View {
+    let session: ThreadModel
+    let process: BackgroundProcess
+    @State private var text = ""
+    @State private var next: Double = 0
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                Text(text.isEmpty ? "No output yet." : text)
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundStyle(Color(red: 0xE5 / 255, green: 0xE5 / 255, blue: 0xEA / 255).opacity(text.isEmpty ? 0.5 : 1))
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 6)
+                Color.clear.frame(height: 1).id("end")
+            }
+            .onChange(of: text) { _, _ in proxy.scrollTo("end", anchor: .bottom) }
+        }
+        .task(id: process.id) {
+            while !Task.isCancelled {
+                if let r = await session.processOutput(process.id, since: next) {
+                    if !r.text.isEmpty {
+                        text += r.text
+                        if text.count > 200_000 { text = String(text.suffix(200_000)) }
+                    }
+                    next = r.next
+                    if r.process.status != .running { break }
+                }
+                try? await Task.sleep(for: .milliseconds(600))
+            }
+        }
     }
 }

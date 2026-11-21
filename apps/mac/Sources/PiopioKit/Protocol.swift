@@ -436,9 +436,35 @@ public struct SessionState: Codable, Sendable, Hashable {
     /// Undo, docs/spec/31 CA7).
     public struct Handoff: Codable, Sendable, Hashable { public var from: ModelRef }
     public var handoff: Handoff?
+    /// Build: commands the agent left running (docs/spec/05-build §9 TM4).
+    public var processes: [BackgroundProcess]?
     public init(status: SessionStatus, queue: [QueuedInput], model: ModelRef?, thinking: String?, tools: Tools? = nil, usage: Usage, context: Context? = nil) {
         self.status = status; self.queue = queue; self.model = model; self.thinking = thinking; self.tools = tools; self.usage = usage; self.context = context
     }
+}
+
+/// A command the agent started with bash `background: true` (docs/spec/05-build §9 TM4).
+public struct BackgroundProcess: Codable, Sendable, Hashable, Identifiable {
+    public enum Status: String, Codable, Sendable { case running, exited, stopped }
+    public var id: String
+    public var command: String
+    public var description: String?
+    public var cwd: String
+    public var status: Status
+    public var exitCode: Int?
+    public var startedAt: String
+    public var endedAt: String?
+    /// Local addresses it printed (a dev server's).
+    public var urls: [String]
+}
+public struct ProcessOutputParams: Encodable, Sendable {
+    public var ref: ContainerRef; public var id: String; public var since: Double?
+    public init(ref: ContainerRef, id: String, since: Double?) { self.ref = ref; self.id = id; self.since = since }
+}
+public struct ProcessOutputResult: Decodable, Sendable { public var text: String; public var next: Double; public var process: BackgroundProcess }
+public struct ProcessStopParams: Encodable, Sendable {
+    public var ref: ContainerRef; public var id: String
+    public init(ref: ContainerRef, id: String) { self.ref = ref; self.id = id }
 }
 
 public struct Snapshot: Codable, Sendable, Hashable {

@@ -73,7 +73,7 @@ export function describe(tool: string, input: Record<string, unknown>): { title:
 	const path = typeof input.path === "string" ? input.path : "";
 	switch (tool) {
 		case "bash":
-			return { title: input.outside_project === true ? "Run a command outside the sandbox" : "Run a command", detail: String(input.command ?? "") };
+			return { title: input.outside_project === true ? "Run a command outside the sandbox" : input.background === true ? "Start a command in the background" : "Run a command", detail: String(input.command ?? "") };
 		case "edit":
 			return { title: "Edit a file", detail: path };
 		case "write":

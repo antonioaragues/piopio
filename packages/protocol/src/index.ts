@@ -291,6 +291,21 @@ export const ChangesSince = literals("session", "turn");
 
 export const SessionStatus = literals("idle", "running", "waiting_approval", "error");
 
+/** A command the agent started with bash `background: true` (docs/spec/05-build §9 TM4). */
+export const BackgroundProcess = Type.Object({
+	id: Type.String(),
+	command: Type.String(),
+	description: Type.Optional(Type.String()),
+	cwd: Type.String(),
+	status: literals("running", "exited", "stopped"),
+	exitCode: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
+	startedAt: Type.String(),
+	endedAt: Type.Optional(Type.String()),
+	/** Local addresses it printed (a dev server's). */
+	urls: Type.Array(Type.String()),
+});
+export type BackgroundProcess = Static<typeof BackgroundProcess>;
+
 /** Build approval modes (docs/spec/05-build §6). */
 /** How much a Build session may do on its own (05-build §6). `read_only`: reads and the web; no edits or commands (18 §4). */
 export const ApprovalMode = literals("read_only", "ask", "auto_edit", "full_auto");
@@ -375,6 +390,8 @@ export const SessionState = Type.Object({
 	 * the composer's Undo.
 	 */
 	handoff: Type.Optional(Type.Object({ from: ModelRef })),
+	/** Build: commands the agent left running (docs/spec/05-build §9 TM4). */
+	processes: Type.Optional(Type.Array(BackgroundProcess)),
 	/** How full the model's context is (Build). `tokens` is null right after a compaction. */
 	context: Type.Optional(Type.Object({
 		tokens: Type.Union([Type.Number(), Type.Null()]),
@@ -1481,6 +1498,15 @@ export const methods = {
 	"sessions.respond": {
 		params: Type.Object({ ref: ContainerRef, promptId: Type.String(), response: PromptResponse }),
 		result: Type.Object({}),
+	},
+	/** A background command's output from `since` (0: what's kept), and where the next read starts (05-build §9 TM4). */
+	"sessions.processOutput": {
+		params: Type.Object({ ref: ContainerRef, id: Type.String(), since: Type.Optional(Type.Number()) }),
+		result: Type.Object({ text: Type.String(), next: Type.Number(), process: BackgroundProcess }),
+	},
+	"sessions.processStop": {
+		params: Type.Object({ ref: ContainerRef, id: Type.String() }),
+		result: Type.Object({ process: BackgroundProcess }),
 	},
 	"settings.get": { params: Type.Object({}), result: EngineSettings },
 	"settings.set": {

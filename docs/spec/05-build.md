@@ -138,6 +138,17 @@ Three modes, set per session (default per project; global default = **Auto-edit*
 - **TM1** Drawer terminal per project (SwiftTerm, local PTY, cwd = project/worktree). Multiple tabs.
 - **TM2** "Send selection to agent" and "Send last command output to agent".
 - **TM3** The agent's `bash` runs inside the engine, not in the user's terminal. Its output appears in tool cards.
+- **TM4 Background processes** (roadmap PAR2, 2026-11-21). `bash` with `background: true` starts a command that keeps
+  running (a dev server, a watcher, a long test run) and returns at once: its id (`p1`), the first lines of output and
+  any local address it printed (`http://localhost:5173`). It's still `bash`, so the same approvals, rules, deny-list and
+  sandbox apply; the approval card says "Start a command in the background". `process_output` reads what it printed
+  since the last read (or its last lines), `process_stop` stops it with everything it started (its process group:
+  SIGTERM, then SIGKILL after 3 s), `process_list` lists them; none of the three asks. At most 8 running per session;
+  each keeps its last 256 KB of output. They stop when the session closes or the engine quits, never outliving
+  Piopio. The session state lists them (`state.processes`: id, command, status, exit code, addresses), and the
+  terminal drawer shows each as a tab next to your shells ("npm run dev · agent"), with its output as it comes,
+  **Stop**, and Send to agent; the app reads output with `sessions.processOutput` and stops one with
+  `sessions.processStop`. Claude Code, Codex and Antigravity have their own background commands (spec 31).
 
 ## 10. Later
 - **Cloud build sessions:** run the coding agent in Cloudflare Sandbox/Containers or over SSH on a devbox. Session kind stays `build` with `location: remote`.

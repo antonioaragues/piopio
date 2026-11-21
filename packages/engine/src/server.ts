@@ -1442,6 +1442,14 @@ export class Engine {
 				const p = params as Params<"git.suggestBranch">;
 				return { branch: gitOps.branchName(p.prompt) } satisfies Result<"git.suggestBranch">;
 			}
+			case "sessions.processOutput": {
+				const p = params as Params<"sessions.processOutput">;
+				return (await this.sessions.build(p.ref)).processOutput(p.id, p.since ?? 0) satisfies Result<"sessions.processOutput">;
+			}
+			case "sessions.processStop": {
+				const p = params as Params<"sessions.processStop">;
+				return (await (await this.sessions.build(p.ref)).processStop(p.id)) satisfies Result<"sessions.processStop">;
+			}
 			case "sessions.respond": {
 				const p = params as Params<"sessions.respond">;
 				await this.sessions.respond(p.ref, p.promptId, p.response);

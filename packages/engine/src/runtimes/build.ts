@@ -17,6 +17,7 @@ import {
 	type AgentSession,
 	type ExtensionFactory,
 } from "@earendil-works/pi-coding-agent";
+import { backgroundExtension, ProcessManager, type BackgroundProcess } from "@piopio/pi-extensions";
 import { approvalsExtension, checkpointsExtension, goalExtension, notifyExtension, planExtension, presentExtension, sandboxExtension, subagentsExtension, todosExtension, type ApprovalMode, type Question, type Rule, type SubagentBridge, type Verdict } from "@piopio/pi-extensions";
 import type { ApprovalItem, ApprovalRule, BranchInfo, CheckpointItem, ContainerRef, FileChange, ModelRef, PromptResponse, SessionState, Snapshot } from "@piopio/protocol";
 import { existsSync, readFileSync, realpathSync } from "node:fs";
@@ -162,6 +163,8 @@ export class BuildRuntime implements Runtime {
 		const sessionManager = o.sessionFile ? SessionManager.open(o.sessionFile) : SessionManager.create(o.cwd, o.piSessionDir);
 		// Piopio's extensions (approvals, notify) join the user's and the project's, discovered as in the CLI.
 		const broker = new PromptBroker();
+		// Commands the agent leaves running (05-build §9 TM4).
+		const processes = new ProcessManager();
 		let runtime: BuildRuntime | undefined;
 		const agentDir = o.piAgentDir ?? getAgentDir();
 		const settingsManager = SettingsManager.create(o.cwd, agentDir);
@@ -200,8 +203,9 @@ export class BuildRuntime implements Runtime {
 						// Linked folders that can be edited are writable like the project's own (18 §18).
 						extraRoots: () => (o.folders?.() ?? []).filter((f) => f.edit).map((f) => f.path),
 					},
-					{ shellPath: () => settingsManager.getShellPath() },
+					{ shellPath: () => settingsManager.getShellPath(), processes: () => processes },
 				),
+				backgroundExtension(() => processes),
 				approvalsExtension({
 					mode: o.approvals.mode,
 					rules: () => o.approvals.rules().map(({ kind, pattern }) => ({ kind, pattern })),
@@ -297,6 +301,7 @@ export class BuildRuntime implements Runtime {
 			...(o.thinking ? { thinkingLevel: o.thinking as never } : {}),
 		});
 		runtime = new BuildRuntime(o.ref, o.hub, session, o.model, broker, o.approvals.mode, o.cwd, o.checkpoints, o.plan, o.chat);
+		if (!o.chat) runtime.useProcesses(processes);
 		if (o.keepImages) runtime.builder.keepImages = o.keepImages;
 		runtime.connectors = o.connectors;
 		runtime.toolsOff = o.toolsOff;
@@ -978,9 +983,40 @@ export class BuildRuntime implements Runtime {
 		this.rebuild(true);
 	}
 
+	/** The session's background commands (05-build §9 TM4): listed in its state as they start and end. */
+	private processes?: ProcessManager;
+
+	useProcesses(processes: ProcessManager): void {
+		this.processes = processes;
+		processes.onChange = (list: BackgroundProcess[]) => {
+			this.builder.setState({ processes: list });
+			this.emitter.emit(this.builder.flush());
+		};
+	}
+
+	processOutput(id: string, since = 0) {
+		if (!this.processes) throw new EngineError("INVALID", "This session has no background commands.");
+		try {
+			const r = this.processes.output(id, { since, markRead: false });
+			return { text: r.text, next: r.next, process: r.process };
+		} catch (error) {
+			throw new EngineError("NOT_FOUND", (error as Error).message);
+		}
+	}
+
+	async processStop(id: string) {
+		if (!this.processes) throw new EngineError("INVALID", "This session has no background commands.");
+		try {
+			return { process: await this.processes.stop(id) };
+		} catch (error) {
+			throw new EngineError("NOT_FOUND", (error as Error).message);
+		}
+	}
+
 	async close(): Promise<void> {
 		this.broker.cancelAll();
 		this.unsubscribe?.();
+		await this.processes?.stopAll();
 		this.session.dispose();
 	}
 }

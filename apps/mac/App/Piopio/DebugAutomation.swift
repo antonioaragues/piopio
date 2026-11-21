@@ -374,6 +374,8 @@ enum DebugAutomation {
                 await session.open()
                 // PIOPIO_DEMO_PLAN=1: plan mode first; PIOPIO_DEMO_DRAFT: text left in the composer (shows @ and / suggestions).
                 if env["PIOPIO_DEMO_PLAN"] == "1" { await session.setPlanMode(true) }
+                // PIOPIO_DEMO_FULL_AUTO=1: no approvals in this session (captures of what runs).
+                if env["PIOPIO_DEMO_FULL_AUTO"] == "1" { await session.setApprovalMode(.fullAuto) }
                 // PIOPIO_DEMO_TERMINAL=<command>: open the terminal drawer and type it. PIOPIO_DEMO_VIEW=<path>[:line]: the file viewer.
                 if let command = env["PIOPIO_DEMO_TERMINAL"] {
                     UserDefaults.standard.set(true, forKey: "buildTerminal")

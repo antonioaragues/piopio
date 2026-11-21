@@ -506,6 +506,18 @@ final class ThreadModel {
     var prompts: [PendingPrompt] { state?.prompts ?? [] }
     var approvalMode: ApprovalMode { state?.approvalMode ?? .autoEdit }
 
+    /// The agent's background commands (docs/spec/05-build §9 TM4).
+    var processes: [BackgroundProcess] { state?.processes ?? [] }
+
+    /// A background command's output from `since`; nil when the engine can't say.
+    func processOutput(_ id: String, since: Double) async -> ProcessOutputResult? {
+        try? await engine?.client?.call("sessions.processOutput", ProcessOutputParams(ref: ref, id: id, since: since), as: ProcessOutputResult.self)
+    }
+
+    func stopProcess(_ id: String) async {
+        await call("sessions.processStop", ProcessStopParams(ref: ref, id: id))
+    }
+
     func respond(_ prompt: PendingPrompt, _ response: PromptResponse) async {
         await call("sessions.respond", RespondParams(ref: ref, promptId: prompt.id, response: response))
     }

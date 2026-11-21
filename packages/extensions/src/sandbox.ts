@@ -19,6 +19,7 @@ import { homedir, tmpdir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import { createBashToolDefinition, getShellConfig, type ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { startedText, type ProcessManager } from "./background.js";
 
 export const SANDBOX_EXEC = "/usr/bin/sandbox-exec";
 export const OUTSIDE_PROJECT = "outside_project";
@@ -173,7 +174,7 @@ const DENIED_HINT = `\n\n[Piopio's sandbox stopped a write outside the project (
 
 type Content = { type: string; text?: string }[];
 
-export function sandboxExtension(bridge: SandboxBridge, options: { shellPath?: () => string | undefined } = {}): ExtensionFactory {
+export function sandboxExtension(bridge: SandboxBridge, options: { shellPath?: () => string | undefined; processes?: () => ProcessManager } = {}): ExtensionFactory {
 	return (pi) => {
 		let cwd = process.cwd();
 		const shell = () => getShellConfig(options.shellPath?.()).shell;
@@ -188,6 +189,9 @@ export function sandboxExtension(bridge: SandboxBridge, options: { shellPath?: (
 			...(plain.parameters as unknown as { properties: Record<string, never> }).properties,
 			description: Type.Optional(Type.String({ description: "A short activity label in the user's language, 3–8 words, e.g. 'Checking the project tests'. Describe the task, not the shell syntax." })),
 			[OUTSIDE_PROJECT]: Type.Optional(Type.Boolean({ description: "Run without the sandbox, to write outside the project. The user is asked first. Only when a sandboxed run failed for that reason." })),
+			...(options.processes
+				? { background: Type.Optional(Type.Boolean({ description: "Keep it running and return at once (a dev server, a watcher, a long test run): you get its id and first output; read more with process_output, stop it with process_stop." })) }
+				: {}),
 		});
 		pi.on("session_start", (_event, ctx) => {
 			cwd = ctx.cwd;
@@ -197,7 +201,22 @@ export function sandboxExtension(bridge: SandboxBridge, options: { shellPath?: (
 			parameters: parameters as never,
 			promptGuidelines: [...(plain.promptGuidelines ?? []), SANDBOX_GUIDELINE, "Include a short description of the task in each bash call, in the user's language. Piopio uses it as the activity label."],
 			async execute(toolCallId: string, params: unknown, signal: AbortSignal | undefined, onUpdate: never, ctx: never) {
-				const { [OUTSIDE_PROJECT]: outside, description: _description, ...input } = params as { command: string; timeout?: number; outside_project?: boolean; description?: string };
+				const { [OUTSIDE_PROJECT]: outside, description, background, ...input } = params as { command: string; timeout?: number; outside_project?: boolean; description?: string; background?: boolean };
+				// A command that keeps running (05-build §9 TM4): the same confinement, started and left running.
+				if (background && options.processes) {
+					const confineIt = !outside && bridge.enabled() && !(process.platform !== "darwin" && sandboxUnavailable());
+					if (confineIt && sandboxUnavailable()) return { content: [{ type: "text", text: `Nothing ran: Piopio's sandbox can't start on this Mac (${sandboxUnavailable()}).` }], details: {}, isError: true } as never;
+					const line = confineIt ? confine(input.command, seatbeltProfile(sandboxRoots(cwd, { extra: bridge.extraRoots?.() ?? [] })), shell(), sandboxShims()) : input.command;
+					try {
+						const manager = options.processes();
+						const started = manager.start(input.command, line, cwd, { shell: shell(), ...(description ? { description } : {}) });
+						await manager.settle(started.id, 2500);
+						const first = manager.output(started.id);
+						return { content: [{ type: "text", text: startedText(first.process, first.text) }], details: { background: first.process } } as never;
+					} catch (error) {
+						return { content: [{ type: "text", text: (error as Error).message }], details: {}, isError: true } as never;
+					}
+				}
 				if (outside || !bridge.enabled()) return plain.execute(toolCallId, input as never, signal, onUpdate, ctx);
 				const unavailable = sandboxUnavailable();
 				if (unavailable) {
