@@ -28,6 +28,7 @@ const EXTRACT = `You maintain a long-term memory of facts about a person and the
 From the exchange, extract the facts worth remembering for months: where they live, work and study, their role, people and pets in their life, health, possessions, preferences and dislikes, plans and appointments with their dates, decisions, and changes to any of these.
 Rules:
 - Only what the person states or confirms. Not the assistant's suggestions, not requests, not small talk, not what's true only today.
+- Nothing about the assistant itself: what it can or can't do, its tools or its settings. Those change.
 - One self-contained sentence per fact, in the third person, with names ("Alex lives in Madrid"), never "I" or "they" alone.
 - Write dates as absolute dates (the exchange's date is given). Keep a change's context in the fact: "Alex now works in pediatrics at Hospital Gregorio Marañón (since June 2026)".
 - Nothing worth keeping: no facts.

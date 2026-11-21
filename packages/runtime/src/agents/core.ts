@@ -16,7 +16,7 @@ import { describeChange, learnFacts, unlearn, type Complete, type LearnedChange 
 import { APPLE_TOOLS, AppUnavailable, appleTools, type AppToolResult } from "./apple.js";
 import { Peers, type Directory, type Envelope, type PeerState } from "./peers.js";
 import { localDate } from "../context/clock.js";
-import { guardMessages, trimResult } from "../context/extension.js";
+import { dropEarlierReasoning, guardMessages, trimResult } from "../context/extension.js";
 
 type AgentState = ProactiveState & SafetyState & PeerState & {
 	/** contact id → conversation id. */
@@ -132,11 +132,37 @@ const SETUP_SWITCHES: { title: string; does: string; builtin?: string; apple?: s
 	{ title: "Music", does: "play and control Music", apple: "music" },
 ];
 
-/** What the owner has switched off in Setup, for the prompt: so a request for one gets "turn on X", not "I can't". */
+/** The switches that apply here (Apple apps only on a Mac), and whether each is on. */
+function setupSwitches(tools: AgentDefinition["tools"], where: { mac: boolean }): { title: string; does: string; on: boolean }[] {
+	return SETUP_SWITCHES.filter((s) => s.builtin || where.mac).map((s) => ({
+		title: s.title,
+		does: s.does,
+		on: s.builtin ? tools.builtin.includes(s.builtin as never) : (tools.apple ?? []).includes(s.apple as never),
+	}));
+}
+
+/**
+ * What the owner has switched off in Setup, for the prompt: so a request for one gets "turn on X", not "I can't". And,
+ * always, that the tools it has now win over what it said or remembered (Pinpin, switched on, still said it couldn't).
+ */
 export function offSwitchesNote(def: Pick<AgentDefinition, "tools">, where: { mac: boolean }): string {
-	const off = SETUP_SWITCHES.filter((s) => (s.builtin ? !def.tools.builtin.includes(s.builtin as never) : where.mac && !(def.tools.apple ?? []).includes(s.apple as never)));
-	if (!off.length) return "";
-	return `\n\nSwitched off in your Setup (What it can use), so you don't have these tools: ${off.map((s) => `“${s.title}” (${s.does})`).join("; ")}. When the owner asks for something one of these does, don't send them elsewhere or settle for less: say in a line that they can turn on “Title” in your Setup tab, then ask again; and do the part you can now.`;
+	const off = setupSwitches(def.tools, where).filter((s) => !s.on);
+	const now = "\n\nWhat you can do is the tools you're offered now. Your owner can switch tools on and off in your Setup at any time, so when your memory or your earlier messages say you can't do something, check your tools again before you say so.";
+	if (!off.length) return now;
+	return `${now}\n\nSwitched off in your Setup (What it can use), so you don't have these tools: ${off.map((s) => `“${s.title}” (${s.does})`).join("; ")}. When the owner asks for something one of these does, don't send them elsewhere or settle for less: say in a line that they can turn on “Title” in your Setup tab, then ask again; and do the part you can now.`;
+}
+
+/** What turning switches on and off changed, for a note in the owner's chat; undefined when nothing did. */
+export function switchesChangedNote(before: AgentDefinition["tools"], after: AgentDefinition["tools"], name: string, where: { mac: boolean }): { text: string; forModel: string } | undefined {
+	const was = new Map(setupSwitches(before, where).map((s) => [s.title, s.on]));
+	const now = setupSwitches(after, where);
+	const on = now.filter((s) => s.on && !was.get(s.title));
+	const off = now.filter((s) => !s.on && was.get(s.title));
+	if (!on.length && !off.length) return undefined;
+	const list = (xs: { title: string }[]) => xs.map((s) => `“${s.title}”`).join(", ");
+	const text = [on.length ? `${name} can now use ${list(on)}.` : "", off.length ? `${list(off)} switched off.` : ""].filter(Boolean).join(" ");
+	const forModel = `[Setup] Your owner changed what you can use. ${on.length ? `Turned on: ${on.map((s) => `“${s.title}” (${s.does})`).join("; ")}: you have those tools now, and whatever you said or remembered earlier about not having them no longer holds.` : ""}${off.length ? ` Turned off: ${list(off)}.` : ""} Don't answer this note; go by it from now on.`;
+	return { text, forModel };
 }
 
 /** An entry in a person's conversation: what the agent learned after a quiet moment, with Undo (M2). */
@@ -430,6 +456,14 @@ export class AgentCore {
 		await this.proactive.reconcile();
 	}
 
+	/** The owner saved a definition that switches tools on or off: a note in their chat, if they have one (see switchesChangedNote). */
+	async switchesChanged(before: AgentDefinition["tools"]): Promise<void> {
+		const owner = this.owner;
+		if (!owner || !(await this.people())[owner.id]) return;
+		const note = switchesChangedNote(before, this.def.tools, this.def.name, { mac: Boolean(this.options.appTool) });
+		if (note) await this.proactive.notice(note.text, owner.id, note.forModel);
+	}
+
 	people(): Promise<Record<string, string>> {
 		return this.options.harness.snapshot(AgentStateDoc, this.options.context).then((s) => ({ ...(s?.people ?? {}) }));
 	}
@@ -438,11 +472,15 @@ export class AgentCore {
 	async beforeTurn(contactId: string, conversationId: ConversationId, text: string): Promise<void> {
 		const contact = this.contact(contactId);
 		if (!contact || !this.usesMemory) return;
-		await this.recallInto(conversationId, partitionsFor(contact).read, text);
+		await this.recallInto(conversationId, partitionsFor(contact).read, text, `person:${contactId}`);
 	}
 
-	/** Recalls what's relevant to `text` from `partitions` into the conversation's notes. */
-	private async recallInto(conversationId: ConversationId, partitions: readonly Partition[], text: string): Promise<void> {
+	/**
+	 * Recalls what's relevant to `text` from `partitions` into the conversation's notes. Messages from `here` (this very
+	 * conversation) are left out: its history already has them, and recalled again each turn its own old answers outweighed
+	 * what changed since (Pinpin, its automations switched on, kept quoting "I can't schedule myself from here").
+	 */
+	private async recallInto(conversationId: ConversationId, partitions: readonly Partition[], text: string, here?: string): Promise<void> {
 		if (!this.usesMemory) return;
 		const banks = [...partitions.map((p) => bankOf(this.def.id, p)), ...(partitions.includes("shared") ? await this.sharedWithMe() : [])];
 		const provider = this.options.memory();
@@ -451,7 +489,7 @@ export class AgentCore {
 			Promise.all(banks.map((b) => provider.standing?.(b).catch(() => []) ?? Promise.resolve([] as MemoryRecord[]))).then((r) => r.flat()),
 		]);
 		const seen = new Set<string>();
-		const lines = [...standing, ...hits].filter((r) => !seen.has(r.id) && seen.add(r.id)).map((r) => `- ${r.at ? `[${r.at.slice(0, 10)}] ` : ""}${r.text}`);
+		const lines = [...standing, ...hits].filter((r) => !(here && r.kind === "message" && r.source?.ref === here) && !seen.has(r.id) && seen.add(r.id)).map((r) => `- ${r.at ? `[${r.at.slice(0, 10)}] ` : ""}${r.text}`);
 		await this.options.harness.commit(async (tx) => {
 			(await tx.doc(AgentStateDoc)).recalled[String(conversationId)] = lines.join("\n");
 		}, this.options.context);
@@ -686,7 +724,7 @@ export class AgentCore {
 				// The clock and the repeated-call nudge (context/), in the agent's time zone.
 				hook(GenerationTask, {
 					beforeRequest: (request) => {
-						const messages = guardMessages(request.messages as never[], core.proactive.tz);
+						const messages = dropEarlierReasoning(guardMessages(request.messages as never[], core.proactive.tz));
 						return messages === (request.messages as unknown) ? undefined : { messages };
 					},
 				}),
@@ -725,7 +763,7 @@ export class AgentCore {
 					// What an agent may automate (docs/spec/27 AU5–AU6; A3: asked for Piopio's project work, it made one for itself).
 					const automating =
 						contact?.role === "owner" && core.options.automations && core.def.tools.builtin.includes("schedule")
-							? "\n\nAutomations you make always run as you, with only your own tools, outside any project: you can't read or change the files of Piopio's projects. When the owner wants Piopio or another agent to do something on its own, or wants a project's files changed, don't make an automation: tell them to ask Piopio, from Home or in that project."
+							? "\n\nYou make automations yourself, with automate: when the owner asks for something at a time, regularly or later (\"remind me every day at 3pm…\", \"every Monday…\", \"when an email arrives…\"), call automate and say in a line what you set; they see a card with Undo. A reminder is one too: its prompt says what to tell them then. Don't hand them text to paste somewhere else. Automations you make run as you, with only your own tools, outside any project. Only when the owner wants Piopio or another agent to do the work, or a project's files read or changed, make nothing and tell them to ask Piopio, from Home or in that project."
 							: "";
 					const switchedOff = contact?.role === "owner" ? offSwitchesNote(core.def, { mac: Boolean(core.options.appTool) }) : "";
 					return `${core.options.instructions().trim()}${who}${shortcuts}${telegram}${people}${automating}${switchedOff}${interview}\n\nToday is ${localDate((core.options.now?.() ?? new Date()).getTime(), core.proactive.tz)} (${core.proactive.tz}).`;

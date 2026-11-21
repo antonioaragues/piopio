@@ -132,6 +132,47 @@ test("an agent makes its own automations by asking: they run as it, in a run of 
 	expect(await list(client, { runsAs: ref.id })).toHaveLength(1);
 }, 60_000);
 
+test("turning on an agent's automations mid-chat gives it automate, and a note says so", async () => {
+	const { client } = await start();
+	const { ref } = await client.call("agents.create", { name: "Pinpin", owner: "Antonio", model: { provider: "faux", id: "faux-1" } });
+	const got = await client.call("agents.get", { ref });
+	const def = got.definition as Record<string, unknown>;
+	const save = (builtin: string[]) => client.call("agents.save", { ref, definition: { ...def, interview: undefined, tools: { builtin } }, instructions: got.instructions });
+	await save(["memory", "send_message"]);
+	await client.call("sessions.subscribe", { ref });
+	const items = () => client.call("sessions.open", { ref }).then((s) => JSON.stringify(s.items));
+	await client.call("sessions.submit", { ref, input: { text: call("automate", { when: "0 15 * * *", prompt: "Before" }) } });
+	await until(items, (s) => s.includes("Tool automate is not available"));
+	await save(["memory", "send_message", "schedule"]);
+	await until(items, (s) => s.includes("Pinpin can now use “Make its own automations”."));
+	await client.call("sessions.submit", { ref, input: { text: call("automate", { when: "0 15 * * *", prompt: "Research Celonis" }) } });
+	await until(() => list(client, { runsAs: ref.id }), (r) => r.length === 1);
+}, 60_000);
+
+test("an agent's memory doesn't recall its own chat back into it: what it said there is in its history already", async () => {
+	const { home, client } = await start();
+	const { ref } = await client.call("agents.create", { name: "Pinpin", owner: "Antonio", model: { provider: "faux", id: "faux-1" } });
+	const got = await client.call("agents.get", { ref });
+	await client.call("agents.save", { ref, definition: { ...(got.definition as object), interview: undefined }, instructions: got.instructions });
+	await client.call("sessions.subscribe", { ref });
+	const answers = () => client.call("sessions.open", { ref }).then((s) => (s.items as { kind: string }[]).filter((i) => i.kind === "assistant").length);
+	await client.call("sessions.submit", { ref, input: { text: "research Celonis every day at 3pm" } });
+	await until(answers, (n) => n === 1);
+	await new Promise((r) => setTimeout(r, 300));
+	await client.call("sessions.submit", { ref, input: { text: "research Celonis every day at 3pm" } });
+	await until(answers, (n) => n === 2);
+	const { DatabaseSync } = await import("node:sqlite");
+	const db = new DatabaseSync(join(home, "agents", `${ref.id}.sqlite`), { readOnly: true });
+	const sections = (db.prepare("SELECT record FROM entries ORDER BY id").all() as { record: string }[])
+		.map((r) => JSON.parse(r.record) as { model?: { role: string; sections?: Record<string, string> }[] })
+		.flatMap((r) => r.model ?? [])
+		.filter((m) => m.role === "system" && m.sections?.["agent-memory"])
+		.map((m) => m.sections!["agent-memory"]!);
+	db.close();
+	expect(sections.length).toBeGreaterThan(0);
+	expect(sections.at(-1)).not.toContain("research Celonis");
+}, 60_000);
+
 test("a template's schedule is an automation the agent runs, not part of its definition", async () => {
 	const { client } = await start();
 	const { ref } = await client.call("agents.create", { name: "Mornings", template: "daily-briefing", owner: "Antonio", schedule: "30 7 * * 1-5", model: { provider: "faux", id: "faux-1" } });

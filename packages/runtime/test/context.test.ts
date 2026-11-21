@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 import { clockLine, formatGap, localDate, stampMessages } from "../src/context/clock.js";
 import { remindRepeats, stableJson } from "../src/context/repeats.js";
 import { keepEnds } from "../src/context/spill.js";
-import { trimResult } from "../src/context/extension.js";
+import { dropEarlierReasoning, trimResult } from "../src/context/extension.js";
 
 const at = (iso: string) => Date.parse(iso);
 const user = (text: string, iso: string) => ({ role: "user", content: text, timestamp: at(iso) });
@@ -87,3 +87,24 @@ describe("oversized results", () => {
 		expect(trimmed?.output?.[0]).toMatchObject({ type: "text" });
 	});
 });
+
+describe("earlier reasoning", () => {
+	test("an earlier turn's reasoning is left out; the turn in progress keeps its own, and an answer that is only reasoning stays", () => {
+		const think = (t: string) => ({ type: "thinking", thinking: t });
+		const text = (t: string) => ({ type: "text", text: t });
+		const messages = [
+			{ role: "user", content: "remind me at 3pm" },
+			{ role: "assistant", content: [think("There's no automation tool in this list."), text("I can't from here.")] },
+			{ role: "assistant", content: [think("only this")] },
+			{ role: "user", content: "remind me at 3pm" },
+			{ role: "assistant", content: [think("Call automate."), { type: "toolCall", id: "1", name: "automate", arguments: {} }] },
+			{ role: "toolResult", toolCallId: "1", content: [text("Made it")] },
+		];
+		const out = dropEarlierReasoning(messages);
+		expect(out[1]!.content).toEqual([text("I can't from here.")]);
+		expect(out[2]).toBe(messages[2]);
+		expect(out[4]).toBe(messages[4]);
+		expect(dropEarlierReasoning(out)).toBe(out);
+	});
+});
+

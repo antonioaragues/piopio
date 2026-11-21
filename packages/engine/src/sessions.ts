@@ -970,6 +970,7 @@ export class Sessions {
 		if (!errors.length && def.id !== ref.id) errors.push({ path: "/id", message: "The id can't change." });
 		if (errors.length) return { errors, saved: false };
 		const saved = await this.host.files.save(entry.agentFolder!, { definition: def, instructions }, message?.trim() || "Edit the definition");
+		const toolsBefore = this.definitions.get(ref.id)?.definition.tools;
 		this.definitions.set(ref.id, { definition: def, instructions });
 		entry.title = def.name;
 		this.setAgentInfo(entry, def);
@@ -982,6 +983,8 @@ export class Sessions {
 			return { errors: [], saved };
 		}
 		if (this.open.has(ref.id)) await (await this.agent(ref)).reconfigure();
+		// Tools switched on or off: a note in the owner's chat, so the agent stops going by what it said before.
+		if (toolsBefore && JSON.stringify(toolsBefore) !== JSON.stringify(def.tools)) await (await this.agent(ref)).core.switchesChanged(toolsBefore).catch((error: unknown) => this.log(`Agents: couldn't note ${def.name}'s tool change: ${(error as Error).message}`));
 		// Schedules, a heartbeat or webhook triggers written into the definition become its automations (docs/spec/27);
 		// opening the agent hands them over.
 		if (this.automations && (def.schedules?.length || def.heartbeat || def.triggers?.length)) {

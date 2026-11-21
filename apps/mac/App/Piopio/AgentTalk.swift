@@ -37,7 +37,7 @@ struct AgentQuickReplies: View {
         for item in items.reversed() {
             switch item {
             case .user: return []
-            case .tool(let t) where t.tool == "ask_owner":
+            case .tool(let t) where t.tool == "ask_owner" && t.status != .error:
                 guard case .array(let list)? = t.args?["options"] else { return [] }
                 return list.compactMap(\.stringValue)
             case .assistant(let a):
@@ -53,7 +53,7 @@ struct AgentQuickReplies: View {
         for item in items.reversed() {
             switch item {
             case .user: return nil
-            case .tool(let t) where t.tool == "ask_owner":
+            case .tool(let t) where t.tool == "ask_owner" && t.status != .error:
                 if case .number(let n)? = t.args?["number"] { return "Question \(Int(n)) of 3" }
                 return nil
             default: continue

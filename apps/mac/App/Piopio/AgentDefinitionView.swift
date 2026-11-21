@@ -6,8 +6,9 @@ import SwiftUI
 /// The Setup tab (docs/spec/27 AU3, the agents and automations handoff, screen 3): who the agent is, never when it acts.
 /// One centered column of four groups (Who it is · What it can use · Where you reach it · Limits), then a block on its
 /// automations, which live in Automations, and History · View as file at its foot. It's a form over agent.json and
-/// instructions.md: saving validates first, errors show at the top with their path, and each save is a commit in the
-/// folder's git history.
+/// instructions.md that saves itself a moment after each change (a Save at the top went unseen: "I thought it saved on
+/// its own"); saving validates first, errors show at the top with their path, and each save is a commit in the folder's
+/// git history. View as file keeps Revert and Save: half-typed JSON can't be saved on its own.
 struct AgentDefinitionView: View {
     let engine: EngineController
     let summary: SessionSummary
@@ -25,6 +26,8 @@ struct AgentDefinitionView: View {
     @State private var editingJSON = false
     @State private var errors: [DefinitionError] = []
     @State private var saving = false
+    /// The save waiting for typing to settle (the form saves itself).
+    @State private var autosave: Task<Void, Never>?
     @State private var pickingModel = false
     @State private var jump: String?
     @State private var showingMemory = false
@@ -87,6 +90,10 @@ struct AgentDefinitionView: View {
             await countLearned()
         }
         .onChange(of: section) { _, s in if let s { jump = nil; DispatchQueue.main.async { jump = s } } }
+        .onChange(of: def) { _, _ in scheduleSave() }
+        .onChange(of: instructions) { _, _ in scheduleSave() }
+        // Leaving Setup (Chat, another agent) saves what's still waiting.
+        .onDisappear { if autosave != nil { autosave?.cancel(); autosave = nil; if dirty, !editingJSON { save() } } }
         .popover(isPresented: $pickingModel) {
             ModelPicker(engine: engine, selected: modelRef(def?.models.default), role: .agent) { ref in
                 def?.models.default = modelString(ref)
@@ -116,18 +123,21 @@ struct AgentDefinitionView: View {
 
     // MARK: Bars
 
-    /// Saved, or how many changes wait with Revert and Save ⌘S. It sits above the groups, small, on the right.
+    /// Saving… or Saved, small, above the groups on the right; the form saves itself. View as file: how many changes wait,
+    /// with Revert and Save ⌘S.
     private var saveBar: some View {
         HStack(spacing: 10) {
             Spacer()
-            if dirty {
+            if !editingJSON, dirty || saving {
+                Text(errors.isEmpty ? "Saving…" : "Not saved: fix what's above").font(.system(size: 12)).foregroundStyle(errors.isEmpty ? Color.dsFg3 : Color.dsWarn)
+            } else if dirty {
                 Circle().fill(Color.dsWarn).frame(width: 6, height: 6)
                 Text("\(changeCount) unsaved change\(changeCount == 1 ? "" : "s")").font(.system(size: 12)).foregroundStyle(Color.dsFg2)
             } else if let at = loaded?.history.first?.at {
                 Text("Saved \(BuildSessionView.relative(at))").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
             }
-            // Revert and Save only when there's something to save: a disabled Save next to "Saved" read as a glitch.
-            if dirty || saving {
+            // Revert and Save only for the file, and only when there's something to save.
+            if editingJSON, dirty || saving {
                 Button("Revert") { Task { await load() } }.buttonStyle(PillStyle(compact: true)).disabled(saving)
                 Button(saving ? "Saving…" : "Save ⌘S") { save() }.buttonStyle(PillStyle(kind: .primary, compact: true)).keyboardShortcut("s").disabled(saving)
             }
@@ -479,6 +489,18 @@ struct AgentDefinitionView: View {
         if def == nil { editingJSON = true }
     }
 
+    /// The form saves itself once changes settle: a switch at once, typing after a pause.
+    private func scheduleSave() {
+        autosave?.cancel()
+        guard !editingJSON, def != nil, dirty else { autosave = nil; return }
+        autosave = Task {
+            try? await Task.sleep(for: .milliseconds(900))
+            guard !Task.isCancelled else { return }
+            autosave = nil
+            if saving { scheduleSave() } else if dirty { save() }
+        }
+    }
+
     private func save() {
         let json: JSONValue
         if editingJSON {
@@ -492,12 +514,19 @@ struct AgentDefinitionView: View {
             json = def.json
         }
         saving = true
+        let sent = (def: def, instructions: instructions, file: editingJSON)
         Task {
             defer { saving = false }
             do {
-                let result = try await engine.saveAgent(summary.ref, definition: json, instructions: instructions, message: "")
+                let result = try await engine.saveAgent(summary.ref, definition: json, instructions: sent.instructions, message: "")
                 errors = result.errors
-                if result.errors.isEmpty { await load() }
+                guard result.errors.isEmpty else { return }
+                if sent.file { await load(); return }
+                // What was sent is saved; what was typed meanwhile stays and saves next (a reload would drop it).
+                original = sent.def
+                originalInstructions = sent.instructions
+                if let got = await engine.agentDefinition(summary.ref) { loaded = got }
+                if dirty { scheduleSave() }
             } catch {
                 errors = [DefinitionError(path: "/", message: (error as? EngineError)?.message ?? String(describing: error))]
             }

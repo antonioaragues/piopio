@@ -114,7 +114,9 @@ nonisolated struct ItemRenderer: Sendable {
             return questionCard(t)
         case .tool(let t) where t.tool == "ask_owner":
             // A new agent's question (docs/spec/21 D4): it reads as its message; its answers to tap are above the composer.
+            // One the tool refused (an answer too long) was never asked: the model asks again, so it showed up to three times.
             let out = NSMutableAttributedString()
+            if t.status == .error { return out }
             if case .number(let n)? = t.args?["number"] { out.append(note("Question \(Int(n)) of 3")) }
             for block in MarkdownStream(text: t.args?["question"]?.stringValue ?? "").blocks { out.append(render(block)) }
             return out

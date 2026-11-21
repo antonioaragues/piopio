@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { cronError, newDefinition, offSwitchesNote, partitionsFor, TEMPLATES, validate } from "../src/index.js";
+import { cronError, newDefinition, offSwitchesNote, partitionsFor, switchesChangedNote, TEMPLATES, validate } from "../src/index.js";
 
 describe("agent definitions", () => {
 	test("every template makes a valid definition", () => {
@@ -55,7 +55,18 @@ describe("agent definitions", () => {
 		expect(mac).not.toContain("“Remember things”");
 		// Without a Mac there are no Apple apps to turn on.
 		expect(offSwitchesNote({ tools: { builtin: [...tools.builtin] } }, { mac: false })).not.toContain("“Reminders”");
-		expect(offSwitchesNote({ tools: { builtin: [...tools.builtin, "schedule"] } }, { mac: false })).toBe("");
+		// All on: no list, but the tools it has now still win over what it said before.
+		const allOn = offSwitchesNote({ tools: { builtin: [...tools.builtin, "schedule"] } }, { mac: false });
+		expect(allOn).not.toContain("Switched off");
+		expect(allOn).toContain("check your tools again");
+	});
+
+	test("switching tools on or off makes a note for the owner's chat; nothing when no switch moved", () => {
+		const before = { builtin: ["memory" as const, "web_search" as const] };
+		const note = switchesChangedNote(before, { builtin: ["memory", "schedule"] }, "Pinpin", { mac: false });
+		expect(note?.text).toBe("Pinpin can now use “Make its own automations”. “Search and read the web” switched off.");
+		expect(note?.forModel).toContain("no longer holds");
+		expect(switchesChangedNote(before, { ...before, shortcuts: ["Log water"] }, "Pinpin", { mac: false })).toBeUndefined();
 	});
 
 	test("partitions keep contacts apart", () => {

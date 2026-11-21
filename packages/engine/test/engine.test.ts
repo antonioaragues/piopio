@@ -2020,7 +2020,11 @@ describe("Agents: proactivity (milestone 4.3)", () => {
 			["And another", "limit"],
 		]);
 		const items = await until(ownerItems, (xs) => xs.some((i) => i.kind === "system" && !i.run));
-		expect(items.filter((i) => i.kind === "system" && !i.run).map((i) => (i.kind === "system" ? i.text : ""))).toEqual(["Helper reached its limit of 2 messages today; the rest wait until tomorrow."]);
+		expect(items.filter((i) => i.kind === "system" && !i.run).map((i) => (i.kind === "system" ? i.text : ""))).toEqual([
+			// Its definition above leaves the web out: the owner's chat says so (the agent goes by it, not by what it said before).
+			"“Search and read the web” switched off.",
+			"Helper reached its limit of 2 messages today; the rest wait until tomorrow.",
+		]);
 		const lines = items.flatMap((i) => (i.kind === "system" && i.run ? [i.text] : []));
 		// Each run is a line in the owner's conversation (docs/spec/21 D3), in order: the reminder and the trigger wrote;
 		// the held ones' messages haven't arrived.

@@ -19,6 +19,25 @@ export function guardMessages<M extends { role: string; timestamp?: number; cont
 	return remindRepeats(stampMessages(messages, tz));
 }
 
+/**
+ * The model's reasoning from turns before the newest message, left out (kept within the turn, where tool calls need it).
+ * Sent back, an old turn's reasoning was believed over what changed since: Pinpin's "there's no automation tool in this
+ * list", written while that switch was off, came back each turn and outweighed the tool it now had. DeepSeek asks for
+ * this, and Anthropic drops earlier turns' thinking anyway. An answer that is only reasoning keeps it.
+ */
+export function dropEarlierReasoning<M extends { role: string; content?: unknown }>(messages: readonly M[]): M[] {
+	const lastUser = messages.map((m) => m.role).lastIndexOf("user");
+	let changed = false;
+	const out = messages.map((m, i) => {
+		if (i > lastUser || m.role !== "assistant" || !Array.isArray(m.content)) return m;
+		const kept = (m.content as { type: string }[]).filter((c) => c.type !== "thinking");
+		if (kept.length === m.content.length || kept.length === 0) return m;
+		changed = true;
+		return { ...m, content: kept };
+	});
+	return changed ? out : (messages as M[]);
+}
+
 /** A result's text over the budget, with its two ends kept. */
 export function trimResult(result: ToolExecutionResult): ToolExecutionResult | undefined {
 	const output = result.output;
