@@ -1850,6 +1850,28 @@ public struct ProjectInfo: Codable, Sendable, Hashable, Identifiable {
     /// Other folders on the Mac linked to the project (docs/spec/18 §18): read only, or edited under its permissions.
     public struct LinkedFolder: Codable, Sendable, Hashable { public var path: String; public var edit: Bool; public var missing: Bool? }
     public var folders: [LinkedFolder]?
+    /// The check run after the agent's edits (docs/spec/05-build "Diagnostics"): detected ("auto", with the command it
+    /// found, if any), set by the user, or off.
+    public struct Check: Codable, Sendable, Hashable {
+        public enum Source: String, Codable, Sendable { case auto, set, off }
+        public var command: String?
+        public var source: Source
+        public init(command: String?, source: Source) { self.command = command; self.source = source }
+    }
+    public var check: Check?
+}
+
+/// Sets a project's check after edits: a command, "" for off, nil for the detected one (05-build "Diagnostics").
+public struct ProjectsCheckParams: Encodable, Sendable {
+    public var id: String
+    public var check: String?
+    public init(id: String, check: String?) { self.id = id; self.check = check }
+    enum CodingKeys: String, CodingKey { case id, check }
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        if let check { try c.encode(check, forKey: .check) } else { try c.encodeNil(forKey: .check) }
+    }
 }
 
 /// New project: a folder in ~/Piopio with AGENTS.md (`instructions`) and NOTES.md.

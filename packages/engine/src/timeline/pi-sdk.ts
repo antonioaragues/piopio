@@ -48,6 +48,15 @@ export class SdkEventMapper {
 				else if (message.role === "custom" && (message as { display?: boolean }).display) b.system(id, "info", customText(message));
 				break;
 			}
+			case "entry_appended": {
+				// A message an extension added at a boundary (the project's check, 05-build "Diagnostics") comes as an entry,
+				// not a message_start; it is a message of the transcript all the same.
+				const entry = event.entry as { type?: string; display?: boolean; content?: unknown; details?: unknown; timestamp?: string } | undefined;
+				if (entry?.type !== "custom_message") break;
+				const id = SdkEventMapper.idOf(this.nextIndex++);
+				if (entry.display) b.system(id, "info", customText({ role: "custom", content: entry.content, details: entry.details } as unknown as PiMessage));
+				break;
+			}
 			case "message_update": {
 				const e = event.assistantMessageEvent as { type: string; contentIndex?: number; delta?: string };
 				if (e.type === "text_delta") b.assistantDelta(e.contentIndex ?? 0, "text", e.delta ?? "");

@@ -817,6 +817,8 @@ export const ProjectInfo = Type.Object({
 	 * pi project trust (shared with the pi CLI, ~/.pi/agent/trust.json): whether the project's own .pi
 	 * extensions, MCP servers, settings, prompts and skills load. `needsTrust`: the project has such resources.
 	 */
+	/** The check after the agent's edits (05-build "Diagnostics"): the command, and whether you set it, it was detected, or it's off. */
+	check: Type.Optional(Type.Object({ command: Type.Optional(Type.String()), source: literals("auto", "set", "off") })),
 	trust: literals("trusted", "untrusted", "undecided"),
 	needsTrust: Type.Boolean(),
 	/** Where the project shows (04-chat P1): Build, Chat, or both. Detected when added; "Show in…" changes it. */
@@ -1370,6 +1372,8 @@ export const methods = {
 			/** Unlinks a folder (its path as `folders` lists it). Nothing on disk changes. */
 			unlinkFolder: Type.Optional(Type.String()),
 			prEvents: Type.Optional(literals("off", "tell", "act")),
+			/** The check after the agent's edits (05-build "Diagnostics"): a command, "" for off, null for automatic. */
+			check: Type.Optional(Type.Union([Type.String(), Type.Null()])),
 		}),
 		result: Type.Object({ project: ProjectInfo }),
 	},

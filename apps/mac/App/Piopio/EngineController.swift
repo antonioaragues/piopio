@@ -727,6 +727,12 @@ final class EngineController {
         await loadProjects()
     }
 
+    /// The project's check after the agent's edits: a command, "" for off, nil for the detected one (05-build "Diagnostics").
+    func setCheck(_ command: String?, for project: ProjectInfo) async {
+        _ = try? await client?.call("projects.configure", ProjectsCheckParams(id: project.id, check: command), as: ProjectsAddResult.self)
+        await loadProjects()
+    }
+
     // MARK: The Watchdog (docs/spec/17 §4)
 
     func loadWatchdog() async {

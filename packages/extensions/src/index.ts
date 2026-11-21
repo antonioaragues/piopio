@@ -6,6 +6,7 @@ export { subagentsExtension, type SubagentBridge, type TaskResult } from "./suba
 export { todosExtension, type Todo, type TodoStatus } from "./todos.js";
 export { notifyExtension, type NotifyBridge, type Question } from "./notify.js";
 export { commandSegments, readOnlyCommand, decide, deniedCommand, suggestCommandRule, type ApprovalMode, type Decision, type Rule, type RuleKind } from "./policy.js";
+export { detectCheck, diagnosticsExtension, DIAGNOSTICS_ENTRY, MAX_CHECK_ROUNDS, problemsIn, runCheck, type DiagnosticsBridge } from "./diagnostics.js";
 export { backgroundExtension, MAX_RUNNING, ProcessManager, startedText, type BackgroundProcess } from "./background.js";
 export { confine, OUTSIDE_PROJECT, sandboxExtension, sandboxRoots, sandboxUnavailable, seatbeltProfile, shellQuote, type SandboxBridge } from "./sandbox.js";
 export { presentExtension, presentedFiles, MAX_PRESENTED, type PresentedFile } from "./present.js";

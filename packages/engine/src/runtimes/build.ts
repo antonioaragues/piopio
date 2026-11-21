@@ -17,7 +17,7 @@ import {
 	type AgentSession,
 	type ExtensionFactory,
 } from "@earendil-works/pi-coding-agent";
-import { backgroundExtension, ProcessManager, type BackgroundProcess } from "@piopio/pi-extensions";
+import { backgroundExtension, confine, diagnosticsExtension, ProcessManager, sandboxRoots, seatbeltProfile, sandboxUnavailable, type BackgroundProcess } from "@piopio/pi-extensions";
 import { codeReviewExtension, type ReviewBridge } from "../code-review.js";
 import { approvalsExtension, checkpointsExtension, goalExtension, notifyExtension, planExtension, presentExtension, sandboxExtension, subagentsExtension, todosExtension, type ApprovalMode, type Question, type Rule, type SubagentBridge, type Verdict } from "@piopio/pi-extensions";
 import type { ApprovalItem, ApprovalRule, BranchInfo, CheckpointItem, ContainerRef, FileChange, ModelRef, PromptResponse, SessionState, Snapshot } from "@piopio/protocol";
@@ -74,6 +74,8 @@ export type BuildOpenOptions = {
 	keepImages?: ToolImageKeeper;
 	/** The browser's tools (docs/spec/22), run by the Mac app for this session. */
 	browser?: BrowserCall;
+	/** The check after the agent's edits (05-build "Diagnostics"): the command for this folder, or undefined for none. */
+	checkCommand?: (cwd: string) => string | undefined;
 	/** A Build session in a project: the browser has the project preview (docs/spec/22 §6). */
 	browserPreview?: boolean;
 	/** Visuals drawn and checked by the Mac app (docs/spec/25 §3.2). */
@@ -212,6 +214,19 @@ export class BuildRuntime implements Runtime {
 					{ shellPath: () => settingsManager.getShellPath(), processes: () => processes },
 				),
 				backgroundExtension(() => processes),
+				// The project's check after the agent's edits, confined like its commands (05-build "Diagnostics").
+				...(o.checkCommand
+					? [
+							diagnosticsExtension({
+								command: o.checkCommand,
+								shell: () => settingsManager.getShellPath() ?? process.env.SHELL ?? "/bin/sh",
+								wrap: (command, cwd) => {
+									const confined = (o.sandbox?.() ?? true) && o.approvals.mode() !== "full_auto" && process.platform === "darwin" && !sandboxUnavailable();
+									return confined ? confine(command, seatbeltProfile(sandboxRoots(cwd)), settingsManager.getShellPath() ?? process.env.SHELL ?? "/bin/sh") : command;
+								},
+							}),
+						]
+					: []),
 				approvalsExtension({
 					mode: o.approvals.mode,
 					rules: () => o.approvals.rules().map(({ kind, pattern }) => ({ kind, pattern })),

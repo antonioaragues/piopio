@@ -336,6 +336,7 @@ struct ProjectSettingsSheet: View {
                 }
                 .labelsHidden().fixedSize()
             }
+            CheckAfterEditsRow(engine: engine, project: project)
             VStack(alignment: .leading, spacing: 8) {
                 Text("How work is done here").font(.system(size: 13)).foregroundStyle(Color.dsFg2)
                 WayOfWorkingSection(engine: engine, project: project)
@@ -343,6 +344,68 @@ struct ProjectSettingsSheet: View {
         }
     }
 
+}
+
+/// The project's check after the agent's edits (docs/spec/05-build "Diagnostics", roadmap PAR5): what was detected, a
+/// command of the user's, or off. When the agent edited files, the check runs before it answers, and the errors in those
+/// files go back to it.
+struct CheckAfterEditsRow: View {
+    let engine: EngineController
+    let project: ProjectInfo
+    @State private var editing = false
+    @State private var draft = ""
+
+    private var check: ProjectInfo.Check { project.check ?? .init(command: nil, source: .auto) }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text("Check after edits").font(.system(size: 13)).foregroundStyle(Color.dsFg2).frame(width: 180, alignment: .leading)
+            Menu {
+                Button { Task { await engine.setCheck(nil, for: project) } } label: {
+                    if check.source == .auto { Label("Automatic", systemImage: "checkmark") } else { Text("Automatic") }
+                    Text(check.source == .auto ? (check.command ?? "Nothing found in this project") : "The project's type checker or compiler")
+                }
+                Button {
+                    draft = check.command ?? ""
+                    editing = true
+                } label: {
+                    if check.source == .set { Label("Command…", systemImage: "checkmark") } else { Text("Command…") }
+                    Text("A command of your own")
+                }
+                Button { Task { await engine.setCheck("", for: project) } } label: {
+                    if check.source == .off { Label("Off", systemImage: "checkmark") } else { Text("Off") }
+                }
+            } label: { Text(title).font(.system(size: 13)) }
+                .menuStyle(.button).buttonStyle(ChipStyle()).menuIndicator(.hidden).fixedSize()
+                .padding(.leading, -6)
+            Text(line).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1).truncationMode(.middle)
+        }
+        .alert("Check after edits", isPresented: $editing) {
+            TextField("pnpm run typecheck", text: $draft)
+            Button("Cancel", role: .cancel) {}
+            Button("Save") {
+                let command = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+                Task { await engine.setCheck(command.isEmpty ? nil : command, for: project) }
+            }
+        } message: {
+            Text("Runs in the project folder when the agent has edited files, before it answers. Errors in the files it changed go back to it, twice at most.")
+        }
+    }
+
+    private var title: String {
+        switch check.source {
+        case .auto: return check.command == nil ? "Automatic · none found" : "Automatic"
+        case .set: return "Command"
+        case .off: return "Off"
+        }
+    }
+
+    private var line: String {
+        switch check.source {
+        case .auto, .set: return check.command.map { "Runs \($0)" } ?? "Nothing to run: set a command"
+        case .off: return "The agent sees errors only when it runs a build"
+        }
+    }
 }
 
 // MARK: The editor

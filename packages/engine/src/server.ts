@@ -369,6 +369,7 @@ export class Engine {
 			foldersFor: (cwd) => this.projects.foldersFor(cwd),
 			addRule: (cwd, rule) => this.projects.addRule(cwd, rule),
 			prEventsFor: (cwd) => this.projects.prEventsFor(cwd),
+			checkFor: (cwd) => this.projects.checkFor(cwd),
 		};
 		this.projects.onChange((projects) => {
 			for (const conn of this.authed) conn.notify("projects.changed", { projects });
@@ -843,7 +844,7 @@ export class Engine {
 			}
 			case "projects.configure": {
 				const p = params as Params<"projects.configure">;
-				const change = { ...(p.approvalMode ? { approvalMode: p.approvalMode } : {}), ...(p.removeRule ? { removeRule: p.removeRule } : {}), ...(p.trust !== undefined ? { trust: p.trust } : {}), ...(p.linkFolder ? { linkFolder: p.linkFolder } : {}), ...(p.unlinkFolder ? { unlinkFolder: p.unlinkFolder } : {}), ...(p.prEvents ? { prEvents: p.prEvents } : {}) };
+				const change = { ...(p.approvalMode ? { approvalMode: p.approvalMode } : {}), ...(p.removeRule ? { removeRule: p.removeRule } : {}), ...(p.trust !== undefined ? { trust: p.trust } : {}), ...(p.linkFolder ? { linkFolder: p.linkFolder } : {}), ...(p.unlinkFolder ? { unlinkFolder: p.unlinkFolder } : {}), ...(p.prEvents ? { prEvents: p.prEvents } : {}), ...(p.check !== undefined ? { check: p.check } : {}) };
 				return { project: this.projects.configure(p.id, change) } satisfies Result<"projects.configure">;
 			}
 			case "projects.create": {

@@ -51,6 +51,27 @@ Default state for new sessions: **approvals, checkpoints, todos, notify and suba
 | `piopio-present` | `present_files(files)`: the files the agent made for you, as a card per file that opens in the viewer. Kept out of the folded activity line. Built 2026-11-08. |
 | `piopio-goal` | `/goal <what done looks like>`: the session gets another turn ("round") each time it finishes until the agent calls `update_goal` with "done" or "blocked", up to 25 rounds. Stop pauses it; `/goal continue` resumes (with more rounds when they ran out); `/goal off` clears it. Each round shows as "Goal · round n of 25". Kept in the session file. Built 2026-11-08. |
 
+| `piopio-diagnostics` | The project's check after the agent's edits ("Diagnostics" below). Built 2026-11-21. |
+
+### Diagnostics (roadmap PAR5, 2026-11-21)
+- **DG1 When.** A run that edited files (`edit`, `write`) is about to end: Piopio runs the project's check before the
+  agent answers. A run that only read, or a failed edit, runs nothing.
+- **DG2 What.** The project's own check, not a language server: its `typecheck` / `type-check` / `check:types` /
+  `check` script (with its package manager), `tsc --noEmit` when the project has TypeScript installed, `cargo check`,
+  `go vet`, `pyright` or `mypy`. On the project page, **Check after edits**: Automatic (what was detected), a command
+  of the user's, or Off. Chat projects and review sessions don't run it.
+- **DG3 Feedback.** Only the problems in the files the agent changed go back (errors elsewhere were there before),
+  with a line or two of context, at most 60 lines. The run goes on with them as a message ("fix them, then finish; if
+  one is wrong, say so"), shown in the transcript as "Checked with <command>: N problems in files it changed". At most
+  twice per message from the user; a third time the note says "(left for you)" and the agent stops.
+- **DG4 Bounds.** It runs in the project folder with the session's sandbox (confined unless Full auto), a two-minute
+  limit, and no colours. A check that passes, times out or names none of the edited files adds nothing.
+- **As built:** `diagnostics.ts` in the extensions package (`detectCheck`, `problemsIn`, `runCheck`,
+  `diagnosticsExtension` on `agent_before_settle`), the project's `check` (`projects.configure`, `ProjectInfo.check`
+  with its source), the live transcript taking messages pi adds at a boundary (`entry_appended`), and the project
+  page's row. Not done: coding agents (Claude Code, Codex, Antigravity) run their own loop, so the check doesn't run
+  for them; a language server's live diagnostics.
+
 The engine adds three more (not pi extensions of this package): the **context guards** (the model's clock and the repeated-call nudge, `tools/guards.ts`), **earlier conversations** (`search_conversations` / `read_conversation` and `@conversation:<id>` mentions, `tools/history.ts`), and **Claude Code / Codex** as `task` backends (`external-agents.ts`). See [docs/research/deepseek-harness.md § As built](../research/deepseek-harness.md#as-built-2026-11-08).
 
 All of them SHOULD also work in the pi CLI (graceful TUI fallback), so they can be published as a pi package `@piopio/pi-extensions`.

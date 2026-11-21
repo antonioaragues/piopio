@@ -160,3 +160,38 @@ describe("the project preview (docs/spec/22 §6, roadmap PAR3)", () => {
 		expect(decide("full_auto", "browser_eval", { script: "return 1" }, "/p", []).action).toBe("allow");
 	});
 });
+
+describe("the project's check after edits (05-build Diagnostics, roadmap PAR5)", () => {
+	test("errors in the files it changed go back to the agent, which goes on; the project's setting decides the command", { timeout: 60_000 }, async () => {
+		const a = await start();
+		const folder = realpathSync(mkdtempSync(join(tmpdir(), "piopio-check-project-")));
+		writeFileSync(join(folder, "package.json"), "{}");
+		const { project } = await a.client.call("projects.add", { path: folder });
+		expect(project.check).toEqual({ source: "auto" });
+		// A type checker that finds one error in the edited file and one in a file it didn't touch.
+		writeFileSync(join(folder, "check.js"), "console.error('src/cart.ts(2,7): error TS2322: Type string is not assignable to type number.');\nconsole.error('src/other.ts(1,1): error TS1005: semicolon expected.');\nprocess.exit(1);\n");
+		const check = "node check.js";
+		const configured = await a.client.call("projects.configure", { id: project.id, check });
+		expect(configured.project.check).toEqual({ command: check, source: "set" });
+		const { ref } = await a.client.call("sessions.create", { kind: "build", cwd: folder });
+		const sub = (await a.client.call("sessions.subscribe", { ref })).subscriptionId as string;
+		await a.client.call("sessions.configure", { ref, approvalMode: "full_auto" });
+		await a.client.call("sessions.submit", { ref, input: { text: "write: src/cart.ts | export const total: number = 'x'" } });
+		const notes = async () => ((await a.client.call("sessions.open", { ref })) as Snapshot).items.flatMap((i) => (i.kind === "system" ? [i.text] : []));
+		for (let i = 0; i < 200 && (await notes()).length < 1; i++) await new Promise((r) => setTimeout(r, 100));
+		await stateWhere(a, sub, (s) => s.status === "idle");
+		// Only src/cart.ts's error: src/other.ts was there before. The run went on with it (the scripted model answers it).
+		expect(await notes()).toEqual([`Checked with ${check}: 1 problem in files it changed`]);
+		const items = ((await a.client.call("sessions.open", { ref })) as Snapshot).items;
+		expect(items.at(-1)).toMatchObject({ kind: "assistant" });
+		expect(JSON.stringify(items.at(-1))).toContain("src/cart.ts(2,7)");
+		expect(JSON.stringify(items.at(-1))).not.toContain("src/other.ts");
+
+		// Off: nothing runs.
+		await a.client.call("projects.configure", { id: project.id, check: "" });
+		await a.client.call("sessions.submit", { ref, input: { text: "write: src/cart.ts | export const total = 1" } });
+		await stateWhere(a, sub, (s) => s.status === "idle" && states(a, sub).length > 0);
+		await new Promise((r) => setTimeout(r, 500));
+		expect((await notes()).length).toBe(1);
+	});
+});

@@ -3,6 +3,7 @@
  * in ~/Piopio, with an AGENTS.md (what every conversation there is told) and a NOTES.md (what they keep for each
  * other). Kept in projects.json.
  */
+import { detectCheck } from "@piopio/pi-extensions";
 import { cpSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { hasTrustRequiringProjectResources, ProjectTrustStore } from "@earendil-works/pi-coding-agent";
@@ -16,7 +17,7 @@ type Lens = "build" | "chat";
  * `lenses`: before docs/spec/18, whether the folder showed in Build, Chat or both. `folder: false` and `instructions`:
  * a project without a folder, before CF4. Both are read once to migrate, then dropped.
  */
-type StoredProject = { id: string; path: string; name: string; addedAt: string; approvalMode?: ApprovalMode; rules?: ApprovalRule[]; lenses?: Lens[]; folder?: false; instructions?: string; folders?: LinkedFolder[]; prEvents?: PrEvents };
+type StoredProject = { id: string; path: string; name: string; addedAt: string; approvalMode?: ApprovalMode; rules?: ApprovalRule[]; lenses?: Lens[]; folder?: false; instructions?: string; folders?: LinkedFolder[]; prEvents?: PrEvents; check?: string };
 /** What a conversation hears about its pull request (docs/spec/17 §5): nothing, a notification, or a follow-up it works on. */
 export type PrEvents = "off" | "tell" | "act";
 
@@ -182,7 +183,7 @@ export class Projects {
 	}
 
 	/** Default approval mode, or rule removal (Settings / project menu). */
-	configure(id: string, change: { approvalMode?: ApprovalMode; removeRule?: string; trust?: boolean | null; linkFolder?: LinkedFolder; unlinkFolder?: string; prEvents?: PrEvents }): ProjectInfo {
+	configure(id: string, change: { approvalMode?: ApprovalMode; removeRule?: string; trust?: boolean | null; linkFolder?: LinkedFolder; unlinkFolder?: string; prEvents?: PrEvents; check?: string | null }): ProjectInfo {
 		const entry = this.entries.find((p) => p.id === id);
 		if (!entry) throw new EngineError("NOT_FOUND", `No project ${id}`);
 		if (change.linkFolder) this.link(entry, change.linkFolder);
@@ -192,6 +193,8 @@ export class Projects {
 		}
 		if (change.approvalMode) entry.approvalMode = change.approvalMode;
 		if (change.prEvents) entry.prEvents = change.prEvents;
+		if (change.check === null) delete entry.check;
+		else if (change.check !== undefined) entry.check = change.check.trim();
 		if (change.removeRule) entry.rules = (entry.rules ?? []).filter((r) => r.id !== change.removeRule);
 		// Saved where the pi CLI reads it too. Sessions opened afterwards load (or skip) the project's resources.
 		if (change.trust !== undefined) this.trust.set(entry.path, change.trust);
@@ -219,6 +222,14 @@ export class Projects {
 	/** What conversations in `cwd`'s project hear about their pull requests (default: tell). */
 	prEventsFor(cwd: string): PrEvents {
 		return this.entryFor(cwd)?.prEvents ?? "tell";
+	}
+
+	/** The check to run after the agent's edits in `cwd`'s project (05-build "Diagnostics"): set, detected, or none. */
+	checkFor(cwd: string): string | undefined {
+		const entry = this.entryFor(cwd);
+		if (!entry) return detectCheck(cwd);
+		if (entry.check !== undefined) return entry.check || undefined;
+		return detectCheck(entry.path);
 	}
 
 	rulesFor(cwd: string): ApprovalRule[] {
@@ -311,6 +322,10 @@ function describe(stored: StoredProject): Omit<ProjectInfo, "trust" | "needsTrus
 		approvalMode: stored.approvalMode ?? "auto_edit",
 		prEvents: stored.prEvents ?? "tell",
 		rules: stored.rules ?? [],
+		check: stored.check === "" ? { source: "off" as const } : stored.check ? { command: stored.check, source: "set" as const } : (() => {
+			const detected = existsSync(stored.path) ? detectCheck(stored.path) : undefined;
+			return { ...(detected ? { command: detected } : {}), source: "auto" as const };
+		})(),
 		lenses: ["build", "chat"] as Lens[],
 		...(folders?.length ? { folders: folders.map((f) => (existsSync(f.path) ? f : { ...f, missing: true })) } : {}),
 	};

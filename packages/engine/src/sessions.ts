@@ -130,6 +130,8 @@ export type ApprovalPolicy = {
 	foldersFor?(cwd: string): { path: string; edit: boolean }[];
 	/** What a conversation hears about its pull request (docs/spec/17 §5). */
 	prEventsFor?(cwd: string): "off" | "tell" | "act";
+	/** The check after the agent's edits (05-build "Diagnostics"). */
+	checkFor?(cwd: string): string | undefined;
 };
 
 export const newId = (prefix: string) => `${prefix}_${randomUUID().replaceAll("-", "").slice(0, 20)}`;
@@ -2769,6 +2771,8 @@ export class Sessions {
 				addRule: (rule) => this.policy.addRule(entry.projectPath ?? entry.cwd!, rule),
 			},
 			folders: () => this.policy.foldersFor?.(entry.projectPath ?? entry.cwd!) ?? [],
+			// The project's check after the agent's edits (05-build "Diagnostics"); not for a review or a chat lens.
+			...(entry.reviewFor || entry.profile === "chat" ? {} : { checkCommand: () => this.policy.checkFor?.(entry.projectPath ?? entry.cwd!) }),
 			checkpoints: this.checkpoints,
 			webOptions: this.webOptions,
 			keepImages: toolImageKeeper(attachmentsDir(this.paths.home, entry.ref.id)),
