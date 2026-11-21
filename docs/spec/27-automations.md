@@ -1,7 +1,7 @@
 # 27 · Automations: when work starts on its own
 
 Status: draft 2026-11-18, from a conversation with the user; A1 and A2 built 2026-11-18 (§10), A3 (a real-model
-trial) done 2026-11-19 (§11), the design pass built 2026-11-19 (§12). It takes "when" away from agents
+trial) done 2026-11-19 (§11), the design pass built 2026-11-19 (§12), a car-keeper trial and its fixes 2026-11-21 (§13). It takes "when" away from agents
 and projects and makes it an object of its own. It changes 06 §6 (PR1–PR3, PR6, PR7's `schedule`), 19 S3 (watches),
 21 AD5 and 26 CL10 (routines with two owners). 26's model of agents (CL1–CL12) holds; this spec makes it simpler.
 The interaction is mocked up on a design canvas: a target-state board and a clickable prototype (agent chat →
@@ -335,3 +335,56 @@ has its own layout with Undo and Redo; and a run's message carries "From <automa
 Where the handoff and the specs differ, the specs hold: no per-agent rows in the sidebar (18 CF10), and Piopio's
 trigger editor stays, opened from the time in the sentence (the handoff has no time picker in v1). Redo needed one
 engine call, `automations.restore`, which brings back an automation removed since the engine started.
+
+## 13. A car-keeper trial (2026-11-21)
+
+From a use case seen in Grok Bot: an agent told only *"your job is to keep everything about my car up to date"*, that
+asks what it needs and tells you when dates come up. Run the way A3 was: an isolated app copy (scratch data, your
+OpenRouter key from the Keychain) driven over the engine socket. One agent, Coche, on the user's default model
+(DeepSeek V4.1 Flash), in Spanish, in the app only (no Telegram). Five messages: the job; the car (Seat León 2019,
+62,000 km, insurance renewing 14 Jan 2027, ITV due 12 Dec 2026, last service May 2026, tyres); "tyres every 6 months";
+"the ITV is booked for 2 Dec"; "it was moved up and passed today, next due 21 Nov 2028". Then Run now on a reminder.
+About **$0.02 in all** over three runs of the script.
+
+**What worked the first time:** it interviewed with question cards, kept each fact with `remember`, and made one-off
+reminders with the right dates and lead times on its own (23 Nov and 4 Dec for the ITV, 5 Jan for the insurance,
+15 Apr for the service, a twice-yearly tyre check). A reminder's run recalled the booked appointment and reframed its
+message around it, and with the ITV passed it cancelled two reminders that no longer applied.
+
+**Fixed from the trial:**
+- **Reminders went stale.** Told the ITV was booked, it added "the day before" and left "book it now" (23 Nov) and
+  "urgent, book it today" (4 Dec). Told it had passed, it removed two and left the 23 Nov one, which would have said
+  "your ITV expires on 12 Dec" on Monday. The agent saw its automations only if it called `list_automations`. Its
+  owner's chat and its runs now get them in a system section (`agent-automations`, up to about 1,500 tokens, then
+  "more: list_automations"), with the rule to change or cancel one in the same turn when something it learns moves a
+  date or makes it pointless. On the rerun it moved the ITV reminder to the eve of the appointment, then to
+  6 Nov 2028, and left nothing stale.
+- **Out-of-date facts stayed current.** "The ITV expires 12 Dec 2026" and "Appointment 2 Dec" stayed beside "passed,
+  next due 21 Nov 2028", so a later run would have recalled all three. `remember` takes `replaces` (ids): the first
+  becomes the new fact's `replaces`, the rest are ended, all stay in the history, and one Undo puts them back
+  (`memory.unlearn`). The card reads "Updated memory · new (was: old)". So the model can name them, facts in its
+  notes carry their id: `- (id) [date] text`. On the rerun it replaced both old ITV facts at once.
+- **A date years away read as this year.** "Once, Sat 21 Oct" was October 2028. A one-off shows its year when it
+  isn't this one ("Once, Mon 6 Nov 2028, 18:00"), and a few days a year read as days: "0 9 1 5,11 *" is "Every year
+  on 1 May and 1 Nov at 09:00" instead of the cron.
+- **A missing time stalled a run of tries.** On one rerun the model left `when` out of `automate` about twenty
+  times, while the error said only "Give a 5-field cron … or a date and time", and it told the owner the tool was
+  broken. The error now names the field: "No time: say when in the when field, next to prompt…", or "“next Friday”
+  isn't a time. In when, put…".
+
+Checked: the TypeScript suites (276 engine tests, 29 runtime), including new tests for the section, `replaces` with
+Undo, the labels and the error; and a clean rerun of the whole script on the rebuilt engine.
+
+**Seen, not changed:**
+- **It invented a fact.** On one run it saved "the owner doesn't know whether it has a timing belt or a chain and
+  wants a reminder", which nobody said, and quoted 1,320 km a month for 1,200. Nothing checks a fact against what
+  was said. Learned facts (14 M2) or a check on `remember` would.
+- **The same failing call over and over.** Twenty identical `automate` errors in one turn, with nothing stopping it.
+  A guard for a repeated failing call (end the turn and say what failed) belongs to every agent, not to automations.
+- **Old messages still come back.** A run recalling "seguro" got an earlier chat message about the 2 Dec
+  appointment. Messages are history and aren't replaced; recency ranks them down, but a run can still read stale
+  wording there.
+- `cancel_automation` once with id "none", and a question card offering Telegram when it isn't connected. Harmless.
+- **What a car needs that it can't do yet:** keep a photo or a PDF (the policy, the tyres) to look at months later
+  (06's `files` is refused on save), and read photos sent on Telegram. Neither was tried; the user put in-app
+  agents first (2026-11-21).

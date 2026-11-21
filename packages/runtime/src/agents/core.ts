@@ -38,6 +38,9 @@ export function partitionsFor(contact: Pick<Contact, "id" | "role">): { read: Pa
 
 export const bankOf = (agentId: string, partition: Partition) => `${agentId}/${partition}`;
 
+/** About 1,500 tokens of its own automations in each turn's system section; past that, list_automations. */
+const AUTOMATIONS_IN_PROMPT = 6000;
+
 /** "openrouter" ids look like "anthropic/claude-…"; other providers are written "provider:model". */
 export function modelOf(id: string): { provider: string; modelId: string } {
 	const colon = id.indexOf(":");
@@ -489,7 +492,8 @@ export class AgentCore {
 			Promise.all(banks.map((b) => provider.standing?.(b).catch(() => []) ?? Promise.resolve([] as MemoryRecord[]))).then((r) => r.flat()),
 		]);
 		const seen = new Set<string>();
-		const lines = [...standing, ...hits].filter((r) => !(here && r.kind === "message" && r.source?.ref === here) && !seen.has(r.id) && seen.add(r.id)).map((r) => `- ${r.at ? `[${r.at.slice(0, 10)}] ` : ""}${r.text}`);
+		// Facts carry their id, so remember can replace one that a new fact makes out of date.
+		const lines = [...standing, ...hits].filter((r) => !(here && r.kind === "message" && r.source?.ref === here) && !seen.has(r.id) && seen.add(r.id)).map((r) => `- ${r.kind === "fact" ? `(${r.id}) ` : ""}${r.at ? `[${r.at.slice(0, 10)}] ` : ""}${r.text}`);
 		await this.options.harness.commit(async (tx) => {
 			(await tx.doc(AgentStateDoc)).recalled[String(conversationId)] = lines.join("\n");
 		}, this.options.context);
@@ -604,10 +608,11 @@ export class AgentCore {
 
 		const remember = defineTool({
 			name: "remember",
-			description: "Save a fact worth keeping (a preference, a plan, a decision, something about a person). It goes to this person's memory unless you say otherwise; the owner can see and delete every fact.",
+			description: "Save a fact worth keeping (a preference, a plan, a decision, a date, something about a person). It goes to this person's memory unless you say otherwise; the owner can see and delete every fact. When it makes facts you hold out of date (a new date, a plan that's done or off), pass their ids in replaces: they stop being recalled, and the history keeps them.",
 			parameters: Type.Object({
 				fact: Type.String({ description: "One self-contained sentence" }),
 				partition: Type.Optional(Type.String({ description: "owner, shared, or contacts/<id>. Default: this person's" })),
+				replaces: Type.Optional(Type.Array(Type.String(), { description: "Ids of facts this one makes out of date (from your notes or recall)" })),
 			}),
 			execute: async (args, api, context) => {
 				const s = await scope(api.conversationId, context);
@@ -616,10 +621,23 @@ export class AgentCore {
 					return { output: [{ type: "text", text: `Can't write to ${partition} from ${s.contact.name}'s conversation.` }], isError: true };
 				}
 				const bank = bankOf(core.def.id, partition);
-				const [record] = await core.options.memory().retain(bank, { content: args.fact, kind: "fact", createdBy: "agent", source: { ref: `person:${s.contact.id}`, title: s.contact.name } });
-				const card: ResultCard = { kind: "memory", title: "Saved to memory", detail: args.fact };
-				const undo = record ? await core.safety.recordUndo("memory.forget", { bank, id: record.id }, `saving “${args.fact.slice(0, 60)}”`, api.conversationId) : undefined;
-				return { output: [{ type: "text", text: `Remembered (${partition}): ${args.fact}` }], details: { partition, ...(record ? { id: record.id } : {}), card, ...(undo ? { undo } : {}) } as never };
+				const provider = core.options.memory();
+				// What it replaces, from the same partition and still current (docs/spec/27 §13: the old ITV date stayed
+				// next to the new one, and a later run would have recalled both).
+				const wanted = [...new Set(args.replaces ?? [])];
+				const current = wanted.length && provider.list ? (await provider.list(bank, { limit: 500, kinds: ["fact"] }).catch(() => ({ records: [] as MemoryRecord[] }))).records.filter((r) => !r.endedAt && !r.replacedBy) : [];
+				const old = wanted.map((id) => current.find((r) => r.id === id)).filter((r): r is MemoryRecord => r !== undefined);
+				const missing = wanted.filter((id) => !old.some((r) => r.id === id));
+				const [first, ...rest] = old;
+				const [record] = await provider.retain(bank, { content: args.fact, kind: "fact", createdBy: "agent", source: { ref: `person:${s.contact.id}`, title: s.contact.name }, ...(first ? { replaces: first.id } : {}) });
+				const ended: MemoryRecord[] = [];
+				if (record && provider.end) for (const r of rest) await provider.end(bank, r.id, record.at, "agent").then(() => ended.push(r), () => undefined);
+				const was = [first, ...ended].filter((r): r is MemoryRecord => r !== undefined);
+				const card: ResultCard = { kind: "memory", title: was.length ? "Updated memory" : "Saved to memory", detail: was.length ? `${args.fact} (was: ${was.map((r) => r.text).join(" · ")})` : args.fact };
+				const changes = record ? [{ action: first ? ("replaced" as const) : ("added" as const), id: record.id, ...(first ? { oldId: first.id } : {}) }, ...ended.map((r) => ({ action: "ended" as const, oldId: r.id }))] : [];
+				const undo = record ? await core.safety.recordUndo("memory.unlearn", { bank, changes }, `saving “${args.fact.slice(0, 60)}”`, api.conversationId) : undefined;
+				const note = `${was.length ? ` It replaces: ${was.map((r) => r.text).join(" · ")}.` : ""}${missing.length ? ` Not found among ${partition}'s current facts, so left alone: ${missing.join(", ")}.` : ""}`;
+				return { output: [{ type: "text", text: `Remembered (${partition}): ${args.fact}${note}` }], details: { partition, ...(record ? { id: record.id } : {}), card, ...(undo ? { undo } : {}) } as never };
 			},
 		});
 
@@ -768,11 +786,23 @@ export class AgentCore {
 					const switchedOff = contact?.role === "owner" ? offSwitchesNote(core.def, { mac: Boolean(core.options.appTool) }) : "";
 					return `${core.options.instructions().trim()}${who}${shortcuts}${telegram}${people}${automating}${switchedOff}${interview}\n\nToday is ${localDate((core.options.now?.() ?? new Date()).getTime(), core.proactive.tz)} (${core.proactive.tz}).`;
 				}),
+				// Its own automations, so what it learns keeps them right (docs/spec/27 §13: told the ITV was booked, then
+				// passed, it added reminders but left "book it now" ones that would have fired anyway).
+				section("agent-automations", async (input, context) => {
+					const bridge = core.options.automations;
+					if (!bridge || !core.def.tools.builtin.includes("schedule")) return undefined;
+					const contact = await core.contactOf(input.conversationId, context);
+					if (contact ? contact.role !== "owner" : !(await core.proactive.runOf(input.conversationId))) return undefined;
+					const list = await bridge.list().catch(() => "");
+					if (!list.trim() || list.trim() === "No automations.") return undefined;
+					const shown = list.length > AUTOMATIONS_IN_PROMPT ? `${list.slice(0, list.lastIndexOf("\n", AUTOMATIONS_IN_PROMPT))}\n- … more: list_automations` : list;
+					return `Your automations (each runs its prompt as written, on its day):\n${shown}\n\nKeep them true to what you know. When you learn something that changes one or makes it pointless (a date moved, an appointment booked, the thing done, sold or cancelled), change_automation or cancel_automation it in the same turn, and say so in a line.`;
+				}),
 				section("agent-memory", async (input, context) => {
 					if (!core.usesMemory) return undefined;
 					const state = await input.read.snapshot(AgentStateDoc, context);
 					const recalled = state?.recalled[String(input.conversationId)];
-					return `From your memory (use remember to keep new facts, recall to search for more):\n${recalled || "(nothing relevant yet)"}`;
+					return `From your memory (use remember to keep new facts, with replaces for the ids of any it makes out of date; recall to search for more):\n${recalled || "(nothing relevant yet)"}`;
 				}),
 			],
 		}) as unknown as Extension;

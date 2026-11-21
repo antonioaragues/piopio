@@ -295,3 +295,69 @@ test("a webhook's {{body}} isn't part of its name", () => {
 	expect(nameOf("{{body}}")).toBe("Automation");
 	expect(nameOf("Write the weekly brief.")).toBe("Write the weekly brief");
 });
+
+test("a date that isn't this year shows its year, and a few days a year read as days, not a cron", async () => {
+	const { whenLabel } = await import("../src/automations/model.js");
+	const now = Date.UTC(2026, 10, 21, 12);
+	const tz = "Europe/Madrid";
+	expect(whenLabel({ on: "time", at: Date.UTC(2026, 10, 23, 8), tz }, now)).toBe("Once, Mon 23 Nov, 09:00");
+	expect(whenLabel({ on: "time", at: Date.UTC(2028, 9, 21, 7), tz }, now)).toBe("Once, Sat 21 Oct 2028, 09:00");
+	expect(whenLabel({ on: "time", cron: "0 9 1 5,11 *", tz }, now)).toBe("Every year on 1 May and 1 Nov at 09:00");
+	expect(whenLabel({ on: "time", cron: "30 8 14 1 *", tz }, now)).toBe("Every year on 14 Jan at 08:30");
+	expect(whenLabel({ on: "time", cron: "0 9 1 13 *", tz }, now)).toBe("On the schedule “0 9 1 13 *”");
+});
+
+// docs/spec/27 §13, the car-keeper trial: told the ITV was booked and then passed, the agent added reminders but left
+// the old "book it now" ones, and kept the old expiry date next to the new one.
+test("an agent keeps its reminders and facts true: it sees its automations each turn, and a new fact can replace old ones", async () => {
+	const { home, client } = await start();
+	const { ref } = await client.call("agents.create", { name: "Coche", owner: "Antonio", model: { provider: "faux", id: "faux-1" } });
+	const got = await client.call("agents.get", { ref });
+	await client.call("agents.save", { ref, definition: { ...(got.definition as object), interview: undefined }, instructions: got.instructions });
+	await client.call("sessions.subscribe", { ref });
+	type Item = { kind: string; card?: { kind: string; title: string; detail?: string }; undo?: { id: string; status: string }; tools?: { output?: string }[] };
+	const items = () => client.call("sessions.open", { ref }).then((s) => s.items as Item[]);
+	const memoryCards = async () => (await items()).filter((i) => i.kind === "result" && i.card?.kind === "memory");
+	const facts = async () => ((await client.call("memory.list", { provider: "builtin", bank: `${ref.id}/owner`, kinds: ["fact"] })) as { records: { id: string; text: string }[] }).records;
+
+	await client.call("sessions.submit", { ref, input: { text: call("automate", { when: "2030-12-04T09:00", name: "ITV reminder", prompt: "Tell the owner to book the ITV" }) } });
+	await until(() => list(client, { runsAs: ref.id }), (r) => r.length === 1);
+	await client.call("sessions.submit", { ref, input: { text: call("remember", { fact: "The ITV expires on 12 December 2026" }) } });
+	const [old] = await until(facts, (r) => r.length === 1);
+
+	// The next turn's system sections: its automations, and its facts with their ids.
+	await client.call("sessions.submit", { ref, input: { text: "When does the ITV expire?" } });
+	await until(items, (xs) => {
+		const asked = xs.findIndex((i) => i.kind === "user" && (i as { text?: string }).text === "When does the ITV expire?");
+		return asked >= 0 && xs.slice(asked).some((i) => i.kind === "assistant" && (i as { status?: string }).status === "done");
+	});
+	const { DatabaseSync } = await import("node:sqlite");
+	const db = new DatabaseSync(join(home, "agents", `${ref.id}.sqlite`), { readOnly: true });
+	const sections = (db.prepare("SELECT record FROM entries ORDER BY id").all() as { record: string }[])
+		.map((r) => JSON.parse(r.record) as { model?: { role: string; sections?: Record<string, string> }[] })
+		.flatMap((r) => r.model ?? [])
+		.filter((m) => m.role === "system" && m.sections)
+		// Each entry holds the sections that changed: the latest of each.
+		.reduce<Record<string, string>>((all, m) => ({ ...all, ...m.sections }), {});
+	db.close();
+	expect(sections["agent-automations"]).toContain("“ITV reminder”: Once, Wed 4 Dec 2030, 09:00");
+	expect(sections["agent-automations"]).toContain("cancel_automation it in the same turn");
+	expect(sections["agent-memory"]).toContain(`(${old!.id}) `);
+
+	// A new fact replaces the old one: only the new one is current, the card says what it was, and Undo puts it back.
+	await client.call("sessions.submit", { ref, input: { text: call("remember", { fact: "The ITV passed on 21 November 2026; it next expires on 21 November 2028", replaces: [old!.id, "mem_nope"] }) } });
+	const cards = await until(memoryCards, (c) => c.length === 2);
+	expect(cards[1]).toMatchObject({ card: { title: "Updated memory", detail: "The ITV passed on 21 November 2026; it next expires on 21 November 2028 (was: The ITV expires on 12 December 2026)" }, undo: { status: "available" } });
+	expect(JSON.stringify(await items())).toContain("left alone: mem_nope");
+	expect((await facts()).map((r) => r.text)).toEqual(["The ITV passed on 21 November 2026; it next expires on 21 November 2028"]);
+	await client.call("agents.undo", { ref, undoId: cards[1]!.undo!.id });
+	expect((await until(facts, (r) => r[0]?.id === old!.id)).map((r) => r.text)).toEqual(["The ITV expires on 12 December 2026"]);
+}, 60_000);
+
+test("a time automation with no time, or one that isn't a time, says to fill in when", async () => {
+	const { parseWhen } = await import("../src/automations/model.js");
+	const now = Date.UTC(2026, 10, 21, 12);
+	expect(parseWhen("", "Europe/Madrid", now)).toEqual({ error: expect.stringContaining("No time: say when in the when field") });
+	expect(parseWhen("next Friday", "Europe/Madrid", now)).toEqual({ error: expect.stringContaining("“next Friday” isn't a time. In when, put") });
+	expect(parseWhen("2026-12-05T09:00", "Europe/Madrid", now)).toEqual({ at: Date.UTC(2026, 11, 5, 8) });
+});

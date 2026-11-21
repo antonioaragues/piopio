@@ -72,18 +72,30 @@ export const DEFAULT_BUDGET = { agent: 0.25, piopio: 0.5 };
 export const systemZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 /** "Every Monday at 09:00", "Every weekday at 08:30", "When a file appears in ~/Inbox"… */
-export function whenLabel(a: Pick<Automation, "on" | "cron" | "at" | "tz" | "folder" | "from" | "subject">): string {
+export function whenLabel(a: Pick<Automation, "on" | "cron" | "at" | "tz" | "folder" | "from" | "subject">, now = Date.now()): string {
 	if (a.on === "folder") return `When a file appears or changes in ${a.folder}`;
 	if (a.on === "email") return `When an email${a.from ? ` from ${a.from}` : ""}${a.subject ? ` about “${a.subject}”` : ""} arrives`;
 	if (a.on === "webhook") return "When its URL is called";
 	if (a.at !== undefined) {
-		const f = new Intl.DateTimeFormat("en-GB", { timeZone: a.tz ?? systemZone(), weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
-		return `Once, ${f.format(new Date(a.at))}`;
+		const timeZone = a.tz ?? systemZone();
+		// The year when it isn't this one (docs/spec/27 §13: "Once, Sat 21 Oct" was October 2028).
+		const year = (t: number) => new Intl.DateTimeFormat("en-GB", { timeZone, year: "numeric" }).format(new Date(t));
+		const parts = Object.fromEntries(new Intl.DateTimeFormat("en-GB", { timeZone, weekday: "short", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date(a.at)).map((p) => [p.type, p.value]));
+		return `Once, ${parts.weekday} ${parts.day} ${parts.month}${year(a.at) !== year(now) ? ` ${parts.year}` : ""}, ${parts.hour}:${parts.minute}`;
 	}
 	const [m, h, dom, mon, dow] = (a.cron ?? "").trim().split(/\s+/);
 	const at = /^\d+$/.test(m ?? "") && /^\d+$/.test(h ?? "") ? `${h!.padStart(2, "0")}:${m!.padStart(2, "0")}` : undefined;
+	// Once or a few times a year ("0 9 1 5,11 *"): the days, not the cron.
+	if (at && /^\d+$/.test(dom ?? "") && /^\d+(,\d+)*$/.test(mon ?? "") && dow === "*") {
+		const months = mon!.split(",").map(Number);
+		if (months.every((n) => n >= 1 && n <= 12)) {
+			const days = months.map((n) => `${Number(dom)} ${MONTHS[n - 1]}`);
+			return `Every year on ${days.length > 1 ? `${days.slice(0, -1).join(", ")} and ${days.at(-1)}` : days[0]} at ${at}`;
+		}
+	}
 	if (at && dom === "*" && mon === "*") {
 		if (dow === "*") return `Every day at ${at}`;
 		if (dow === "1-5") return `Every weekday at ${at}`;
@@ -112,7 +124,8 @@ export function parseWhen(when: string, tz: string, now: number): { cron: string
 		}
 	}
 	const at = parseLocal(text, tz);
-	if (at === undefined) return { error: "Give a 5-field cron (0 9 * * 1) or a date and time (2026-11-16T09:00)." };
+	// Named after the field: told only "give a cron or a date", a model left `when` out twenty times (docs/spec/27 §13).
+	if (at === undefined) return { error: text ? `“${text}” isn't a time. In when, put a 5-field cron ("0 9 * * 1" is Mondays at 9) or a local date-time once ("2026-11-16T09:00").` : `No time: say when in the when field, next to prompt: a 5-field cron ("0 9 * * 1" is Mondays at 9) or a local date-time once ("2026-11-16T09:00").` };
 	if (at <= now) return { error: passedText(now, tz) };
 	return { at };
 }
