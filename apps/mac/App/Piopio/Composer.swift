@@ -21,6 +21,10 @@ struct Composer: View {
     @State private var suggestions: [Suggestion] = []
     @State private var highlighted = 0
     @State private var sessionCommands: [SessionCommand] = []
+    /// The command chip at the start of the box (docs/spec/32 §4.2). Its own state, set only by picking a command, a
+    /// space after one, or a message put in the box (a draft, an edit): the text field can't be rewritten under it
+    /// while you type.
+    @State private var chip: CommandChip?
     /// The tray (docs/design/grey "Composer tray"): which of the waiting prompts it shows, and whether it's folded to
     /// one line.
     @State private var trayIndex = 0
@@ -64,6 +68,8 @@ struct Composer: View {
             box
         }
         .onChange(of: text) { _, value in
+            // Sent, cleared or edited away: the chip goes with its command.
+            if let chip, !value.hasPrefix("/\(chip.name) ") { self.chip = nil }
             suggest(for: value)
             thread.composing = !value.isEmpty
         }
@@ -72,13 +78,15 @@ struct Composer: View {
             // Put above what you're writing (a quote from Select and ask, a mention, terminal output).
             text = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? draft : draft + text
             thread.draft = nil
+            adoptChip()
             focused = true
         }
         // Build: pi's commands. Chat: prompt templates and skills from pi's folder and packages.
-        .task(id: thread.ref.id) { sessionCommands = await thread.commands() }
+        .task(id: thread.ref.id) { sessionCommands = await thread.commands(); adoptChip() }
         .onChange(of: thread.editing?.itemId) { _, id in
             guard id != nil, let original = thread.editing?.original else { return }
             text = original
+            adoptChip()
             focused = true
         }
         .dropDestination(for: URL.self) { urls, _ in
@@ -267,8 +275,8 @@ struct Composer: View {
             }
             if !attachments.isEmpty { chips }
             HStack(alignment: .top, spacing: 2) {
-            if let chip = leading?.chip {
-                CommandChipView(chip: chip) { text = ""; focused = true }.padding(.top, 0.5)
+            if let chip {
+                CommandChipView(chip: chip) { removeChip() }.padding(.top, 0.5)
             }
             ZStack(alignment: .topLeading) {
                 if fieldText.wrappedValue.isEmpty {
@@ -320,15 +328,23 @@ struct Composer: View {
                         highlighted = (highlighted + suggestions.count - 1) % suggestions.count
                         return .handled
                     }
-                    // ⌫ in an empty box takes the command chip off.
-                    .onKeyPress(.delete) {
-                        guard leading != nil, fieldText.wrappedValue.isEmpty else { return .ignored }
-                        text = ""
+                    // ⌫ in an empty box takes the command chip off. The Mac's delete key sends U+007F, not SwiftUI's
+                    // `.delete` (U+0008), so both.
+                    .onKeyPress(keys: [.delete, KeyEquivalent("\u{7F}")]) { _ in
+                        guard chip != nil, fieldText.wrappedValue.isEmpty else { return .ignored }
+                        removeChip()
+                        return .handled
+                    }
+                    // A space after a command typed by hand (`/goal`) makes its chip.
+                    .onKeyPress(.space) {
+                        guard chip == nil, text.hasPrefix("/"), let found = chipCommands[String(text.dropFirst())] else { return .ignored }
+                        chip = found
+                        text = "/\(found.name) "
                         return .handled
                     }
                     .onKeyPress(.escape) {
                         if !suggestions.isEmpty { suggestions = []; return .handled }
-                        if leading != nil, fieldText.wrappedValue.isEmpty { text = ""; return .handled }
+                        if chip != nil, fieldText.wrappedValue.isEmpty { removeChip(); return .handled }
                         if thread.editing != nil { cancelEdit(); return .handled }
                         guard thread.isRunning else { return .ignored }
                         Task { await thread.stop() }
@@ -374,23 +390,33 @@ struct Composer: View {
     /// The command chip at the start of the box and the words after it (docs/spec/32 §4.2). The message keeps the
     /// command as typed (`/goal words`), so drafts, the queue and editing see one string; the chip is how it shows.
     private var leading: (chip: CommandChip, rest: String)? {
-        guard text.hasPrefix("/") else { return nil }
-        let chips = chipCommands
-        guard let l = CommandMenu.leading(text, commands: Set(chips.keys)), let chip = chips[l.command] else { return nil }
+        guard let chip, let l = CommandMenu.leading(text, commands: [chip.name]) else { return nil }
         return (chip, l.rest)
     }
 
     /// What the text field edits: the words after the chip, or all of it.
     private var fieldText: Binding<String> {
         Binding(get: { leading?.rest ?? text }, set: { new in
-            if let chip = leading?.chip { text = "/\(chip.name) " + new } else { text = new }
+            if let chip { text = "/\(chip.name) " + new } else { text = new }
         })
+    }
+
+    /// A message put in the box that starts with a command that takes words shows it as a chip.
+    private func adoptChip() {
+        guard chip == nil, text.hasPrefix("/"), let l = CommandMenu.leading(text, commands: Set(chipCommands.keys)) else { return }
+        chip = chipCommands[l.command]
+    }
+
+    private func removeChip() {
+        chip = nil
+        text = ""
+        focused = true
     }
 
     private var placeholder: String {
         if thread.editing != nil { return "Edit your message" }
         if let prompt = shownPrompt, prompt.takesReply { return prompt.replyPlaceholder }
-        if let chip = leading?.chip { return chip.hint }
+        if let chip { return chip.hint }
         if thread.isRunning { return "Add to the queue, or ⌥↩ to steer now…" }
         if isBuild && thread.planMode { return "Plan only: describe what you want; the agent proposes a plan first" }
         // An agent is set up by talking (docs/spec/21 D3): its chat says so.
@@ -552,13 +578,23 @@ struct Composer: View {
         }
         // Piopio's commands that act run here; the others, and pi's templates, skills and extension commands, go to
         // the agent as typed.
-        if let command = builtIns.first(where: { $0.hint == nil && "/\($0.name)" == trimmedMessage }) {
+        // `/plan` alone, typed, still turns plan mode on or off.
+        if let command = builtIns.first(where: { ($0.hint == nil || $0.name == "plan") && "/\($0.name)" == trimmedMessage }) {
             text = ""
             command.run(thread)
             return
         }
         let files = attachments.map(\.attachment)
         attachError = nil
+        // `/plan <task>`: plan mode on, then the task goes out as your words (pi's /plan would only toggle).
+        if isBuild, let l = leading, l.chip.name == "plan" {
+            text = l.rest
+            Task {
+                if !thread.planMode { await thread.setPlanMode(true) }
+                await thread.send(l.rest, attachments: files, steer: steer && thread.isRunning)
+            }
+            return
+        }
         Task { await thread.send(message, attachments: files, steer: steer && thread.isRunning) }
     }
 }
@@ -795,7 +831,7 @@ struct BuiltInCommand: Hashable {
     var engine = false
 
     static let all = [
-        BuiltInCommand(name: "plan", summary: "Plan mode on or off: explore and propose a plan before changing anything", icon: "list.bullet.rectangle", keywords: ["think", "propose"], buildOnly: true),
+        BuiltInCommand(name: "plan", summary: "Plan first: explore and propose a plan before changing anything", icon: "list.bullet.rectangle", keywords: ["think", "propose"], buildOnly: true, hint: "What to plan…"),
         BuiltInCommand(name: "goal", summary: "Keep working until a goal is met", icon: "scope", keywords: ["done", "until", "finish"], buildOnly: true, hint: "What done looks like…", engine: true),
         BuiltInCommand(name: "side", summary: "A side conversation for something else; this one goes on", icon: "bubble.left.and.text.bubble.right", keywords: ["btw", "aside", "meanwhile"], hint: "What the side conversation is about…"),
         BuiltInCommand(name: "automation", summary: "Make an automation: work that starts on its own, once or on a schedule", icon: "clock", keywords: ["schedule", "timer", "remind", "every", "later", "cron"], hint: "What, and when or how often…", engine: true),
@@ -930,11 +966,13 @@ extension Composer {
             if let query = mentionQuery { text.removeLast(query.count + 1) }
             text += "@conversation:\(id) "
         case .builtIn(let c) where c.hint != nil:
+            chip = chipCommands[c.name]
             text = "/\(c.name) "
         case .builtIn(let c):
             text = ""
             c.run(thread)
         case .command(let c):
+            chip = chipCommands[c.name]
             text = "/\(c.name) "
         }
         suggestions = []

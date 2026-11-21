@@ -91,7 +91,7 @@ them when built.
 
 | Command | Mode | Kind | Runs in |
 |---|---|---|---|
-| /plan | Build | Acts | App (`setPlanMode`); the extension's row is hidden |
+| /plan | Build | Words | App: plan mode on, then the words go out as your message; `/plan` typed alone still toggles it. The extension's row is hidden |
 | /goal | Build (Chat later) | Words | `piopio-goal` extension |
 | /side | Both | Words | App (24) |
 | /automation | Both | Words | Bundled template → automation tools (27) |
@@ -133,7 +133,11 @@ CM1 and CM2 are app-only and change nothing in the protocol. CM3 adds three temp
   lists them, so each appears exactly where it works: /goal in Build; /browser only with the browser on; /automation
   only with automations.
 - **Chip:** the message stays `/name words` in the composer's text (drafts, the queue and editing are unchanged); the
-  chip is drawn from its start, and the field edits the words after it. A command with a chip needs words to send.
+  field edits the words after the chip. The chip is its own state, set by picking a command, a space after one typed
+  by hand, or a message put in the box (a draft, an edit), never re-read from the text while you type: the text
+  field can't be rewritten under the cursor. A command with a chip needs words to send. ⌫ listens for U+007F, what
+  the Mac's delete key sends (SwiftUI's `.delete` is U+0008).
+- **/plan takes words** like the others (changed after use, 2026-11-21): a chip, then plan mode on and the task sent.
   Skills without an argument hint get "What the skill should do…".
 - **Templates** ([piopio-commands.ts](../../packages/engine/src/runtimes/piopio-commands.ts)) join pi's through the
   resource loader's `promptsOverride`, so Build and chats have them; a template of the same name in the user's pi
