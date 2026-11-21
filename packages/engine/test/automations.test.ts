@@ -361,3 +361,16 @@ test("a time automation with no time, or one that isn't a time, says to fill in 
 	expect(parseWhen("next Friday", "Europe/Madrid", now)).toEqual({ error: expect.stringContaining("“next Friday” isn't a time. In when, put") });
 	expect(parseWhen("2026-12-05T09:00", "Europe/Madrid", now)).toEqual({ at: Date.UTC(2026, 11, 5, 8) });
 });
+
+test("an agent's tool that fails the same way three times in a turn is told to stop", async () => {
+	const { client } = await start();
+	const { ref } = await client.call("agents.create", { name: "Coche", owner: "Antonio", model: { provider: "faux", id: "faux-1" } });
+	const got = await client.call("agents.get", { ref });
+	await client.call("agents.save", { ref, definition: { ...(got.definition as object), interview: undefined }, instructions: got.instructions });
+	await client.call("sessions.subscribe", { ref });
+	const tries = [1, 2, 3, 4].map((n) => call("automate", { name: `ITV ${n}`, prompt: "Tell the owner about the ITV" })).join("\n");
+	await client.call("sessions.submit", { ref, input: { text: tries } });
+	const text = await until(() => client.call("sessions.open", { ref }).then((s) => JSON.stringify(s.items)), (s) => s.includes("failed 3 times this turn"));
+	expect(text).toContain("No time: say when in the when field");
+	expect(await list(client, { runsAs: ref.id })).toHaveLength(0);
+}, 60_000);

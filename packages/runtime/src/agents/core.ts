@@ -17,6 +17,7 @@ import { APPLE_TOOLS, AppUnavailable, appleTools, type AppToolResult } from "./a
 import { Peers, type Directory, type Envelope, type PeerState } from "./peers.js";
 import { localDate } from "../context/clock.js";
 import { dropEarlierReasoning, guardMessages, trimResult } from "../context/extension.js";
+import { FailureGuard } from "../context/failures.js";
 
 type AgentState = ProactiveState & SafetyState & PeerState & {
 	/** contact id → conversation id. */
@@ -37,6 +38,20 @@ export function partitionsFor(contact: Pick<Contact, "id" | "role">): { read: Pa
 }
 
 export const bankOf = (agentId: string, partition: Partition) => `${agentId}/${partition}`;
+
+/**
+ * What memory found, as the model reads it: current facts first, with the ids remember's replaces takes, then earlier
+ * messages under their date, marked as what was said then (docs/spec/27 §13: a run recalling the insurance got an old
+ * message about an ITV appointment that had since passed, mixed in with the facts as if it were current).
+ */
+export function memoryText(records: readonly MemoryRecord[], messageIds = false): string {
+	const line = (r: MemoryRecord, id: boolean) => `- ${id ? `(${r.id}) ` : ""}${r.at ? `[${r.at.slice(0, 10)}] ` : ""}${r.text}`;
+	const facts = records.filter((r) => r.kind !== "message");
+	const messages = records.filter((r) => r.kind === "message");
+	const out = facts.map((r) => line(r, true));
+	if (messages.length) out.push(`${facts.length ? "\n" : ""}Earlier messages, as said then (where a fact above says otherwise, the fact is current):`, ...messages.map((r) => line(r, messageIds)));
+	return out.join("\n");
+}
 
 /** About 1,500 tokens of its own automations in each turn's system section; past that, list_automations. */
 const AUTOMATIONS_IN_PROMPT = 6000;
@@ -177,6 +192,8 @@ export class AgentCore {
 	readonly extension: Extension;
 	readonly proactive: Proactivity;
 	readonly safety: Safety;
+	/** Tools that kept failing the same way this turn (context/failures.ts). */
+	readonly failures = new FailureGuard();
 	readonly peers: Peers;
 	private memoryTools: { name: string }[] = [];
 	private readonly apple: ReturnType<typeof appleTools>;
@@ -492,10 +509,9 @@ export class AgentCore {
 			Promise.all(banks.map((b) => provider.standing?.(b).catch(() => []) ?? Promise.resolve([] as MemoryRecord[]))).then((r) => r.flat()),
 		]);
 		const seen = new Set<string>();
-		// Facts carry their id, so remember can replace one that a new fact makes out of date.
-		const lines = [...standing, ...hits].filter((r) => !(here && r.kind === "message" && r.source?.ref === here) && !seen.has(r.id) && seen.add(r.id)).map((r) => `- ${r.kind === "fact" ? `(${r.id}) ` : ""}${r.at ? `[${r.at.slice(0, 10)}] ` : ""}${r.text}`);
+		const found = [...standing, ...hits].filter((r) => !(here && r.kind === "message" && r.source?.ref === here) && !seen.has(r.id) && seen.add(r.id));
 		await this.options.harness.commit(async (tx) => {
-			(await tx.doc(AgentStateDoc)).recalled[String(conversationId)] = lines.join("\n");
+			(await tx.doc(AgentStateDoc)).recalled[String(conversationId)] = memoryText(found);
 		}, this.options.context);
 	}
 
@@ -608,7 +624,7 @@ export class AgentCore {
 
 		const remember = defineTool({
 			name: "remember",
-			description: "Save a fact worth keeping (a preference, a plan, a decision, a date, something about a person). It goes to this person's memory unless you say otherwise; the owner can see and delete every fact. When it makes facts you hold out of date (a new date, a plan that's done or off), pass their ids in replaces: they stop being recalled, and the history keeps them.",
+			description: "Save a fact worth keeping (a preference, a plan, a decision, a date, something about a person): only what the person said or a tool returned, in their terms, never a guess about what they know, have or want. It goes to this person's memory unless you say otherwise; the owner can see and delete every fact. When it makes facts you hold out of date (a new date, a plan that's done or off), pass their ids in replaces: they stop being recalled, and the history keeps them.",
 			parameters: Type.Object({
 				fact: Type.String({ description: "One self-contained sentence" }),
 				partition: Type.Optional(Type.String({ description: "owner, shared, or contacts/<id>. Default: this person's" })),
@@ -649,7 +665,7 @@ export class AgentCore {
 				const s = await scope(api.conversationId, context);
 				const shared = s.read.includes("shared") ? await core.sharedWithMe() : [];
 				const hits = await core.options.memory().recall([...s.read.map((p) => bankOf(core.def.id, p)), ...shared], args.query, { budgetTokens: 1500 });
-				return { output: [{ type: "text", text: hits.length ? hits.map((h) => `- [${h.id}] ${h.text}`).join("\n") : "Nothing found." }] };
+				return { output: [{ type: "text", text: hits.length ? memoryText(hits, true) : "Nothing found." }] };
 			},
 		});
 
@@ -735,13 +751,20 @@ export class AgentCore {
 						// An automation's run stops at its budget (docs/spec/27 AU8).
 						const over = await core.proactive.overBudget(api.conversationId);
 						if (over) return { block: over };
+						// A tool that kept failing the same way this turn (context/failures.ts).
+						const stopped = core.failures.before(String(api.conversationId), call);
+						if (stopped) return { block: stopped };
 						return core.safety.beforeTool(call, api.conversationId, context) as Promise<{ arguments?: JsonObject; block?: string } | undefined>;
 					},
-					afterTool: (_call, result) => trimResult(result),
+					afterTool: (call, result, api) => {
+						const guarded = core.failures.after(String(api.conversationId), call, result) ?? result;
+						return trimResult(guarded) ?? (guarded === result ? undefined : guarded);
+					},
 				}),
 				// The clock and the repeated-call nudge (context/), in the agent's time zone.
 				hook(GenerationTask, {
-					beforeRequest: (request) => {
+					beforeRequest: (request, api) => {
+						core.failures.request(String(api.conversationId), request.messages as never[]);
 						const messages = dropEarlierReasoning(guardMessages(request.messages as never[], core.proactive.tz));
 						return messages === (request.messages as unknown) ? undefined : { messages };
 					},

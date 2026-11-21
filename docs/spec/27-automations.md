@@ -1,7 +1,7 @@
 # 27 · Automations: when work starts on its own
 
 Status: draft 2026-11-18, from a conversation with the user; A1 and A2 built 2026-11-18 (§10), A3 (a real-model
-trial) done 2026-11-19 (§11), the design pass built 2026-11-19 (§12), a car-keeper trial and its fixes 2026-11-21 (§13). It takes "when" away from agents
+trial) done 2026-11-19 (§11), the design pass built 2026-11-19 (§12), a car-keeper trial and its fixes 2026-11-21 (§13), and a failure guard, stricter facts and facts apart from old messages the same day (§13). It takes "when" away from agents
 and projects and makes it an object of its own. It changes 06 §6 (PR1–PR3, PR6, PR7's `schedule`), 19 S3 (watches),
 21 AD5 and 26 CL10 (routines with two owners). 26's model of agents (CL1–CL12) holds; this spec makes it simpler.
 The interaction is mocked up on a design canvas: a target-state board and a clickable prototype (agent chat →
@@ -375,15 +375,29 @@ message around it, and with the ITV passed it cancelled two reminders that no lo
 Checked: the TypeScript suites (276 engine tests, 29 runtime), including new tests for the section, `replaces` with
 Undo, the labels and the error; and a clean rerun of the whole script on the rebuilt engine.
 
-**Seen, not changed:**
+**Fixed after, the same day (from what was first seen, not changed):**
 - **It invented a fact.** On one run it saved "the owner doesn't know whether it has a timing belt or a chain and
-  wants a reminder", which nobody said, and quoted 1,320 km a month for 1,200. Nothing checks a fact against what
-  was said. Learned facts (14 M2) or a check on `remember` would.
-- **The same failing call over and over.** Twenty identical `automate` errors in one turn, with nothing stopping it.
-  A guard for a repeated failing call (end the turn and say what failed) belongs to every agent, not to automations.
-- **Old messages still come back.** A run recalling "seguro" got an earlier chat message about the 2 Dec
-  appointment. Messages are history and aren't replaced; recency ranks them down, but a run can still read stale
-  wording there.
+  wants a reminder", which nobody said, and quoted 1,320 km a month for 1,200. `remember` now says to keep only what
+  the person said or a tool returned, in their terms, never a guess about what they know, have or want. That lowers
+  the odds; nothing yet checks a fact against what was said. A cheap model checking each fact against the recent
+  messages is the next step if it keeps happening.
+- **The same failing call over and over.** Twenty `automate` errors in one turn, each with other arguments, so the
+  repeated-call nudge (identical arguments only) never fired. A failure guard (`context/failures.ts`, every agent):
+  since the turn's last user message or a run's prompt, the third failure of a tool with the same error gets a note
+  to stop and tell the person; then the tool is blocked for the rest of the turn, and the second blocked call ends the
+  run. Counts live in memory per conversation and start over with the next message. Build and chats keep only the
+  nudge.
+- **Old messages came back as if current.** A run recalling "seguro" got an earlier chat message about the 2 Dec
+  appointment, mixed in with the facts. Recall (in the notes and the `recall` tool) now lists current facts first,
+  with their ids, then "Earlier messages, as said then (where a fact above says otherwise, the fact is current)"
+  under their dates. The ranking is unchanged, so the memory eval would score the same; this changes how the model
+  reads what's found.
+
+Checked: the TypeScript suites (277 engine tests, 32 runtime), with tests for the guard (unit, and four failing
+`automate` calls through a faux agent) and the memory text; and one more real-model rerun of the whole script: no
+invented facts, every stale reminder changed or cancelled, both old ITV facts replaced, and a run's message right.
+
+**Seen, not changed:**
 - `cancel_automation` once with id "none", and a question card offering Telegram when it isn't connected. Harmless.
 - **What a car needs that it can't do yet:** keep a photo or a PDF (the policy, the tyres) to look at months later
   (06's `files` is refused on save), and read photos sent on Telegram. Neither was tried; the user put in-app

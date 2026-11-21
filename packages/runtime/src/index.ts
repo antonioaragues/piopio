@@ -12,6 +12,7 @@ export * from "./agents/peers.js";
 export * from "./agents/time.js";
 export * from "./context/clock.js";
 export * from "./context/repeats.js";
+export * from "./context/failures.js";
 export * from "./context/spill.js";
 export * from "./context/extension.js";
 export * from "./channels/telegram.js";
