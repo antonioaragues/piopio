@@ -6,9 +6,11 @@ import SwiftUI
 /// current one, whatever the caller adds (Thinking), and Manage providers. Recently used models lead their group; batch
 /// and alias variants stay folded until you search. Searching also matches "free", "vision" and "reasoning".
 /// With coding agents (docs/spec/31, docs/design/agent-runtimes/picker.html) the list has two parts, Models then Agents:
-/// one row per agent ("Claude Code", "Opus 5.5 · Pro plan"), its models in a menu at its side (›, or →), and the models
-/// that match a search under its row.
-/// Keyboard: type to search, ↑↓ to move, → to open an agent's models, ↩ to pick, ⌘↩ to pick and make it the default for `role`.
+/// one row per agent ("Claude Code", "Opus 5.5 · Pro plan"), and the models that match a search under its row.
+/// An agent row works like a menu item with a submenu (docs/design/agent-picker/agent-submenu.html): hovering it opens its
+/// models beside the picker, clicking it picks the model it shows. Moving diagonally toward the submenu keeps it open.
+/// Keyboard: type to search, ↑↓ to move, → to open an agent's models (← or esc to go back), ↩ to pick, ⌘↩ to pick and
+/// make it the default for `role`.
 struct ModelPicker: View {
     let engine: EngineController
     let selected: ModelRef?
@@ -20,8 +22,13 @@ struct ModelPicker: View {
     var agents = false
     let onPick: (ModelRef) -> Void
     @State private var query = ""
-    /// The agent whose models are open at its side.
+    /// The agent whose models are open at its side, the row highlighted there (keyboard or pointer), and whether its
+    /// older models are unfolded.
     @State private var agentMenu: String?
+    @State private var subHighlight: Int?
+    @State private var showOlder = false
+    @State private var rowFrames: [String: CGRect] = [:]
+    @State private var submenu = AgentSubmenu()
     @State private var showVariants = false
     @State private var highlighted: String?
     @FocusState private var searching: Bool
@@ -58,6 +65,14 @@ struct ModelPicker: View {
         }
         .frame(width: 340, height: accessory == nil ? 440 : 500)
         .background(Color.dsCard)
+        .coordinateSpace(name: AgentSubmenu.space)
+        .background(AgentSubmenu.Anchor(submenu: submenu))
+        .onPreferenceChange(AgentRowFrames.self) { rowFrames = $0; syncSubmenu() }
+        .onContinuousHover { phase in if case .active = phase { submenu.track(NSEvent.mouseLocation) } }
+        .onChange(of: agentMenu) { _, _ in showOlder = false; syncSubmenu() }
+        .onChange(of: subHighlight) { _, _ in syncSubmenu() }
+        .onChange(of: showOlder) { _, _ in syncSubmenu() }
+        .onDisappear { submenu.close() }
         .onAppear {
             searching = true
             // Captures: PIOPIO_DEMO_MODEL_QUERY types a search.
@@ -68,15 +83,43 @@ struct ModelPicker: View {
             }
             highlighted = keys.first { $0.hasSuffix("|\(selected?.provider ?? "")/\(selected?.id ?? "")") } ?? keys.first { $0 == "agent|\(selected?.provider ?? "")" } ?? keys.first
         }
-        .onChange(of: query) { _, _ in highlighted = keys.first }
-        .onKeyPress(.downArrow) { move(1); return .handled }
-        .onKeyPress(.upArrow) { move(-1); return .handled }
+        .onChange(of: query) { _, _ in highlighted = keys.first; closeSubmenu() }
+        .onKeyPress(.downArrow) {
+            if let i = subHighlight { subHighlight = min(subItems.count - 1, i + 1) } else { closeSubmenu(); move(1) }
+            return .handled
+        }
+        .onKeyPress(.upArrow) {
+            if let i = subHighlight { subHighlight = max(0, i - 1) } else { closeSubmenu(); move(-1) }
+            return .handled
+        }
         .onKeyPress(.rightArrow) {
-            guard let key = highlighted, key.hasPrefix("agent|") else { return .ignored }
-            agentMenu = String(key.dropFirst("agent|".count))
+            guard subHighlight == nil, let key = highlighted, key.hasPrefix("agent|"), query.isEmpty else { return .ignored }
+            let id = String(key.dropFirst("agent|".count))
+            agentMenu = id
+            // Start on the model the row shows.
+            if let group = agentGroups.first(where: { $0.id == id }) {
+                showOlder = !Self.current(group).contains(chosenModel(group))
+                subHighlight = items(group, older: showOlder).firstIndex { $0.model?.ref == chosenModel(group).ref } ?? 0
+            }
+            return .handled
+        }
+        .onKeyPress(.leftArrow) {
+            guard agentMenu != nil else { return .ignored }
+            closeSubmenu()
+            return .handled
+        }
+        .onKeyPress(.escape) {
+            guard agentMenu != nil else { return .ignored }
+            closeSubmenu()
             return .handled
         }
         .onKeyPress(.return, phases: .down) { press in
+            if let i = subHighlight, subItems.indices.contains(i) {
+                guard let model = subItems[i].model else { showOlder = true; return .handled }
+                if press.modifiers.contains(.command) { engine.setModel(model.ref, for: role) }
+                pick(model)
+                return .handled
+            }
             guard let model = model(for: highlighted) else { return .ignored }
             if press.modifiers.contains(.command) { engine.setModel(model.ref, for: role) }
             pick(model)
@@ -94,6 +137,12 @@ struct ModelPicker: View {
                             .padding(.horizontal, 10).padding(.top, 8).padding(.bottom, 3)
                         ForEach(section.models) { model in row(model, in: section.id) }
                     }
+                    // Under the models it unfolds, before the agents.
+                    if foldsVariants, hiddenVariants > 0 {
+                        Button("Show \(hiddenVariants) more variant\(hiddenVariants == 1 ? "" : "s")") { showVariants = true }
+                            .buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
+                            .padding(.horizontal, 10).padding(.vertical, 8)
+                    }
                     if !agentGroups.isEmpty {
                         if !sections.isEmpty { Rectangle().fill(Color.dsLine).frame(height: 0.5).padding(.horizontal, 4).padding(.vertical, 8) }
                         part("Agents", "run the whole conversation")
@@ -106,11 +155,6 @@ struct ModelPicker: View {
                         Text(engine.models.isEmpty ? "Loading models…" : "No models match.")
                             .font(.system(size: 13)).foregroundStyle(Color.dsFg3)
                             .frame(maxWidth: .infinity).padding(.top, 60)
-                    }
-                    if foldsVariants, hiddenVariants > 0 {
-                        Button("Show \(hiddenVariants) more variants") { showVariants = true }
-                            .buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
-                            .padding(.horizontal, 10).padding(.vertical, 8)
                     }
                 }
                 .padding(6)
@@ -142,7 +186,9 @@ struct ModelPicker: View {
         .buttonStyle(.plain)
         .id(key)
         .help("\(model.id)\n\(Self.price(model)) per million tokens, input / output · \(Self.context(model)) context")
-        .onHover { if $0 { highlighted = key } }
+        .onHover { inside in
+            if inside { hover(key) } else if submenu.hovered == key { submenu.hovered = nil }
+        }
         .contextMenu { Button("Set as Default for \(Self.roleName(role))") { engine.setModel(model.ref, for: role) } }
     }
 
@@ -157,46 +203,100 @@ struct ModelPicker: View {
     }
 
     /// One row per coding agent: what it will run (the model you chose, else the last you used in it, else its first),
-    /// and the plan. Its models open at its side.
+    /// and the plan. Hovering it opens its models at its side; clicking it picks the model it shows.
     private func agentRow(_ group: AgentGroup) -> some View {
         let key = "agent|\(group.id)"
         let chosen = chosenModel(group)
         let isSelected = selected?.provider == group.id
-        return HStack(spacing: 0) {
-            Button { pick(chosen) } label: {
-                HStack(spacing: 10) {
-                    RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Color(nsColor: DS.bubble)).frame(width: 26, height: 26)
-                        .overlay(AgentGlyph(size: 12))
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(Self.providerTag(chosen)).font(.system(size: 13)).foregroundStyle(Color.dsFg).lineLimit(1)
-                        Text(query.isEmpty ? [Self.shortName(chosen), Self.planLabel(chosen)].compactMap { $0 }.joined(separator: " · ") : (Self.planLabel(chosen) ?? ""))
-                            .font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1)
-                    }
-                    Spacer(minLength: 8)
+        return Button { pick(chosen) } label: {
+            HStack(spacing: 10) {
+                RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Color(nsColor: DS.bubble)).frame(width: 26, height: 26)
+                    .overlay(AgentGlyph(size: 12))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(Self.providerTag(chosen)).font(.system(size: 13)).foregroundStyle(Color.dsFg).lineLimit(1)
+                    Text(query.isEmpty ? [Self.shortName(chosen), Self.planLabel(chosen)].compactMap { $0 }.joined(separator: " · ") : (Self.planLabel(chosen) ?? ""))
+                        .font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1)
+                }
+                Spacer(minLength: 8)
+                HStack(spacing: 8) {
                     if isSelected { Image(systemName: "checkmark").font(.system(size: 11, weight: .medium)).foregroundStyle(Color.dsFg2) }
-                }
-                .padding(.leading, 10)
-                .frame(height: 46)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            Button { agentMenu = group.id } label: {
-                Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.dsFg3)
-                    .frame(width: 28, height: 46).contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .help("Its models")
-            .popover(isPresented: Binding(get: { agentMenu == group.id }, set: { if !$0 { agentMenu = nil } }), arrowEdge: .trailing) {
-                AgentModelsMenu(group: group, selected: selected) { model in
-                    agentMenu = nil
-                    pick(model)
+                    // A sign, like a menu item's: the whole row opens the submenu.
+                    if query.isEmpty { Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.dsFg3) }
                 }
             }
+            .padding(.horizontal, 10)
+            .frame(height: 46)
+            .background(isSelected || highlighted == key || agentMenu == group.id ? Color.dsChip : .clear, in: RoundedRectangle(cornerRadius: DS.Radius.row, style: .continuous))
+            .contentShape(Rectangle())
         }
-        .background(isSelected || highlighted == key ? Color.dsChip : .clear, in: RoundedRectangle(cornerRadius: DS.Radius.row, style: .continuous))
+        .buttonStyle(.plain)
         .id(key)
-        .help("\(Self.providerTag(chosen)) runs the whole conversation with its own tools, settings and MCP servers, on your plan.")
-        .onHover { if $0 { highlighted = key } }
+        .background(GeometryReader { g in Color.clear.preference(key: AgentRowFrames.self, value: [group.id: g.frame(in: .named(AgentSubmenu.space))]) })
+        .onHover { inside in
+            if inside { hover(key) } else if submenu.hovered == key { submenu.hovered = nil }
+        }
+    }
+
+    // MARK: Submenu
+
+    /// The pointer entered a row: highlight it, open an agent's models after a beat, or close the open ones. While the
+    /// pointer heads for the open submenu, rows it crosses on the way are skipped, then looked at again once it rests.
+    private func hover(_ key: String) {
+        submenu.hovered = key
+        let agent = key.hasPrefix("agent|") ? String(key.dropFirst("agent|".count)) : nil
+        if let open = agentMenu, agent != open, submenu.headingIn() {
+            submenu.later(0.3) { if submenu.hovered == key { hover(key) } }
+            return
+        }
+        highlighted = key
+        if let agent {
+            if agent == agentMenu { submenu.cancel(); subHighlight = nil; return }
+            submenu.later(0.1) {
+                guard submenu.hovered == key else { return }
+                subHighlight = nil
+                agentMenu = agent
+            }
+        } else if agentMenu != nil {
+            submenu.later(0.15) { if submenu.hovered == key { closeSubmenu() } }
+        }
+    }
+
+    private func closeSubmenu() {
+        submenu.cancel()
+        agentMenu = nil
+        subHighlight = nil
+    }
+
+    /// The agent's main models (Claude Code: Opus, Sonnet, Fable, Haiku), then "Older models", unfolded on demand.
+    struct SubItem: Hashable { let model: ModelInfo?; let older: Int }
+
+    static func current(_ group: AgentGroup) -> [ModelInfo] { Array(group.all.prefix(4)) }
+
+    private func items(_ group: AgentGroup, older: Bool) -> [SubItem] {
+        let rest = group.all.dropFirst(4)
+        if rest.isEmpty || older { return group.all.map { SubItem(model: $0, older: 0) } }
+        return Self.current(group).map { SubItem(model: $0, older: 0) } + [SubItem(model: nil, older: rest.count)]
+    }
+
+    private var subItems: [SubItem] {
+        guard let group = agentGroups.first(where: { $0.id == agentMenu }) else { return [] }
+        return items(group, older: showOlder)
+    }
+
+    private func syncSubmenu() {
+        guard let id = agentMenu, query.isEmpty, let frame = rowFrames[id] else { submenu.close(); return }
+        submenu.show(
+            AnyView(AgentModelsMenu(
+                items: subItems, selected: selected, highlighted: subHighlight,
+                onHover: { subHighlight = $0; submenu.cancel() },
+                onPick: { model in
+                    if NSEvent.modifierFlags.contains(.command) { engine.setModel(model.ref, for: role) }
+                    pick(model)
+                },
+                onOlder: { showOlder = true }
+            )),
+            row: frame
+        )
     }
 
     private func chosenModel(_ group: AgentGroup) -> ModelInfo {
@@ -317,6 +417,7 @@ struct ModelPicker: View {
     }
 
     private func pick(_ model: ModelInfo) {
+        closeSubmenu()
         let key = "\(model.provider)/\(model.id)"
         recentRaw = ([key] + recent.filter { $0 != key }).prefix(8).joined(separator: "\n")
         onPick(model.ref)
@@ -412,45 +513,157 @@ struct ModelPicker: View {
     }
 }
 
-/// A coding agent's models, at the side of its row (docs/design/agent-runtimes/picker.html): the current ones first, the
-/// older ones folded.
-private struct AgentModelsMenu: View {
-    let group: ModelPicker.AgentGroup
-    let selected: ModelRef?
-    let onPick: (ModelInfo) -> Void
-    @State private var showOlder = false
+/// The agent rows' frames in the picker, where their submenus line up.
+private struct AgentRowFrames: PreferenceKey {
+    static let defaultValue: [String: CGRect] = [:]
+    static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) { value.merge(nextValue()) { $1 } }
+}
 
-    /// Agents list their main models first (Claude Code: Opus, Sonnet, Fable, Haiku), then the rest.
-    private var current: [ModelInfo] { Array(group.all.prefix(4)) }
-    private var older: [ModelInfo] { Array(group.all.dropFirst(4)) }
+/// A coding agent's models beside its row, drawn like a menu (docs/design/agent-picker/agent-submenu.html): ✓ on the one
+/// in use, "Older models" folded below a line. The picker owns its state, so the keyboard and the pointer agree.
+private struct AgentModelsMenu: View {
+    let items: [ModelPicker.SubItem]
+    let selected: ModelRef?
+    let highlighted: Int?
+    let onHover: (Int) -> Void
+    let onPick: (ModelInfo) -> Void
+    let onOlder: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
-            HStack(spacing: 5) {
-                AgentGlyph(size: 11)
-                Text(ModelPicker.providerTag(group.all[0])).font(.system(size: 12)).foregroundStyle(Color.dsFg3)
-            }
-            .padding(.horizontal, 10).padding(.top, 6).padding(.bottom, 3)
-            ForEach(showOlder || older.contains(where: { $0.ref == selected }) ? group.all : current) { model in
-                Button { onPick(model) } label: {
-                    HStack {
-                        Text(ModelPicker.shortName(model)).font(.system(size: 13)).foregroundStyle(Color.dsFg)
-                        Spacer(minLength: 12)
-                        if model.ref == selected { Image(systemName: "checkmark").font(.system(size: 11, weight: .medium)).foregroundStyle(Color.dsFg2) }
+            ForEach(Array(items.enumerated()), id: \.element) { i, item in
+                if item.model == nil { Rectangle().fill(Color.dsLine).frame(height: 0.5).padding(.horizontal, 6).padding(.vertical, 4) }
+                Button { if let m = item.model { onPick(m) } else { onOlder() } } label: {
+                    HStack(spacing: 6) {
+                        Group {
+                            if let m = item.model, m.ref == selected { Image(systemName: "checkmark").font(.system(size: 10.5, weight: .semibold)) }
+                        }
+                        .foregroundStyle(Color.dsFg2).frame(width: 12)
+                        if let m = item.model {
+                            Text(ModelPicker.shortName(m)).font(.system(size: 13)).foregroundStyle(Color.dsFg).lineLimit(1)
+                        } else {
+                            Text("Older models").font(.system(size: 13)).foregroundStyle(Color.dsFg2)
+                            Spacer(minLength: 8)
+                            Text("\(item.older)").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
+                        }
+                        Spacer(minLength: 0)
                     }
-                    .padding(.horizontal, 10).frame(height: 30)
+                    .padding(.horizontal, 8).frame(height: 30)
+                    .background(highlighted == i ? Color.dsChip : .clear, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
                     .contentShape(Rectangle())
                 }
-                .buttonStyle(HoverRowStyle())
-            }
-            if !older.isEmpty, !showOlder, !older.contains(where: { $0.ref == selected }) {
-                Button("Show \(older.count) more model\(older.count == 1 ? "" : "s")") { showOlder = true }
-                    .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Color.dsFg2)
-                    .padding(.horizontal, 10).padding(.vertical, 6)
+                .buttonStyle(.plain)
+                .onHover { if $0 { onHover(i) } }
             }
         }
-        .padding(6)
+        .padding(5)
         .frame(width: 200)
-        .background(Color.dsCard)
+        .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 0.5))
+    }
+}
+
+/// The window an agent's models open in: a borderless child panel of the picker's popover window, flush with the
+/// picker's right edge (its left one when the screen ends), its first row level with the agent row. A SwiftUI popover
+/// would bring an arrow and a gap. It never becomes key, so the search field keeps the keyboard.
+@MainActor final class AgentSubmenu {
+    static let space = "modelPicker"
+
+    /// The picker's own view, to place the panel from the rows' frames.
+    fileprivate weak var host: NSView?
+    private var panel: NSPanel?
+    private var hosting: NSHostingView<AnyView>?
+    private var task: Task<Void, Never>?
+    /// The row under the pointer, if any.
+    var hovered: String?
+    /// The pointer's last two positions on screen, to tell whether it's heading for the panel.
+    private var prev: NSPoint?
+    private var now: NSPoint?
+
+    func track(_ p: NSPoint) { if p != now { prev = now; now = p } }
+
+    /// Runs `action` after `delay`, replacing what was waiting.
+    func later(_ delay: Double, _ action: @escaping @MainActor () -> Void) {
+        task?.cancel()
+        task = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(delay))
+            if !Task.isCancelled { action() }
+        }
+    }
+
+    func cancel() { task?.cancel(); task = nil }
+
+    /// Whether the pointer is moving into the open panel: it lies in the triangle between where it was and the panel's
+    /// near edge (with some slack above and below).
+    func headingIn() -> Bool {
+        guard let panel, panel.isVisible, let a = prev else { return false }
+        let p = NSEvent.mouseLocation, f = panel.frame
+        let edge = abs(f.minX - a.x) < abs(f.maxX - a.x) ? f.minX : f.maxX
+        let b = NSPoint(x: edge, y: f.maxY + 20), c = NSPoint(x: edge, y: f.minY - 20)
+        func side(_ p1: NSPoint, _ p2: NSPoint, _ p3: NSPoint) -> CGFloat { (p1.x - p3.x) * (p2.y - p3.y) - (p2.x - p3.x) * (p1.y - p3.y) }
+        let d1 = side(p, a, b), d2 = side(p, b, c), d3 = side(p, c, a)
+        return !((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0))
+    }
+
+    /// Shows `content` beside `row` (a frame in the picker's coordinate space), or updates it in place.
+    func show(_ content: AnyView, row: CGRect) {
+        guard let host, let window = host.window else { return }
+        let panel = panel ?? makePanel()
+        hosting?.rootView = content
+        let size = hosting?.fittingSize ?? .zero
+        let rowOnScreen = window.convertToScreen(host.convert(row, to: nil))
+        let picker = window.convertToScreen(host.convert(host.bounds, to: nil))
+        let visible = window.screen?.visibleFrame ?? .infinite
+        var x = picker.maxX - 2
+        if x + size.width > visible.maxX { x = picker.minX - size.width + 2 }
+        // The first model sits level with the row: the panel's padding above it.
+        let y = max(visible.minY, min(rowOnScreen.maxY + 5 - size.height, visible.maxY - size.height))
+        panel.appearance = window.effectiveAppearance
+        panel.setFrame(NSRect(x: x, y: y, width: size.width, height: size.height), display: true)
+        if panel.parent !== window {
+            panel.parent?.removeChildWindow(panel)
+            window.addChildWindow(panel, ordered: .above)
+        }
+        panel.orderFront(nil)
+        panel.invalidateShadow()
+    }
+
+    func close() {
+        cancel()
+        guard let panel, panel.isVisible || panel.parent != nil else { return }
+        panel.parent?.removeChildWindow(panel)
+        panel.orderOut(nil)
+    }
+
+    private func makePanel() -> NSPanel {
+        let panel = Panel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true)
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = true
+        panel.isReleasedWhenClosed = false
+        panel.hidesOnDeactivate = true
+        let hosting = FirstClickHostingView(rootView: AnyView(EmptyView()))
+        panel.contentView = hosting
+        self.panel = panel
+        self.hosting = hosting
+        return panel
+    }
+
+    private final class Panel: NSPanel {
+        override var canBecomeKey: Bool { false }
+        override var canBecomeMain: Bool { false }
+    }
+
+    /// Clicks land on the first try, though the panel is never key.
+    private final class FirstClickHostingView: NSHostingView<AnyView> {
+        override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+    }
+
+    /// Hands the picker's view to the submenu. Flipped, so frames read top-down as in SwiftUI.
+    struct Anchor: NSViewRepresentable {
+        let submenu: AgentSubmenu
+        func makeNSView(context: Context) -> NSView { let v = Flipped(); submenu.host = v; return v }
+        func updateNSView(_ view: NSView, context: Context) { submenu.host = view }
+        private final class Flipped: NSView { override var isFlipped: Bool { true } }
     }
 }

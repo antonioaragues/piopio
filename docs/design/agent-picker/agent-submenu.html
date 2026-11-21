@@ -1,0 +1,293 @@
+<title>Agent models: a submenu on hover</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Reading column of short decisions, each with a mockup in Piopio's grey-ink tokens (docs/design/grey). */
+:root {
+  --win: #FCFCFB; --side: #F4F4F2; --card: #FFFFFF; --bubble: #EDEDEC;
+  --chip: rgba(0,0,0,.06); --track: rgba(0,0,0,.05); --seg: #FFFFFF;
+  --fg: #1F1F1E; --fg2: #6B6B67; --fg3: #9B9B96; --line: rgba(0,0,0,.08); --edge: rgba(0,0,0,.09);
+  --accent: #2F6FEB; --page: #EFEFEC; --bad: #B4503C;
+  --ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root {
+  --win: #1E1E1D; --side: #191918; --card: #252524; --bubble: #2B2B29;
+  --chip: rgba(255,255,255,.07); --track: rgba(255,255,255,.06); --seg: #3A3A38;
+  --fg: #ECECEA; --fg2: #A6A6A1; --fg3: #77776F; --line: rgba(255,255,255,.09); --edge: rgba(255,255,255,.10);
+  --accent: #5B8DEF; --page: #141413; --bad: #D9826E; color-scheme: dark } }
+
+* { box-sizing: border-box }
+body { background: var(--page); color: var(--fg); font: 15px/1.6 var(--ui); -webkit-font-smoothing: antialiased; margin: 0 }
+.wrap { max-width: 860px; margin: 0 auto; padding: 48px max(16px, env(safe-area-inset-left, 0px)) 96px }
+h1 { font-size: 30px; line-height: 1.15; letter-spacing: -.02em; margin: 0 0 8px }
+h2 { font-size: 19px; letter-spacing: -.01em; margin: 52px 0 8px }
+p, li { max-width: 70ch }
+.lede { color: var(--fg2); font-size: 16.5px; margin: 0 }
+.meta { color: var(--fg3); font-size: 13px; margin: 6px 0 0 }
+.muted { color: var(--fg2) }
+kbd { font: 12px var(--mono); background: var(--card); border-radius: 4px; padding: 1px 5px; box-shadow: 0 0 0 .5px var(--edge) }
+.rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; margin-top: 14px }
+.rule { background: var(--win); border: .5px solid var(--line); border-radius: 12px; padding: 12px 16px; font-size: 14px }
+.rule b { display: block; margin-bottom: 2px }
+
+.stage { margin-top: 16px; background: var(--side); border-radius: 12px; padding: 26px 22px; box-shadow: 0 0 0 .5px var(--line); overflow: visible; font-size: 13px; line-height: 1.45 }
+.hint { font-size: 12px; color: var(--fg3); margin: 0 0 14px }
+.pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 22px; align-items: start }
+.label { font-size: 12px; color: var(--fg2); margin: 0 0 10px; font-weight: 600 }
+.label span { font-weight: 400; color: var(--fg3) }
+
+/* Picker */
+.scene { position: relative; display: inline-block }
+.menu { width: 340px; background: var(--card); border-radius: 12px; box-shadow: 0 0 0 .5px var(--edge), 0 10px 30px rgba(0,0,0,.12); overflow: hidden; user-select: none }
+.search { padding: 0 16px; height: 40px; display: flex; align-items: center; color: var(--fg3); border-bottom: .5px solid var(--line); font-size: 13.5px }
+.list { padding: 6px }
+.part { display: flex; justify-content: space-between; align-items: baseline; padding: 8px 10px 2px; font-size: 12.5px; font-weight: 600 }
+.part span { font-weight: 400; color: var(--fg3); font-size: 11.5px }
+.sep { height: .5px; background: var(--line); margin: 8px 4px }
+.row { border-radius: 7px; padding: 0 10px; min-height: 42px; display: flex; align-items: center; gap: 10px; cursor: default }
+.row .n { color: var(--fg) } .row .s { color: var(--fg3); font-size: 12px }
+.row .end { margin-left: auto; display: flex; gap: 8px; align-items: center; color: var(--fg3) }
+.row.hl, .row.open { background: var(--chip) }
+.row.agent { min-height: 46px }
+.tile { width: 26px; height: 26px; border-radius: 7px; background: var(--bubble); display: grid; place-items: center; flex: none }
+.ag { width: 13px; height: 13px; color: var(--fg2); display: block }
+.chev { width: 7px; height: 11px; color: var(--fg3) }
+.ck { width: 11px; height: 11px; color: var(--fg2) }
+.more { padding: 8px 10px; color: var(--fg2); font-size: 12.5px; cursor: default }
+.thinking { border-top: .5px solid var(--line); padding: 10px 16px 12px }
+.thinking .h { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 8px }
+.thinking .h span { color: var(--fg3); font-size: 11.5px }
+.seg { display: grid; grid-template-columns: repeat(4, 1fr); background: var(--track); border-radius: 8px; padding: 2px; font-size: 12.5px; color: var(--fg2); text-align: center }
+.seg i { font-style: normal; padding: 3px 0; border-radius: 6px } .seg i.on { background: var(--seg); color: var(--fg); box-shadow: 0 0 0 .5px var(--line) }
+.foot { border-top: .5px solid var(--line); padding: 0 16px; height: 36px; display: flex; justify-content: space-between; align-items: center; font-size: 12.5px }
+.foot a { color: var(--accent); text-decoration: none } .foot span { color: var(--fg3); font-size: 11px }
+
+/* The submenu: flush with the picker's right edge, its first row level with the agent row. No arrow, no title. */
+.sub { position: absolute; width: 210px; background: var(--card); border-radius: 10px; padding: 5px;
+  box-shadow: 0 0 0 .5px var(--edge), 0 10px 30px rgba(0,0,0,.14); opacity: 0; transform: translateX(-4px); pointer-events: none;
+  transition: opacity .12s ease, transform .12s ease; user-select: none; z-index: 2 }
+.sub.on { opacity: 1; transform: none; pointer-events: auto }
+.sub .row { min-height: 30px; padding: 0 10px; border-radius: 6px; gap: 8px }
+.sub .row .s { margin-left: auto; font-size: 11.5px }
+.sub .row .tick { width: 12px; flex: none; display: grid; place-items: center }
+.sub .sep { margin: 5px 6px }
+.sub .older { color: var(--fg2) }
+
+/* Static compare (today) */
+.today .sub { opacity: 1; transform: none; position: absolute }
+.today .sub::before { content: ""; position: absolute; left: -7px; top: 172px; width: 14px; height: 14px; background: var(--card); transform: rotate(45deg); box-shadow: -.5px .5px 0 var(--edge) }
+.today .chevhit { outline: 1.5px dashed var(--bad); outline-offset: 2px; border-radius: 5px; padding: 6px 4px }
+.note { font-size: 12px; color: var(--fg3); margin: 10px 2px 0; max-width: 340px }
+.bad { color: var(--bad) }
+
+/* Alternative: inline */
+.inline .row.child { min-height: 32px; padding-left: 46px }
+.inline .row.child .s { margin-left: auto }
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="agent" viewBox="0 0 16 16"><rect x="1.5" y="2.5" width="13" height="11" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M4.6 6.2l2.2 1.8-2.2 1.8M8.4 10.2h3" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="chev" viewBox="0 0 7 11"><path d="M1.5 1.5l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="ck" viewBox="0 0 12 12"><path d="M2 6.4l2.6 2.6L10 3.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+</svg>
+
+<div class="wrap">
+  <h1>Agent models: a submenu on hover</h1>
+  <p class="lede">An agent row works like a macOS menu item with a submenu. Hover it and its models slide out beside it. Click it and you get the agent with the model it already shows. The chevron marks the row; it is no longer a button of its own.</p>
+  <p class="meta">Built 2026-11-21 in ModelPicker.swift (AgentSubmenu, AgentModelsMenu) · the traits on the right (“most capable”…) were left out: agents give no short trait for their models</p>
+
+  <h2>1 · Today</h2>
+  <p>The row has two hit targets. Clicking the name picks the agent right away; to change its model you have to find the 18-point chevron. That click opens a second popover with an arrow and its own title, floating apart from the list.</p>
+  <div class="stage">
+    <div class="scene today">
+      <div class="menu">
+        <div class="search">Search models and agents</div>
+        <div class="list">
+          <div class="row"><div><div class="n">Claude Fable 5.2</div><div class="s">Anthropic · premium, thinks first, reads images</div></div></div>
+          <div class="row"><div><div class="n">DaisyRose 27B</div><div class="s">RadixArk · low cost, thinks first, reads images</div></div></div>
+          <div class="sep"></div>
+          <div class="part">Agents <span>run the whole conversation</span></div>
+          <div class="row agent hl"><span class="tile"><svg class="ag"><use href="#agent"/></svg></span><div><div class="n">Claude Code</div><div class="s">Opus 5.5 · Pro plan</div></div><span class="end"><span class="chevhit"><svg class="chev"><use href="#chev"/></svg></span></span></div>
+          <div class="row agent"><span class="tile"><svg class="ag"><use href="#agent"/></svg></span><div><div class="n">Codex</div><div class="s">6.2 Sol · Plus plan</div></div><span class="end"><svg class="chev"><use href="#chev"/></svg></span></div>
+          <div class="more">Show 1 more variants</div>
+        </div>
+      </div>
+      <div class="sub" style="left: 360px; top: 0px">
+        <div class="row"><span class="s" style="margin:0; display:flex; gap:5px; align-items:center"><svg class="ag" style="width:11px;height:11px;color:var(--fg3)"><use href="#agent"/></svg>Claude Code</span></div>
+        <div class="row"><span class="n">Opus 5.5</span></div>
+        <div class="row"><span class="n">Sonnet 5.5</span></div>
+        <div class="row"><span class="n">Fable 5.2</span></div>
+        <div class="row"><span class="n">Haiku 5.5</span></div>
+        <div class="row"><span class="s" style="margin:0">Show 9 more models</span></div>
+      </div>
+    </div>
+    <p class="note"><span class="bad">Dashed:</span> the only way in. Also: “Show 1 more variants” sits under Agents but folds a <em>model</em>, and reads “1 more variants”.</p>
+  </div>
+
+  <h2>2 · Proposed — try it</h2>
+  <p class="hint" style="margin-top:0">Hover an agent row, then move diagonally into its models: the submenu stays open. Click a model to pick it. Or click the picker, then use <kbd>↓</kbd> <kbd>→</kbd> <kbd>←</kbd> <kbd>↩</kbd>.</p>
+  <div class="stage">
+    <div class="scene live" tabindex="0" style="outline:none">
+      <div class="menu">
+        <div class="search">Search models and agents</div>
+        <div class="list">
+          <div class="row" data-k><div><div class="n">Claude Fable 5.2</div><div class="s">Anthropic · premium, thinks first, reads images</div></div></div>
+          <div class="row" data-k><div><div class="n">DaisyRose 27B</div><div class="s">RadixArk · low cost, thinks first, reads images</div></div></div>
+          <div class="row" data-k><div><div class="n">Inkling 2 Mini</div><div class="s">Thinking Machines · low cost, thinks first</div></div></div>
+          <div class="more">Show 1 more variant</div>
+          <div class="sep"></div>
+          <div class="part">Agents <span>run the whole conversation</span></div>
+          <div class="row agent" data-k data-agent="cc"><span class="tile"><svg class="ag"><use href="#agent"/></svg></span><div><div class="n">Claude Code</div><div class="s" data-line>Opus 5.5 · Pro plan</div></div><span class="end"><svg class="ck" data-ck><use href="#ck"/></svg><svg class="chev"><use href="#chev"/></svg></span></div>
+          <div class="row agent" data-k data-agent="ag"><span class="tile"><svg class="ag"><use href="#agent"/></svg></span><div><div class="n">Antigravity CLI</div><div class="s" data-line>Gemini 4 Neon · AI Pro plan</div></div><span class="end"><svg class="ck" data-ck style="display:none"><use href="#ck"/></svg><svg class="chev"><use href="#chev"/></svg></span></div>
+          <div class="row agent" data-k data-agent="cx"><span class="tile"><svg class="ag"><use href="#agent"/></svg></span><div><div class="n">Codex</div><div class="s" data-line>6.2 Sol · Plus plan</div></div><span class="end"><svg class="ck" data-ck style="display:none"><use href="#ck"/></svg><svg class="chev"><use href="#chev"/></svg></span></div>
+        </div>
+        <div class="thinking"><div class="h">Thinking <span>⌘T to cycle</span></div><div class="seg"><i>Off</i><i>Low</i><i class="on">Medium</i><i>High</i></div></div>
+        <div class="foot"><a href="#">Manage providers and agents</a><span>⌘↩ sets as default</span></div>
+      </div>
+      <div class="sub" id="sub"></div>
+    </div>
+    <p class="note" id="status">Chosen: Claude Code · Opus 5.5</p>
+  </div>
+
+  <div class="rules">
+    <div class="rule"><b>One target</b><span class="muted">The whole row opens the submenu on hover (after ~0.1 s, so sweeping past doesn't flash it). Click picks what the row shows. The chevron is only a sign.</span></div>
+    <div class="rule"><b>Placed like a menu</b><span class="muted">Flush against the picker's right edge, its first model level with the row. No arrow, no title — the row it grows from is the title.</span></div>
+    <div class="rule"><b>Forgiving pointer</b><span class="muted">Moving diagonally toward the submenu keeps it open, even across the next agent row. It closes ~0.25 s after the pointer settles elsewhere.</span></div>
+    <div class="rule"><b>Row stays lit</b><span class="muted">While its submenu is open the agent row keeps its grey highlight, so you see where the list came from.</span></div>
+    <div class="rule"><b>What's inside</b><span class="muted">The agent's main models with a quiet trait on the right, ✓ on the one in use, then “Older models” folded below a line.</span></div>
+    <div class="rule"><b>Keyboard</b><span class="muted"><kbd>→</kbd> opens it with the current model highlighted, <kbd>←</kbd> or <kbd>esc</kbd> goes back to the row, <kbd>↩</kbd> picks, <kbd>⌘↩</kbd> picks and sets the default.</span></div>
+  </div>
+
+  <h2>3 · Smaller fixes in the same pass</h2>
+  <ul>
+    <li>“Show N more variants” moves up, right under the models it unfolds, and says “variant” when there is one.</li>
+    <li>The agent row shows ✓ when it's the one in use, as model rows do; today that check fights with the chevron for the same corner.</li>
+    <li>Searching keeps today's behavior: matching models show indented under their agent, no submenu needed.</li>
+  </ul>
+
+  <h2>4 · The alternative I'd skip — inline</h2>
+  <p>Clicking an agent could unfold its models in the list instead. It needs no second panel, but the list jumps under the pointer, the Thinking control gets pushed out of view in a 440-point picker, and it isn't what you expect from a <span class="mono">›</span>. Shown for comparison only.</p>
+  <div class="stage">
+    <div class="menu inline" style="width:340px">
+      <div class="search">Search models and agents</div>
+      <div class="list">
+        <div class="part">Agents <span>run the whole conversation</span></div>
+        <div class="row agent hl"><span class="tile"><svg class="ag"><use href="#agent"/></svg></span><div><div class="n">Claude Code</div><div class="s">Opus 5.5 · Pro plan</div></div><span class="end"><svg class="chev" style="transform:rotate(90deg)"><use href="#chev"/></svg></span></div>
+        <div class="row child"><span class="n">Opus 5.5</span><svg class="ck"><use href="#ck"/></svg></div>
+        <div class="row child"><span class="n">Sonnet 5.5</span></div>
+        <div class="row child"><span class="n">Fable 5.2</span></div>
+        <div class="row child"><span class="n">Haiku 5.5</span></div>
+        <div class="row agent"><span class="tile"><svg class="ag"><use href="#agent"/></svg></span><div><div class="n">Codex</div><div class="s">6.2 Sol · Plus plan</div></div><span class="end"><svg class="chev"><use href="#chev"/></svg></span></div>
+      </div>
+    </div>
+  </div>
+
+  <h2>Building it</h2>
+  <p class="muted">The submenu has to spill outside the picker's own popover, so it becomes a small borderless child panel of the popover's window, placed from the agent row's frame — not a SwiftUI <span class="mono">.popover</span> (that's what brings the arrow and the gap). Hover intent and the diagonal allowance live in ModelPicker; AgentModelsMenu keeps its rows.</p>
+</div>
+
+<script>
+const agents = {
+  cc: { name: "Claude Code", plan: "Pro plan", models: [["Opus 5.5","most capable"],["Sonnet 5.5","balanced"],["Fable 5.2","thinks longer"],["Haiku 5.5","fastest"]], older: 9 },
+  ag: { name: "Antigravity CLI", plan: "AI Pro plan", models: [["Gemini 4 Neon","most capable"],["Gemini 4 Flash","fastest"]], older: 3 },
+  cx: { name: "Codex", plan: "Plus plan", models: [["6.2 Sol","most capable"],["6.2 Sol Mini","fastest"],["6.1 Codex","for code"]], older: 2 },
+};
+const chosen = { cc: "Opus 5.5", ag: "Gemini 4 Neon", cx: "6.2 Sol" };
+let inUse = "cc";
+
+const scene = document.querySelector(".live"), sub = document.getElementById("sub"), status = document.getElementById("status");
+const rows = [...scene.querySelectorAll(".menu [data-k]")];
+let openAgent = null, openTimer = null, closeTimer = null, hl = null, subHl = -1, lastPt = null, older = false;
+
+function setHl(r) { rows.forEach(x => x.classList.toggle("hl", x === r)); hl = r }
+function render() {
+  rows.forEach(r => { if (r.dataset.agent) {
+    const a = r.dataset.agent;
+    r.querySelector("[data-line]").textContent = `${chosen[a]} · ${agents[a].plan}`;
+    r.querySelector("[data-ck]").style.display = a === inUse ? "" : "none";
+  }});
+  status.textContent = `Chosen: ${agents[inUse].name} · ${chosen[inUse]}`;
+}
+function subRows() { return [...sub.querySelectorAll(".row[data-m]")] }
+function setSubHl(i) { subHl = i; subRows().forEach((r, j) => r.classList.toggle("hl", j === i)) }
+
+function open(row) {
+  clearTimeout(closeTimer);
+  const a = row.dataset.agent;
+  if (openAgent === a) return;
+  older = false;
+  openAgent = a;
+  rows.forEach(r => r.classList.toggle("open", r === row));
+  const g = agents[a];
+  const models = g.models.map(([n, t]) => `<div class="row" data-m="${n}"><span class="tick">${a === inUse && chosen[a] === n ? '<svg class="ck"><use href="#ck"/></svg>' : ""}</span><span class="n">${n}</span><span class="s">${t}</span></div>`).join("");
+  sub.innerHTML = models + `<div class="sep"></div><div class="row older" data-older><span class="tick"></span>Older models<span class="s">${g.older}</span></div>`;
+  const top = row.offsetTop - 5; // .scene is the offset parent
+  sub.style.left = (scene.querySelector(".menu").offsetWidth - 2) + "px";
+  sub.style.top = top + "px";
+  sub.classList.add("on");
+  subHl = -1;
+}
+function close() {
+  openAgent = null; sub.classList.remove("on");
+  rows.forEach(r => r.classList.remove("open"));
+}
+function pick(a, m) { chosen[a] = m; inUse = a; close(); render() }
+
+// Diagonal allowance: is the pointer heading into the submenu?
+function headingToSub(p) {
+  if (!lastPt || !sub.classList.contains("on")) return false;
+  const s = sub.getBoundingClientRect();
+  const tri = [lastPt, { x: s.left, y: s.top - 20 }, { x: s.left, y: s.bottom + 20 }];
+  const sign = (a, b, c) => (a.x - c.x) * (b.y - c.y) - (b.x - c.x) * (a.y - c.y);
+  const d1 = sign(p, tri[0], tri[1]), d2 = sign(p, tri[1], tri[2]), d3 = sign(p, tri[2], tri[0]);
+  return !((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0));
+}
+
+scene.addEventListener("mousemove", e => {
+  const p = { x: e.clientX, y: e.clientY };
+  const row = e.target.closest(".menu [data-k]");
+  if (row && !(openAgent && row.dataset.agent !== openAgent && headingToSub(p))) {
+    setHl(row);
+    clearTimeout(openTimer);
+    if (row.dataset.agent) { if (row.dataset.agent !== openAgent) openTimer = setTimeout(() => open(row), 100); else clearTimeout(closeTimer) }
+    else if (openAgent) { clearTimeout(closeTimer); closeTimer = setTimeout(close, 250) }
+  }
+  if (e.target.closest("#sub")) { clearTimeout(closeTimer); clearTimeout(openTimer) }
+  lastPt = p;
+});
+scene.addEventListener("mouseleave", () => { clearTimeout(openTimer); closeTimer = setTimeout(close, 250) });
+sub.addEventListener("mousemove", e => { const r = e.target.closest(".row[data-m]"); setSubHl(subRows().indexOf(r)) });
+sub.addEventListener("click", e => {
+  const r = e.target.closest(".row");
+  if (!r) return;
+  if (r.dataset.older !== undefined) { r.querySelector(".s").textContent = "in the full mockup"; return }
+  pick(openAgent, r.dataset.m);
+});
+rows.forEach(r => r.addEventListener("click", () => {
+  if (r.dataset.agent) pick(r.dataset.agent, chosen[r.dataset.agent]);
+}));
+scene.addEventListener("keydown", e => {
+  const keys = rows, i = keys.indexOf(hl);
+  if (openAgent && subHl >= 0) {
+    const n = subRows().length;
+    if (e.key === "ArrowDown") setSubHl(Math.min(n - 1, subHl + 1));
+    else if (e.key === "ArrowUp") setSubHl(Math.max(0, subHl - 1));
+    else if (e.key === "ArrowLeft" || e.key === "Escape") { close(); }
+    else if (e.key === "Enter") pick(openAgent, subRows()[subHl].dataset.m);
+    else return;
+  } else {
+    if (e.key === "ArrowDown") { close(); setHl(keys[Math.min(keys.length - 1, i + 1)]) }
+    else if (e.key === "ArrowUp") { close(); setHl(keys[Math.max(0, i - 1)]) }
+    else if (e.key === "ArrowRight" && hl?.dataset.agent) {
+      open(hl);
+      const a = hl.dataset.agent, idx = agents[a].models.findIndex(m => m[0] === chosen[a]);
+      setSubHl(Math.max(0, idx));
+    }
+    else if (e.key === "Enter" && hl?.dataset.agent) pick(hl.dataset.agent, chosen[hl.dataset.agent]);
+    else return;
+  }
+  e.preventDefault();
+});
+scene.addEventListener("click", () => scene.focus());
+render();
+</script>
