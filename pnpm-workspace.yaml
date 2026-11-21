@@ -9,3 +9,16 @@ allowBuilds:
   # wrangler/Miniflare (packages/cloud) need their platform binaries.
   esbuild: true
   workerd: true
+
+minimumReleaseAgeExclude:
+  - '@earendil-works/chord@1.6.0'
+  - '@earendil-works/pi-agent-core@1.6.0'
+  - '@earendil-works/pi-ai@1.6.0'
+  - '@earendil-works/pi-codemode@1.6.0'
+  - '@earendil-works/pi-coding-agent@1.6.0'
+  - '@earendil-works/pi-durable@1.6.0'
+  - '@earendil-works/pi-mcp@1.6.0'
+  - '@earendil-works/pi-schema@1.6.0'
+  - '@earendil-works/pi-telemetry@1.6.0'
+  - '@earendil-works/pi-tui@1.6.0'
+  - agents@0.34.0
