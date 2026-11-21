@@ -33,7 +33,7 @@ A free-standing conversation. Backed by **one pi-durable session** (`threads/<id
   *Implementation (1.2):* a thread is one pi-durable session; each version is a conversation forked just before the edited user message (`parent.at`), and the engine computes the switcher from pi-durable's conversation records (`packages/engine/src/runtimes/branches.ts`). The catalog remembers the active branch and when each branch was last used.
 - **T6** Switch model mid-thread (`sessions.configure`). The model used is shown per assistant message.
 - **T7** Auto-title after the first exchange, using the cheap "utility" model (07-shared §1.3). Can be renamed.
-- **T8** Attachments: drag & drop, paste, or 📎. Images go to vision models. PDFs are passed as files when the model supports it, otherwise text is extracted in the engine. Text/code files are inlined. Max size is configurable.
+- **T8** Attachments: drag & drop, paste, or 📎. Images go to vision models. PDFs are passed as files when the model supports it, otherwise text is extracted in the engine. Text/code files are inlined. Max size is configurable. In the transcript, images you sent show as thumbnails at the right edge above your message (a click opens the viewer); other files show as chips. The notes pi adds to the model's copy of an image message (its original size, a format conversion) are not shown as your words.
 - **T9** Tools available by default (toggle per thread from the composer's ⚙︎ menu):
   - `web_search`: OpenRouter web plugin by default. Optional Brave/Tavily/Exa key for a dedicated provider.
   - `web_fetch`: engine fetch + readability → markdown, size-capped.

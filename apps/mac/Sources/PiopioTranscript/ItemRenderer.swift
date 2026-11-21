@@ -95,7 +95,12 @@ nonisolated struct ItemRenderer: Sendable {
         case .user(let u):
             if compact { return NSAttributedString() }
             let out = NSMutableAttributedString()
-            if let files = u.attachments, !files.isEmpty { out.append(fileChips(files)) }
+            let files = u.attachments ?? []
+            // Images with a kept copy show as thumbnails; the other files as chips.
+            let pictured = attachments.map { base in files.compactMap { f in f.kind == .image ? f.stored.map { CardImage(url: base.appending(path: $0), stored: $0, name: f.name) } : nil } } ?? []
+            if !pictured.isEmpty { out.append(attachmentParagraph(UserImagesAttachment(model: UserImagesModel(images: pictured)), spacing: 6)) }
+            let chips = files.filter { $0.kind != .image || $0.stored == nil || attachments == nil }
+            if !chips.isEmpty { out.append(fileChips(chips)) }
             out.append(bubble(u.text))
             out.append(userFooter(u))
             return out

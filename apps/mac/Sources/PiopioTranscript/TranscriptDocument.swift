@@ -801,6 +801,7 @@ public final class TranscriptDocument {
             (value as? DisclosureAttachment)?.card.onToggle = { [weak self] card in self?.relayout(card) }
             (value as? DisclosureAttachment)?.card.onAction = { [weak self] action in self?.handle(action) }
             (value as? FileCardAttachment)?.model.onAction = { [weak self] action in self?.handle(action) }
+            (value as? UserImagesAttachment)?.model.onAction = { [weak self] action in self?.handle(action) }
             (value as? AutomationCardAttachment)?.model.onAction = { [weak self] action in self?.handle(action) }
             (value as? SideOfferAttachment)?.model.onAction = { [weak self] action in self?.handle(action) }
             if let visual = (value as? VisualAttachment)?.model {

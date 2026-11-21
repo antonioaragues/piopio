@@ -75,6 +75,10 @@ test("a pi session's message carries its files as tags, read back as chips; an e
 	] });
 	const edited = sdkWithWords(stored, "Only the notes");
 	expect(sdkUser(typeof edited === "string" ? edited : [{ type: "text", text: edited.text }, ...edited.images])).toMatchObject({ text: "Only the notes", attachments: [{ name: "notes.txt" }, { name: "a.png" }] });
+	// pi's notes on the images it resized follow the words: the model's, not yours.
+	const hinted = [{ type: "text" as const, text: `${typeof sent === "string" ? sent : sent.text}\n\n[Image: original 2048x1166, displayed at 2000x1139. Multiply coordinates by 1.02 to map to original image.]\n[Image converted from image/heic to image/jpeg.]` }, ...(typeof sent === "string" ? [] : sent.images)];
+	expect(sdkUser(hinted).text).toBe("What's in these?");
+	expect(sdkUser([{ type: "text", text: "see\n\n[Image: a note of mine]" }]).text).toBe("see\n\n[Image: a note of mine]");
 	expect(sdkContent("plain")).toBe("plain");
 	// Chats moved from pi-durable: tags without attributes, images without a tag.
 	expect(sdkUser([{ type: "text", text: '<attachment name="old.md">\nhi\n</attachment>\nwords' }, { type: "image", data: "AAAA", mimeType: "image/jpeg" }])).toEqual({ text: "words", attachments: [{ name: "old.md", kind: "text", size: 2 }, { name: "image", kind: "image", mimeType: "image/jpeg", size: 3 }] });

@@ -1003,7 +1003,7 @@ struct StepThumbnail: View {
     let url: URL
     @State private var image: NSImage?
     static let size = CGSize(width: 52, height: 34)
-    nonisolated(unsafe) private static let cache = NSCache<NSURL, NSImage>()
+    nonisolated(unsafe) private static let cache = NSCache<NSString, NSImage>()
 
     var body: some View {
         ZStack {
@@ -1022,19 +1022,21 @@ struct StepThumbnail: View {
         .task(id: url) { image = await Self.load(url) }
     }
 
-    static func load(_ url: URL) async -> NSImage? {
-        if let hit = cache.object(forKey: url as NSURL) { return hit }
+    /// The image read at most `maxPixel` on its longer side (cached per file and size).
+    static func load(_ url: URL, maxPixel: Int = 160) async -> NSImage? {
+        let key = "\(maxPixel) \(url.path)" as NSString
+        if let hit = cache.object(forKey: key) { return hit }
         let image = await Task.detached(priority: .utility) { () -> NSImage? in
             guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
             let options: [CFString: Any] = [
                 kCGImageSourceCreateThumbnailFromImageAlways: true,
                 kCGImageSourceCreateThumbnailWithTransform: true,
-                kCGImageSourceThumbnailMaxPixelSize: 160,
+                kCGImageSourceThumbnailMaxPixelSize: maxPixel,
             ]
             guard let cg = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
             return NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
         }.value
-        if let image { cache.setObject(image, forKey: url as NSURL) }
+        if let image { cache.setObject(image, forKey: key) }
         return image
     }
 }

@@ -68,8 +68,9 @@ function estimate(messages: Message[], base: Breakdown["groups"] = []): Breakdow
 	for (const message of messages) {
 		switch (message.role) {
 			case "user": {
-				const { words, files, images, clock } = userContent(message.content);
+				const { words, hints, files, images, clock } = userContent(message.content);
 				add("conversation", "Your messages", textTokens(words) + textTokens(clock));
+				add("attachments", "Images", textTokens(hints));
 				add("attachments", "Text and documents", textTokens(files));
 				add("attachments", "Images", estimateTokens({ ...message, content: images }));
 				break;

@@ -81,8 +81,12 @@ export function sdkContent(text: string, attachments: readonly (Attachment & { s
 	return { text: `${parts.join("\n")}\n${text}`, images };
 }
 
-/** A stored user message split into its files' part, its words and its images. */
-export function sdkSplit(content: string | readonly ContentBlock[] | undefined): { files: string; words: string; images: ImageBlock[]; attachments: AttachmentInfo[] } {
+/** The notes pi adds after the words of a message with images ("[Image: original 2048x1166, displayed at…]",
+ *  "[Image converted from…]", "[Image omitted: …]"): for the model only; pi writes them again on each send. */
+const IMAGE_HINTS = /\n\n(\[Image[ :][^\n]*\](?:\n\[Image[ :][^\n]*\])*)$/;
+
+/** A stored user message split into its files' part, its words, pi's notes on its images, and its images. */
+export function sdkSplit(content: string | readonly ContentBlock[] | undefined): { files: string; words: string; hints: string; images: ImageBlock[]; attachments: AttachmentInfo[] } {
 	const images = typeof content === "string" || !content ? [] : (content.filter((b) => b.type === "image") as ImageBlock[]);
 	let rest = typeof content === "string" ? content : (content ?? []).flatMap((b) => (b.type === "text" ? [b.text] : [])).join("\n");
 	const attachments: AttachmentInfo[] = [];
@@ -109,7 +113,9 @@ export function sdkSplit(content: string | readonly ContentBlock[] | undefined):
 	}
 	// Images without a tag (chats from before): named by kind.
 	for (const block of images.slice(image)) attachments.push({ name: "image", kind: "image", mimeType: block.mimeType, size: Math.floor((block.data.length * 3) / 4) });
-	return { files, words: rest, images, attachments };
+	const hint = images.length ? IMAGE_HINTS.exec(rest) : null;
+	const words = hint ? rest.slice(0, hint.index) : rest;
+	return { files, words, hints: hint?.[1] ?? "", images, attachments };
 }
 
 /** A user message as the transcript shows it: the words, and the files as chips. */

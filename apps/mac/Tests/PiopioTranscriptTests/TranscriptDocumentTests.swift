@@ -126,6 +126,20 @@ private func expectConsistent(_ doc: TranscriptDocument) {
     expectConsistent(doc)
 }
 
+@MainActor @Test func imagesYouSentShowAsThumbnailsOverTheBubble() {
+    let files = [AttachmentInfo(name: "shot.png", kind: .image, stored: "u1/shot.png"), AttachmentInfo(name: "notes.md", kind: .text, stored: "u1/notes.md"), AttachmentInfo(name: "old.jpg", kind: .image)]
+    let item = TimelineItem.user(UserItem(id: "u1", at: "", text: "Look", attachments: files))
+    let out = ItemRenderer(attachments: URL(fileURLWithPath: "/tmp/attachments/c1")).render(item)
+    var thumbnails: [CardImage] = []
+    out.enumerateAttribute(.attachment, in: NSRange(location: 0, length: out.length)) { value, _, _ in
+        if let a = value as? UserImagesAttachment { thumbnails += a.model.images }
+    }
+    #expect(thumbnails == [CardImage(url: URL(fileURLWithPath: "/tmp/attachments/c1/u1/shot.png"), stored: "u1/shot.png", name: "shot.png")])
+    // The other file and the image without a kept copy stay chips; the image with one doesn't.
+    #expect(out.string.contains("notes.md") && out.string.contains("old.jpg") && !out.string.contains("shot.png"))
+    #expect(UserImagesModel(images: Array(repeating: thumbnails[0], count: 5)).height(for: 400) - 188 == 0, "two rows of 3 + 2")
+}
+
 @MainActor @Test func revealPagesInOldItems() async {
     let items = (0..<400).map { i in i % 2 == 0 ? user("\(i)", "message \(i)") : answer("\(i)", "answer \(i)") }
     let doc = await loaded(items, window: 300, page: 10)
