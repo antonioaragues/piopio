@@ -266,11 +266,15 @@ struct Composer: View {
                 .foregroundStyle(Color.dsFg2)
             }
             if !attachments.isEmpty { chips }
+            HStack(alignment: .top, spacing: 2) {
+            if let chip = leading?.chip {
+                CommandChipView(chip: chip) { text = ""; focused = true }.padding(.top, 0.5)
+            }
             ZStack(alignment: .topLeading) {
-                if text.isEmpty {
-                    Text(placeholder).foregroundStyle(Color.dsFg3).padding(.top, 1).padding(.leading, 5).allowsHitTesting(false)
+                if fieldText.wrappedValue.isEmpty {
+                    Text(placeholder).foregroundStyle(Color.dsFg3).lineLimit(1).padding(.top, 1).padding(.leading, 5).allowsHitTesting(false)
                 }
-                TextEditor(text: $text).accessibilityLabel("Message")
+                TextEditor(text: fieldText).accessibilityLabel("Message")
                     .scrollContentBackground(.hidden)
                     .focused($focused)
                     .frame(minHeight: 22, maxHeight: 180)
@@ -316,13 +320,21 @@ struct Composer: View {
                         highlighted = (highlighted + suggestions.count - 1) % suggestions.count
                         return .handled
                     }
+                    // ⌫ in an empty box takes the command chip off.
+                    .onKeyPress(.delete) {
+                        guard leading != nil, fieldText.wrappedValue.isEmpty else { return .ignored }
+                        text = ""
+                        return .handled
+                    }
                     .onKeyPress(.escape) {
                         if !suggestions.isEmpty { suggestions = []; return .handled }
+                        if leading != nil, fieldText.wrappedValue.isEmpty { text = ""; return .handled }
                         if thread.editing != nil { cancelEdit(); return .handled }
                         guard thread.isRunning else { return .ignored }
                         Task { await thread.stop() }
                         return .handled
                     }
+            }
             }
             .font(.system(size: 14))
             HStack(spacing: 2) {
@@ -356,11 +368,29 @@ struct Composer: View {
     /// Build sessions take files by path (the agent reads them) and have their own tools.
     private var isBuild: Bool { thread.ref.kind == .build }
 
-    private var canSend: Bool { !thread.isSubmitting && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    /// A command with a chip needs words after it.
+    private var canSend: Bool { !thread.isSubmitting && !(leading?.rest ?? text).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
+    /// The command chip at the start of the box and the words after it (docs/spec/32 §4.2). The message keeps the
+    /// command as typed (`/goal words`), so drafts, the queue and editing see one string; the chip is how it shows.
+    private var leading: (chip: CommandChip, rest: String)? {
+        guard text.hasPrefix("/") else { return nil }
+        let chips = chipCommands
+        guard let l = CommandMenu.leading(text, commands: Set(chips.keys)), let chip = chips[l.command] else { return nil }
+        return (chip, l.rest)
+    }
+
+    /// What the text field edits: the words after the chip, or all of it.
+    private var fieldText: Binding<String> {
+        Binding(get: { leading?.rest ?? text }, set: { new in
+            if let chip = leading?.chip { text = "/\(chip.name) " + new } else { text = new }
+        })
+    }
 
     private var placeholder: String {
         if thread.editing != nil { return "Edit your message" }
         if let prompt = shownPrompt, prompt.takesReply { return prompt.replyPlaceholder }
+        if let chip = leading?.chip { return chip.hint }
         if thread.isRunning { return "Add to the queue, or ⌥↩ to steer now…" }
         if isBuild && thread.planMode { return "Plan only: describe what you want; the agent proposes a plan first" }
         // An agent is set up by talking (docs/spec/21 D3): its chat says so.
@@ -504,7 +534,7 @@ struct Composer: View {
 
     private func send(steer: Bool) {
         let message = text
-        guard !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        guard !(leading?.rest ?? message).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         if !steer, answerTray() { return }
         // `/side <what>` (docs/spec/24 §6): a side conversation with your words as its brief; this one goes on.
         let trimmedMessage = message.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -520,8 +550,9 @@ struct Composer: View {
             }
             return
         }
-        // Piopio's own commands run here; pi's templates, skills and extension commands go to the agent as typed.
-        if isBuild, let command = BuiltInCommand.all.first(where: { "/\($0.name)" == message.trimmingCharacters(in: .whitespacesAndNewlines) }) {
+        // Piopio's commands that act run here; the others, and pi's templates, skills and extension commands, go to
+        // the agent as typed.
+        if let command = builtIns.first(where: { $0.hint == nil && "/\($0.name)" == trimmedMessage }) {
             text = ""
             command.run(thread)
             return
@@ -748,20 +779,40 @@ enum Suggestion: Hashable, Identifiable {
     }
 }
 
-/// Commands the app handles itself (BR5: /plan, /compact, /model, /tree, plus review, commit, new).
+/// Piopio's own commands (docs/spec/32 §4), the menu's first group in this order. Some act when picked (plan, compact,
+/// review…); the others take words: picking one puts a chip in the box with its hint as the placeholder, and the
+/// message goes out as `/name words`.
 struct BuiltInCommand: Hashable {
     let name: String
     let summary: String
+    let icon: String
+    var keywords: [String] = []
+    /// Build sessions only.
+    var buildOnly = false
+    /// Takes words: the box's placeholder while its chip is there.
+    var hint: String?
+    /// The engine runs it (a pi extension, or a template Piopio bundles): listed only where the session has it.
+    var engine = false
 
     static let all = [
-        BuiltInCommand(name: "plan", summary: "Plan mode on or off: explore and propose a plan before changing anything"),
-        BuiltInCommand(name: "compact", summary: "Summarize older messages to free context"),
-        BuiltInCommand(name: "model", summary: "Choose the model for this session"),
-        BuiltInCommand(name: "review", summary: "Review this session's changes"),
-        BuiltInCommand(name: "commit", summary: "Commit changes"),
-        BuiltInCommand(name: "new", summary: "New session, on a branch or a worktree"),
-        BuiltInCommand(name: "side", summary: "A side conversation for something else: /side <what>"),
+        BuiltInCommand(name: "plan", summary: "Plan mode on or off: explore and propose a plan before changing anything", icon: "list.bullet.rectangle", keywords: ["think", "propose"], buildOnly: true),
+        BuiltInCommand(name: "goal", summary: "Keep working until a goal is met", icon: "scope", keywords: ["done", "until", "finish"], buildOnly: true, hint: "What done looks like…", engine: true),
+        BuiltInCommand(name: "side", summary: "A side conversation for something else; this one goes on", icon: "bubble.left.and.text.bubble.right", keywords: ["btw", "aside", "meanwhile"], hint: "What the side conversation is about…"),
+        BuiltInCommand(name: "automation", summary: "Make an automation: work that starts on its own, once or on a schedule", icon: "clock", keywords: ["schedule", "timer", "remind", "every", "later", "cron"], hint: "What, and when or how often…", engine: true),
+        BuiltInCommand(name: "grill-me", summary: "Pressure-test an idea: one question at a time until the plan is clear", icon: "questionmark.bubble", keywords: ["question", "interview", "idea", "pressure"], hint: "The idea to pressure-test…", engine: true),
+        BuiltInCommand(name: "browser", summary: "Do it in the browser, where you can watch", icon: "globe", keywords: ["web", "page", "site"], hint: "What to do in the browser…", engine: true),
+        BuiltInCommand(name: "compact", summary: "Summarize older messages to free context", icon: "arrow.down.right.and.arrow.up.left", keywords: ["context", "summarize"]),
+        BuiltInCommand(name: "review", summary: "Review this session's changes", icon: "checklist", keywords: ["check", "diff"], buildOnly: true),
+        BuiltInCommand(name: "commit", summary: "Commit changes", icon: "arrow.triangle.branch", keywords: ["git", "save"], buildOnly: true),
+        BuiltInCommand(name: "model", summary: "Choose the model for this session", icon: "cpu", buildOnly: true),
+        BuiltInCommand(name: "new", summary: "New session, on a branch or a worktree", icon: "square.and.pencil", keywords: ["worktree", "branch"], buildOnly: true),
     ]
+
+    /// Piopio's commands this conversation has: Build's or both modes', and the engine's only where it lists them.
+    static func available(build: Bool, session: [SessionCommand]) -> [BuiltInCommand] {
+        let listed = Set(session.map(\.name))
+        return all.filter { (build || !$0.buildOnly) && (!$0.engine || listed.contains($0.name)) }
+    }
 
     @MainActor func run(_ thread: ThreadModel) {
         switch name {
@@ -784,28 +835,52 @@ extension Composer {
         return String(word.dropFirst())
     }
 
+    /// Piopio's commands here, then pi's (templates, skills, extension commands) without those Piopio has by name.
+    private var builtIns: [BuiltInCommand] { BuiltInCommand.available(build: isBuild, session: sessionCommands) }
+    private var piCommands: [SessionCommand] {
+        let own = Set(BuiltInCommand.all.map(\.name))
+        return sessionCommands.filter { !own.contains($0.name) }
+    }
+
+    /// Every command for `/query`, grouped (Piopio's, skills, templates and extension commands) and matched by one
+    /// rule (docs/spec/32 §4.1).
+    private func commandSuggestions(_ q: String) -> [Suggestion] {
+        let own = CommandMenu.filter(builtIns, query: q) { (names: [$0.name], keywords: $0.keywords, description: $0.summary) }
+        let pi = { (kinds: Set<SessionCommand.Kind>) in
+            CommandMenu.filter(piCommands.filter { kinds.contains($0.kind) }, query: q) { (names: [Self.label($0), $0.name], keywords: [], description: $0.description) }
+        }
+        return own.map(Suggestion.builtIn) + (pi([.skill]) + pi([.template, .extension])).map(Suggestion.command)
+    }
+
+    /// The commands that take words, by what's typed for them, for the chip.
+    var chipCommands: [String: CommandChip] {
+        var out: [String: CommandChip] = [:]
+        for c in piCommands where c.kind == .skill || (c.kind == .template && c.hint != nil) {
+            out[c.name] = CommandChip(name: c.name, label: Self.label(c), icon: Self.icon(c), hint: c.hint ?? "What the skill should do…", help: c.description)
+        }
+        for c in builtIns { if let hint = c.hint { out[c.name] = CommandChip(name: c.name, label: c.name, icon: c.icon, hint: hint, help: c.summary) } }
+        return out
+    }
+
+    /// A skill by its name ("greet" for `skill:greet`).
+    static func label(_ c: SessionCommand) -> String { c.kind == .skill && c.name.hasPrefix("skill:") ? String(c.name.dropFirst(6)) : c.name }
+    static func icon(_ c: SessionCommand) -> String { c.kind == .skill ? "sparkles" : c.kind == .template ? "text.badge.plus" : "puzzlepiece.extension" }
+
     func suggest(for value: String) {
-        let trimmed = value.trimmingCharacters(in: .whitespaces)
+        // Leading spaces only: `/goal ` has a command and its chip, so the menu closes.
+        let trimmed = String(value.drop(while: { $0 == " " }))
+        if trimmed.hasPrefix("/"), !trimmed.contains(" "), !value.contains("\n") {
+            suggestions = commandSuggestions(String(trimmed.dropFirst()))
+            highlighted = 0
+            return
+        }
         if !isBuild {
-            // Conversations: templates and skills after "/".
-            if trimmed.hasPrefix("/"), !trimmed.contains(" "), !value.contains("\n") {
-                let q = trimmed.dropFirst().lowercased()
-                let side = BuiltInCommand.all.filter { $0.name == "side" && (q.isEmpty || $0.name.hasPrefix(q)) }.map(Suggestion.builtIn)
-                suggestions = Array((side + sessionCommands.filter { q.isEmpty || $0.name.lowercased().contains(q) }.map(Suggestion.command)).prefix(12))
-            } else if let query = mentionQuery, query.count >= 2, !chatMentions(query).isEmpty {
+            if let query = mentionQuery, query.count >= 2, !chatMentions(query).isEmpty {
                 // A chat outside projects: your other such chats whose title matches, sent along as background.
                 suggestions = chatMentions(query)
             } else if !suggestions.isEmpty {
                 suggestions = []
             }
-            highlighted = 0
-            return
-        }
-        if trimmed.hasPrefix("/"), !trimmed.contains(" "), !value.contains("\n") {
-            let q = trimmed.dropFirst().lowercased()
-            let builtIn = BuiltInCommand.all.filter { q.isEmpty || $0.name.hasPrefix(q) }.map(Suggestion.builtIn)
-            let pi = sessionCommands.filter { q.isEmpty || $0.name.lowercased().contains(q) }.map(Suggestion.command)
-            suggestions = Array((builtIn + pi).prefix(12))
             highlighted = 0
             return
         }
@@ -854,8 +929,8 @@ extension Composer {
         case .conversation(let id, _):
             if let query = mentionQuery { text.removeLast(query.count + 1) }
             text += "@conversation:\(id) "
-        case .builtIn(let c) where c.name == "side":
-            text = "/side "
+        case .builtIn(let c) where c.hint != nil:
+            text = "/\(c.name) "
         case .builtIn(let c):
             text = ""
             c.run(thread)
@@ -865,33 +940,76 @@ extension Composer {
         suggestions = []
     }
 
+    /// A command's group in the menu; nil for mentions.
+    private func group(_ s: Suggestion) -> String? {
+        switch s {
+        case .builtIn: "Piopio"
+        case .command(let c): c.kind == .skill ? "Skills" : "Templates and commands"
+        default: nil
+        }
+    }
+
+    /// The rows, with a small label before each group when there's more than one; about eight rows show, and ↑/↓
+    /// keep the highlighted one in view.
     var suggestionList: some View {
-        VStack(alignment: .leading, spacing: 1) {
-            ForEach(Array(suggestions.enumerated()), id: \.element.id) { index, suggestion in
-                Button { accept(suggestion) } label: {
-                    HStack(spacing: 12) {
-                        Text(title(suggestion)).font(.system(size: 12.5, design: .monospaced)).lineLimit(1).truncationMode(.head)
-                        Text(subtitle(suggestion)).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1)
-                        Spacer(minLength: 0)
+        let groups = Set(suggestions.compactMap(group))
+        let labelled = groups.count > 1
+        let rows = suggestions.count, labels = labelled ? groups.count : 0
+        let height = min(CGFloat(rows) * 31 + CGFloat(labels) * 24, 8.5 * 31)
+        return ScrollViewReader { proxy in
+            ScrollView(.vertical) {
+                VStack(alignment: .leading, spacing: 1) {
+                    ForEach(Array(suggestions.enumerated()), id: \.element.id) { index, suggestion in
+                        if labelled, let g = group(suggestion), index == 0 || group(suggestions[index - 1]) != g {
+                            Text(g).font(.system(size: 11)).foregroundStyle(Color.dsFg3)
+                                .padding(.horizontal, 10).frame(height: 23, alignment: .bottomLeading)
+                        }
+                        row(suggestion, highlighted: index == highlighted).id(suggestion.id)
                     }
-                    .padding(.horizontal, 10)
-                    .frame(height: 30)
-                    .background(index == highlighted ? Color.dsChip : .clear, in: RoundedRectangle(cornerRadius: 8))
-                    .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+            }
+            .scrollIndicators(.automatic)
+            .frame(height: height)
+            .onChange(of: highlighted) { _, i in
+                guard suggestions.indices.contains(i) else { return }
+                proxy.scrollTo(suggestions[i].id)
             }
         }
         .padding(6)
         .glassPanel(radius: DS.Radius.panel, material: .regularMaterial)
     }
 
+    private func row(_ suggestion: Suggestion, highlighted: Bool) -> some View {
+        Button { accept(suggestion) } label: {
+            HStack(spacing: 8) {
+                icon(suggestion).frame(width: 16)
+                switch suggestion {
+                case .file: Text(title(suggestion)).font(.system(size: 12.5, design: .monospaced)).lineLimit(1).truncationMode(.head)
+                default: Text(title(suggestion)).font(.system(size: 13)).foregroundStyle(Color.dsFg).lineLimit(1).fixedSize()
+                }
+                Text(subtitle(suggestion)).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1).truncationMode(.tail)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 10)
+            .frame(height: 30)
+            .background(highlighted ? Color.dsChip : .clear, in: RoundedRectangle(cornerRadius: 8))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(help(suggestion))
+    }
+
+    private func help(_ s: Suggestion) -> String {
+        if case .command(let c) = s, let source = c.source { return "\(c.description)\nFrom \(source)" }
+        return subtitle(s)
+    }
+
     private func title(_ s: Suggestion) -> String {
         switch s {
         case .file(let f): f.path
         case .conversation(_, let title): title
-        case .builtIn(let c): "/\(c.name)"
-        case .command(let c): "/\(c.name)" + (c.hint.map { " \($0)" } ?? "")
+        case .builtIn(let c): c.name
+        case .command(let c): Self.label(c)
         case .agent(_, let name): "@\(name)"
         }
     }
@@ -911,10 +1029,51 @@ extension Composer {
         case .file(let f): f.kind == .folder ? "folder" : "doc"
         case .conversation: "bubble.left.and.text.bubble.right"
         case .agent: "person.crop.circle"
-        case .builtIn: "command"
-        case .command(let c): c.kind == .skill ? "sparkles" : c.kind == .template ? "text.badge.plus" : "puzzlepiece.extension"
+        case .builtIn(let c): c.icon
+        case .command(let c): Self.icon(c)
         }
         Image(systemName: name).font(.system(size: 11)).foregroundStyle(Color.dsFg3)
+    }
+}
+
+/// A command that takes words, shown as a chip at the start of the box (docs/spec/32 §4.2).
+struct CommandChip: Equatable {
+    /// What's typed for it ("goal", "skill:greet").
+    let name: String
+    let label: String
+    let icon: String
+    /// The box's placeholder while the chip is there.
+    let hint: String
+    /// Its description, in the chip's help tag.
+    let help: String
+}
+
+/// The chip: icon and name on a grey fill, and × to take it off (so do ⌫ and esc in an empty box).
+struct CommandChipView: View {
+    let chip: CommandChip
+    let remove: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: chip.icon).font(.system(size: 10.5))
+            Text(chip.label).font(.system(size: 13))
+            Button(action: remove) {
+                Image(systemName: "xmark").font(.system(size: 7.5, weight: .bold))
+                    .frame(width: 12, height: 12).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(hovering ? Color.dsFg2 : Color.dsFg3)
+            .help("Remove /\(chip.name)")
+            .accessibilityLabel("Remove command \(chip.label)")
+        }
+        .foregroundStyle(Color.dsFg)
+        .padding(.leading, 6).padding(.trailing, 4)
+        .frame(height: 20)
+        .background(Color.dsChip, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .onHover { hovering = $0 }
+        .help(chip.help)
+        .fixedSize()
     }
 }
 

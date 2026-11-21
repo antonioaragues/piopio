@@ -1116,7 +1116,7 @@ describe("composer and extensions (milestone 2.5)", () => {
 		await stop(a); // a fresh runtime discovers the new template
 		const b = await start(a.home);
 		const { commands } = await b.client.call("sessions.commands", { ref: s.ref });
-		expect(commands).toEqual(expect.arrayContaining([expect.objectContaining({ name: "plan", kind: "extension" })]));
+		expect(commands).toEqual(expect.arrayContaining([expect.objectContaining({ name: "plan", kind: "extension" }), expect.objectContaining({ name: "grill-me", kind: "template" })]));
 		const names = commands.map((c: { name: string }) => c.name);
 		if (names.includes("review")) expect(commands.find((c: { name: string }) => c.name === "review")).toMatchObject({ kind: "template", description: "Review the current diff" });
 		const { files } = await b.client.call("projects.files", { cwd: s.folder, query: "stdio" });
@@ -1591,6 +1591,8 @@ describe("Extensions and memory providers (milestone 4.1)", () => {
 			expect.arrayContaining([
 				{ name: "summarize", description: "Summarize something briefly", kind: "template", hint: "<what> <words>" },
 				{ name: "skill:greet", description: "Greets people warmly in Valencian.", kind: "skill", source: expect.any(String) },
+				// Piopio's own, bundled (docs/spec/32 CM3).
+				expect.objectContaining({ name: "grill-me", kind: "template", hint: "<the idea>" }),
 			]),
 		);
 		await a.client.call("sessions.submit", { ref, input: { text: "/summarize report 50" } });

@@ -1,6 +1,6 @@
 # 32 · The / menu: commands as intents
 
-Proposed 2026-11-21, not decided. From the user's screenshots of Antigravity's composer and a read of Piopio's
+Proposed 2026-11-21; decided and CM1–CM3 built the same day (§7). From the user's screenshots of Antigravity's composer and a read of Piopio's
 composer ([Composer.swift](../../apps/mac/App/Piopio/Composer.swift)), the engine's command list
 ([build.ts](../../packages/engine/src/runtimes/build.ts) `commands()`) and the specs each command maps to.
 
@@ -109,16 +109,32 @@ the Piopio group with their own icons rather than as templates.
 
 | Phase | What | Size |
 |---|---|---|
-| **CM1 · The menu** | §4.1: icons, body font, groups, scroll, one matching rule, keywords, skill names, dedupe; /compact in Chat | S |
-| **CM2 · The chip** | §4.2, for every command that takes words, including pi templates and skills | S–M |
-| **CM3 · Cheap commands** | /automation, /grill-me, /browser as bundled templates; /goal shown as a Piopio command | S |
+| **CM1 · The menu** | §4.1: icons, body font, groups, scroll, one matching rule, keywords, skill names, dedupe; /compact in Chat | S · built |
+| **CM2 · The chip** | §4.2, for every command that takes words, including pi templates and skills | S–M · built |
+| **CM3 · Cheap commands** | /automation, /grill-me, /browser as bundled templates; /goal shown as a Piopio command | S · built |
 | **CM4 · Commands with engine work** | /learn (after PAR12's skill writing), /parallel (after real use of the board), /goal in Chat | M each |
 
 CM1 and CM2 are app-only and change nothing in the protocol. CM3 adds three template files and their rows.
 
-## 6. Open questions
+## 6. Decisions (2026-11-21)
 
-- **CM-Q1.** The hint in the placeholder (proposed) or Antigravity's callout above the box?
-- **CM-Q2.** `/side` or rename it `/btw`? Proposed: keep `/side`, find it by "btw".
-- **CM-Q3.** `/parallel` as a command at all, or only the project's Parallel work setting?
-- **CM-Q4.** A bundled `piopio-guide` skill: worth its context cost on every request?
+- **CM-Q1.** The hint is the box's placeholder; no callout above the box.
+- **CM-Q2.** Keep `/side`; "btw" finds it.
+- **CM-Q3.** `/parallel` waits for real use of the Parallel work board (CM4).
+- **CM-Q4.** No `piopio-guide` skill for now: not worth its context on every request.
+
+## 7. As built (2026-11-21)
+
+- **Menu** ([Composer.swift](../../apps/mac/App/Piopio/Composer.swift)): groups Piopio, Skills, Templates and
+  commands, each labelled only when more than one shows; about 8½ rows, then it scrolls. Matching is
+  [CommandMenu](../../apps/mac/Sources/PiopioKit/CommandMenu.swift): name prefix, name substring, then from two
+  letters a keyword or a word of the description. A pi command with a Piopio command's name is hidden.
+- **Piopio's commands that need the engine** (/goal, /automation, /grill-me, /browser) show only where the session
+  lists them, so each appears exactly where it works: /goal in Build; /browser only with the browser on; /automation
+  only with automations.
+- **Chip:** the message stays `/name words` in the composer's text (drafts, the queue and editing are unchanged); the
+  chip is drawn from its start, and the field edits the words after it. A command with a chip needs words to send.
+  Skills without an argument hint get "What the skill should do…".
+- **Templates** ([piopio-commands.ts](../../packages/engine/src/runtimes/piopio-commands.ts)) join pi's through the
+  resource loader's `promptsOverride`, so Build and chats have them; a template of the same name in the user's pi
+  folder or a package wins. Agents' chats (pi-durable) don't have them yet.

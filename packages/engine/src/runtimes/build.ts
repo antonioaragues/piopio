@@ -41,6 +41,7 @@ import { consultExtension, type ConsultBridge } from "../consult.js";
 import { offersExtension, type OffersBridge } from "../offers.js";
 import { guardsExtension } from "../tools/guards.js";
 import { CONVERSATION_MIME, formatConversation, historySdkExtension, type HistoryBridge } from "../tools/history.js";
+import { withPiopioPrompts } from "./piopio-commands.js";
 import { PromptBroker, uiBridge } from "./prompts.js";
 import { ContextBreakdown } from "./context-breakdown.js";
 import { recorder } from "./recorder.js";
@@ -179,6 +180,8 @@ export class BuildRuntime implements Runtime {
 			cwd: o.cwd,
 			agentDir,
 			settingsManager,
+			// Piopio's /automation, /grill-me and /browser (docs/spec/32 CM3).
+			promptsOverride: (base) => ({ ...base, prompts: withPiopioPrompts(base.prompts, { browser: Boolean(o.browser), automations: Boolean(o.automations) }) }),
 			extensionFactories: o.chat ? chatFactories(o, broker, () => runtime) : [
 				// The pi CLI's built-ins (MCP servers, and codemode / tool search through which MCP tools are
 				// reached). Replaceable: a user extension that registers the same tools or /mcp takes over.
