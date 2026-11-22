@@ -5,12 +5,11 @@
  * before. A fire is a run: an agent's (its run machinery, 06 PR1) or Piopio's (a new conversation, in the project's
  * folder or loose). Rules live here, not in the prompts (26 §7.2): who may run what, where, and with which result.
  */
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { EngineError } from "../models.js";
 import type { AutomationSummary } from "@piopio/runtime";
 import { DEFAULT_BUDGET, nameOf, nextOf, parseWhen, PIOPIO, resultLabel, systemZone, whenLabel, type Automation, type AutomationRun, type ResultTo, type RunStatus, type Trigger } from "./model.js";
-import { writeFileAtomic } from "../atomic.js";
 
 /** `cloud`: it runs in your cloud (docs/spec/30 K1), which keeps its own automations. */
 export type AgentInfo = { id: string; name: string; telegram: boolean; cloud?: boolean };
@@ -544,12 +543,12 @@ export class Automations {
 
 	private save(): void {
 		mkdirSync(dirname(this.host.file), { recursive: true });
-		writeFileAtomic(this.host.file, JSON.stringify(this.store, null, "\t"));
+		writeFileSync(this.host.file, JSON.stringify(this.store, null, "\t"));
 	}
 
 	private saveRuns(): void {
 		mkdirSync(dirname(this.host.runsFile), { recursive: true });
-		writeFileAtomic(this.host.runsFile, JSON.stringify(this.runs, null, "\t"));
+		writeFileSync(this.host.runsFile, JSON.stringify(this.runs, null, "\t"));
 	}
 
 	/** The migration's records (27 §6), written before anything runs. Ids already here are kept as they are. */

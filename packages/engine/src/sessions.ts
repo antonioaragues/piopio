@@ -69,7 +69,6 @@ import { sdkMessages, SdkEventMapper } from "./timeline/pi-sdk.js";
 import { migrateChat } from "./migrate-chats.js";
 import type { CloudMemory, Params, Result, SessionEvent } from "@piopio/protocol";
 import { CloudAgentView, type CloudLink } from "./cloud.js";
-import { readJsonFile, writeFileAtomic } from "./atomic.js";
 import type { SecretBroker } from "./secrets.js";
 import { TelegramChannels as TelegramSecrets } from "./channels/manager.js";
 import { progressLine } from "./progress-line.js";
@@ -238,7 +237,7 @@ export class Sessions {
 		});
 		this.checkpoints = new CheckpointStore(join(paths.home, "checkpoints"));
 		if (existsSync(paths.catalogIndex)) {
-			for (const e of readJsonFile<CatalogEntry[]>(paths.catalogIndex, () => [])) {
+			for (const e of JSON.parse(readFileSync(paths.catalogIndex, "utf8")) as CatalogEntry[]) {
 				// Chat-lens sessions are Read only now (docs/spec/18 §4): the profile follows the approval mode.
 				if (e.ref.kind === "build" && e.profile === "chat") e.approvalMode = "read_only";
 				// Notebooks are gone (docs/spec/18 CF8): their files stay in spaces/, they no longer show.
@@ -3116,7 +3115,9 @@ export class Sessions {
 	}
 
 	private save(): void {
-		writeFileAtomic(this.paths.catalogIndex, JSON.stringify([...this.entries.values()], null, "\t"));
+		const tmp = `${this.paths.catalogIndex}.tmp`;
+		writeFileSync(tmp, JSON.stringify([...this.entries.values()], null, "\t"));
+		renameSync(tmp, this.paths.catalogIndex);
 	}
 }
 

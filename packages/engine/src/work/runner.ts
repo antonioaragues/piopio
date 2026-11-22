@@ -9,13 +9,12 @@
  * What starts a project's work on its own is an automation run by Piopio there (docs/spec/27, automations/).
  */
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { ApprovalMode, WayOfWorking, WorkLanding, WorkTask } from "@piopio/protocol";
 import { EngineError } from "../models.js";
 import { detectLanguage, fitCheck } from "./fit.js";
 import { BUILTIN_PLAYBOOKS, defaultPlaybook, partFor, PIOPIO_BOARD, playbookOf, projectPlaybooks, type HelperKind, type Playbook } from "./playbooks.js";
-import { writeFileAtomic } from "../atomic.js";
 
 export type TaskState = WorkTask["state"];
 export type { WayOfWorking, WorkLanding, WorkTask };
@@ -130,7 +129,7 @@ export class WorkRunner {
 
 	private save(work?: ProjectWork): void {
 		mkdirSync(dirname(this.host.stateFile), { recursive: true });
-		writeFileAtomic(this.host.stateFile, JSON.stringify(this.work, null, "\t"));
+		writeFileSync(this.host.stateFile, JSON.stringify(this.work, null, "\t"));
 		if (work) this.host.changed(work.project);
 	}
 

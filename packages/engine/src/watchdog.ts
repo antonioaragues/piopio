@@ -10,11 +10,10 @@
  * helper's to the conversation that made the task, yours to Needs you, with a notification. W4 (parked or faulted)
  * and W5 (over budget) are already the agents' Inbox and the board's and agents' budgets.
  */
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import type { ContainerRef } from "@piopio/protocol";
 import type { Runtime } from "./runtimes/runtime.js";
-import { writeFileAtomic } from "./atomic.js";
 
 export type WatchdogRule = "silent" | "looping" | "waiting";
 
@@ -213,7 +212,7 @@ export class Watchdog {
 
 	private save(): void {
 		mkdirSync(dirname(this.file), { recursive: true });
-		writeFileAtomic(this.file, JSON.stringify(this.notes, null, "\t"));
+		writeFileSync(this.file, JSON.stringify(this.notes, null, "\t"));
 		this.host.changed();
 	}
 }
