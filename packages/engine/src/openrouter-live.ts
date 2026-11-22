@@ -51,13 +51,21 @@ export class OpenRouterLive {
 		return this.extra;
 	}
 
-	/** pi's OpenRouter provider with the added models listed too; requests go through it unchanged. */
-	wrap(base: Provider): Provider {
+	/**
+	 * pi's OpenRouter provider with the added models listed too; requests go through it unchanged. With `anthropic`
+	 * (pi's catalog for Anthropic's own API), a Claude model OpenRouter serves through the Anthropic Messages API takes
+	 * that catalog's `supportsMidConvoSystemMessages`: OpenRouter passes system messages mid-conversation through and the
+	 * cache holds across them (docs/spec/38 §8 R2, test/openrouter-midconvo.test.ts), but its catalog entries lack the
+	 * flag, so pi folded every prompt change into a new leading prompt.
+	 */
+	wrap(base: Provider, anthropic: readonly Model<Api>[] = []): Provider {
 		const { getAllModels, ...rest } = base;
+		const midConvo = new Set(anthropic.filter((m) => (m.compat as { supportsMidConvoSystemMessages?: boolean } | undefined)?.supportsMidConvoSystemMessages).map((m) => m.id));
+		const patch = <M extends { id: string }>(models: readonly M[]): M[] => (midConvo.size ? models.map((m) => withMidConvo(m, midConvo)) : [...models]);
 		return {
 			...rest,
-			getModels: () => [...base.getModels(), ...this.extra],
-			...(getAllModels ? { getAllModels: () => [...getAllModels.call(base), ...this.extra] } : {}),
+			getModels: () => patch([...base.getModels(), ...this.extra]),
+			...(getAllModels ? { getAllModels: () => patch([...getAllModels.call(base), ...this.extra]) } : {}),
 		} as Provider;
 	}
 
@@ -163,4 +171,17 @@ function closest(id: string, catalog: readonly Model<Api>[]): Model<Api> | undef
 		}
 	}
 	return best;
+}
+
+/** "anthropic/claude-haiku-5.5" is Anthropic's "claude-haiku-5-5". */
+export function anthropicId(openrouterId: string): string | undefined {
+	return openrouterId.startsWith("anthropic/") ? openrouterId.slice("anthropic/".length).replaceAll(".", "-") : undefined;
+}
+
+/** A Claude chat model on the Anthropic Messages API, with the flag its Anthropic entry has; anything else as it is. */
+function withMidConvo<M extends { id: string }>(model: M, midConvo: ReadonlySet<string>): M {
+	const id = anthropicId(model.id);
+	const { api, compat } = model as { api?: unknown; compat?: Record<string, unknown> };
+	if (api !== "anthropic-messages" || !id || !midConvo.has(id) || compat?.supportsMidConvoSystemMessages !== undefined) return model;
+	return { ...model, compat: { ...compat, supportsMidConvoSystemMessages: true } };
 }

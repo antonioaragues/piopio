@@ -189,7 +189,7 @@ test("Build: a plain conversation, a tool step included, keeps its prefix", asyn
 	expect(breaks(a.requests.get("build"))).toEqual([]);
 });
 
-test.fails("Build: an edit to NOTES.md between turns changes the system prompt (spec 38 T3), for models that collapse it (R2)", async () => {
+test.fails("Build: an edit to NOTES.md between turns changes the system prompt (spec 38 T3), for models that collapse it: those without the flag (R4)", async () => {
 	const a = await start();
 	await SCENARIOS.notes!(a);
 	expect(breaks(a.requests.get("notes"))).toEqual([]);
@@ -210,7 +210,7 @@ test("Chat: a plain conversation keeps its prefix", async () => {
 	expect(breaks(a.requests.get("chat"))).toEqual([]);
 });
 
-test.fails("Chat: About me changing between turns changes the system prompt (spec 38 T3), for models that collapse it (R2)", async () => {
+test.fails("Chat: About me changing between turns changes the system prompt (spec 38 T3), for models that collapse it: those without the flag (R4)", async () => {
 	const a = await start();
 	await SCENARIOS.aboutme!(a);
 	expect(breaks(a.requests.get("aboutme"))).toEqual([]);
@@ -222,7 +222,7 @@ test("the same, in place, keeps the prefix for models that accept mid-conversati
 	expect(breaks(a.inPlace.get("aboutme"))).toEqual([]);
 });
 
-test.fails("Agent: what memory recalls for each message changes the system prompt (spec 38 T2), for models that collapse it (R2)", async () => {
+test.fails("Agent: what memory recalls for each message changes the system prompt (spec 38 T2), for models that collapse it: those without the flag (R4)", async () => {
 	const a = await start();
 	await SCENARIOS.agent!(a);
 	expect(breaks(a.requests.get("agent"))).toEqual([]);
@@ -234,7 +234,7 @@ test("the same, in place, keeps the prefix for models that accept mid-conversati
 	expect(breaks(a.inPlace.get("agent"))).toEqual([]);
 });
 
-test.fails("Build: an @mention changes the system prompt for its turn and again after (spec 38 T2), for models that collapse it (R2)", async () => {
+test.fails("Build: an @mention changes the system prompt for its turn and again after (spec 38 T2), for models that collapse it: those without the flag (R4)", async () => {
 	const a = await start();
 	await SCENARIOS.mention!(a);
 	expect(breaks(a.requests.get("mention"))).toEqual([]);

@@ -194,3 +194,21 @@ second mode for R1 (recorded with `resolveTranscript(…, true)`, the in-place f
   The in-place tests now pass; the collapsed ones stay `test.fails` until R2.
 - **For pi upstream:** a way to replace only the preamble (a custom prompt that keeps pi's tools list and rules) would
   let `promptToolsExtension` go.
+
+### R2 as checked and built (2026-11-22)
+
+- **The check.** [engine/test/openrouter-midconvo.test.ts](../../packages/engine/test/openrouter-midconvo.test.ts)
+  (`PIOPIO_LIVE=1` with a key) sends `anthropic/claude-haiku-5.5` on OpenRouter what pi-ai sends with
+  `supportsMidConvoSystemMessages` on: a `{ role: "system" }` message after the last user message, holding "Updated
+  system prompt section …". OpenRouter takes it (HTTP 200), the cache holds across it (14,849 tokens read, 0 written),
+  and the model uses it (it answers the question from the update). Placed before the question, it works too. Folded
+  into the leading prompt, as before, the first time it misses the cache entirely (0 read, 14,876 written).
+- **The flag.** Piopio's OpenRouter wrapper (`openrouter-live.ts`) gives each model OpenRouter serves through the
+  Anthropic Messages API the `supportsMidConvoSystemMessages` that pi's own catalog has for the same model on
+  Anthropic's API (`anthropic/claude-haiku-5.5` → `claude-haiku-5-5`). Nothing else changes, and Piopio keeps no list of
+  its own. A test checks pi's two catalogs still line up.
+- **For pi upstream:** the same flag on OpenRouter's catalog entries for those Claude models, which would let the
+  wrapper's patch go.
+- **What's left:** models that take no mid-conversation system message at all still collapse (the prefix test's four
+  `test.fails`). R4 waits for numbers on those, and R3's hygiene (send state when it changes, recall each record once,
+  no dates) still applies everywhere.

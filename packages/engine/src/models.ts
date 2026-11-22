@@ -88,7 +88,7 @@ export class ModelHub {
 			if (openrouter && !this.faux) {
 				this.openrouterBase = openrouter;
 				this.live.recompute(openrouter.getModels());
-				rt.registerNativeProvider(this.live.wrap(openrouter));
+				rt.registerNativeProvider(this.live.wrap(openrouter, this.anthropicCatalog(rt)));
 			}
 			if (this.faux) rt.registerNativeProvider(this.faux.provider);
 			for (const e of this.endpoints.list()) rt.registerProvider(e.id, endpointConfig(e) as never);
@@ -96,6 +96,13 @@ export class ModelHub {
 			return rt;
 		});
 		return this.starting;
+	}
+
+	/** pi's catalog for Anthropic's own API, all of it (with or without an Anthropic key): what its models accept. */
+	private anthropicCatalog(rt: ModelRuntime): readonly Model<Api>[] {
+		const anthropic = rt.getProvider("anthropic");
+		if (!anthropic) return [];
+		return (anthropic.getAllModels?.call(anthropic) ?? anthropic.getModels()) as readonly Model<Api>[];
 	}
 
 	/** pi's own OpenRouter provider, before the live models were added to it. */
@@ -113,7 +120,7 @@ export class ModelHub {
 		const base = this.openrouterBase;
 		if (!base) return;
 		const apply = (changed: boolean) => {
-			if (changed) rt.registerNativeProvider(this.live.wrap(base));
+			if (changed) rt.registerNativeProvider(this.live.wrap(base, this.anthropicCatalog(rt)));
 		};
 		const update = this.live.update(base.getModels(), { force }).then(apply);
 		if (force || this.live.models.length === 0) await update;
