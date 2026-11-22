@@ -30,28 +30,17 @@ struct SubagentPanel: View {
         }
     }
 
+    /// The tabs give way in steps as the column narrows: every title (each up to 140pt); then only the open one's title
+    /// and the others as their glyph (the title in the tooltip); then one menu that lists them all.
     private func tabs(_ children: [SessionSummary]) -> some View {
         HStack(spacing: 4) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 2) {
-                    ForEach(children, id: \.ref.id) { child in
-                        let on = child.ref.id == selected
-                        Button { select(child.ref.id) } label: {
-                            HStack(spacing: 6) {
-                                SubagentGlyph(state: child.parent?.state ?? "working").scaleEffect(0.85)
-                                Text(child.title).font(.system(size: 12.5)).lineLimit(1).frame(maxWidth: 120, alignment: .leading)
-                            }
-                            .foregroundStyle(on ? Color.dsFg : Color.dsFg2)
-                            .padding(.horizontal, 8).padding(.vertical, 4)
-                            .background(on ? Color.dsChip : .clear, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .help(child.title)
-                    }
-                }
-                .padding(.leading, 8)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 2) { ForEach(children, id: \.ref.id) { tab($0, titled: true) } }
+                HStack(spacing: 2) { ForEach(children, id: \.ref.id) { tab($0, titled: $0.ref.id == selected) } }
+                menu(children)
             }
+            .padding(.leading, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
             ToolbarIcon(symbol: "arrow.up.left.and.arrow.down.right", label: "Open in full", help: "Open this subagent's session") {
                 NotificationCenter.default.post(name: .selectBuildSession, object: selected)
             }
@@ -60,6 +49,53 @@ struct SubagentPanel: View {
         }
         .frame(height: Shell.cardBarHeight)
         .overlay(alignment: .bottom) { Rectangle().fill(Color.dsLine).frame(height: 0.5) }
+    }
+
+    private func tab(_ child: SessionSummary, titled: Bool) -> some View {
+        let on = child.ref.id == selected
+        return Button { select(child.ref.id) } label: {
+            HStack(spacing: 6) {
+                SubagentGlyph(state: child.parent?.state ?? "working").scaleEffect(0.85)
+                if titled { Text(child.title).font(.system(size: 12.5)).lineLimit(1).frame(maxWidth: 140, alignment: .leading).fixedSize() }
+            }
+            .foregroundStyle(on ? Color.dsFg : Color.dsFg2)
+            .padding(.horizontal, titled ? 8 : 6).padding(.vertical, 4)
+            .background(on ? Color.dsChip : .clear, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(child.title)
+        .accessibilityLabel("Subagent \(child.title)")
+    }
+
+    /// The narrowest: the open one's title, and a menu of all of them with where each stands.
+    private func menu(_ children: [SessionSummary]) -> some View {
+        let current = children.first { $0.ref.id == selected }
+        return Menu {
+            ForEach(children, id: \.ref.id) { child in
+                Button {
+                    select(child.ref.id)
+                } label: {
+                    let state = child.parent?.state ?? "working"
+                    Text("\(child.ref.id == selected ? "✓ " : "")\(child.title) · \(state == "working" ? (child.parent?.line ?? "working") : state)")
+                }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                SubagentGlyph(state: current?.parent?.state ?? "working").scaleEffect(0.85)
+                Text(current?.title ?? "Subagents").font(.system(size: 12.5)).lineLimit(1)
+                Text("\(children.count)").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
+                Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold)).foregroundStyle(Color.dsFg3)
+            }
+            .foregroundStyle(Color.dsFg)
+            .padding(.horizontal, 8).padding(.vertical, 4)
+            .background(Color.dsChip, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+        }
+        .menuStyle(.button)
+        .menuIndicator(.hidden)
+        .buttonStyle(.plain)
+        .fixedSize(horizontal: false, vertical: true)
+        .help("All of this conversation's subagents")
     }
 }
 

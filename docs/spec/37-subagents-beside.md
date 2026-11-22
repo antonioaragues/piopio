@@ -84,5 +84,14 @@ shows all of them. Not started.
   "…" instead of pushing the box wider than the column (it did with "DeepSeek V4.1 Flash 1017 · OpenRouter high").
 - **Captures:** `PIOPIO_DEMO_SUBAGENT=1` opens the first subagent beside once there is one;
   `PIOPIO_FAUX_MODEL_NAME` gives the scripted model a long name.
-- **Not verified:** a follow-up to a finished subagent from the column (SB6) and its second `[Task]` result, with a
-  real model; the narrow-window fallback.
+- **Tabs that fit** (2026-11-22): every title while they fit (each up to 140pt); then the open one's title and the
+  others as their glyph, the title in the tooltip; at the narrowest, one menu of all of them with where each stands.
+  At 340–400pt with four subagents it's the second step.
+- **The way back:** a subagent's own session (Open in full, or the narrow-window fallback) has a "Subagent of
+  <conversation> ›" bar, as side conversations have "Started from"; subagents aren't in the sidebar.
+- **Narrow window:** when the window hides the column, no row stays highlighted as open (it did); widening brings
+  the column back with the same subagent.
+- **Checked:** a follow-up to a finished subagent (SB6) in `tasks.test.ts` with the scripted model: its row works
+  again, `startedAt` moves, and a second `[Task]` result reaches the parent with the new answer. The narrow-window
+  fallback in a capture (`PIOPIO_DEMO_RESIZE=700`): the click opens the subagent's session.
+- **Not verified:** the follow-up with a real model.

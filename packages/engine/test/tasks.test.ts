@@ -102,3 +102,23 @@ test("past three running, a task waits as queued and starts when one ends; their
 	await until(() => items(client, ref), (x) => x.filter((i) => i.kind === "user" && i.text?.startsWith("[Task]")).flatMap((i) => i.text!.match(/\[Task\] “Task \d”/g) ?? []).length === 4);
 	expect(woke.length).toBeLessThanOrEqual(2);
 }, 90_000);
+
+/** A follow-up to a subagent that finished (docs/spec/37 SB6): its row works again and its new answer reaches Piopio. */
+test("a follow-up to a finished subagent is a new turn: working again, then a second [Task] result", async () => {
+	const { client, ref } = await start();
+	await client.call("sessions.submit", { ref, input: { text: task("Look around", "read: nothing.txt") } });
+	type Timed = Child & { parent?: { id: string; state?: string; startedAt?: string; endedAt?: string } };
+	const timed = async () => (await children(client, ref)) as Timed[];
+	const [first] = await until(timed, (c) => c[0]?.parent?.state === "done");
+	expect(first!.parent!.startedAt).toBeTruthy();
+	expect(first!.parent!.endedAt).toBeTruthy();
+	await until(() => items(client, ref), (x) => x.filter((i) => i.kind === "user" && i.text?.startsWith("[Task] “Look around”")).length === 1 && x.at(-1)?.kind === "assistant");
+	await idle(client, ref);
+
+	// You write to it from the column.
+	await client.call("sessions.submit", { ref: first!.ref, input: { text: "And the README?" } });
+	const [again] = await until(timed, (c) => c[0]?.parent?.state === "done" && c[0]!.parent!.startedAt !== first!.parent!.startedAt);
+	expect(Date.parse(again!.parent!.endedAt!)).toBeGreaterThanOrEqual(Date.parse(again!.parent!.startedAt!));
+	const notes = await until(() => items(client, ref), (x) => x.filter((i) => i.kind === "user" && i.text?.startsWith("[Task] “Look around”")).length === 2);
+	expect(notes.filter((i) => i.kind === "user" && i.text?.startsWith("[Task]")).at(-1)!.text).toContain("Echo: And the README?");
+}, 60_000);

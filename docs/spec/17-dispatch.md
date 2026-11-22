@@ -279,7 +279,8 @@ On the bridge side conversations use (24 §5), so `task`, side conversations and
 - A blocking `task` now goes through the same path (start, then wait), so its card still shows progress.
 - A subagent or side conversation that the engine was in the middle of when it quit is marked stopped at the next
   start.
-- **In the app:**
+- **In the app** (until 2026-11-22; [37](37-subagents-beside.md) replaced all three with one live row per subagent,
+  opened beside the conversation):
   - the task card reads "started · its result comes back here";
   - `[Task]` messages are "Result from <title> · finished" rows that open to the answer;
   - running subagents show in the block above the composer ("Subagents · 1 subagent running"), with what each is

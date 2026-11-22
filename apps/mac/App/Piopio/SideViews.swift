@@ -13,18 +13,32 @@ import SwiftUI
     NotificationCenter.default.post(name: .selectItem, object: item.raw)
 }
 
-/// "Started from Agent page redesign ›" (docs/spec/24 §1.4): the same bar as Continued in.
+/// "Started from Agent page redesign ›" (docs/spec/24 §1.4): the same bar as Continued in. A subagent's session says
+/// "Subagent of …" (docs/spec/37): it isn't in the sidebar, so this is the way back.
 struct SideStartedBar: View {
     let engine: EngineController
-    let side: SessionSummary.Side
+    let parentId: String
+    let parentTitle: String
+    var label = "Started from"
+
+    init(engine: EngineController, side: SessionSummary.Side) {
+        self.engine = engine; parentId = side.parent.id; parentTitle = side.parent.title
+    }
+
+    init(engine: EngineController, subagentOf parentId: String) {
+        self.engine = engine
+        self.parentId = parentId
+        parentTitle = (engine.buildSessions + engine.threads).first { $0.ref.id == parentId }?.title ?? "its conversation"
+        label = "Subagent of"
+    }
 
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: "arrow.turn.up.left").font(.system(size: 11)).foregroundStyle(Color.dsFg3)
-            Text("Started from").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3)
-            Button { openConversation(engine, side.parent.id) } label: {
+            Text(label).font(.system(size: 12.5)).foregroundStyle(Color.dsFg3)
+            Button { openConversation(engine, parentId) } label: {
                 HStack(spacing: 3) {
-                    Text(side.parent.title).lineLimit(1)
+                    Text(parentTitle).lineLimit(1)
                     Image(systemName: "chevron.right").font(.system(size: 8, weight: .semibold))
                 }
                 .font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)

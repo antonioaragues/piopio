@@ -75,6 +75,8 @@ struct BuildSessionView: View {
     @State private var subagentOpen: String?
     @AppStorage("subagentWidth") private var subagentPreferred = 400.0
     private var columnShown: Bool { (showInspector || subagentOpen != nil) && !panelAutoHidden }
+    /// The subagent the column shows now: none while a narrow window hides the column, so no row looks open.
+    private var subagentShown: String? { panelAutoHidden ? nil : subagentOpen }
     @AppStorage("sessionPanel") private var inspectorTab = SessionPanel.inspector
     /// Each panel's width as you last dragged it (every session shares them; the Browser's also with chats).
     @AppStorage("filesWidth") private var filesPreferred = 280.0
@@ -135,6 +137,7 @@ struct BuildSessionView: View {
             VStack(spacing: 0) {
                 if !reviewing { header }
                 if !reviewing, let side = summary.side { SideStartedBar(engine: engine, side: side) }
+                if !reviewing, let parent = summary.parent { SideStartedBar(engine: engine, subagentOf: parent.id) }
                 if let notice = git?.notice {
                     Text(notice.text).font(.system(size: 12)).foregroundStyle(Color.dsFg2)
                         .lineLimit(2).padding(.horizontal, 24).padding(.bottom, 6).frame(maxWidth: .infinity, alignment: .leading)
@@ -302,11 +305,11 @@ struct BuildSessionView: View {
         .modifier(SideOffers(engine: engine, ref: summary.ref, document: session.document))
         // Its subagents' rows say where each stands, and which one is open beside (docs/spec/37).
         .onChange(of: subagents, initial: true) { _, now in
-            session.document.setSubagents(now, open: subagentOpen)
+            session.document.setSubagents(now, open: subagentShown)
             // PIOPIO_DEMO_SUBAGENT=1: captures open the first subagent beside once there is one.
             if ProcessInfo.processInfo.environment["PIOPIO_DEMO_SUBAGENT"] == "1", subagentOpen == nil, let first = now.first { openSubagent(first.id) }
         }
-        .onChange(of: subagentOpen) { _, open in session.document.setSubagents(subagents, open: open) }
+        .onChange(of: subagentShown) { _, open in session.document.setSubagents(subagents, open: open) }
         .onReceive(NotificationCenter.default.publisher(for: .createPullRequest)) { note in
             if note.object as? String == summary.ref.id { creatingPR = true }
         }
