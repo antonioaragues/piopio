@@ -57,7 +57,8 @@ const common = {
 	banner: { js: banner },
 	// pi's bundled-Node mode: user extensions get pi's packages as virtual modules instead of
 	// resolving them from a node_modules folder that the app doesn't ship.
-	define: { PI_BUNDLED_NODE: "true", PIOPIO_ENGINE_VERSION: JSON.stringify(version) },
+	// Google's OAuth client secret (docs/spec/12 §2) comes from the environment, so it never sits in git.
+	define: { PI_BUNDLED_NODE: "true", PIOPIO_ENGINE_VERSION: JSON.stringify(version), PIOPIO_GOOGLE_CLIENT_SECRET: JSON.stringify(process.env.PIOPIO_GOOGLE_CLIENT_SECRET ?? "") },
 	legalComments: "linked",
 	logLevel: "warning",
 };

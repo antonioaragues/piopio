@@ -60,6 +60,16 @@ Set `SPARKLE_FEED_URL` in `project.yml` to where `appcast.xml` will be served. F
 
 Until both the key and the feed URL are set, the app's updater stays off. "Check for Updates…" is disabled, and Settings › General says the build doesn't update itself.
 
+### 4. Google sign-in secret
+
+Piopio's Google client ID is in the code (`connectors/hub.ts`), but its secret is kept out of git. The release bundle reads it from `PIOPIO_GOOGLE_CLIENT_SECRET`, or else from the login keychain. Store it there once:
+
+```bash
+security add-generic-password -s "Piopio release" -a google-client-secret -w
+```
+
+It prompts for the secret: Google Cloud › Google Auth Platform › Clients › the Desktop client. Without it, the build prints a warning, and connecting Google Calendar needs Settings › Connectors › Developer setup.
+
 ### Development builds
 
 Ad hoc builds keep secrets in the login keychain. macOS identifies an ad hoc build by its hash, so after every rebuild it asks for your password once per secret ("Always Allow" only lasts until the next build). Signing with your team fixes that:

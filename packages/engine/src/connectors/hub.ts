@@ -39,8 +39,18 @@ type State = {
 /** An MCP app's account as conversations use it: its tools and how to call them. */
 export type McpUse = { account: Account; def: McpConnector; tools: McpToolInfo[]; call: McpCall };
 
-/** OAuth clients Piopio ships with (docs/spec/12 §2): empty until our Google and Microsoft apps are registered. */
-const BUILT_IN_CLIENTS: Record<string, string> = {};
+/** Google's client secret, put in by the release bundle (scripts/bundle-engine.sh) and kept out of git. */
+declare const PIOPIO_GOOGLE_CLIENT_SECRET: string | undefined;
+const GOOGLE_CLIENT_SECRET = typeof PIOPIO_GOOGLE_CLIENT_SECRET === "string" && PIOPIO_GOOGLE_CLIENT_SECRET ? PIOPIO_GOOGLE_CLIENT_SECRET : undefined;
+
+/**
+ * OAuth clients Piopio ships with (docs/spec/12 §2). Google's is a "Desktop app" client, which still needs its secret
+ * at the token step: release builds carry it, and a dev build without it takes yours from Developer setup.
+ * Microsoft's will be a public client with PKCE and no secret.
+ */
+const BUILT_IN_CLIENTS: Record<string, { id: string; secret?: string }> = {
+	"google-calendar": { id: "340136059233-fo92kn03aag7ta03bu60otbi5sc7r0he.apps.googleusercontent.com", ...(GOOGLE_CLIENT_SECRET ? { secret: GOOGLE_CLIENT_SECRET } : {}) },
+};
 
 const LOGIN_TIMEOUT_MS = 5 * 60_000;
 
@@ -114,12 +124,16 @@ export class ConnectorHub {
 	/** The OAuth client: yours from settings or the environment, else Piopio's own. */
 	clientId(connector: string): string | undefined {
 		const env = process.env[`PIOPIO_${connector.toUpperCase().replaceAll("-", "_")}_CLIENT_ID`];
-		return this.state.settings[connector]?.clientId || env || BUILT_IN_CLIENTS[connector];
+		return this.state.settings[connector]?.clientId || env || BUILT_IN_CLIENTS[connector]?.id;
 	}
 
+	/** The client's secret: from the environment, Piopio's own when its client is the one in use, else yours. */
 	private async clientSecret(connector: string): Promise<string | undefined> {
 		const env = process.env[`PIOPIO_${connector.toUpperCase().replaceAll("-", "_")}_CLIENT_SECRET`];
-		return env ?? (await this.secrets.get(`connector.${connector}.clientSecret`, "Sign in to the app")) ?? undefined;
+		if (env) return env;
+		const builtIn = BUILT_IN_CLIENTS[connector];
+		if (builtIn?.secret && this.clientId(connector) === builtIn.id) return builtIn.secret;
+		return (await this.secrets.get(`connector.${connector}.clientSecret`, "Sign in to the app")) ?? undefined;
 	}
 
 	async hasClientSecret(connector: string): Promise<boolean> {

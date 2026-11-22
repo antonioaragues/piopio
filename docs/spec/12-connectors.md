@@ -50,9 +50,15 @@ What you can do at the end of C1, in any chat, notebook, Build session or agent:
 - Per capability, Runs / Asks first / Off (reading runs, changes ask, deleting is off by default; sending and deleting never run on their own); calendars on or off per account; the Add connector catalog and a connect step that sets permissions before signing in. Details in `docs/design/settings/IMPLEMENTATION.md`.
 
 **Not done yet**
-- **Piopio's own Google and Microsoft OAuth apps aren't registered** (`BUILT_IN_CLIENTS` is empty). Until they are, the connect step says sign-in isn't available in this build; a small "Developer setup…" link (or the `PIOPIO_<APP>_CLIENT_ID` / `_CLIENT_SECRET` environment variables) takes a development client. Registering them, and applying for Google's review, is the step that makes "Connect" work for everyone.
+- **Microsoft's OAuth app isn't registered yet.** Until it is, Outlook's connect step says sign-in isn't available in this build; a small "Developer setup…" link (or the `PIOPIO_<APP>_CLIENT_ID` / `_CLIENT_SECRET` environment variables) takes a development client.
+- **Google's review:** Piopio's Google app is registered (2026-11-22) but still in Testing: only test users can sign in, they see the "unverified app" warning, and they sign in again every 7 days. The review needs a homepage and a privacy policy on a verified domain first.
 - Notebooks (topics) don't get the tools yet; chats, Build and agents do.
-- Not tried against real Google or Microsoft accounts.
+- Outlook not tried against a real Microsoft account.
+
+**Google registered (2026-11-22)**
+- Google Cloud project "Piopio": External, in Testing, Calendar API, scopes `calendar.readonly` and `calendar.events` only. Gmail and Drive scopes stay out of this review: they're restricted and need the yearly audit.
+- Its Desktop client ID is in `BUILT_IN_CLIENTS` (`connectors/hub.ts`). The secret stays out of git: release builds put it in from `PIOPIO_GOOGLE_CLIENT_SECRET` or the login keychain (docs/releasing.md §4), and a dev build without it takes yours from Developer setup.
+- **Tried with a real Google account**, through Developer setup: signing in, reading the week, free time, creating, moving and deleting an event with their approval cards.
 
 ## Linear: the first app with its own server (C3, 2026-11-21)
 
