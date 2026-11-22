@@ -178,7 +178,7 @@ struct ThreadView: View {
 
     /// Continue in a project (18 §5): a new conversation in its folder, with this one's history.
     private var moveMenu: some View {
-        ContinueInMenu(engine: engine, ref: summary.ref) { Image(systemName: "folder") }
+        ContinueInMenu(engine: engine, ref: summary.ref) { Image(systemName: "arrow.turn.up.right") }
             .menuStyle(.button).buttonStyle(IconButtonStyle()).menuIndicator(.hidden).fixedSize()
             .accessibilityLabel("Continue in a project")
             .help("Continue in a project: a new conversation in its folder, with this one's history")
