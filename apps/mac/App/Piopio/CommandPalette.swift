@@ -172,8 +172,7 @@ struct CommandPalette: View {
                 for i in engine.library where matches(i.name) {
                     destinations.append(Row(id: "l:\(i.id)", icon: LibraryKind.symbol(i.kind), title: i.name, trailing: "Library · \(LibraryKind.label(i.kind))") {
                         close()
-                        NotificationCenter.default.post(name: .selectItem, object: SidebarItem.library.raw)
-                        DispatchQueue.main.async { NotificationCenter.default.post(name: .showLibraryItem, object: i.id) }
+                        engine.focusLibrary(i.id)
                     })
                 }
             }

@@ -145,6 +145,7 @@ struct FileCardView: View {
                 Button("Open in Default App") { NSWorkspace.shared.open(url) }
                 Button("Save a Copy…") { FileSaving.saveCopy(of: url) }
                 Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+                Button("Show in Library") { NotificationCenter.default.post(name: .showInLibrary, object: file.path) }
             }
         }
     }
@@ -155,6 +156,11 @@ struct FileCardView: View {
         guard !file.missing else { return }
         MainActor.assumeIsolated { model.onAction?(.openFile(path: file.path, line: nil)) }
     }
+}
+
+extension Notification.Name {
+    /// Show a file (its path is the object) in the Library (docs/spec/35 §4.2): listed if it wasn't, then selected.
+    public static let showInLibrary = Notification.Name("piopio.showInLibrary")
 }
 
 /// "Save a copy…" for a file Piopio holds (one an agent or a chat made): a save panel in Downloads, then a copy there.

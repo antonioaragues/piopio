@@ -1244,6 +1244,10 @@ export class Engine {
 				const p = params as Params<"library.add">;
 				return { item: this.libraryCall(() => this.library.add(p.path)) } satisfies Result<"library.add">;
 			}
+			case "library.visual": {
+				const p = params as Params<"library.visual">;
+				return this.libraryCall(() => this.library.visual(p.id)) satisfies Result<"library.visual">;
+			}
 			case "library.relocate": {
 				const p = params as Params<"library.relocate">;
 				return { item: this.libraryCall(() => this.library.relocate(p.id, p.path)) } satisfies Result<"library.relocate">;

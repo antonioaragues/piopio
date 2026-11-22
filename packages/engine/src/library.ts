@@ -8,8 +8,8 @@
  * replaced by a fix in the same turn. You add any other file by hand; Remove hides an item and never touches its file.
  */
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
-import { basename, extname, isAbsolute, resolve } from "node:path";
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { basename, dirname, extname, isAbsolute, join, resolve } from "node:path";
 import type { ContainerRef, LibraryItem, LibraryKind, TimelineItem } from "@piopio/protocol";
 import { SearchIndex } from "./search.js";
 import { replacedVisuals } from "./tools/visuals.js";
@@ -38,7 +38,12 @@ type Stored = {
 	origin?: { ref: ContainerRef; title: string; project?: string };
 	by: string;
 	visual?: { callId: string };
+	/** When its file was first found missing; after 30 days the item leaves (docs/spec/35 §6). */
+	missingSince?: string;
 };
+
+/** How long a missing file stays listed, marked, for Locate… or Remove. */
+export const MISSING_DAYS = 30;
 
 type File = { version: 1; items: Stored[]; pins: string[]; hidden: string[] };
 
@@ -61,15 +66,33 @@ const convPrefix = (ref: ContainerRef) => `visual:${ref.kind}:${ref.id}:${ref.co
 const visualKey = (ref: ContainerRef, callId: string) => `${convPrefix(ref)}${callId}`;
 const titleKey = (title: string | undefined) => (title ?? "").trim().toLowerCase();
 
+/** What a file is, in a line, from its first few KB (the utility model); undefined to leave it without one. */
+export type Describe = (file: { name: string; text: string }, origin: LibraryOrigin) => Promise<string | undefined>;
+
+/** Text files whose start says what they are; other files keep only the note they were handed over with. */
+const NOTED = new Set(["md", "markdown", "txt", "csv", "tsv", "json", "html", "htm"]);
+const NOTES_PER_HOUR = 20;
+
+export const NOTE_PROMPT = `You name files in a list of things an assistant made. Given a file's name and its first lines, answer with one line of at most 12 words that says what it is, specific enough to find it again ("Gas offers from Iberdrola, Naturgy and Repsol, compared"). No quotes, no final period, nothing else.`;
+
 export class Library {
 	private data: File;
+	/** Writes a note for a new file that came without one (set by the engine; nothing in tests unless given). */
+	describe?: Describe;
+	private notes: { key: string; origin: LibraryOrigin }[] = [];
+	private noting = false;
+	private notedAt: number[] = [];
 	/** When each open conversation's current turn started (your latest message), for replacing drafts. */
 	private readonly turnStart = new Map<string, string>();
+
+	/** A copy of each listed visual's HTML (`<id>.html`), so the app can draw it without opening its conversation. */
+	private readonly visualsDir: string;
 
 	constructor(
 		private readonly file: string,
 		private readonly onChange: () => void = () => {},
 	) {
+		this.visualsDir = join(dirname(file), "library-visuals");
 		this.data = { version: 1, items: [], pins: [], hidden: [] };
 		if (existsSync(file)) {
 			try {
@@ -99,7 +122,7 @@ export class Library {
 				changed = true;
 			}
 		}
-		this.data.items = this.data.items.filter((s) => !s.key.startsWith(prefix) || keptVisuals.has(s.key));
+		this.keepOnly((s) => !s.key.startsWith(prefix) || keptVisuals.has(s.key));
 		if (changed || this.data.items.length !== before) this.save();
 	}
 
@@ -114,18 +137,22 @@ export class Library {
 			return;
 		}
 		if (item.kind !== "tool") return;
+		const fresh = new Set(this.data.items.map((s) => s.key));
 		const keys = this.take(origin, item);
 		if (!keys.length) return;
+		// Files new to the Library, made now (not your history, read at start), get a note when they lack one.
+		for (const key of keys) if (!fresh.has(key)) this.noteLater(key, origin);
 		const since = this.turnStart.get(conv);
 		if (item.tool === "show_visual" && since !== undefined) {
 			const title = titleKey(this.data.items.find((s) => s.key === keys[0])?.name);
-			this.data.items = this.data.items.filter((s) => !(s.key.startsWith(conv) && s.key !== keys[0] && s.at >= since && titleKey(s.name) === title));
+			this.keepOnly((s) => !(s.key.startsWith(conv) && s.key !== keys[0] && s.at >= since && titleKey(s.name) === title));
 		}
 		this.save();
 	}
 
-	/** Every item you haven't removed, newest first, with what's on disk now. */
-	list(): { items: LibraryItem[]; pins: string[] } {
+	/** Every item you haven't removed, newest first, with what's on disk now. A file missing for 30 days leaves. */
+	list(now = Date.now()): { items: LibraryItem[]; pins: string[] } {
+		this.sweepMissing(now);
 		const hidden = new Set(this.data.hidden);
 		const items = this.data.items
 			.filter((s) => !hidden.has(idOf(s.key)))
@@ -185,11 +212,95 @@ export class Library {
 	/** A conversation (or an agent, with all of its) was deleted: its visuals go; its files stay listed while they exist. */
 	forget(id: string): void {
 		const before = this.data.items.length;
-		this.data.items = this.data.items.filter((s) => !(s.key.startsWith("visual:") && s.key.split(":")[2] === id));
+		this.keepOnly((s) => !(s.key.startsWith("visual:") && s.key.split(":")[2] === id));
 		if (this.data.items.length !== before) this.save();
 	}
 
+	/** A listed visual's title and HTML, for its picture and to show it large. */
+	visual(id: string): { title: string; html: string } {
+		const s = this.require(id);
+		if (s.kind !== "visual") throw new Error("That item isn't a visual.");
+		const file = join(this.visualsDir, `${id}.html`);
+		if (!existsSync(file)) throw new Error("This visual's drawing isn't kept: open its conversation.");
+		return { title: s.name, html: readFileSync(file, "utf8") };
+	}
+
 	// ── Internals ──────────────────────────────────────────────────────────
+
+	private sweepMissing(now: number): void {
+		let changed = false;
+		const stamp = new Date(now).toISOString();
+		const cutoff = now - MISSING_DAYS * 86_400_000;
+		const gone = new Set<string>();
+		for (const s of this.data.items) {
+			if (!s.path) continue;
+			const there = existsSync(s.path);
+			if (there && s.missingSince) {
+				delete s.missingSince;
+				changed = true;
+			} else if (!there && !s.missingSince) {
+				s.missingSince = stamp;
+				changed = true;
+			} else if (!there && Date.parse(s.missingSince!) < cutoff) gone.add(s.key);
+		}
+		if (gone.size) {
+			const ids = new Set([...gone].map(idOf));
+			this.keepOnly((s) => !gone.has(s.key));
+			this.data.pins = this.data.pins.filter((p) => !ids.has(p));
+			changed = true;
+		}
+		if (changed) this.save();
+	}
+
+	/** Waits until the queued notes are written (tests). */
+	async notesDone(): Promise<void> {
+		while (this.noting || this.notes.length) await new Promise((r) => setTimeout(r, 5));
+	}
+
+	private noteLater(key: string, origin: LibraryOrigin): void {
+		const s = this.data.items.find((i) => i.key === key);
+		if (!this.describe || !s?.path || s.note || !NOTED.has(extname(s.path).slice(1).toLowerCase())) return;
+		this.notes.push({ key, origin });
+		void this.writeNotes();
+	}
+
+	/** One at a time, at most 20 an hour; a note that can't be written is simply left out. */
+	private async writeNotes(): Promise<void> {
+		if (this.noting) return;
+		this.noting = true;
+		try {
+			for (let job = this.notes.shift(); job; job = this.notes.shift()) {
+				const now = Date.now();
+				this.notedAt = this.notedAt.filter((t) => now - t < 3_600_000);
+				if (this.notedAt.length >= NOTES_PER_HOUR) continue;
+				const s = this.data.items.find((i) => i.key === job.key);
+				if (!s?.path || s.note) continue;
+				let text: string;
+				try {
+					text = readFileSync(s.path, "utf8").slice(0, 3000);
+				} catch {
+					continue;
+				}
+				if (!text.trim()) continue;
+				this.notedAt.push(now);
+				const line = await this.describe!({ name: s.name, text }, job.origin).catch(() => undefined);
+				const note = line?.split("\n")[0]?.trim().replace(/^["'“]|["'”]$/g, "").replace(/\.$/, "").slice(0, 160);
+				if (note && !s.note) {
+					s.note = note;
+					this.save();
+				}
+			}
+		} finally {
+			this.noting = false;
+		}
+	}
+
+	/** Items leave the index; their visuals' copies go with them. */
+	private keepOnly(keep: (s: Stored) => boolean): void {
+		const [kept, gone] = [this.data.items.filter(keep), this.data.items.filter((s) => !keep(s))];
+		this.data.items = kept;
+		for (const s of gone) if (s.kind === "visual") rmSync(join(this.visualsDir, `${idOf(s.key)}.html`), { force: true });
+	}
 
 	/** What one tool call brings in; the keys it added or refreshed. */
 	private take(origin: LibraryOrigin, item: Extract<TimelineItem, { kind: "tool" }>): string[] {
@@ -208,6 +319,8 @@ export class Library {
 			const title = typeof (item.args as { title?: unknown })?.title === "string" ? ((item.args as { title: string }).title.trim() || "Visual") : "Visual";
 			const key = visualKey(origin.ref, item.callId);
 			this.upsert({ key, kind: "visual", name: title, how: "visual", visual: { callId: item.callId }, ...base });
+			const html = (item.args as { html?: unknown })?.html;
+			if (typeof html === "string" && html) this.keepVisual(idOf(key), html);
 			return [key];
 		}
 		if (item.tool === "write" && origin.chatFolder) {
@@ -221,6 +334,13 @@ export class Library {
 			return [key];
 		}
 		return [];
+	}
+
+	private keepVisual(id: string, html: string): void {
+		const file = join(this.visualsDir, `${id}.html`);
+		if (existsSync(file) && statSync(file).size === Buffer.byteLength(html)) return;
+		mkdirSync(this.visualsDir, { recursive: true, mode: 0o700 });
+		writeFileSync(file, html, { mode: 0o600 });
 	}
 
 	/** The first time decides where it came from; a later handover only adds a note it lacked. */

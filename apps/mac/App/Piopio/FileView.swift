@@ -552,6 +552,11 @@ struct FileSheet: View {
                     .buttonStyle(IconButtonStyle()).help("Reveal in Finder").accessibilityLabel("Reveal in Finder")
                 Button { FileSaving.saveCopy(of: url) } label: { Image(systemName: "arrow.down.circle") }
                     .buttonStyle(IconButtonStyle()).help("Save a copy…").accessibilityLabel("Save a copy")
+                Button {
+                    dismiss()
+                    NotificationCenter.default.post(name: .showInLibrary, object: url.path)
+                } label: { Image(systemName: "books.vertical") }
+                    .buttonStyle(IconButtonStyle()).help("Show in Library").accessibilityLabel("Show in Library")
                 Button("Open") { NSWorkspace.shared.open(url) }.buttonStyle(PillStyle(compact: true)).help("Open in its default app")
                 Button("Done") { dismiss() }.buttonStyle(PillStyle(kind: .strong, compact: true)).keyboardShortcut(.cancelAction)
             }

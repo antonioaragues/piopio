@@ -285,7 +285,7 @@ enum DebugAutomation {
                 await engine.loadLibrary()
                 try? await Task.sleep(for: .seconds(1))
                 let hit = engine.library.first { $0.name == screen } ?? (screen == "preview" ? engine.library.first : nil)
-                if let hit { NotificationCenter.default.post(name: .showLibraryItem, object: hit.id) }
+                if let hit { engine.libraryFocus = hit.id }
             }
         }
         // PIOPIO_DEMO_AGENT=<template>: a new agent "Coach"; PIOPIO_DEMO_AGENT_MESSAGES: messages to it ("||");

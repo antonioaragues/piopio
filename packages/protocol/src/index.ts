@@ -1862,6 +1862,8 @@ export const methods = {
 	"library.remove": { params: Type.Object({ id: Type.String() }), result: Type.Object({}) },
 	/** Add to Library: any file, by hand. */
 	"library.add": { params: Type.Object({ path: Type.String() }), result: Type.Object({ item: LibraryItem }) },
+	/** A visual in the Library: its title and HTML, to draw its picture and show it large. */
+	"library.visual": { params: Type.Object({ id: Type.String() }), result: Type.Object({ title: Type.String(), html: Type.String() }) },
 	/** Locate…: where a missing file is now. */
 	"library.relocate": { params: Type.Object({ id: Type.String(), path: Type.String() }), result: Type.Object({ item: LibraryItem }) },
 	/** Runs: schedules, heartbeat, reminders, triggers and manual runs, newest first (06 §6, Runs tab). Open one with `conversationId: "run:<id>"`. */

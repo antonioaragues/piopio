@@ -24,6 +24,8 @@ final class EngineController {
     private(set) var library: [LibraryEntry] = []
     private(set) var libraryPins: [String] = []
     private(set) var libraryLoaded = false
+    /// An item the Library should select when it shows (from a pin, ⌘K or Show in Library); the page clears it.
+    var libraryFocus: String?
     /// Which migration report is showing ("work" or "automations").
     @ObservationIgnored private var reportFrom = "work"
     /// The Watchdog's notes about your conversations (docs/spec/17 §4): in Needs you.
@@ -149,7 +151,16 @@ final class EngineController {
 
     // MARK: Lifecycle
 
+    /// Show in Library (docs/spec/35 §4.2), posted by a file card, the file viewer or Build's files; listened to once.
+    @ObservationIgnored private var showsInLibrary: NSObjectProtocol?
+
     func start() async {
+        if showsInLibrary == nil {
+            showsInLibrary = NotificationCenter.default.addObserver(forName: .showInLibrary, object: nil, queue: .main) { [weak self] note in
+                guard let path = note.object as? String else { return }
+                MainActor.assumeIsolated { Task { try? await self?.showInLibrary(path) } }
+            }
+        }
         status = .starting
         do {
             try FileManager.default.createDirectory(at: home.appending(path: "logs"), withIntermediateDirectories: true)
@@ -885,6 +896,15 @@ final class EngineController {
         await loadLibrary()
     }
 
+    /// A pin dropped on another: it takes that one's place (after it when moving right or down, before it otherwise).
+    func movePin(_ id: String, onto target: String) async {
+        guard id != target, let from = libraryPins.firstIndex(of: id), let to = libraryPins.firstIndex(of: target) else { return }
+        var ids = libraryPins
+        ids.remove(at: from)
+        ids.insert(id, at: from < to ? min(to, ids.count) : to)
+        try? await reorderLibraryPins(ids)
+    }
+
     func reorderLibraryPins(_ ids: [String]) async throws {
         guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
         libraryPins = ids
@@ -905,6 +925,18 @@ final class EngineController {
         let item = try await client.call("library.add", LibraryPathParams(path: path), as: LibraryEntryResult.self).item
         await loadLibrary()
         return item
+    }
+
+    /// Show in Library: the file is listed if it wasn't (or comes back if you'd removed it), then the Library selects it.
+    func showInLibrary(_ path: String) async throws {
+        let item = try await addToLibrary(path)
+        libraryFocus = item.id
+        NotificationCenter.default.post(name: .selectItem, object: SidebarItem.library.raw)
+    }
+
+    /// A visual in the Library: its title and HTML (kept beside the index), for its picture and to show it large.
+    func libraryVisual(_ id: String) async -> LibraryVisual? {
+        try? await client?.call("library.visual", LibraryIdParams(id: id), as: LibraryVisual.self)
     }
 
     /// Locate…: where a missing file is now.

@@ -349,17 +349,11 @@ sidebar.
 
 **Different from §4:**
 - **Thumbnails:** Quick Look only for images, pages, PDFs and slides. Text, data and Word files came out as blank
-  pages at these sizes, so they show their kind's glyph, as visuals do. There's no snapshot from 25 yet.
-- **Opening a visual** opens its conversation but doesn't scroll to the card. An agent's opens the agent.
+  pages at these sizes, so they show their kind's glyph.
 - **The title** is 28 pt like Automations', not 20 pt as in the mockup.
-- **Not built:**
-  - reordering pins by dragging (the engine has `library.reorder`);
-  - Add to Library in file cards, the file viewer and Build's file tree (the engine has `library.add`);
-  - notes written by the utility model when a file has none;
-  - dropping missing items after 30 days. They stay, marked, until you remove them.
 - **The place menu** also has "Added by you".
 
-**Checked.**
+**Checked (first pass).**
 - **Engine tests** (`library.test.ts`, 13): handovers with their note and origin, the first origin kept, missing
   files skipped, a chat's writes but not code or hidden files, drafts replaced within a turn and not across turns,
   re-reading, pins and removals across a restart, Add bringing a removed file back, Locate… keeping the pin,
@@ -373,3 +367,36 @@ sidebar.
 
 **Not checked:** clicking Open, Show in Finder, Move to Trash and Locate… for real; ⌘K; dark mode; an agent's
 handover from a real agent; a Library of several hundred items.
+
+**Second pass (2026-11-22, the same day): what L1 had left out.**
+- **Show in Library:**
+  - **Where:** in a file card's menu, in the file viewer sheet (chats, files you sent) and Build's file viewer (a
+    books icon), and in Build's file tree (a row's context menu, with Open and Show in Finder).
+  - **What it does:** `library.add` lists the file, or brings it back if you'd removed it, and the Library opens
+    with it selected. That's how you add any file by hand.
+  - **How the Library selects it:** a pin, ⌘K and Show in Library set `libraryFocus` on the engine controller,
+    which the page takes when it shows. The notification it replaced could arrive before the page existed.
+- **Reordering pins:** drag a pin onto another, on the shelf or in the sidebar. It takes that one's place.
+- **Visuals:**
+  - **Kept:** the engine keeps a copy of each listed visual's HTML in `library-visuals/<id>.html` (gone with the
+    visual) and serves it with `library.visual`.
+  - **Picture:** the app draws it once off screen, as the visual check does (`VisualChecker`, one at a time), and
+    shows it whole, with a margin.
+  - **Open:** shows the visual large in the visual sheet. What its buttons send or fill in goes to its
+    conversation's composer.
+  - **Open the Conversation:** scrolls to the card in a chat or a Build session. An agent's opens the agent.
+- **Notes:** a new text file (Markdown, text, CSV, TSV, JSON, HTML) that comes without a note gets one line from the
+  utility model, read from its first 3,000 characters. The cost goes to the conversation that made it. It runs one
+  at a time, at most 20 an hour, and only for files made from now on, not your history.
+- **Missing files:** a file missing for 30 days leaves the Library, and its pin goes with it. One that comes back
+  before then is listed as before.
+
+**Checked (second pass).**
+- **Engine tests:** 16 in `library.test.ts`. They add visuals' HTML kept and dropped, notes (only new text files
+  without one), and missing files leaving after 30 days or forgiven when they come back. The whole engine suite
+  passes (300).
+- **In a copy of the app:** a scripted chat drew a bar chart and handed over `plan.md`, and the Library showed the
+  chart's picture in its row and preview.
+
+**Not checked:** dragging pins, Show in Library from each place, opening a visual large or at its card, and notes
+from a real utility model, all by hand; dark mode.

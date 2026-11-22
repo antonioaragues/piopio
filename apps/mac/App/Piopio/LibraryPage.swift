@@ -59,9 +59,9 @@ struct LibraryPage: View {
         .background(Color.dsWin)
         .animation(.easeOut(duration: 0.15), value: selected)
         .task { if !engine.libraryLoaded { await engine.loadLibrary() } }
-        .onReceive(NotificationCenter.default.publisher(for: .showLibraryItem)) { note in
-            if let id = note.object as? String { selected = id }
-        }
+        .onAppear(perform: takeFocus)
+        .onChange(of: engine.libraryFocus) { takeFocus() }
+        .onChange(of: engine.library) { takeFocus() }
         .alert("Move “\(trashing?.name ?? "")” to the Trash?", isPresented: Binding(get: { trashing != nil }, set: { if !$0 { trashing = nil } })) {
             Button("Move to Trash", role: .destructive) { if let t = trashing { trash(t) }; trashing = nil }
             Button("Cancel", role: .cancel) { trashing = nil }
@@ -133,8 +133,15 @@ struct LibraryPage: View {
             Text("Pinned").font(.system(size: 11.5, weight: .semibold)).foregroundStyle(Color.dsFg3)
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3), alignment: .leading, spacing: 12) {
                 ForEach(pins) { p in
-                    LibraryTile(item: p, selected: selected == p.id) { open(p) } select: { selected = p.id }
+                    LibraryTile(engine: engine, item: p, selected: selected == p.id) { open(p) } select: { selected = p.id }
                         .contextMenu { menu(p) }
+                        // Drag a pin onto another to change their order (the sidebar follows).
+                        .draggable(LibraryPinDrag.text(p.id)) { LibraryDragPreview(item: p) }
+                        .dropDestination(for: String.self) { drops, _ in
+                            guard let id = LibraryPinDrag.id(drops) else { return false }
+                            Task { await engine.movePin(id, onto: p.id) }
+                            return true
+                        }
                 }
             }
         }
@@ -171,6 +178,14 @@ struct LibraryPage: View {
 
     // MARK: Actions
 
+    /// What a pin, ⌘K or Show in Library asked to select, once it's in the list.
+    private func takeFocus() {
+        guard let id = engine.libraryFocus, engine.library.contains(where: { $0.id == id }) else { return }
+        engine.libraryFocus = nil
+        kind = nil; place = nil; query = ""
+        selected = id
+    }
+
     private var actions: LibraryActions {
         LibraryActions(
             open: open,
@@ -195,7 +210,7 @@ struct LibraryPage: View {
     }
 
     private func openConversation(_ i: LibraryEntry) {
-        if let target = LibraryOpen.conversation(i, engine: engine) { item = target }
+        if let target = LibraryOpen.reveal(i, engine: engine) { item = target }
         else { problem = "The conversation it came from isn't here any more." }
     }
 
@@ -230,6 +245,28 @@ struct LibraryPage: View {
 }
 
 // MARK: - Pieces
+
+/// A pin being dragged to a new place: its id as text with a prefix, so other text dropped on a pin is ignored.
+enum LibraryPinDrag {
+    static let prefix = "piopio-library-pin:"
+    static func text(_ id: String) -> String { prefix + id }
+    static func id(_ dropped: [String]) -> String? {
+        dropped.first.flatMap { $0.hasPrefix(prefix) ? String($0.dropFirst(prefix.count)) : nil }
+    }
+}
+
+/// What follows the pointer while a pin is dragged.
+struct LibraryDragPreview: View {
+    let item: LibraryEntry
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: LibraryKind.symbol(item.kind)).foregroundStyle(Color.dsFg3)
+            Text(item.name).font(.system(size: 13)).foregroundStyle(Color.dsFg).lineLimit(1)
+        }
+        .padding(.horizontal, 10).padding(.vertical, 6)
+        .background(Color.dsWin, in: RoundedRectangle(cornerRadius: DS.Radius.button, style: .continuous))
+    }
+}
 
 /// What a row, a tile, the preview and the menus can do with an item.
 struct LibraryActions {
@@ -281,7 +318,7 @@ private struct LibraryRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            LibraryThumb(item: item, size: CGSize(width: 34, height: 26), corner: 5)
+            LibraryThumb(engine: engine, item: item, size: CGSize(width: 34, height: 26), corner: 5)
             HStack(spacing: 7) {
                 Text(item.name).font(.system(size: 13.5)).foregroundStyle(item.missing == true ? Color.dsFg3 : Color.dsFg).lineLimit(1).truncationMode(.tail)
                     .layoutPriority(1)
@@ -343,6 +380,7 @@ private struct LibraryBadge: View {
 }
 
 private struct LibraryTile: View {
+    let engine: EngineController
     let item: LibraryEntry
     let selected: Bool
     let open: () -> Void
@@ -351,7 +389,7 @@ private struct LibraryTile: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            LibraryThumb(item: item, size: CGSize(width: 300, height: 96), corner: 0)
+            LibraryThumb(engine: engine, item: item, size: CGSize(width: 300, height: 96), corner: 0)
                 .frame(height: 96).frame(maxWidth: .infinity).clipped()
                 .overlay(alignment: .bottom) { Rectangle().fill(Color.dsLine).frame(height: 0.5) }
             VStack(alignment: .leading, spacing: 2) {
@@ -387,7 +425,7 @@ private struct LibraryPreview: View {
                     Button(action: close) { Image(systemName: "xmark").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.dsFg3).frame(width: 22, height: 22) }
                         .buttonStyle(.plain).help("Close the preview")
                 }
-                LibraryThumb(item: item, size: CGSize(width: 264, height: 160), corner: 8)
+                LibraryThumb(engine: engine, item: item, size: CGSize(width: 264, height: 160), corner: 8)
                     .frame(height: 160).frame(maxWidth: .infinity)
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 0.5))
@@ -447,6 +485,7 @@ private struct LibraryPreview: View {
 
 /// A picture of the item: Quick Look's thumbnail for a file, its kind's glyph otherwise (a visual, a file that's gone).
 struct LibraryThumb: View {
+    let engine: EngineController
     let item: LibraryEntry
     let size: CGSize
     let corner: CGFloat
@@ -456,7 +495,11 @@ struct LibraryThumb: View {
         // The field fills what it's offered and the picture fills the field, cropped: a wide page never spills out.
         Color.dsCardField
             .overlay(alignment: .top) {
-                if let image {
+                if let image, item.kind == "visual" {
+                    // A visual is drawn at a column's width: whole, with a margin, like its card.
+                    Image(nsImage: image).resizable().aspectRatio(contentMode: .fit).padding(size.height > 40 ? 10 : 2)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if let image {
                     Image(nsImage: image).resizable().aspectRatio(contentMode: .fill)
                 } else {
                     Image(systemName: LibraryKind.symbol(item.kind))
@@ -469,8 +512,12 @@ struct LibraryThumb: View {
         .overlay {
             if corner > 0 { RoundedRectangle(cornerRadius: corner, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 0.5) }
         }
-        .task(id: "\(item.path ?? "")|\(item.changedAt ?? "")|\(Int(size.width))") {
+        .task(id: "\(item.id)|\(item.changedAt ?? "")|\(Int(size.width))") {
             image = nil
+            if item.kind == "visual" {
+                image = await LibraryThumbnails.visual(item.id, engine: engine)
+                return
+            }
             guard let path = item.path, item.missing != true, LibraryThumbnails.pictured(path) else { return }
             image = await LibraryThumbnails.image(path: path, changed: item.changedAt, size: size)
         }
@@ -484,6 +531,26 @@ enum LibraryThumbnails {
 
     /// Kinds whose Quick Look picture says something: images, pages, PDFs, slides. Text, data and Word files come out
     /// as a blank page at these sizes, so they keep their glyph.
+    /// A visual's picture: drawn once off screen as the visual check draws it (docs/spec/25 §3.2), one at a time.
+    private static var visuals: [String: Task<NSImage?, Never>] = [:]
+    private static var lastVisual: Task<NSImage?, Never>?
+
+    static func visual(_ id: String, engine: EngineController) async -> NSImage? {
+        if let running = visuals[id] { return await running.value }
+        let before = lastVisual
+        let task = Task<NSImage?, Never> { @MainActor in
+            _ = await before?.value
+            guard let v = await engine.libraryVisual(id) else { return nil }
+            let drawn = await VisualChecker.check(html: v.html, title: v.title, look: true, width: 640)
+            return drawn.jpeg.flatMap(NSImage.init(data:))
+        }
+        visuals[id] = task
+        lastVisual = task
+        let image = await task.value
+        if image == nil { visuals[id] = nil }
+        return image
+    }
+
     nonisolated static func pictured(_ path: String) -> Bool {
         ["png", "jpg", "jpeg", "gif", "webp", "heic", "svg", "html", "htm", "pdf", "key", "pptx"].contains((path as NSString).pathExtension.lowercased())
     }
@@ -651,12 +718,24 @@ enum LibraryText {
 /// Opening an item: a file in the viewer, a visual in its conversation, a missing file in the Library's preview.
 @MainActor
 enum LibraryOpen {
-    static func open(_ item: LibraryEntry, engine: EngineController, go: (SidebarItem) -> Void, missing: () -> Void) {
+    static func open(_ item: LibraryEntry, engine: EngineController, go: @escaping (SidebarItem) -> Void, missing: () -> Void) {
         if item.missing == true { missing(); return }
         if let path = item.path {
             NotificationCenter.default.post(name: .viewFile, object: URL(fileURLWithPath: path))
-        } else if let target = conversation(item, engine: engine) {
-            go(target)
+            return
+        }
+        // A visual, large, in the visual sheet. What it sends or fills in goes to its conversation's composer.
+        Task {
+            guard let v = await engine.libraryVisual(item.id) else {
+                if let target = reveal(item, engine: engine) { go(target) }
+                return
+            }
+            let back: @MainActor (String) -> Void = { text in
+                guard let target = reveal(item, engine: engine) else { return }
+                go(target)
+                if let ref = item.origin?.ref { engine.thread(ref).draft = text }
+            }
+            NotificationCenter.default.post(name: .showVisual, object: ShownVisual(title: v.title, html: v.html, send: back, prefill: back))
         }
     }
 
@@ -665,9 +744,20 @@ enum LibraryOpen {
         guard let ref = item.origin?.ref else { return nil }
         return engine.item(for: ref.id)
     }
+
+    /// The conversation, scrolled to a visual's card (a chat or a Build session; an agent's opens the agent).
+    static func reveal(_ item: LibraryEntry, engine: EngineController) -> SidebarItem? {
+        guard let target = conversation(item, engine: engine) else { return nil }
+        if let ref = item.origin?.ref, ref.kind != .agent, let call = item.visual?.callId { engine.thread(ref).reveal("tool:\(call)") }
+        return target
+    }
 }
 
-extension Notification.Name {
-    /// Select an item in the Library's preview (its id is the object): a missing pin from the sidebar.
-    static let showLibraryItem = Notification.Name("piopio.showLibraryItem")
+@MainActor
+extension EngineController {
+    /// Open the Library with an item selected.
+    func focusLibrary(_ id: String) {
+        libraryFocus = id
+        NotificationCenter.default.post(name: .selectItem, object: SidebarItem.library.raw)
+    }
 }

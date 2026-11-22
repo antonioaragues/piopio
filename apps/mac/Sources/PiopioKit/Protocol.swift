@@ -908,6 +908,7 @@ public struct LibraryEntry: Codable, Sendable, Hashable, Identifiable {
         self.origin = origin; self.visual = visual; self.missing = missing; self.size = size; self.changedAt = changedAt; self.pinned = pinned
     }
 }
+public struct LibraryVisual: Decodable, Sendable { public var title: String; public var html: String }
 public struct LibraryList: Decodable, Sendable { public var items: [LibraryEntry]; public var pins: [String] }
 public struct LibraryEntryResult: Decodable, Sendable { public var item: LibraryEntry }
 public struct LibraryPinParams: Encodable, Sendable { public var id: String; public var pinned: Bool; public init(id: String, pinned: Bool) { self.id = id; self.pinned = pinned } }

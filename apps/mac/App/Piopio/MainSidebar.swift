@@ -513,10 +513,7 @@ struct MainSidebar: View {
         .buttonStyle(.plain)
         ForEach(engine.pinnedLibrary.prefix(5)) { pin in
             Button {
-                LibraryOpen.open(pin, engine: engine) { item = $0 } missing: {
-                    item = .library
-                    DispatchQueue.main.async { NotificationCenter.default.post(name: .showLibraryItem, object: pin.id) }
-                }
+                LibraryOpen.open(pin, engine: engine) { item = $0 } missing: { engine.focusLibrary(pin.id) }
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: LibraryKind.symbol(pin.kind)).font(.system(size: 11)).foregroundStyle(Color.dsFg3).frame(width: 14)
@@ -527,12 +524,15 @@ struct MainSidebar: View {
             }
             .buttonStyle(.plain)
             .help(pin.missing == true ? "\(pin.name): the file isn't where it was" : pin.name)
+            .draggable(LibraryPinDrag.text(pin.id)) { LibraryDragPreview(item: pin) }
+            .dropDestination(for: String.self) { drops, _ in
+                guard let id = LibraryPinDrag.id(drops) else { return false }
+                Task { await engine.movePin(id, onto: pin.id) }
+                return true
+            }
             .contextMenu {
-                Button("Open") { LibraryOpen.open(pin, engine: engine) { item = $0 } missing: { item = .library } }
-                Button("Show in Library") {
-                    item = .library
-                    DispatchQueue.main.async { NotificationCenter.default.post(name: .showLibraryItem, object: pin.id) }
-                }
+                Button("Open") { LibraryOpen.open(pin, engine: engine) { item = $0 } missing: { engine.focusLibrary(pin.id) } }
+                Button("Show in Library") { engine.focusLibrary(pin.id) }
                 Divider()
                 Button("Unpin") { Task { try? await engine.pinLibrary(pin.id, false) } }
             }

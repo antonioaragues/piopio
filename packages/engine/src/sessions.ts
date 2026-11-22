@@ -47,7 +47,7 @@ import type { Extension } from "@earendil-works/pi-durable";
 import type { WebOptions } from "./tools/web.js";
 import { exportTranscript, type ExportFormat } from "./export.js";
 import { SearchIndex } from "./search.js";
-import { type Library, LibrarySearch, type LibraryOrigin } from "./library.js";
+import { type Library, LibrarySearch, type LibraryOrigin, NOTE_PROMPT } from "./library.js";
 import type { HistoryBridge } from "./tools/history.js";
 import { AGENT_NAMES, findAgent, installedAgents, runExternalAgent, type ExternalAgent } from "./external-agents.js";
 import type { TelegramChannels } from "./channels/manager.js";
@@ -193,8 +193,18 @@ export class Sessions {
 	log: (line: string) => void = () => {};
 	/** Your cloud (docs/spec/30 K1) and the Keychain, set by the engine. */
 	cloud?: CloudLink;
-	/** The Library (docs/spec/35 §4), set by the engine: it reads what search reads. */
-	library?: Library;
+	/** The Library (docs/spec/35 §4), set by the engine: it reads what search reads; new files without a note get one. */
+	private libraryIndex?: Library;
+	get library(): Library | undefined {
+		return this.libraryIndex;
+	}
+	set library(library: Library | undefined) {
+		this.libraryIndex = library;
+		if (library) {
+			library.describe = (file, origin) =>
+				this.hub.utility(NOTE_PROMPT, `File: ${file.name}\nFrom the conversation: ${origin.title}\n\n${file.text}`, origin.ref.id, { model: this.entries.get(origin.ref.id)?.model });
+		}
+	}
 	secrets?: SecretBroker;
 	/** A cloud agent's open conversations, by `<agent>|<conversation>`. */
 	private cloudViews = new Map<string, Promise<CloudAgentView>>();

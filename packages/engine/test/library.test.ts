@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -58,6 +58,27 @@ describe("Library (docs/spec/35 §4)", () => {
 		expect(lib.list().items.map((i) => i.origin?.title)).toEqual(["Lisbon plan", "Lisbon plan"]);
 	});
 
+	it("writes a note for a new text file that came without one, not for history or other files", async () => {
+		const lib = new Library(join(dir, "library.json"));
+		const asked: string[] = [];
+		lib.describe = async (f, origin) => {
+			asked.push(`${f.name} · ${origin.title} · ${f.text.slice(0, 9)}`);
+			return '"Gas offers from three companies, compared."\nmore';
+		};
+		const old = file("old.md", "# Old");
+		lib.observe(chat, [presented(1, { path: old, name: "old.md" })]);
+		const csv = file("gas.csv", "company,price\nIberdrola,0.12\n");
+		const png = file("chart.png", "x");
+		const noted = file("noted.md", "# N");
+		lib.observeItem(chat, presented(2, { path: csv, name: "gas.csv" }));
+		lib.observeItem(chat, presented(3, { path: png, name: "chart.png" }));
+		lib.observeItem(chat, presented(4, { path: noted, name: "noted.md", description: "Already said" }));
+		await lib.notesDone();
+		expect(asked).toEqual(["gas.csv · Gas contract · company,p"]);
+		const notes = Object.fromEntries(lib.list().items.map((i) => [i.name, i.note]));
+		expect(notes).toEqual({ "gas.csv": "Gas offers from three companies, compared", "chart.png": undefined, "noted.md": "Already said", "old.md": undefined });
+	});
+
 	it("skips files present_files couldn't find", () => {
 		const lib = new Library(join(dir, "library.json"));
 		lib.observe(chat, [presented(1, { path: join(dir, "nope.md"), name: "nope.md", missing: true })]);
@@ -106,6 +127,19 @@ describe("Library (docs/spec/35 §4)", () => {
 		expect(lib.list().items.map((i) => i.at)).toEqual([at(5), at(3)]);
 	});
 
+	it("keeps each visual's HTML to draw it, and drops it with the visual", () => {
+		const lib = new Library(join(dir, "library.json"));
+		const draft = tool(1, "show_visual", { title: "Chart", html: "<p>draft</p>" });
+		const fixed = tool(2, "show_visual", { title: "Chart", html: "<p>fixed</p>" });
+		lib.observe(chat, [user(0), draft, fixed]);
+		const [only] = lib.list().items;
+		expect(lib.visual(only!.id)).toEqual({ title: "Chart", html: "<p>fixed</p>" });
+		expect(readdirSync(join(dir, "library-visuals"))).toEqual([`${only!.id}.html`]);
+		lib.forget("t1");
+		expect(readdirSync(join(dir, "library-visuals"))).toEqual([]);
+		expect(() => lib.visual(only!.id)).toThrow("isn't in the Library");
+	});
+
 	it("re-reading a conversation drops visuals it no longer shows (a branch switched, a turn undone)", () => {
 		const lib = new Library(join(dir, "library.json"));
 		lib.observe(chat, [user(0), visual(1, "A"), visual(2, "B")]);
@@ -148,6 +182,26 @@ describe("Library (docs/spec/35 §4)", () => {
 		expect(found).toMatchObject({ path: moved, name: "moved.md", pinned: true });
 		expect(found.missing).toBeUndefined();
 		expect(lib.list().pins).toEqual([found.id]);
+	});
+
+	it("lets a missing file go after 30 days, and forgives one that comes back", () => {
+		const lib = new Library(join(dir, "library.json"));
+		const a = file("a.md");
+		const b = file("b.md");
+		lib.observe(chat, [presented(1, { path: a, name: "a.md" }), presented(2, { path: b, name: "b.md" })]);
+		const ids = Object.fromEntries(lib.list().items.map((i) => [i.name, i.id]));
+		lib.pin(ids["a.md"]!, true);
+		const day = 86_400_000;
+		const t0 = Date.now();
+		rmSync(a);
+		rmSync(b);
+		expect(lib.list(t0).items.every((i) => i.missing)).toBe(true);
+		writeFileSync(b, "back");
+		expect(lib.list(t0 + 10 * day).items.map((i) => [i.name, i.missing ?? false])).toEqual([["b.md", false], ["a.md", true]]);
+		rmSync(b);
+		lib.list(t0 + 20 * day);
+		expect(lib.list(t0 + 31 * day)).toEqual({ items: [expect.objectContaining({ name: "b.md", missing: true })], pins: [] });
+		expect(lib.list(t0 + 51 * day).items).toEqual([]);
 	});
 
 	it("forgets a deleted conversation's visuals and keeps its files", () => {
