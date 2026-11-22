@@ -578,8 +578,9 @@ struct MainSidebar: View {
     @ViewBuilder private var chatsSection: some View {
         let threads = engine.threads
         let cap = Self.caps[.chats]!
-        // No +: the compose button and ⌘N start every conversation (docs/spec/18 §16).
-        header(.chats, total: threads.count, shown: min(cap, threads.count), add: nil)
+        // + opens the same New conversation page as ⌘N and the compose button, without scrolling back up (CF32).
+        header(.chats, total: threads.count, shown: min(cap, threads.count),
+               add: { NotificationCenter.default.post(name: .newChat, object: nil) }, addHelp: "New conversation (⌘N)")
         if !collapsed.contains(SidebarSection.chats.rawValue) {
             draftRow(.chat)
             ForEach(Self.nested(Array(threads.prefix(cap))), id: \.0.ref.id) { t, depth in chatRow(t).padding(.leading, CGFloat(depth) * 14) }

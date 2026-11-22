@@ -490,6 +490,8 @@ runs every thread on the same agent, giving a thread without a project a folder 
 
 ## 16. One New, and Agents beside Home (2026-11-15)
 
+> **Since §23 (2026-11-22):** Conversations have their `+` again (CF32).
+
 > **Since §21 (2026-11-20):** your agents are back in the sidebar under an Agents heading with a +, and the compose
 > button is a menu of New Conversation and New Agent (CF27–CF29). That replaces CF10 and the "button, not a menu" part
 > of CF9; the rest of CF9 stands.
@@ -600,3 +602,12 @@ beside it (option C2 of the [mockups](https://claude.ai/artifact/Bec6wd9tVE31Vgf
 | ID | Decision |
 |---|---|
 | CF31 | **Search and New share the sidebar's first row.** The top bar keeps only the toggle. Search is a pill on the window's field grey ("Search", ⌘K) that opens the search and command box; New is a 32 pt black circle with a +, the sidebar's one black action. Clicking it opens its menu: New Conversation (⌘N), New Agent (⌥⌘N, with Agents on) and New Project… (⇧⌘N, with Chat on), the same as File › New. With neither Agents nor Chat on, it starts a conversation straight away. This replaces CF29's pencil, and New Project joins the menu (the Projects + still makes one too). |
+
+## 23. Conversations get their + back (2026-11-22)
+
+**Why:** with a long sidebar, starting a conversation meant scrolling back up to New. The user asked for a + beside
+the Conversations heading, like Agents and Projects have.
+
+| ID | Decision |
+|---|---|
+| CF32 | **Conversations' heading has a +** that opens the New conversation page with no project, the same as ⌘N and New › New Conversation. This undoes "Conversations lose their `+`" in CF9; the rest of CF9 stands. |
