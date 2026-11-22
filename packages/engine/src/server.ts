@@ -4,11 +4,12 @@ import { randomUUID } from "node:crypto";
 import { dirname, join, resolve } from "node:path";
 import { appendFileSync, existsSync, mkdirSync, unlinkSync, chmodSync, statSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { createConnection, createServer, type Server } from "node:net";
+import { createServer, type Server } from "node:net";
 import { methods, PROTOCOL_VERSION, reverseMethods, SECRET_OPENROUTER, type MethodName, type Params, type Result } from "@piopio/protocol";
 import { Value } from "typebox/value";
 import { EngineError, keyHint, ModelHub, providerUsage } from "./models.js";
 import { ensureDirs, loadOrCreateToken, type EnginePaths } from "./paths.js";
+import { socketAnswers } from "./lock.js";
 import { MethodNotFound, RpcConnection } from "./rpc/connection.js";
 import { SecretBroker } from "./secrets.js";
 import { connectMethods, LoginFlows } from "./providers.js";
@@ -407,7 +408,7 @@ export class Engine {
 			throw new Error(`Socket path is ${Buffer.byteLength(socket)} bytes; macOS allows 103. Use a shorter PIOPIO_HOME.`);
 		}
 		if (existsSync(socket)) {
-			if (await isAlive(socket)) throw new Error(`Another engine is already listening on ${socket}`);
+			if (await socketAnswers(socket)) throw new Error(`Another engine is already listening on ${socket}`);
 			unlinkSync(socket);
 		}
 		this.token = loadOrCreateToken(this.options.paths);
@@ -1760,10 +1761,3 @@ class RpcConnectionFor {
 	constructor(readonly stream: import("node:net").Socket) {}
 }
 
-function isAlive(socket: string): Promise<boolean> {
-	return new Promise((resolve) => {
-		const s = createConnection(socket);
-		s.once("connect", () => (s.destroy(), resolve(true)));
-		s.once("error", () => resolve(false));
-	});
-}

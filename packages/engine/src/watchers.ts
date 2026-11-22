@@ -5,11 +5,12 @@
  * words in the subject. Webhook watches need nothing here: the hooks endpoint (hooks.ts) fires them. Each fire is a run
  * in the agent (`fireWatch`), keyed so the same file version or message never runs twice.
  */
-import { existsSync, readdirSync, readFileSync, statSync, watch, writeFileSync, type FSWatcher } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync, watch, type FSWatcher } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { Watch } from "@piopio/runtime";
 import type { MailMessage } from "./connectors/types.js";
+import { writeFileAtomic } from "./atomic.js";
 
 export type WatchHost = {
 	/** Every agent's watches. */
@@ -162,7 +163,7 @@ export class AgentWatchers {
 	}
 
 	private writeState(state: Record<string, string>): void {
-		writeFileSync(this.host.stateFile, JSON.stringify(state));
+		writeFileAtomic(this.host.stateFile, JSON.stringify(state));
 	}
 }
 

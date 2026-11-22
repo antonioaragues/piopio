@@ -2,8 +2,9 @@
  * Engine-wide settings the app changes in Settings (07-shared §7): Chat's MCP servers and follow-up suggestions,
  * and the "About me" memory (07-shared §5). Kept in `<home>/settings.json`.
  */
-import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import type { EngineSettings } from "@piopio/protocol";
+import { readJsonFile, writeFileAtomic } from "./atomic.js";
 
 export const DEFAULT_SETTINGS: EngineSettings = {
 	chat: { mcp: false, followUps: true },
@@ -18,7 +19,7 @@ export class Settings {
 	private listeners = new Set<(value: EngineSettings, previous: EngineSettings) => void>();
 
 	constructor(private readonly file: string) {
-		const saved = existsSync(file) ? (JSON.parse(readFileSync(file, "utf8")) as SettingsPatch) : {};
+		const saved = readJsonFile<SettingsPatch>(file, () => ({}));
 		// Notebook settings from before docs/spec/18 phase 2, still in older files.
 		delete (saved.chat as Record<string, unknown> | undefined)?.suggestSpaces;
 		delete (saved.aboutMe as Record<string, unknown> | undefined)?.inSpaces;
@@ -36,9 +37,7 @@ export class Settings {
 		const models = { ...previous.models, ...patch.models };
 		const build = { ...previous.build, ...patch.build };
 		this.value = { ...(Object.keys(models).length ? { models } : {}), ...(Object.keys(build).length ? { build } : {}), chat: { ...previous.chat, ...patch.chat }, aboutMe: { ...previous.aboutMe, ...patch.aboutMe }, memory: { ...previous.memory, ...patch.memory } };
-		const tmp = `${this.file}.tmp`;
-		writeFileSync(tmp, JSON.stringify(this.value, null, "\t"));
-		renameSync(tmp, this.file);
+		writeFileAtomic(this.file, JSON.stringify(this.value, null, "\t"));
 		for (const l of this.listeners) l(this.get(), previous);
 		return this.get();
 	}

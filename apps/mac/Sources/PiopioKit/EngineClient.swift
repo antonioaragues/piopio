@@ -89,7 +89,7 @@ public actor EngineClient {
         let body = try encoder.encode(Request(id: id, method: method, params: params))
         let line = try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Data, Error>) in
             pending[id] = cont
-            send(body, on: connection)
+            send(body, on: connection, failing: id)
         }
         return try decoder.decode(ResultEnvelope<R>.self, from: line).result
     }
@@ -102,10 +102,18 @@ public actor EngineClient {
 
     // MARK: I/O
 
-    private nonisolated func send(_ body: Data, on conn: NWConnection) {
+    /// Writes one line. With `failing`, a write that fails ends that call with the error instead of leaving it waiting.
+    private nonisolated func send(_ body: Data, on conn: NWConnection, failing id: Int? = nil) {
         var framed = body
         framed.append(0x0A)
-        conn.send(content: framed, completion: .contentProcessed { _ in })
+        conn.send(content: framed, completion: .contentProcessed { [weak self] error in
+            guard let error, let id, let self else { return }
+            Task { await self.fail(id, EngineError(code: "ENGINE_UNAVAILABLE", message: "Couldn't reach the engine: \(error)")) }
+        })
+    }
+
+    private func fail(_ id: Int, _ error: Error) {
+        pending.removeValue(forKey: id)?.resume(throwing: error)
     }
 
     private nonisolated func receive(on conn: NWConnection) {
@@ -171,7 +179,9 @@ public actor EngineClient {
                         projectsContinuation.yield(n.params.projects)
                     }
                 } else if let id = head.id {
-                    await answerReverse(id: id, method: method, line: line)
+                    // Answered on its own: a slow one (a browser action, a Keychain prompt, a check that calls the
+                    // engine back) held up this loop, and with it every reply and event behind it.
+                    Task { await self.answerReverse(id: id, method: method, line: line) }
                 }
             } else if case .int(let id)? = head.id, let cont = pending.removeValue(forKey: id) {
                 if let error = head.error {

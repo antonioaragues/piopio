@@ -8,7 +8,7 @@
  * and send a fresh snapshot). The gateway with one socket for everything (30 §8) waits for the phone app (K3).
  */
 import { randomBytes } from "node:crypto";
-import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { SECRET_OPENROUTER } from "@piopio/protocol";
@@ -18,6 +18,7 @@ import type { Runtime, SubmitOptions } from "./runtimes/runtime.js";
 import { Emitter } from "./runtimes/runtime.js";
 import type { SecretBroker } from "./secrets.js";
 import { CloudflareApi, deploy, readBundle, type WranglerConfig } from "./cloud-deploy.js";
+import { writeFileAtomic } from "./atomic.js";
 
 /** The Keychain item for the Worker's owner token. */
 export const SECRET_CLOUD = "CLOUD_OWNER_TOKEN";
@@ -136,7 +137,7 @@ export class CloudLink {
 		this.close();
 		await this.options.secrets.set(SECRET_CLOUD, token.trim());
 		const config: CloudConfig = { url, connectedAt: new Date().toISOString(), ...(version ? { version } : {}), ...(accountId ? { accountId } : {}) };
-		writeFileSync(this.options.file, JSON.stringify(config, null, "\t"));
+		writeFileAtomic(this.options.file, JSON.stringify(config, null, "\t"));
 		// The old sockets are closed: what's open on them subscribes again through the new ones.
 		for (const reset of [...this.resets]) reset();
 		return { connected: true, url, reachable: true, ...(version ? { version } : {}), connectedAt: config.connectedAt, managed: Boolean(accountId), agents };

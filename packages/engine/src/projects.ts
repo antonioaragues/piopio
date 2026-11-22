@@ -12,6 +12,7 @@ import type { ApprovalMode, ApprovalRule, ProjectInfo } from "@piopio/protocol";
 import { EngineError } from "./models.js";
 import { NOTES_FILE } from "./runtimes/build.js";
 import { newId } from "./sessions.js";
+import { readJsonFile, writeFileAtomic } from "./atomic.js";
 
 type Lens = "build" | "chat";
 /**
@@ -52,7 +53,7 @@ export class Projects {
 		/** Where projects without a folder kept their files before CF4 (`<home>/projects`), to move them out. */
 		oldDataDir?: string,
 	) {
-		if (existsSync(file)) this.entries = JSON.parse(readFileSync(file, "utf8")) as StoredProject[];
+		this.entries = readJsonFile<StoredProject[]>(file, () => this.entries);
 		this.trust = new ProjectTrustStore(agentDir);
 		// Lenses are gone (docs/spec/18 §4): a folder only used to chat about keeps that, as Read only, so removing the
 		// lens never leaves a folder of documents ready to edit. Folders in Build keep their mode.
@@ -309,9 +310,7 @@ export class Projects {
 	}
 
 	private save(): void {
-		const tmp = `${this.file}.tmp`;
-		writeFileSync(tmp, JSON.stringify(this.entries, null, "\t"));
-		renameSync(tmp, this.file);
+		writeFileAtomic(this.file, JSON.stringify(this.entries, null, "\t"));
 		const projects = this.list();
 		for (const l of this.listeners) l(projects);
 	}
