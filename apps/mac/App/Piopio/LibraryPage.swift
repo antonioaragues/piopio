@@ -129,7 +129,7 @@ struct LibraryPage: View {
                     Image(systemName: "magnifyingglass").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
                     TextField("Search the Library", text: $query).textFieldStyle(.plain).font(.system(size: 13))
                 }
-                .padding(.horizontal, 10).frame(width: 220, height: 28)
+                .padding(.horizontal, 10).frame(minWidth: 120, idealWidth: 220, maxWidth: 220).frame(height: 28)
                 .background(Color.dsChip, in: RoundedRectangle(cornerRadius: DS.Radius.button, style: .continuous))
                 .padding(.top, 4)
             }
@@ -436,6 +436,8 @@ struct LibraryPlaceLabel: View {
     let engine: EngineController
     let item: LibraryEntry
     let interactive: Bool
+    /// A narrow window: the icon alone (the name is in the tooltip).
+    var iconOnly = false
     @State private var hovering = false
 
     var body: some View {
@@ -447,9 +449,11 @@ struct LibraryPlaceLabel: View {
             default:
                 Image(systemName: place.symbol).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).frame(width: 16)
             }
-            Text(place.rowLabel(engine)).font(.system(size: 12.5)).foregroundStyle(hovering ? Color.dsFg : Color.dsFg2)
-                .lineLimit(1).truncationMode(.tail)
-                .underline(hovering, color: Color.dsFg3)
+            if !iconOnly {
+                Text(place.rowLabel(engine)).font(.system(size: 12.5)).foregroundStyle(hovering ? Color.dsFg : Color.dsFg2)
+                    .lineLimit(1).truncationMode(.tail)
+                    .underline(hovering, color: Color.dsFg3)
+            }
         }
         .contentShape(Rectangle())
         .onHover { hovering = interactive && $0 }
@@ -492,8 +496,21 @@ private struct LibraryRow: View {
     let actions: LibraryActions
     let select: () -> Void
     @State private var hovering = false
+    /// The row's width: as it narrows, the place gives way first (down to its icon), then the badge; the name last.
+    @State private var width: CGFloat = 900
+
+    /// Thumb, gaps, time and padding: what the name and the place share the rest of.
+    private static let fixed: CGFloat = 40 + 12 * 3 + 52 + 20
+    /// Room the name keeps before the place starts to narrow.
+    private static let nameRoom: CGFloat = 260
+
+    private var placeWidth: CGFloat {
+        min(compact ? 140 : 170, max(22, width - Self.fixed - Self.nameRoom))
+    }
 
     var body: some View {
+        let placeWidth = placeWidth
+        let roomy = width - Self.fixed - placeWidth > 340
         HStack(spacing: 12) {
             LibraryThumb(engine: engine, item: item, size: CGSize(width: 40, height: 32), corner: 5)
             // Name, then what it is (its note), so three report.md files tell themselves apart.
@@ -502,37 +519,44 @@ private struct LibraryRow: View {
                     Text(item.name).font(.system(size: 13.5)).foregroundStyle(item.missing == true ? Color.dsFg3 : Color.dsFg).lineLimit(1).truncationMode(.tail)
                         .layoutPriority(1)
                     if item.missing == true { LibraryBadge(text: "File missing") }
-                    else if item.kind == "visual", item.path == nil, !compact { LibraryBadge(text: "in a conversation") }
+                    else if item.kind == "visual", item.path == nil, roomy { LibraryBadge(text: "in a conversation") }
                     if item.pinned == true {
                         Image(systemName: "pin.fill").font(.system(size: 9.5)).foregroundStyle(Color.dsFg3).accessibilityLabel("Pinned")
                     }
                 }
                 Text(LibraryText.second(item)).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1).truncationMode(.tail)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
             // Where it lives, in the sidebar's words; a click shows only that place. The exact conversation is in the
             // tooltip, the preview and Open the Conversation.
-            Button { actions.filterPlace(LibraryPlace.of(item)) } label: { LibraryPlaceLabel(engine: engine, item: item, interactive: true) }
-                .buttonStyle(.plain)
-                .help(LibraryText.placeHelp(item, engine))
-                .frame(width: compact ? 140 : 170, alignment: .leading)
-            ZStack(alignment: .trailing) {
-                Text(LibraryText.time(item.at)).font(.system(size: 12)).foregroundStyle(Color.dsFg3).opacity(hovering ? 0 : 1)
-                if hovering {
-                    HStack(spacing: 2) {
-                        if item.missing == true { small("Locate…") { actions.locate(item) } }
-                        else { small("Open") { actions.open(item) } }
-                        small(item.pinned == true ? "Unpin" : "Pin") { actions.pin(item) }
-                        Menu { LibraryMenu(item: item, actions: actions) } label: {
-                            Image(systemName: "ellipsis").font(.system(size: 12)).foregroundStyle(Color.dsFg2).frame(width: 22, height: 20)
-                        }
-                        .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
-                    }
-                }
+            Button { actions.filterPlace(LibraryPlace.of(item)) } label: {
+                LibraryPlaceLabel(engine: engine, item: item, interactive: true, iconOnly: placeWidth < 80)
             }
-            .frame(width: 150, alignment: .trailing)
+            .buttonStyle(.plain)
+            .help(LibraryText.placeHelp(item, engine))
+            .frame(width: placeWidth, alignment: .leading)
+            Text(LibraryText.time(item.at)).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1)
+                .frame(width: 52, alignment: .trailing)
+                .opacity(hovering ? 0 : 1)
         }
         .padding(.horizontal, 10).padding(.vertical, 7)
+        // On hover, the actions float over the end of the row: they don't hold a column of their own.
+        .overlay(alignment: .trailing) {
+            if hovering {
+                HStack(spacing: 2) {
+                    if item.missing == true { small("Locate…") { actions.locate(item) } }
+                    else { small("Open") { actions.open(item) } }
+                    small(item.pinned == true ? "Unpin" : "Pin") { actions.pin(item) }
+                    Menu { LibraryMenu(item: item, actions: actions) } label: {
+                        Image(systemName: "ellipsis").font(.system(size: 12)).foregroundStyle(Color.dsFg2).frame(width: 22, height: 20)
+                    }
+                    .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+                }
+                .padding(.leading, 10).padding(.trailing, 8)
+                .background(selected ? Color.dsChip : Color.dsSide)
+            }
+        }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
         .background(selected ? Color.dsChip : hovering ? Color.dsSide : .clear, in: RoundedRectangle(cornerRadius: DS.Radius.button, style: .continuous))
         .contentShape(Rectangle())
         .onTapGesture(count: 2) { item.missing == true ? actions.locate(item) : actions.open(item) }
@@ -922,7 +946,7 @@ enum LibraryPlace: Hashable {
 enum LibraryText {
     /// The tooltip on a row's place: the exact conversation, and what a click does.
     @MainActor static func placeHelp(_ item: LibraryEntry, _ engine: EngineController) -> String {
-        let only = "Click to show only \(LibraryPlace.of(item).label(engine))"
+        let only = "\(LibraryPlace.of(item).rowLabel(engine)) · click to show only \(LibraryPlace.of(item).label(engine))"
         guard let origin = item.origin else { return only }
         return "Made in “\(origin.title)”. \(only)."
     }

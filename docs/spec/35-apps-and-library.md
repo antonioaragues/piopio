@@ -453,3 +453,6 @@ icons: a folder and the project's name, the agent's tile and name, "Conversation
 "Added by you". A click shows only that place (the same as the place menu). The exact conversation is in the
 tooltip ("Made in “…”"), the preview's Made in, and Open the Conversation. The user chose this from three options;
 the others were the place on the note line, and grouping by place, which stays a possible later Day / Place switch.
+As the window narrows, the name keeps about 260 pt: the place gives way first (to its icon alone below 80 pt,
+with the place in the tooltip), then the "in a conversation" badge. The time keeps 52 pt, and the hover actions
+float over the end of the row instead of holding a column of their own. The search field shrinks too.
