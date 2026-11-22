@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { describe, expect, test } from "vitest";
-import { confine, sandboxExtension, sandboxHidden, sandboxRoots, sandboxShims, seatbeltProfile } from "../src/sandbox.js";
+import { confine, sandboxExtension, sandboxHidden, sandboxHint, sandboxRoots, sandboxShims, seatbeltProfile } from "../src/sandbox.js";
 
 // The wrappers go in Piopio's data folder: a scratch one here, never the user's.
 process.env.PIOPIO_HOME = realpathSync(mkdtempSync(join(tmpdir(), "pio-home-")));
@@ -92,4 +92,34 @@ describe.skipIf(process.platform !== "darwin")("piopio-sandbox", () => {
 			server.kill();
 		}
 	});
+
+	test("credentials stay out of reach: plain-text credential files, SSH private keys by their contents, the Keychain tool", () => {
+		const base = realpathSync(mkdtempSync(join(tmpdir(), "pio-cred-")));
+		const home = join(base, "home");
+		const project = join(base, "project");
+		mkdirSync(join(home, ".ssh"), { recursive: true });
+		mkdirSync(project);
+		writeFileSync(join(home, ".netrc"), "machine github.com password hunter2\n");
+		writeFileSync(join(home, ".ssh", "work_key"), "-----BEGIN OPENSSH PRIVATE KEY-----\nabc\n");
+		writeFileSync(join(home, ".ssh", "work_key.pub"), "ssh-ed25519 AAAA me\n");
+		writeFileSync(join(home, ".ssh", "config"), "Host x\n");
+		const hidden = sandboxHidden({ home, piopioHome: join(base, "P") });
+		expect(hidden).toContain(join(home, ".netrc"));
+		expect(hidden).toContain(join(home, ".ssh", "work_key"));
+		expect(hidden).not.toContain(join(home, ".ssh", "work_key.pub"));
+		const profile = seatbeltProfile(sandboxRoots(project, { home }), hidden);
+		const sh = (command: string) => spawnSync("/bin/sh", ["-c", confine(command, profile, "/bin/sh")], { cwd: project, encoding: "utf8" });
+		expect(sh(`cat ${join(home, ".netrc")}`).stderr).toContain("Operation not permitted");
+		expect(sh(`cat ${join(home, ".ssh", "work_key")}`).stderr).toContain("Operation not permitted");
+		expect(sh(`cat ${join(home, ".ssh", "work_key.pub")} ${join(home, ".ssh", "config")}`).stdout).toBe("ssh-ed25519 AAAA me\nHost x\n");
+		expect(sh("/usr/bin/security list-keychains").stderr).toContain("Operation not permitted");
+	});
+});
+
+test("a confined command's failure says what stopped it: signed out of GitHub, a write outside, a nested sandbox", () => {
+	expect(sandboxHint("To get started with GitHub CLI, please run:  gh auth login")).toMatch(/signed out.*outside_project: true/s);
+	expect(sandboxHint("fatal: could not read Username for 'https://github.com': terminal prompts disabled")).toMatch(/signed out/);
+	expect(sandboxHint("touch: /etc/x: Operation not permitted")).toMatch(/stopped a write outside the project/);
+	expect(sandboxHint("sandbox_apply: Operation not permitted")).toMatch(/its own macOS sandbox/);
+	expect(sandboxHint("Error: tests failed")).toBeUndefined();
 });

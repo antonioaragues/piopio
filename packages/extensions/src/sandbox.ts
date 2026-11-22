@@ -16,7 +16,7 @@
  *   writes stay inside the project all the same.
  */
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import { createBashToolDefinition, getShellConfig, type ExtensionFactory } from "@earendil-works/pi-coding-agent";
@@ -153,17 +153,59 @@ function sbpl(value: string): string {
 	return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }
 
+/** Files of plain-text credentials that builds and tests don't read: git's and netrc's passwords, registry tokens. */
+const CREDENTIAL_FILES = [".netrc", ".git-credentials", ".pypirc", ".gem/credentials"];
+
 /**
  * What sandboxed commands may not read or connect to: Piopio's own data folder (the engine's token and socket, every
- * chat, agent and secret it keeps) and the sign-ins of AI tools and cloud CLIs. Without this a confined command could
- * read the token, talk to the engine and change its own permissions, or take the user's keys.
- * Left readable on purpose: ~/.ssh and ~/.gnupg (git over SSH and signed commits), the keychains (code signing).
+ * chat, agent and secret it keeps), the sign-ins of AI tools and cloud CLIs, plain-text credentials and SSH private
+ * keys. Without this a confined command could read the token, talk to the engine and change its own permissions, or
+ * take the user's keys and send them anywhere (the network is open).
+ * Left readable on purpose: the rest of ~/.ssh (config, known_hosts, public keys) and ~/.gnupg, so git over SSH (with
+ * the agent's keys) and signed commits work; the keychains, which code signing needs.
  */
 export function sandboxHidden(options: { home?: string; piopioHome?: string } = {}): string[] {
 	const home = options.home ?? homedir();
 	const piopio = options.piopioHome ?? piopioHome(home);
-	return [piopio, join(home, ".pi", "agent", "auth.json"), join(home, ".codex", "auth.json"), join(home, ".aws")].map(real);
+	return [piopio, join(home, ".pi", "agent", "auth.json"), join(home, ".codex", "auth.json"), join(home, ".aws"), ...CREDENTIAL_FILES.map((f) => join(home, f)), ...sshPrivateKeys(home)].map(real);
 }
+
+/** The private keys in ~/.ssh, whatever they're named: the files that start like one. */
+function sshPrivateKeys(home: string): string[] {
+	const dir = join(home, ".ssh");
+	let names: string[];
+	try {
+		names = readdirSync(dir);
+	} catch {
+		return [];
+	}
+	const keys: string[] = [];
+	for (const name of names) {
+		const path = join(dir, name);
+		try {
+			if (!statSync(path).isFile()) continue;
+			const fd = openSync(path, "r");
+			const head = Buffer.alloc(64);
+			try {
+				readSync(fd, head, 0, 64, 0);
+			} finally {
+				closeSync(fd);
+			}
+			if (/-----BEGIN [A-Z ]*PRIVATE KEY-----/.test(head.toString("latin1"))) keys.push(path);
+		} catch {
+			// unreadable: nothing to hide
+		}
+	}
+	return keys;
+}
+
+/**
+ * The Keychain's command-line tool. gh keeps its GitHub token in the Keychain and reads it with this, so did git (gh is
+ * its credential helper), and a sandboxed `gh auth token` printed it. Code signing reads the Keychain through the
+ * framework, not this, so builds still sign. Inside the sandbox gh and git over HTTPS act signed out; a push or a call
+ * that needs the account runs again outside it, which asks the user.
+ */
+export const KEYCHAIN_TOOL = "/usr/bin/security";
 
 /**
  * The profile: everything allowed except writing outside `roots` (and devices such as /dev/null), and reading, writing
@@ -176,7 +218,7 @@ export function sandboxHidden(options: { home?: string; piopioHome?: string } = 
  */
 export function seatbeltProfile(roots: readonly string[], hidden: readonly string[] = sandboxHidden(), readable: readonly string[] = [real(sandboxShimsDir())]): string {
 	const subpaths = (paths: readonly string[]) => paths.map((p) => `(subpath ${sbpl(p)})`).join(" ");
-	const lines = ["(version 1)", "(allow default)", "(deny file-write*)", '(allow file-write* (subpath "/dev"))', `(allow file-write* ${subpaths(roots)})`];
+	const lines = ["(version 1)", "(allow default)", "(deny file-write*)", '(allow file-write* (subpath "/dev"))', `(allow file-write* ${subpaths(roots)})`, `(deny process-exec (literal ${sbpl(KEYCHAIN_TOOL)}))`];
 	if (hidden.length) {
 		lines.push(`(deny file-read-data file-write* ${subpaths(hidden)})`, `(deny network-outbound ${hidden.map((p) => `(remote unix-socket (subpath ${sbpl(p)}))`).join(" ")})`);
 		const within = (paths: readonly string[]) => paths.filter((r) => hidden.some((h) => r.startsWith(`${h}/`)));
@@ -212,11 +254,21 @@ export function sandboxUnavailable(): string | undefined {
 	return probed;
 }
 
-export const SANDBOX_GUIDELINE = `Commands run in a sandbox: they can read almost anything (not Piopio's own data or AI and cloud sign-ins) and use the network, but write only inside the project folder, temporary folders and package/build caches. If a command must write elsewhere (a global install, a file in the home folder), run it again with ${OUTSIDE_PROJECT}: true; the user is asked first.`;
+export const SANDBOX_GUIDELINE = `Commands run in a sandbox: they can read almost anything (not Piopio's own data, sign-ins and credentials: gh and git over HTTPS are signed out there) and use the network, but write only inside the project folder, temporary folders and package/build caches. If a command must write elsewhere (a global install, a file in the home folder), run it again with ${OUTSIDE_PROJECT}: true; the user is asked first.`;
 
 const NESTED_HINT = `\n\n[A tool tried to start its own macOS sandbox, which can't run inside Piopio's ("sandbox_apply: Operation not permitted"). Piopio already turns it off for swift and xcodebuild. For another tool, look for its flag that disables its own sandbox and run it again; Piopio's sandbox still keeps writes inside the project.]`;
 
 const DENIED_HINT = `\n\n[Piopio's sandbox stopped a write outside the project, or a read of Piopio's own data or a sign-in file ("Operation not permitted"). If this command really has to do that, run it again with ${OUTSIDE_PROJECT}: true and the user will be asked. Otherwise write inside the project or a temporary folder.]`;
+
+const SIGNED_OUT_HINT = `\n\n[Inside Piopio's sandbox gh and git over HTTPS are signed out: the Keychain, where their GitHub sign-in is, is out of reach. Don't ask the user to sign in. If this needs their account (a push, a pull request, a private repository), run it again with ${OUTSIDE_PROJECT}: true and the user will be asked.]`;
+
+/** What to add to a confined command's failure, so the agent knows what stopped it and what to do. */
+export function sandboxHint(output: string): string | undefined {
+	if (/sandbox_apply/.test(output)) return NESTED_HINT;
+	if (/no oauth token found|gh auth login|could not read Username|Authentication failed|terminal prompts disabled|Bad credentials|HTTP 401/i.test(output)) return SIGNED_OUT_HINT;
+	if (/Operation not permitted/.test(output)) return DENIED_HINT;
+	return undefined;
+}
 
 type Content = { type: string; text?: string }[];
 
@@ -275,9 +327,8 @@ export function sandboxExtension(bridge: SandboxBridge, options: { shellPath?: (
 				const result = await confined.execute(toolCallId, input as never, signal, onUpdate, ctx);
 				const content = (result as { content?: Content }).content;
 				const text = content?.map((c) => c.text ?? "").join("") ?? "";
-				if ((result as { isError?: boolean }).isError && /Operation not permitted/.test(text)) {
-					return { ...result, content: [...(content ?? []), { type: "text", text: /sandbox_apply/.test(text) ? NESTED_HINT : DENIED_HINT }] } as never;
-				}
+				const hint = (result as { isError?: boolean }).isError ? sandboxHint(text) : undefined;
+				if (hint) return { ...result, content: [...(content ?? []), { type: "text", text: hint }] } as never;
 				return result;
 			},
 		} as never);
