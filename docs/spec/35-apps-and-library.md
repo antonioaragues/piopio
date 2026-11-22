@@ -1,0 +1,315 @@
+# 35 · Apps and the Library: visuals that stay live, and one place for what Piopio makes
+
+Status: draft 2026-11-22, from a conversation with the user. The user asked for the Library as a section of its own,
+with pins kept there instead of the sidebar's Pinned (AL1, AL9). The other decisions are proposed and still need
+confirming (§12). Nothing is built. Mockup: [docs/design/apps](../design/apps/Apps.html), which includes a clickable
+prototype. This spec continues [25](25-visuals.md): VS3 (saved visuals are files), VS4 (the engine records and the
+app draws), VS5 (no network) and VS7 (a visual talks back only on your click) all still hold.
+
+**The idea:** an app is a saved visual plus a list of where its data comes from. Piopio reads those sources and hands
+the result to the page, so the page never reaches out. The Library lists everything Piopio and your agents make,
+wherever the file lives, and pinned items go at the top of the Library.
+
+## 1. Why
+
+- **A visual is a snapshot.** The data is written into its HTML (25 §4.4: "a visual that needs data gets it in its
+  HTML"). "Chart my spending" drawn today is wrong tomorrow. Asking again means a model rewrites the whole page, so it
+  costs tokens and comes back looking different each time.
+- **What Piopio makes gets lost.** A chat's files are in its own folder under `~/Library/Application Support/Piopio/
+  scratch/`. A project's files are in that project. An agent's files are in `~/Piopio/Agents/<name>/files/`. A
+  visual you didn't save exists only in the transcript. To find "the gas comparison from Saturday" you have to
+  remember which conversation made it.
+- **The direction others are taking.** Apps you keep and customize are where agent platforms are heading
+  ([the "Agent platform 2027" memo](https://x.com/john_ssuh/status/2124336124172935336), Claude's artifacts you can
+  install, Cowork with customization). Piopio already has the hard parts: a sandboxed web view (25), read-only
+  connector tools (12), codemode, automations (27) and Piopio's own numbers (34).
+
+## 2. The experience
+
+**An app**
+1. In a project you ask "Chart my spending by category from expenses.csv". A visual card appears, as it does today.
+2. The card has a new button, **Keep**. Its popover shows the name, what the app will read (`data/expenses.csv`),
+   when it refreshes (when you open it and when the file changes, with no model), where it will be saved, and a
+   **Pin it in the Library** checkbox, ticked by default. Nothing is written until you click Keep.
+3. Piopio takes one short turn to rewrite the visual so it reads its data instead of carrying it. It saves the file
+   and says so in the answer.
+4. The app opens as a page in the content card. Piopio's toolbar is above it: the name, "Updated 10:42",
+   **Refresh**, **Sources**, and ⊘ for offline. Next to it is a conversation about the app.
+5. You ask for a change ("Split it by month and add a budget line at 1.100 €"). The model edits the file, the page
+   reloads, and the edit is a checkpoint like any other (Undo).
+6. When `expenses.csv` changes, the app redraws without running a model.
+
+**The Library**
+1. **Library** is a sidebar row under Automations, with your pinned items indented beneath it.
+2. Its page has a **Pinned** shelf of tiles, then everything else by day. You can filter by kind and by place, and
+   search.
+3. Clicking a row shows a preview: the file, the conversation that made it, who made it, when, and how many versions
+   git has. It has **Open**, **Pin** and **Show in Finder**.
+
+## 3. Apps
+
+### 3.1 The file
+
+An app is one `.html` file with a manifest at the top:
+
+```html
+<script type="application/json" id="piopio-app">
+{
+  "title": "Spending",
+  "sources": {
+    "expenses": { "file": "data/expenses.csv" },
+    "week":     { "tool": "calendar_list_events", "args": { "days": 7 } },
+    "bills":    { "script": "bills.js", "tools": ["gmail_search"] },
+    "spend":    { "piopio": "stats.spend", "args": { "groupBy": "agent", "range": "month" } }
+  },
+  "refresh": { "onOpen": true, "onChange": true, "every": "1h" }
+}
+</script>
+<script type="module">
+  piopio.onData(({ expenses, week, bills, spend }, { updatedAt, stale }) => draw(...));
+</script>
+```
+
+- **Where it's saved:** in a project, in the project's folder (`apps/` by default). Elsewhere, in `~/Piopio/Apps/`,
+  next to `~/Piopio/Agents/`. A script source sits beside its app (`apps/bills.js`).
+- **The rest is a visual:** the same tokens, libraries, CSP and `piopio.send` / `piopio.prefill` as 25 §4. The only
+  new thing in the wrapper is `piopio.onData`.
+- **It's still a file:** git, checkpoints, the file viewer and Finder all work on it. If you open it in another
+  browser it draws its last cached data, or "Open in Piopio to see live data" when there is none.
+
+### 3.2 Sources
+
+| Kind | Reads | Runs a model | Refreshed by |
+|---|---|---|---|
+| `file` | A file in the app's project, or under the app's own folder: CSV, JSON, Markdown or text. Its parsed rows or text go to the page. | No | Opening it, the file changing, the timer |
+| `tool` | One connector or MCP tool with fixed arguments. It must be a **read** tool (12's `access: "read"`, MCP's `readOnlyHint`). | No | Opening it, the timer |
+| `script` | A small JavaScript function in codemode's sandbox that calls only the tools listed in the manifest, all of them read tools, and returns JSON. The model writes it once. | No | Opening it, the timer |
+| `piopio` | Piopio's own numbers: 34's `stats.*`, automation runs, agents and their status. | No | Opening it, the timer |
+
+There's no source that asks the model on each refresh. Work that needs a model belongs in an automation (27), which
+can write a file that an app then reads. That keeps "refreshing costs nothing" true, and it keeps everything that
+spends money in Automations, where 34 counts it.
+
+A source has limits: 10 s per read, at most 2 MB of JSON per source, and a script may make at most 20 tool calls.
+When a source goes over, it fails (§3.5).
+
+### 3.3 Refresh
+
+- **`onOpen`:** when the page is shown, if the last read is older than a minute.
+- **`onChange`:** `file` sources are watched like folder watches (`watchers.ts`), with the same settle delay.
+- **`every`:** at least `15m`, and only while the app is pinned. It's an automation with no model (27): it appears in
+  Automations as "Refresh *Spending*", with its runs and $0. Unpinning pauses it.
+- **Refresh** in the toolbar reads everything now.
+
+The last result of each source is cached in the engine's data folder (`apps-cache/<hash of the path>.json`), not in
+the project, so git stays clean. An app opens straight away with that data and then refreshes.
+
+### 3.4 Allowing sources
+
+- **Keep allows them.** The popover lists every source, and clicking Keep allows that list.
+- **A different list asks again.** If an edit adds a source or changes a tool or its arguments, the app keeps
+  drawing the last version you allowed and shows a banner: "This app now also wants to read *Gmail attachments*",
+  with **Not now** and **Allow**. A source is never added silently.
+- **Allowed by content, not by name.** What's allowed is the manifest's sources. Changing only the page (layout,
+  colours, a new chart) asks nothing.
+- **Read only, always.** A write or destructive tool can't be a source at all; the manifest is refused with the
+  reason. Acting on data stays in a conversation or with an agent, where approvals live. An app's button can only put
+  words in the composer (`piopio.prefill`) from your click.
+
+### 3.5 When a source fails
+
+The app keeps the last good data, and the toolbar says what happened in amber ("Calendar didn't answer at 11:00"),
+with the one fix that would help: Sign in again, Retry, or Open the file. `onData` receives `stale: ["week"]` so the
+page can grey that part out. A pinned app whose timed refresh fails three times in a row gets the blue dot on its row
+under Library.
+
+### 3.6 The app page
+
+- **Toolbar** (44 pt, in the card): ◫ and the title, then "*project* · Updated 10:42", then Refresh, Sources
+  (a popover listing each source with its last read and size, the refresh rule with its cost, and Edit…), ⊘ (offline,
+  tooltip "This page can't reach the internet"), and ◧ to show or hide the conversation.
+- **The app** fills the card at full width and scrolls. It's live while it's shown (25 VS8: one web view per open app).
+- **The conversation about it** is a right panel, 300 pt wide, open the first time and remembered after. It's a
+  normal conversation in the app's project (or a chat, for apps in `~/Piopio/Apps/`) with the app file attached as
+  context. Its prompt says to edit that file and to keep the manifest unless you ask. Each edit reloads the page.
+- **Keep from any visual card:** Keep is in the card's header next to Open, Save… and Copy HTML. Save… stays as a
+  plain snapshot, which is still useful for sharing.
+
+### 3.7 Making an app on purpose
+
+Besides Keep, you can ask for one directly ("make me an app that shows this week's calendar and the bills due"). The
+model calls `make_app({ title, html, sources, refresh, folder? })`. That shows the same Keep popover as a card in the
+answer, and nothing is saved until you click Keep. Overview › Spend gets **Make an app of this…**, which opens a
+conversation with the question already written (34 stays native; the app reads `stats.spend`).
+
+## 4. The Library
+
+### 4.1 What it is
+
+It's an index of files, not a store: each item is a file where it already lives (25 VS3, 18 CF4). The index is
+`<home>/library.json`, with each item's path, kind, the note on it, where it came from (conversation, project or
+agent), who made it, when, and whether it's pinned. It lists files but never moves or copies them.
+
+### 4.2 What goes in
+
+Items are added on their own:
+
+| Comes in | When |
+|---|---|
+| **Apps** | When kept or made (§3) |
+| **Files handed over** | Every file in a `present_files` call, from a conversation, a Build session or an agent. That's the signal that "this is for you", and it keeps code out: Build writes many files but hands over few. |
+| **Files written in a conversation's folder** | Files a chat writes in its own folder, of a kind meant to be looked at (pages, documents, data, images, slides), even if never presented |
+| **Saved visuals** | Save… on a card |
+| **Visuals not saved** | Every `show_visual` card, marked "in a conversation", with **Keep** and **Save…**. Drafts replaced in the same turn (25 §3.4) aren't listed. |
+
+You can also add or remove items yourself:
+- **Add to Library** is in the ⋯ menu of any file card, in the file viewer, and in Build's file tree.
+- **Remove from Library** hides an item and leaves the file where it is.
+- **Move to Trash** is a separate, confirmed step, and it uses the Finder Trash.
+
+**Notes:** when Piopio makes a file it writes a one-line note on it, the way agents do with `note_file` (06 §14), so
+the list and search can say "Gas offers from Iberdrola, Naturgy and Repsol, compared". The note is generated on the
+Library's utility model when `present_files` didn't give one.
+
+**Kinds:** App, Document (`.md`, `.pdf`, `.docx`, `.txt`), Page (`.html` that isn't an app), Visual (a card, or a
+saved visual), Image, Data (`.csv`, `.json`, `.xlsx`), Slides.
+
+### 4.3 The page
+
+- **Where:** the sidebar row **Library** (▥), after Automations, and ⌘K ("Library", or an item's name).
+- **Title row:** "Library" (20 bold), and a search field on the right.
+- **Filters:** a kind segment (All · Apps · Documents · Pages · Visuals · Images · Data), and a place picker as plain
+  text ("All places", a project, an agent, Conversations).
+- **Pinned shelf:** tiles three per row, each with a thumbnail, the name, and the kind with "updated 9:00" or
+  "changed Sat". Clicking a tile opens the item.
+- **Everything else:** grouped Today / Yesterday / Earlier this week / by month. Each row has its icon, name and kind
+  (plus "● pinned" or "in a conversation" where it applies), where it is, who made it, and when. Hovering a row
+  shows Open · Pin · ⋯ (Show in Finder, Open the conversation, Copy path, Remove from Library, Move to Trash).
+- **Preview** (290 pt, when a row is selected): a thumbnail, the name, the note, then Kind and size, File (the path),
+  Made in (a link to the conversation), By, and Changed (with "3 versions in git" when it's tracked), then Open, Pin
+  and Show in Finder.
+- **Opening an item** opens apps as their page (§3.6), visuals in their conversation, scrolled to the card, and
+  files in the file viewer (25 §7 for HTML).
+- **Thumbnails** come from 25's snapshot for visuals and apps, Quick Look for files, and a glyph otherwise. They're
+  cached with the index.
+
+### 4.4 Pins
+
+- **Any item can be pinned.** Apps are the usual ones.
+- **Pinned items** go on the shelf, and the five most recent pins show under Library in the sidebar. The rest stay
+  on the shelf. You can drag to reorder both.
+- **The sidebar's Pinned section** stays for conversations and agents (18 CF10, CF27). Apps and files go only under
+  Library.
+- **Unpinning** an app pauses its timed refresh (§3.3).
+
+### 4.5 Agents, the cloud and the phone
+
+- **An agent's files** go in the Library when it hands them over (`present_files`). Files you sent the agent stay
+  on its page (06 §14 FL2), since you made those, not the agent.
+- **Cloud items:** a cloud conversation's or cloud agent's files appear once they sync to the Mac (30 K-phases).
+  Until then the Library covers This Mac only.
+- **The phone (30's Piopio app):** it shows the Library and draws apps from their HTML and cached JSON. It refreshes
+  them through the Mac when the Mac is reachable, and otherwise shows the cached data with "as of 10:42".
+
+## 5. Safety
+
+- **The page is still offline** (25 §5): no network, no files, and no channel back except your click. `onData` only
+  goes into the page. The worst an app can do is still to look wrong.
+- **Data that reaches the page** was read by the engine from sources you allowed, using read tools only. A visual
+  made from a hostile page still can't send anything anywhere.
+- **Scripts** run in codemode's sandbox, with only the tools their manifest lists. They have no `fetch`, no file
+  system, and nothing beyond the listed tools.
+- **Prompt injection through data:** source data reaches the page, not a model. A model sees it only when you ask
+  the app's conversation about it, and then it's ordinary tool output.
+- **The Library index** holds paths and notes, not file contents. It never sends anything anywhere (01 principle 5, no
+  telemetry).
+
+## 6. Under the hood
+
+**Engine**
+- `library.ts`: the index (`library.json`). It's fed by `present_files`, writes in chat folders, `show_visual`,
+  Save…, Keep and `make_app`. It notices a file being moved or deleted when it lists, and keeps a missing item for 30
+  days marked "File missing", with **Locate…** and **Remove**.
+- `apps.ts`: parses and validates a manifest, reads the sources (the file reader, `connectors` for tools, codemode
+  for scripts, `stats.*` for Piopio), caches the results, watches files, and registers the model-free automation for
+  `every`.
+
+**Protocol**
+
+| Method / event | Does |
+|---|---|
+| `library.list { kind?, place?, query?, cursor? }` | Items with their thumbnails' refs |
+| `library.add / remove / pin / unpin / reorder` | What the page and menus do |
+| `app.open { path }` | The manifest, the cached data and whether the sources are allowed |
+| `app.refresh { path, source? }` | Reads now; answers with the data, or what failed |
+| `app.allow { path, manifestHash }` | Allows the current list of sources |
+| `app.data` (event) | New data for an open app, from a file change or the timer |
+| `library.changed` (event) | The index changed |
+
+**App:** `LibraryPage.swift`, `AppPage.swift` (the toolbar, the visual's web view with `onData`, and the panel
+conversation), a Keep popover on `VisualCard`, and the sidebar row with its pins.
+
+## 7. Where it touches other specs
+
+| Spec | Change |
+|---|---|
+| 25 Visuals | Keep on the card; `piopio.onData` in the wrapper; §10's "Editing a visual in place" happens here, through the app's conversation |
+| 27 Automations | A trigger with no model, "Refresh *app*", kind `app.refresh`, $0, shown like the others |
+| 34 Overview | Make an app of this… on Spend; `stats.*` open to apps; Activity counts apps and Library items |
+| 06 Agents | `present_files` also adds to the Library |
+| 18 Conversation first | A sidebar row, Library, after Automations; Pinned stays for conversations and agents |
+| 12 Connectors | The read access mark decides what can be a source |
+
+## 8. Phases
+
+| # | Delivers | Done when |
+|---|---|---|
+| **L1 · Library** | The index, fed by `present_files`, chat-folder writes, visuals and Save…; the page with kinds, places, search and preview; Pin and the sidebar row; Remove, Move to Trash, File missing | Last week's mockups, a chat's CSV and an agent's PDF are listed with where they came from, and pinning one shows it under Library |
+| **L2 · Apps on files** | The manifest, `file` sources, `onData`, Keep and its popover, the app page, the cache, `onChange` | Keep on a chart of a CSV makes an app that redraws when the CSV changes, without a model turn |
+| **L3 · Changing an app** | The app's conversation panel; edits reload it; checkpoints | "Split it by month" changes the app in one turn, and Undo brings the old one back |
+| **L4 · Services and Piopio** | `tool`, `piopio` and `script` sources, allowing and re-allowing, failures, `every` as a model-free automation, Make an app of this… | "This week" reads Calendar and Gmail hourly at $0; a changed source waits for Allow |
+| **L5 · Elsewhere** | The phone draws apps and the Library; cloud items once they sync | An app pinned on the Mac opens on the phone with its last data |
+
+L1 is useful alone and doesn't need apps. L2 is the smallest version of apps.
+
+## 9. Not in this spec
+
+- **Apps that write.** A source never writes, and there's no `piopio.call(tool)` from the page. If it's ever wanted,
+  it would go through MCP Apps' bridge with per-call approvals (25 D6), not through the Library.
+- **Sharing an app** with someone else. Save… and export still give a portable snapshot.
+- **A gallery of apps** to install. Your own apps and the ones Piopio makes come first.
+- **Apps as Piopio's own pages.** Overview, Settings and Home stay native (01 principle 1).
+
+## 10. What you see, in short
+
+You ask for a chart and click Keep, and it becomes an app that stays current, costs nothing to refresh, and changes
+when you ask. Everything Piopio and your agents make (apps, mockups, documents, spreadsheets, images, visuals) is in
+the Library, which says where each item came from. What you use often is pinned there and under Library in the
+sidebar.
+
+## 11. Not verified
+
+- That `present_files` plus chat-folder writes catch most of what you'd want listed, and not too much. To check, run
+  it against a month of real sessions.
+- That models write `onData` apps reliably without a worked example, and keep the manifest intact when editing the
+  layout.
+- Quick Look thumbnails from the engine's side, and their cost for a Library of a few hundred items.
+- Codemode's sandbox as a script runner outside a session (it's a pi extension today).
+- How 30's cloud sync carries file items.
+
+## 12. Questions
+
+| # | Question | Proposed |
+|---|---|---|
+| AL1 | A section of its own for what Piopio makes, with pins kept there | **Yes** (the user, 2026-11-22) |
+| AL2 | Name: Library, Files, Made, Artifacts | Library |
+| AL3 | Is it an index of files where they live, or a store of copies? | An index (25 VS3) |
+| AL4 | What comes in on its own: `present_files`, chat-folder writes, visuals, apps; Build's other writes stay out | As proposed |
+| AL5 | Do unsaved visuals from conversations show in the Library? | Yes, marked, with Keep |
+| AL6 | Name: App, View or Board; and the button: Keep | App, Keep |
+| AL7 | A source that asks the model on each refresh? | No; that's an automation writing a file the app reads |
+| AL8 | Where apps live outside a project | `~/Piopio/Apps/` |
+| AL9 | Pins: on the Library's shelf, with the five most recent under Library in the sidebar | **Yes** (the user, 2026-11-22) |
+| AL10 | The timed refresh: shortest interval, and only while pinned | 15 min, only while pinned |
+| AL11 | Does the app's conversation open by default? | The first time, then remembered |
+| AL12 | Does Overview become an app? | No, it stays native; it's the first `piopio` source |

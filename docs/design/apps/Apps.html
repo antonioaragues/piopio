@@ -1,0 +1,778 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Piopio Apps Mockup</title>
+<style>
+:root {
+  --win:#fcfcfb; --side:#f4f4f2; --fg:#1f1f1e; --fg2:#6b6b67; --fg3:#9b9b96; --line:rgba(0,0,0,.09);
+  --bubble:#f0f0ed; --field:#ffffff; --track:rgba(0,0,0,.05); --seg:#fff; --inv:#1f1f1e; --invfg:#fff;
+  --accent:#2f6fde; --sel:rgba(0,0,0,.05); --page:#e9e9e6; --amber:#b7791f;
+  --bar1:#6b6b67; --bar2:#c4c4bf; --code:#f3f3f1;
+}
+:root[data-theme="dark"] {
+  --win:#1e1e1d; --side:#191918; --fg:#ececea; --fg2:#a6a6a1; --fg3:#77776f; --line:rgba(255,255,255,.1);
+  --bubble:#2b2b29; --field:#252524; --track:rgba(255,255,255,.06); --seg:#3a3a38; --inv:#ececea; --invfg:#1e1e1d;
+  --accent:#6ea0ff; --sel:rgba(255,255,255,.07); --page:#121211; --amber:#e0a84a;
+  --bar1:#a6a6a1; --bar2:#55554f; --code:#252524;
+}
+* { box-sizing:border-box; }
+body { margin:0; background:var(--page); color:var(--fg); font:13px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif; -webkit-font-smoothing:antialiased; }
+main { max-width:1240px; margin:0 auto; padding:40px 16px 80px; }
+header.doc { display:flex; gap:20px; align-items:flex-start; }
+header.doc h1 { font-size:22px; font-weight:600; margin:0 0 6px; }
+header.doc p { color:var(--fg2); margin:0 0 4px; max-width:800px; }
+header.doc .theme { margin-left:auto; color:var(--fg2); cursor:pointer; padding:3px 8px; border-radius:6px; user-select:none; white-space:nowrap; }
+header.doc .theme:hover { background:var(--sel); color:var(--fg); }
+nav.toc { display:flex; gap:6px; flex-wrap:wrap; margin:18px 0 34px; }
+nav.toc a { color:var(--fg2); text-decoration:none; padding:3px 8px; border-radius:6px; }
+nav.toc a:hover { background:var(--sel); color:var(--fg); }
+section.screen { margin:0 0 64px; }
+.label { display:flex; gap:10px; align-items:baseline; margin:0 0 12px; }
+.label b { font-size:12px; color:var(--fg3); font-weight:600; }
+.label h2 { font-size:15px; margin:0; font-weight:600; }
+.label span { color:var(--fg2); }
+.note { color:var(--fg2); max-width:880px; margin:14px 0 0; padding-left:18px; }
+.note li { margin:3px 0; }
+.mono { font-family:ui-monospace, "SF Mono", Menlo, monospace; font-size:12px; }
+a.lk { color:var(--accent); text-decoration:none; cursor:pointer; }
+
+/* stepper */
+.steps { display:flex; gap:4px; align-items:center; margin:0 0 12px; flex-wrap:wrap; }
+.steps span { color:var(--fg2); padding:4px 10px; border-radius:7px; cursor:pointer; user-select:none; }
+.steps span:hover { background:var(--sel); color:var(--fg); }
+.steps span.on { background:var(--seg); color:var(--fg); box-shadow:0 0 0 .5px var(--line), 0 1px 2px rgba(0,0,0,.06); }
+.steps span i { font-style:normal; color:var(--fg3); margin-right:6px; }
+.steps .next { margin-left:auto; background:var(--inv); color:var(--invfg); }
+.steps .next:hover { background:var(--inv); color:var(--invfg); opacity:.88; }
+.hint { color:var(--fg3); font-size:12px; margin:-4px 0 12px; min-height:17px; }
+
+/* window */
+.win { background:var(--side); border-radius:12px; box-shadow:0 0 0 .5px var(--line), 0 20px 50px rgba(0,0,0,.12); overflow:hidden; display:flex; height:640px; }
+.win.short { height:520px; }
+.side { width:228px; flex:none; display:flex; flex-direction:column; }
+.side .top { height:52px; display:flex; align-items:center; padding:0 14px; }
+.dot3 i { display:inline-block; width:12px; height:12px; border-radius:50%; background:var(--line); margin-right:6px; }
+.side .rows { padding:2px 8px; flex:1; overflow:hidden; }
+.side h4 { font-size:12px; color:var(--fg3); font-weight:500; margin:14px 8px 4px; display:flex; justify-content:space-between; }
+.row { display:flex; align-items:center; gap:9px; padding:5px 8px; border-radius:7px; color:var(--fg); white-space:nowrap; overflow:hidden; }
+.row.on { background:var(--sel); }
+.row.click { cursor:pointer; }
+.row.click:hover { background:var(--sel); }
+.row.new { animation:flash 1.6s ease-out; }
+@keyframes flash { 0% { background:rgba(47,111,222,.18); } 100% { background:transparent; } }
+.row .g { width:16px; text-align:center; color:var(--fg2); flex:none; }
+.row .r { margin-left:auto; color:var(--fg3); font-size:12px; }
+.side .foot { height:52px; display:flex; align-items:center; gap:9px; padding:0 14px; color:var(--fg2); font-size:12px; }
+.av { width:24px; height:24px; border-radius:50%; background:var(--bubble); flex:none; display:grid; place-items:center; font-size:11px; color:var(--fg2); }
+.card { flex:1; margin:8px 8px 8px 0; background:var(--win); border-radius:10px; box-shadow:0 0 0 .5px var(--line); display:flex; flex-direction:column; min-width:0; overflow:hidden; position:relative; }
+.tb { height:44px; flex:none; display:flex; align-items:center; padding:0 16px; gap:10px; }
+.tb .t { font-weight:600; font-size:13.5px; }
+.tb .s { color:var(--fg3); font-size:12px; }
+.tb .rt { margin-left:auto; display:flex; gap:4px; color:var(--fg2); align-items:center; }
+.tb .btn { padding:3px 8px; border-radius:6px; cursor:pointer; user-select:none; white-space:nowrap; }
+.tb .btn:hover, .tb .btn.on { background:var(--sel); color:var(--fg); }
+.tb .ic { color:var(--fg3); padding:3px 6px; }
+.toast { color:var(--fg2); font-size:12px; padding:2px 8px; border-radius:6px; background:var(--sel); animation:fade 4s forwards; }
+@keyframes fade { 0%,70% { opacity:1; } 100% { opacity:0; } }
+
+/* transcript */
+.scroll { flex:1; overflow:auto; display:flex; flex-direction:column; align-items:center; padding:12px 24px 0; }
+.col { width:100%; max-width:560px; }
+.umsg { display:flex; justify-content:flex-end; margin:10px 0 14px; }
+.umsg div { background:var(--bubble); padding:7px 12px; border-radius:14px; max-width:80%; font-size:14px; }
+.ans { font-size:14px; line-height:1.55; margin:0 0 12px; }
+.stepl { color:var(--fg3); font-size:12.5px; margin:0 0 10px; display:flex; gap:8px; }
+.stepl b { color:var(--fg2); font-weight:500; }
+.vcard { border:.5px solid var(--line); border-radius:10px; margin:4px 0 14px; position:relative; background:var(--win); }
+.vcard .vh { display:flex; align-items:center; gap:8px; padding:8px 10px 6px 12px; font-size:12.5px; }
+.vcard .vh .ti { font-weight:500; }
+.vcard .vh .acts { margin-left:auto; display:flex; gap:2px; color:var(--fg2); }
+.vcard .vh .acts span { padding:2px 7px; border-radius:6px; }
+.vcard .vh .acts span.keep { color:var(--fg); font-weight:500; cursor:pointer; box-shadow:0 0 0 .5px var(--line); }
+.vcard .vh .acts span.keep:hover { background:var(--sel); }
+.vcard .vh .acts span.kept { color:var(--fg3); }
+.vcard .vb { padding:4px 14px 14px; }
+.vcard .vf { color:var(--fg3); font-size:11.5px; padding:0 14px 10px; }
+.composer { width:100%; max-width:560px; margin:10px auto 14px; border:.5px solid var(--line); border-radius:14px; background:var(--field); padding:10px 12px 8px; box-shadow:0 4px 14px rgba(0,0,0,.05); }
+.composer .ph { color:var(--fg3); font-size:14px; min-height:22px; }
+.composer .ph.typed { color:var(--fg); }
+.composer .ch { display:flex; gap:12px; color:var(--fg2); font-size:12px; margin-top:6px; align-items:center; }
+.composer .send { margin-left:auto; width:24px; height:24px; border-radius:50%; background:var(--inv); color:var(--invfg); display:grid; place-items:center; font-size:12px; cursor:pointer; }
+.composer .send.off { opacity:.25; cursor:default; }
+
+/* hbar chart inside visuals/apps */
+.hb { display:grid; grid-template-columns:96px 1fr 64px; gap:10px; align-items:center; padding:3px 0; font-size:12.5px; }
+.hb .n { color:var(--fg2); }
+.hb .bar { height:14px; background:var(--track); border-radius:3px; overflow:hidden; }
+.hb .bar i { display:block; height:100%; background:var(--bar1); border-radius:3px; transition:width .6s; }
+.hb .bar i.up { background:var(--fg); }
+.hb .v { text-align:right; font-variant-numeric:tabular-nums; }
+
+/* popover */
+.pop { position:absolute; background:var(--field); border:.5px solid var(--line); border-radius:12px; box-shadow:0 14px 40px rgba(0,0,0,.16); padding:14px 16px; z-index:5; font-size:13px; }
+.pop h6 { margin:0 0 2px; font-size:13.5px; font-weight:600; }
+.pop .sub { color:var(--fg2); margin:0 0 12px; font-size:12.5px; }
+.pop .fld { border:.5px solid var(--line); border-radius:7px; padding:5px 8px; background:var(--win); margin:0 0 12px; }
+.pop .k { color:var(--fg3); font-size:12px; margin:10px 0 4px; }
+.pop .src { display:flex; gap:9px; align-items:baseline; padding:4px 0; }
+.pop .src .g { color:var(--fg2); width:16px; text-align:center; flex:none; }
+.pop .src .d { color:var(--fg3); font-size:12px; }
+.pop .src .r { margin-left:auto; color:var(--fg2); font-size:12px; white-space:nowrap; }
+.pop .chk { display:flex; gap:8px; align-items:center; margin:10px 0 0; }
+.pop .chk i { width:14px; height:14px; border-radius:4px; background:var(--inv); color:var(--invfg); font-size:10px; display:grid; place-items:center; font-style:normal; }
+.pop .btns { display:flex; gap:8px; justify-content:flex-end; margin-top:14px; }
+.b1 { white-space:nowrap; background:var(--inv); color:var(--invfg); padding:4px 12px; border-radius:7px; cursor:pointer; user-select:none; }
+.b2 { white-space:nowrap; color:var(--fg); padding:4px 12px; border-radius:7px; box-shadow:0 0 0 .5px var(--line); cursor:pointer; user-select:none; }
+.b1:hover { opacity:.88; } .b2:hover { background:var(--sel); }
+.pop .sep { height:.5px; background:var(--line); margin:10px 0; }
+.pop .fine { color:var(--fg3); font-size:12px; }
+
+/* app page */
+.appbody { flex:1; display:flex; min-height:0; border-top:.5px solid var(--line); }
+.appview { flex:1; overflow:auto; padding:22px 30px; min-width:0; }
+.appchat { width:300px; flex:none; border-left:.5px solid var(--line); display:flex; flex-direction:column; background:var(--win); }
+.appchat .hd { padding:10px 14px 4px; color:var(--fg3); font-size:12px; }
+.appchat .msgs { flex:1; overflow:auto; padding:0 14px; }
+.appchat .umsg div { font-size:13px; }
+.appchat .ans { font-size:13px; }
+.appchat .composer { margin:8px 10px 10px; width:auto; padding:8px 10px 6px; }
+.appchat .composer .ph { font-size:13px; }
+.sugg { display:flex; flex-direction:column; gap:6px; margin:6px 0 0; }
+.sugg span { color:var(--fg2); font-size:12.5px; padding:5px 9px; border-radius:8px; box-shadow:0 0 0 .5px var(--line); cursor:pointer; }
+.sugg span:hover { background:var(--sel); color:var(--fg); }
+.app h2 { font-size:18px; margin:0 0 2px; font-weight:650; }
+.app .lede { color:var(--fg2); margin:0 0 18px; }
+.kp { display:flex; gap:34px; margin:0 0 18px; }
+.kp b { display:block; font-size:20px; font-weight:600; font-variant-numeric:tabular-nums; transition:color .4s; }
+.kp b.chg { color:var(--accent); }
+.kp span { color:var(--fg3); font-size:12px; }
+.app h5 { font-size:12px; color:var(--fg3); font-weight:500; margin:18px 0 8px; }
+table.tx { width:100%; border-collapse:collapse; font-size:12.5px; }
+table.tx td { padding:6px 8px 6px 0; border-top:.5px solid var(--line); }
+table.tx td.v { text-align:right; font-variant-numeric:tabular-nums; }
+table.tx td.m { color:var(--fg3); }
+table.tx tr.new td { animation:flash 2.4s ease-out; }
+
+/* month chart */
+.mc { position:relative; height:190px; display:flex; align-items:flex-end; gap:14px; padding:0 0 20px; border-bottom:.5px solid var(--line); margin-top:10px; }
+.mc .b { flex:1; display:flex; flex-direction:column-reverse; border-radius:3px 3px 0 0; overflow:hidden; position:relative; transition:height .6s; }
+.mc .b i { display:block; }
+.mc .b .lab { position:absolute; bottom:-19px; left:0; right:0; text-align:center; color:var(--fg3); font-size:11px; }
+.mc .bw { flex:1; position:relative; display:flex; align-items:flex-end; height:100%; }
+.mc .bw .b { width:100%; flex:none; }
+.mc .bw .lab { position:absolute; bottom:-19px; left:0; right:0; text-align:center; color:var(--fg3); font-size:11px; }
+.mc .bw .val { position:absolute; left:0; right:0; text-align:center; color:var(--fg2); font-size:11px; font-variant-numeric:tabular-nums; }
+.mc .budget { position:absolute; left:0; right:0; border-top:1.2px dashed var(--fg2); }
+.mc .budget span { position:absolute; right:0; top:-17px; color:var(--fg2); font-size:11px; background:var(--win); padding-left:6px; }
+.legend { display:flex; gap:14px; color:var(--fg3); font-size:12px; margin:10px 0 0; flex-wrap:wrap; }
+.legend i { display:inline-block; width:8px; height:8px; border-radius:2px; margin-right:5px; }
+
+/* banners */
+.banner { display:flex; gap:10px; align-items:center; padding:9px 14px; border-bottom:.5px solid var(--line); font-size:12.5px; }
+.banner .bd { width:7px; height:7px; border-radius:50%; background:var(--accent); flex:none; }
+.banner .r { margin-left:auto; display:flex; gap:8px; }
+.banner.stale { color:var(--fg2); }
+
+/* week app */
+.wk { display:grid; grid-template-columns:1fr 1.25fr; gap:30px; }
+.day { padding:7px 0; border-top:.5px solid var(--line); display:grid; grid-template-columns:62px 1fr; gap:8px; }
+.day b { font-weight:500; color:var(--fg2); font-size:12.5px; }
+.ev { font-size:12.5px; padding:1px 0; }
+.ev span { color:var(--fg3); margin-right:6px; font-variant-numeric:tabular-nums; }
+.due { display:flex; gap:10px; padding:7px 0; border-top:.5px solid var(--line); font-size:12.5px; }
+.due .v { margin-left:auto; font-variant-numeric:tabular-nums; }
+.due .m { color:var(--fg3); }
+.due .soon { color:var(--amber); }
+.btnin { display:inline-block; margin-top:10px; color:var(--fg2); font-size:12.5px; padding:4px 10px; border-radius:7px; box-shadow:0 0 0 .5px var(--line); }
+
+/* under the hood */
+.hood { display:grid; grid-template-columns:1fr 1fr; gap:22px; }
+pre.code { background:var(--code); border:.5px solid var(--line); border-radius:10px; padding:12px 14px; margin:0; overflow:auto; font:11.5px/1.55 ui-monospace, "SF Mono", Menlo, monospace; color:var(--fg); }
+pre.code .c { color:var(--fg3); }
+pre.code .k { color:var(--accent); }
+.flow { border:.5px solid var(--line); border-radius:10px; background:var(--field); padding:8px; }
+.flow svg { display:block; width:100%; height:auto; }
+.flow .bx { fill:var(--win); stroke:var(--line); }
+.flow .bx2 { fill:var(--field); stroke:var(--fg3); stroke-dasharray:3 3; }
+.flow text { font-size:12px; fill:var(--fg); }
+.flow text.d { fill:var(--fg3); font-size:11px; }
+.flow text.h { fill:var(--fg3); font-size:11.5px; font-weight:500; }
+.flow path { fill:none; stroke:var(--fg3); stroke-width:1.1; }
+.flow path.back { stroke-dasharray:4 3; }
+.pair { display:grid; grid-template-columns:1fr 1fr; gap:22px; }
+.pair .win { height:430px; }
+.pair .side { display:none; }
+.pair .card { margin:8px; }
+
+.row.sub { padding-left:34px; }
+/* library */
+.lib { flex:1; display:flex; min-height:0; }
+.libmain { flex:1; overflow:auto; padding:10px 32px 30px; min-width:0; }
+.libtitle { display:flex; align-items:center; gap:14px; margin:6px 0 4px; }
+.libtitle h3 { font-size:20px; font-weight:700; margin:0; }
+.libtitle .search { margin-left:auto; width:200px; border:.5px solid var(--line); border-radius:7px; padding:3px 9px; color:var(--fg3); background:var(--field); font-size:12.5px; }
+.filters { display:flex; gap:10px; align-items:center; margin:8px 0 16px; }
+.seg { display:inline-flex; background:var(--track); border-radius:7px; padding:2px; }
+.seg span { padding:3px 11px; border-radius:5px; color:var(--fg2); font-size:12.5px; }
+.seg span.on { background:var(--seg); color:var(--fg); box-shadow:0 0 0 .5px var(--line), 0 1px 2px rgba(0,0,0,.06); }
+.pick { color:var(--fg2); padding:3px 6px; border-radius:6px; font-size:12.5px; margin-left:auto; }
+.shelf { display:grid; grid-template-columns:repeat(3, 1fr); gap:12px; margin:0 0 6px; }
+.tile { border:.5px solid var(--line); border-radius:10px; overflow:hidden; background:var(--win); cursor:pointer; }
+.tile:hover { box-shadow:0 0 0 .5px var(--fg3); }
+.tile.new { animation:flash 1.8s ease-out; }
+.tile .th { height:78px; background:var(--field); border-bottom:.5px solid var(--line); padding:10px 12px; display:flex; align-items:flex-end; gap:4px; }
+.tile .th i { flex:1; background:var(--bar2); border-radius:2px 2px 0 0; }
+.tile .th i.d { background:var(--bar1); }
+.tile .th .ln { flex:1; align-self:stretch; display:flex; flex-direction:column; gap:5px; justify-content:center; }
+.tile .th .ln b { display:block; height:5px; border-radius:3px; background:var(--track); }
+.tile .th .ln b.s { background:var(--bar2); width:60%; }
+.tile .tt { padding:7px 10px 8px; }
+.tile .tt b { font-weight:500; display:block; }
+.tile .tt span { color:var(--fg3); font-size:11.5px; }
+.lgroup { font-size:12px; color:var(--fg3); font-weight:500; margin:18px 0 4px; }
+.lrow { display:grid; grid-template-columns:34px 1fr 160px 104px 72px; gap:10px; align-items:center; padding:6px 6px; border-radius:7px; cursor:pointer; }
+.lrow:hover { background:var(--sel); }
+.lrow.on { background:var(--sel); box-shadow:inset 0 0 0 .5px var(--line); }
+.lrow .ic { width:30px; height:24px; border-radius:5px; border:.5px solid var(--line); background:var(--field); display:grid; place-items:center; color:var(--fg2); font-size:12px; }
+.lrow .n { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.lrow .n small { color:var(--fg3); font-size:12px; margin-left:6px; }
+.lrow .n .pin { color:var(--fg3); font-size:11px; margin-left:6px; }
+.lrow .w, .lrow .by { color:var(--fg2); font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.lrow .t { color:var(--fg3); font-size:12px; text-align:right; }
+.lrow .acts { display:none; }
+.lrow:hover .t { display:none; }
+.lrow:hover .acts { display:flex; gap:2px; justify-content:flex-end; color:var(--fg2); font-size:12px; }
+.lrow .acts span { padding:1px 5px; border-radius:5px; }
+.lrow .acts span:hover { background:var(--sel); color:var(--fg); }
+.lib.withprev .lrow { grid-template-columns:34px 1fr 150px 56px; }
+.lib.withprev .lrow .by { display:none; }
+.unsaved { color:var(--fg3); font-size:11.5px; border:.5px dashed var(--fg3); border-radius:4px; padding:0 4px; margin-left:6px; }
+.prev { width:290px; flex:none; border-left:.5px solid var(--line); padding:16px 18px; overflow:auto; }
+.prev .big { height:150px; border:.5px solid var(--line); border-radius:8px; background:var(--field); margin:0 0 12px; padding:12px; display:flex; flex-direction:column; gap:7px; }
+.prev .big b { display:block; height:6px; border-radius:3px; background:var(--track); }
+.prev .big b.h { width:45%; height:9px; background:var(--bar2); }
+.prev .big .bars { flex:1; display:flex; align-items:flex-end; gap:4px; }
+.prev .big .bars i { flex:1; background:var(--bar2); border-radius:2px 2px 0 0; }
+.prev h6 { font-size:14px; margin:0 0 2px; font-weight:600; }
+.prev .note1 { color:var(--fg2); margin:0 0 12px; }
+.prev .kv { display:grid; grid-template-columns:62px 1fr; gap:4px 10px; font-size:12.5px; margin:0 0 14px; }
+.prev .kv span:nth-child(odd) { color:var(--fg3); }
+.prev .btns { display:flex; gap:6px; flex-wrap:wrap; }
+
+@media (max-width: 960px) {
+  .side { display:none; } .card { margin:8px; }
+  .appchat { display:none; }
+  .hood, .pair, .wk { grid-template-columns:1fr; }
+}
+</style>
+</head>
+<body>
+<main>
+<header class="doc">
+  <div>
+    <h1>Apps: a visual you keep, fed with live data</h1>
+    <p>Review mockup for a proposed spec (apps, after <a class="lk" href="../../spec/25-visuals.md">25 · Visuals</a>), drawn in the grey style in the card layout. A reference, not a handoff: nothing here is built. Numbers are made up but add up.</p>
+    <p>The idea: an app is a saved visual plus a short list of where its data comes from. Piopio reads those sources and hands the result to the page. The page stays offline, so data only flows in.</p>
+  </div>
+  <span class="theme" id="theme">◐ Dark</span>
+</header>
+<nav class="toc">
+  <a href="#a">A · From a visual to an app (clickable)</a><a href="#lib">B · The Library</a><a href="#b">C · An app on your services</a><a href="#c">D · When something changes</a><a href="#d">E · From Overview</a><a href="#e">F · Under the hood</a>
+</nav>
+
+<!-- ───────────────────────── A · PROTOTYPE ───────────────────────── -->
+<section class="screen" id="a">
+  <div class="label"><b>A</b><h2>From a visual to an app</h2><span>Click through, or use the steps</span></div>
+  <div class="steps" id="steps"></div>
+  <div class="hint" id="hint"></div>
+  <div class="win" id="proto">
+    <aside class="side" id="protoSide"></aside>
+    <div class="card" id="protoCard"></div>
+  </div>
+  <ul class="note">
+    <li><b>Keep</b> is the one new button on a visual card. A visual is still a snapshot; Keep turns it into an app: Piopio rewrites it to read its data instead of carrying it, saves it as a file in the project, lists it in the Library and (unless you untick it) pins it there.</li>
+    <li><b>An app is a page</b> in the content card: the app at full width, Piopio's toolbar above it (Updated, Refresh, Sources, ⊘ offline), and a conversation about it on the right, closed by default after the first time.</li>
+    <li><b>Changing it is asking.</b> The model edits the file; the page reloads; the change is a checkpoint like any other edit (Undo).</li>
+    <li><b>Refreshing costs nothing.</b> Reading a file, a connector or Piopio's numbers runs no model. Only changing the app does.</li>
+  </ul>
+</section>
+
+<!-- ───────────────────────── B · LIBRARY ───────────────────────── -->
+<section class="screen" id="lib">
+  <div class="label"><b>B</b><h2>The Library</h2><span>Everything Piopio and your agents made, in one place; a mockup selected</span></div>
+  <div class="win">
+    <aside class="side" data-sidebar="library"></aside>
+    <div class="card" id="libStatic"></div>
+  </div>
+  <ul class="note">
+    <li><b>An index, not a store.</b> Every item is a file where it already lives: a project's folder, a conversation's folder, an agent's <span class="mono">files/</span>, <span class="mono">~/Piopio/Apps/</span>. Git, checkpoints and Finder keep working (25 VS3 holds). Remove from Library hides it; deleting the file is a separate, confirmed step.</li>
+    <li><b>What's in it, on its own:</b> files Piopio or an agent wrote that are things to look at (pages and mockups, documents, spreadsheets and CSVs, images, slides) and apps. Code isn't: a Build session's <span class="mono">.swift</span> files stay in Build. Visuals still in a conversation show too, marked, with Keep. Any other file can be added from its ⋯ menu.</li>
+    <li><b>Each item says where it came from:</b> the conversation that made it (a link back), who (Piopio or an agent), and when. Piopio writes a one-line note when it makes a file, as agents already do with <span class="mono">note_file</span> (06 §14), so search finds "the gas comparison".</li>
+    <li><b>Pin</b> puts an item on the shelf at the top and under Library in the sidebar (the five most recent pins; the rest stay on the shelf). Any item can be pinned; apps are the usual ones. The sidebar's Pinned section stays for conversations and agents.</li>
+    <li><b>Filters:</b> kind (All, Apps, Documents, Pages, Visuals, Images, Data), place (a project, an agent, conversations) and search. ⌘K finds items too.</li>
+  </ul>
+</section>
+
+<!-- ───────────────────────── B · SERVICES ───────────────────────── -->
+<section class="screen" id="b">
+  <div class="label"><b>C</b><h2>An app on your services</h2><span>"This week": your calendar, and bills found in Gmail by a small script; Sources open</span></div>
+  <div class="win">
+    <aside class="side" data-sidebar="week"></aside>
+    <div class="card">
+      <div class="tb">
+        <span class="t">◫ This week</span><span class="s">Updated 9:00 · every hour</span>
+        <span class="rt"><span class="btn">↻ Refresh</span><span class="btn on">Sources</span><span class="ic" title="Offline: the page can't reach the internet">⊘</span><span class="btn">◧</span></span>
+      </div>
+      <div class="appbody">
+        <div class="appview app">
+          <h2>This week</h2>
+          <p class="lede">23–29 Nov · 9 events · 3 bills due</p>
+          <div class="wk">
+            <div>
+              <h5 style="margin-top:0">Bills due</h5>
+              <div class="due"><span>Iberdrola</span><span class="m">from Gmail, 19 Nov</span><span class="v soon">Tue · 74,20 €</span></div>
+              <div class="due"><span>Community fees</span><span class="m">from Gmail, 2 Nov</span><span class="v">Fri · 65,00 €</span></div>
+              <div class="due"><span>Car insurance</span><span class="m">from Gmail, 15 Nov</span><span class="v">Sun · 312,40 €</span></div>
+              <span class="btnin">Ask Rita to pay the first one…</span>
+              <p style="color:var(--fg3);font-size:12px;margin:8px 0 0">A button in an app can only put words in the composer, from your click. Paying is Rita's, with her own approval.</p>
+            </div>
+            <div>
+              <h5 style="margin-top:0">Calendar</h5>
+              <div class="day"><b>Mon 23</b><div><div class="ev"><span>09:30</span>Dentist, Lucía</div><div class="ev"><span>18:00</span>Padel</div></div></div>
+              <div class="day"><b>Tue 24</b><div><div class="ev"><span>10:00</span>Call with the gestor</div></div></div>
+              <div class="day"><b>Wed 25</b><div><div class="ev"><span>17:30</span>School meeting</div></div></div>
+              <div class="day"><b>Thu 26</b><div><div class="ev"><span>all day</span>Madrid</div><div class="ev"><span>20:00</span>Dinner, Marta &amp; Pablo</div></div></div>
+              <div class="day"><b>Fri 27</b><div><div class="ev"><span>08:15</span>ITV, the car</div></div></div>
+              <div class="day"><b>Sat 28</b><div><div class="ev"><span>11:00</span>Market</div></div></div>
+              <div class="day"><b>Sun 29</b><div><div class="ev" style="color:var(--fg3)">Nothing</div></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="pop" style="right:14px; top:40px; width:380px">
+        <h6>Sources</h6>
+        <p class="sub">What this app reads. Piopio reads them; the page only gets the result.</p>
+        <div class="src"><span class="g">▦</span><div>Google Calendar<div class="d">calendar_list_events · next 7 days · read only</div></div><span class="r">9:00 · 9 events</span></div>
+        <div class="src"><span class="g">ƒ</span><div>bills.js<div class="d">a script · calls gmail_search (read only) · <a class="lk">Show code</a></div></div><span class="r">9:00 · 3 found</span></div>
+        <div class="sep"></div>
+        <div class="src"><span class="g">◷</span><div>Every hour while pinned, and when you open it<div class="d">An automation that runs no model: "Refresh This week" in Automations</div></div><span class="r">$0</span></div>
+        <div class="sep"></div>
+        <div class="fine">Allowed on 22 Nov. If a change to the app adds a source, Piopio asks again. <span style="float:right"><a class="lk">Edit…</a></span></div>
+      </div>
+    </div>
+  </div>
+  <ul class="note">
+    <li><b>Two kinds of source here.</b> A connector tool read with fixed arguments (Calendar), and a script the model wrote once (<span class="mono">bills.js</span>) that searches Gmail and returns JSON. Neither runs a model on refresh.</li>
+    <li><b>Read only, always.</b> A source may only call tools marked read. Writing (paying, replying) stays with a conversation or an agent, where approvals live.</li>
+    <li><b>The timer is an automation</b> (27) with no model, so "what runs while I'm away" still has one answer, and its cost shows as $0.</li>
+  </ul>
+</section>
+
+<!-- ───────────────────────── C · CHANGES ───────────────────────── -->
+<section class="screen" id="c">
+  <div class="label"><b>D</b><h2>When something changes</h2><span>A change that adds a source asks first; a source that fails keeps the last data</span></div>
+  <div class="pair">
+    <div class="win">
+      <aside class="side"></aside>
+      <div class="card">
+        <div class="tb"><span class="t">◫ This week</span><span class="s">Updated 9:00</span><span class="rt"><span class="btn">↻ Refresh</span><span class="btn">Sources</span><span class="ic">⊘</span></span></div>
+        <div class="banner"><span class="bd"></span><span>This app now also wants to read <b>Gmail attachments</b> (gmail_get_attachment, read only).</span><span class="r"><span class="b2">Not now</span><span class="b1">Allow</span></span></div>
+        <div class="appview app" style="opacity:.55">
+          <h2>This week</h2>
+          <p class="lede">Showing the version before the change until you allow it.</p>
+          <div class="due"><span>Iberdrola</span><span class="v">Tue · 74,20 €</span></div>
+          <div class="due"><span>Community fees</span><span class="v">Fri · 65,00 €</span></div>
+          <div class="due"><span>Car insurance</span><span class="v">Sun · 312,40 €</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="win">
+      <aside class="side"></aside>
+      <div class="card">
+        <div class="tb"><span class="t">◫ This week</span><span class="s" style="color:var(--amber)">Calendar didn't answer at 11:00</span><span class="rt"><span class="btn">↻ Retry</span><span class="btn">Sources</span><span class="ic">⊘</span></span></div>
+        <div class="banner stale"><span>Showing Calendar as of 10:00. Google said the sign-in expired.</span><span class="r"><span class="b2">Sign in again</span></span></div>
+        <div class="appview app">
+          <h2>This week</h2>
+          <p class="lede">23–29 Nov · 9 events · 3 bills due</p>
+          <div class="day"><b>Mon 23</b><div><div class="ev"><span>09:30</span>Dentist, Lucía</div><div class="ev"><span>18:00</span>Padel</div></div></div>
+          <div class="day"><b>Tue 24</b><div><div class="ev"><span>10:00</span>Call with the gestor</div></div></div>
+          <div class="day"><b>Wed 25</b><div><div class="ev"><span>17:30</span>School meeting</div></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <ul class="note">
+    <li><b>Left:</b> you asked for "attach the PDF of each bill". The model's edit adds a source, so the app keeps its old version until you say Allow. A source is never added silently.</li>
+    <li><b>Right:</b> a failed read keeps the last good data and says so in the toolbar, with the one fix that would help. A pinned app that fails three times in a row shows the blue dot on its row under Library.</li>
+  </ul>
+</section>
+
+<!-- ───────────────────────── D · OVERVIEW ───────────────────────── -->
+<section class="screen" id="d">
+  <div class="label"><b>E</b><h2>From Overview</h2><span>Overview stays native; its numbers are the first Piopio source an app can read</span></div>
+  <div class="win short">
+    <aside class="side" data-sidebar="agents"></aside>
+    <div class="card">
+      <div class="tb"><span class="t">◫ Agents' spend</span><span class="s">Updated just now · when you open it</span><span class="rt"><span class="btn">↻ Refresh</span><span class="btn">Sources</span><span class="ic">⊘</span><span class="btn">◧</span></span></div>
+      <div class="appbody">
+        <div class="appview app">
+          <h2>Agents' spend, by week</h2>
+          <p class="lede">Since 1 Oct · $13.94 in all · from Piopio's own numbers (stats.spend, by agent)</p>
+          <div class="mc" id="agentsChart"></div>
+          <div class="legend"><span><i style="background:var(--fg)"></i>Rita $7.40</span><span><i style="background:var(--bar1)"></i>Morning briefing $4.86</span><span><i style="background:var(--bar2)"></i>Bookkeeper $1.68</span></div>
+        </div>
+        <div class="appchat">
+          <div class="hd">Made from Overview › Spend</div>
+          <div class="msgs">
+            <div class="umsg"><div>Make an app of agents' spend by week since October</div></div>
+            <div class="stepl"><span>✓</span><span><b>Read</b> stats.spend · by agent, weekly</span></div>
+            <div class="stepl"><span>✓</span><span><b>Saved</b> ~/Piopio/Apps/agents-spend.html</span></div>
+            <p class="ans">It's in your Library, pinned. Rita grew after she moved to the cloud on 19 Nov; the briefing is steady.</p>
+          </div>
+          <div class="composer"><div class="ph">Change this app…</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <ul class="note">
+    <li>Overview › Spend gets <b>Make an app of this…</b> beside By what. It opens a conversation with the question filled in; the result reads <span class="mono">{ "piopio": "stats.spend" }</span>, the same method Overview's page uses (34 §8.2).</li>
+    <li>Apps outside a project live in <span class="mono">~/Piopio/Apps/</span>; inside a project, in its folder (<span class="mono">apps/</span> by default), where git and checkpoints see them.</li>
+  </ul>
+</section>
+
+<!-- ───────────────────────── E · HOOD ───────────────────────── -->
+<section class="screen" id="e">
+  <div class="label"><b>F</b><h2>Under the hood</h2><span>One file; data in, your click out</span></div>
+  <div class="hood">
+    <pre class="code"><span class="c">&lt;!-- household/apps/spending.html --&gt;</span>
+&lt;script type="application/json" id="<span class="k">piopio-app</span>"&gt;
+{
+  "title": "Spending",
+  "sources": {
+    "expenses": { "<span class="k">file</span>": "data/expenses.csv" }
+  },
+  "refresh": { "onOpen": true, "onChange": true }
+}
+&lt;/script&gt;
+
+&lt;div id="chart"&gt;&lt;/div&gt;
+&lt;script type="module"&gt;
+  import { Chart } from "piopio-lib://chart.js";
+  <span class="c">// Called on every refresh with what Piopio read.</span>
+  piopio.<span class="k">onData</span>(({ expenses, updatedAt }) =&gt; {
+    draw(byMonth(expenses));
+  });
+  <span class="c">// Buttons still only send words, on a click.</span>
+  pay.onclick = () =&gt; piopio.<span class="k">prefill</span>("Ask Rita to pay…");
+&lt;/script&gt;
+
+<span class="c">// Other source kinds</span>
+{ "<span class="k">tool</span>":   "calendar_list_events", "args": { "days": 7 } }
+{ "<span class="k">script</span>": "bills.js", "tools": ["gmail_search"] }
+{ "<span class="k">piopio</span>": "stats.spend", "args": { "by": "agent" } }</pre>
+    <div class="flow"><svg viewBox="0 0 540 470" id="flow"></svg></div>
+  </div>
+  <ul class="note">
+    <li><b>The manifest is the contract.</b> Sources and refresh live in one JSON block at the top of the file. Allowing an app means allowing exactly that list; a different list asks again.</li>
+    <li><b>The engine reads, the app draws</b> (25 VS4 again). Results are cached in Piopio's data folder, not the project, so an app opens instantly with its last data and a phone can draw it too.</li>
+    <li><b>The sandbox doesn't change</b> (25 §5): no network, no files. What's new is <span class="mono">piopio.onData</span>, one way in. That's why the worst an app can do is still look wrong.</li>
+  </ul>
+</section>
+</main>
+
+<script>
+// Theme
+const themeBtn = document.getElementById('theme');
+function setTheme(t) { document.documentElement.dataset.theme = t; themeBtn.textContent = t === 'dark' ? '◑ Light' : '◐ Dark'; }
+setTheme(matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+themeBtn.onclick = () => setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+
+// Sidebar
+function sidebar({ pinned = [], sel = '', flash = '', libClick = '' } = {}) {
+  const pin = pinned.map(p => `<div class="row sub${p.id === sel ? ' on' : ''}${p.id === flash ? ' new' : ''}${p.click ? ' click' : ''}" ${p.click ? `data-go="${p.click}"` : ''}><span class="g">◫</span>${p.name}${p.r ? `<span class="r">${p.r}</span>` : ''}</div>`).join('');
+  return `
+  <div class="top"><span class="dot3"><i></i><i></i><i></i></span><span style="margin-left:auto;color:var(--fg2)">▯</span></div>
+  <div class="rows">
+    <div class="row"><span class="g">⌕</span>Search<span class="r">⌘K</span></div>
+    <div class="row"><span class="g">⌂</span>Home</div>
+    <div class="row"><span class="g">◷</span>Automations</div>
+    <div class="row${sel === 'library' ? ' on' : ''}${libClick ? ' click' : ''}" ${libClick ? `data-go="${libClick}"` : ''}><span class="g">▥</span>Library</div>
+    ${pin}
+    <h4>Pinned</h4>
+    <div class="row"><span class="g">☺</span>Rita<span class="r">☁︎</span></div>
+    <h4>Projects <span>+</span></h4>
+    <div class="row"><span class="g">▤</span>household</div>
+    <div class="row${sel === 'conv' ? ' on' : ''}" style="padding-left:34px">Spending by category</div>
+    <div class="row" style="padding-left:34px">Gas contract</div>
+    <div class="row"><span class="g">▤</span>piopio</div>
+    <h4>Conversations <span>+</span></h4>
+    <div class="row"><span class="g">▢</span>Trip to Lisbon<span class="r">☁︎</span></div>
+  </div>
+  <div class="foot"><span class="av">T</span><span>This Mac · $0.91 today</span><span style="margin-left:auto">⚙︎</span></div>`;
+}
+const week = { id: 'week', name: 'This week' };
+document.querySelectorAll('[data-sidebar]').forEach(el => {
+  const k = el.dataset.sidebar;
+  const pinned = [{ id: 'spend', name: 'Spending' }, week, { id: 'agents', name: "Agents' spend" }];
+  el.innerHTML = sidebar({ pinned, sel: k });
+});
+
+// Data
+const cats = [['Groceries', 412], ['Home', 260], ['Eating out', 148], ['Transport', 96], ['Kids', 84], ['Health', 52], ['Other', 38]];
+const added = { 'Groceries': 38, 'Eating out': 24, 'Transport': 12 };
+const months = [['Jun', 980], ['Jul', 1240], ['Aug', 1310], ['Sep', 1020], ['Oct', 1075], ['Nov', 1090]];
+const fmt = n => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ' €';
+
+function hbars(list, max, up = {}) {
+  return list.map(([n, v]) => `<div class="hb"><span class="n">${n}</span><span class="bar"><i class="${up[n] ? 'up' : ''}" style="width:${v / max * 100}%"></i></span><span class="v">${fmt(v)}</span></div>`).join('');
+}
+function monthChart(ms, budget, hiLast) {
+  const max = 1500, H = 160;
+  const bars = ms.map(([m, v], i) => `<div class="bw"><div class="b" style="height:${v / max * H}px;background:${v > budget ? 'var(--fg)' : 'var(--bar2)'}${i === ms.length - 1 && hiLast ? ';box-shadow:0 0 0 2px var(--accent)' : ''}"></div><span class="val" style="bottom:${v / max * H + 4}px">${fmt(v)}</span><span class="lab">${m}${i === ms.length - 1 ? ' · so far' : ''}</span></div>`).join('');
+  return `<div class="mc">${bars}<div class="budget" style="bottom:${20 + budget / max * H}px"></div></div>`;
+}
+
+// Library
+const LIB = {
+  spend:   { g: '◫', name: 'Spending', kind: 'App', where: 'household', by: 'Piopio', t: '10:44', day: 'Today', bars: [5,7,4,8,6,9], path: 'household/apps/spending.html', from: 'Spending by category' },
+  usage:   { g: '◰', name: 'Usage card: three options', kind: 'Visual', where: 'piopio › Overview page', by: 'Piopio', t: '09:12', day: 'Today', unsaved: true, from: 'Overview page' },
+  ovw:     { g: '▧', name: 'Overview.html', kind: 'Page', where: 'piopio · docs/design/overview', by: 'Piopio', t: '08:50', day: 'Today',
+             note: 'Review mockup for spec 34: spend, setup, activity.', path: 'piopio/docs/design/overview/Overview.html', from: 'Overview page', size: '44 KB', versions: '3 versions in git' },
+  brief:   { g: '▤', name: 'Weekly brief, 21 Nov.md', kind: 'Document', where: 'Morning briefing', by: 'Morning briefing', t: 'Sat', day: 'Yesterday' },
+  gas:     { g: '▦', name: 'Gas offers compared.xlsx', kind: 'Data', where: 'household › Gas contract', by: 'Piopio', t: 'Sat', day: 'Yesterday' },
+  cloud:   { g: '▧', name: 'Cloud.html', kind: 'Page', where: 'piopio · docs/design/cloud', by: 'Piopio', t: 'Sat', day: 'Yesterday' },
+  week:    { g: '◫', name: 'This week', kind: 'App', where: 'Library', by: 'Piopio', t: 'Thu', day: 'Earlier this week', path: '~/Piopio/Apps/this-week.html' },
+  lisbon:  { g: '▤', name: 'Lisbon itinerary.md', kind: 'Document', where: 'Trip to Lisbon ☁︎', by: 'Piopio', t: 'Wed', day: 'Earlier this week' },
+  chick:   { g: '▨', name: 'Chick icon, four options.png', kind: 'Image', where: 'piopio', by: 'Piopio', t: 'Tue', day: 'Earlier this week' },
+  car:     { g: '▤', name: 'Car insurance, compared.pdf', kind: 'Document', where: 'Rita', by: 'Rita', t: 'Mon', day: 'Earlier this week' },
+  agents:  { g: '◫', name: "Agents' spend", kind: 'App', where: 'Library', by: 'Piopio', t: 'Mon', day: 'Earlier this week', bars: [3,3,4,4,3,2,3,7], path: '~/Piopio/Apps/agents-spend.html' },
+};
+let libPins = ['spend', 'week', 'agents'], libSel = '';
+function tileThumb(it) {
+  if (it.bars) return it.bars.map((v, i) => `<i class="${i === it.bars.length - 1 ? 'd' : ''}" style="height:${v * 6}px"></i>`).join('');
+  return `<div class="ln"><b class="s"></b><b></b><b style="width:80%"></b><b></b><b style="width:55%"></b></div><div class="ln"><b></b><b style="width:70%"></b><b></b><b class="s" style="width:40%"></b><b></b></div>`;
+}
+const UPD = { spend: 'updated just now', week: 'updated 9:00', agents: 'updated 10:02' };
+function libraryPage({ sel = '', interactive = false, filter = 'All' } = {}) {
+  const shelf = libPins.map(id => { const it = LIB[id]; return `<div class="tile${id === 'spend' && interactive ? ' new' : ''}" ${interactive && id === 'spend' ? 'data-go="4"' : ''}><div class="th">${tileThumb(it)}</div><div class="tt"><b>${it.name}</b><span>${it.kind} · ${UPD[id] || 'changed ' + it.t}</span></div></div>`; }).join('');
+  const days = ['Today', 'Yesterday', 'Earlier this week'];
+  const rows = days.map(d => `<div class="lgroup">${d}</div>` + Object.entries(LIB).filter(([, it]) => it.day === d).map(([id, it]) => `
+      <div class="lrow${id === sel ? ' on' : ''}" data-sel="${id}">
+        <span class="ic">${it.g}</span>
+        <span class="n">${it.name}<small>${it.kind}</small>${it.unsaved ? '<span class="unsaved">in a conversation</span>' : ''}${libPins.includes(id) ? '<span class="pin">● pinned</span>' : ''}</span>
+        <span class="w">${it.where}</span><span class="by">${it.by}</span>
+        <span class="t">${it.t}</span>
+        <span class="acts"><span>Open</span>${it.unsaved ? '<span>Keep</span>' : `<span data-act="pin" data-id="${id}">${libPins.includes(id) ? 'Unpin' : 'Pin'}</span>`}<span>⋯</span></span>
+      </div>`).join('')).join('');
+  const it = LIB[sel];
+  const prev = it ? `
+    <aside class="prev">
+      <div class="big">${it.bars ? `<b class="h"></b><div class="bars">${it.bars.map(v => `<i style="height:${v * 10}%"></i>`).join('')}</div>` : '<b class="h"></b><b></b><b style="width:80%"></b><b></b><b style="width:60%"></b><b></b><b style="width:72%"></b>'}</div>
+      <h6>${it.name}</h6>
+      <p class="note1">${it.note || (it.kind === 'App' ? 'Reads its sources each time you open it.' : it.unsaved ? 'A visual in a conversation; Keep saves it as a file.' : 'Made by ' + it.by + '.')}</p>
+      <div class="kv">
+        <span>Kind</span><span>${it.kind}${it.size ? ' · ' + it.size : ''}</span>
+        <span>File</span><span class="mono" style="font-size:11.5px;word-break:break-all">${it.path || (it.unsaved ? 'not saved yet' : it.where + '/' + it.name)}</span>
+        <span>Made in</span><span><a class="lk">${it.from || it.where}</a></span>
+        <span>By</span><span>${it.by}</span>
+        <span>Changed</span><span>${it.t === '08:50' ? 'today 08:50' : it.t}${it.versions ? ' · ' + it.versions : ''}</span>
+      </div>
+      <div class="btns"><span class="b1">Open</span>${it.unsaved ? '<span class="b2">Keep</span>' : `<span class="b2" data-act="pin" data-id="${sel}">${libPins.includes(sel) ? 'Unpin' : 'Pin'}</span>`}<span class="b2">Show in Finder</span></div>
+    </aside>` : '';
+  return `
+  <div class="tb"><span class="t">Library</span><span class="s">46 things Piopio and your agents made</span><span class="rt"><span class="btn">⋯</span></span></div>
+  <div class="lib${it ? ' withprev' : ''}">
+    <div class="libmain">
+      <div class="libtitle"><h3>Library</h3><span class="search">⌕ Search the Library</span></div>
+      <div class="filters"><div class="seg">${['All', 'Apps', 'Documents', 'Pages', 'Visuals', 'Images', 'Data'].map(f => `<span class="${f === filter ? 'on' : ''}">${f}</span>`).join('')}</div><span class="pick">All places</span></div>
+      <div class="lgroup" style="margin-top:0">Pinned</div>
+      <div class="shelf">${shelf}</div>
+      ${rows}
+    </div>
+    ${prev}
+  </div>`;
+}
+
+// Prototype
+const STEPS = [
+  { name: 'Ask for a visual', hint: 'A visual today: a snapshot of expenses.csv, drawn in the answer. Click Keep on the card.' },
+  { name: 'Keep it', hint: 'Keep says what the app will read and how it refreshes, before anything is saved. Click Keep.' },
+  { name: "It's an app", hint: 'Pinned in the Library, so it also shows under Library in the sidebar. A page of its own: try a suggestion on the right.' },
+  { name: 'Change it by asking', hint: 'The model edited the file; the page reloaded. Now pretend expenses.csv changes on disk.' },
+  { name: 'The file changes', hint: 'Three rows were added to expenses.csv. The app redrew without running a model. Now click Library in the sidebar.' },
+  { name: 'In the Library', hint: 'Everything Piopio and your agents made, in one place. Click a row to see where it came from; Pin puts it on the shelf and under Library in the sidebar.' },
+];
+let step = 0, typed = false;
+const stepsEl = document.getElementById('steps');
+function renderSteps() {
+  stepsEl.innerHTML = STEPS.map((s, i) => `<span class="${i === step ? 'on' : ''}" data-step="${i}"><i>${i + 1}</i>${s.name}</span>`).join('') +
+    (step < STEPS.length - 1 ? `<span class="next" data-step="${step + 1}">Next →</span>` : `<span class="next" data-step="0">Start again</span>`);
+  document.getElementById('hint').textContent = STEPS[step].hint;
+}
+document.getElementById('hint').onclick = e => { if (e.target.closest('[data-sim]')) go(4); };
+stepsEl.onclick = e => { const s = e.target.closest('[data-step]'); if (s) go(+s.dataset.step); };
+
+const visualCard = kept => `
+  <div class="vcard">
+    <div class="vh"><span style="color:var(--fg2)">◰</span><span class="ti">Spending by category</span>
+      <span class="acts"><span>Open</span><span>Save…</span><span>Copy HTML</span>${kept ? '<span class="kept">Kept ✓</span>' : '<span class="keep" data-act="keep">Keep</span>'}</span></div>
+    <div class="vb"><div style="color:var(--fg3);font-size:12px;margin:2px 0 8px">November · 1.090 € · from expenses.csv</div>${hbars(cats, 412)}</div>
+    <div class="vf">${kept ? 'Kept as the app Spending: it reads expenses.csv each time.' : 'A snapshot of expenses.csv at 10:42.'}</div>
+  </div>`;
+
+function conversation(kept) {
+  return `
+  <div class="tb"><span class="t">Spending by category</span><span class="s">household</span><span class="rt"><span class="btn">⋯</span></span></div>
+  <div class="scroll"><div class="col">
+    <div class="umsg"><div>Chart my spending by category this month from expenses.csv</div></div>
+    <div class="stepl"><span>✓</span><span><b>Read</b> data/expenses.csv · 214 rows</span></div>
+    <p class="ans">Groceries and home are 62% of November so far. Eating out is up from October (148 € against 96 €).</p>
+    ${visualCard(kept)}
+    ${kept ? `<div class="stepl"><span>✓</span><span><b>Rewrote</b> it to read expenses.csv · <b>Saved</b> apps/spending.html</span></div>
+    <p class="ans">It's in your Library as <b>Spending</b>, pinned. It reads expenses.csv when you open it and whenever the file changes. <a class="lk" data-go="2">Open Spending</a></p>` : ''}
+  </div></div>
+  <div class="composer" style="max-width:560px"><div class="ph">Ask anything</div><div class="ch"><span>▤ household</span><span>Ask</span><span>Sonnet 5.5</span><span class="send off">↑</span></div></div>
+  ${step === 1 ? keepPop() : ''}`;
+}
+function keepPop() {
+  return `<div class="pop" style="right:50%; margin-right:-300px; top:210px; width:360px">
+    <h6>Keep as an app</h6>
+    <p class="sub">Piopio rewrites the visual to read its data each time, instead of carrying today's numbers.</p>
+    <div class="fld">Spending</div>
+    <div class="k">It reads</div>
+    <div class="src"><span class="g">▤</span><div>data/expenses.csv<div class="d">a file in household</div></div></div>
+    <div class="k">It refreshes</div>
+    <div class="src"><span class="g">↻</span><div>When you open it, and when the file changes<div class="d">No model runs; reading is free</div></div></div>
+    <div class="sep"></div>
+    <div class="fine">Saved as household/apps/spending.html, and listed in your Library. Making it takes one short turn (about $0.01).</div>
+    <div class="chk"><i>✓</i>Pin it in the Library</div>
+    <div class="btns"><span class="b2" data-go="0">Cancel</span><span class="b1" data-go="2k">Keep</span></div>
+  </div>`;
+}
+function appPage() {
+  const edited = step >= 3, live = step === 4;
+  const nov = live ? 1164 : 1090;
+  const ms = months.map(([m, v], i) => [m, i === months.length - 1 ? nov : v]);
+  const catsNow = live ? cats.map(([n, v]) => [n, v + (added[n] || 0)]) : cats;
+  const body = edited ? `
+      <h2>Spending</h2>
+      <p class="lede">From expenses.csv · June to November</p>
+      <div class="kp"><div><b class="${live ? 'chg' : ''}">${fmt(nov)}</b><span>November so far</span></div><div><b class="${live ? 'chg' : ''}">${ms.filter(([, v]) => v > 1100).length}</b><span>months over budget</span></div><div><b class="${live ? 'chg' : ''}">${fmt(Math.round(ms.reduce((t, [, v]) => t + v, 0) / ms.length))}</b><span>average a month</span></div></div>
+      ${monthChart(ms, 1100, live)}
+      <div class="legend"><span><i style="background:var(--fg)"></i>Over budget</span><span><i style="background:var(--bar2)"></i>Under</span><span><i style="width:14px;height:0;border-top:1.2px dashed var(--fg2);border-radius:0;vertical-align:3px"></i>Budget 1.100 €</span></div>
+      <h5>November by category</h5>
+      ${hbars(catsNow, 450, live ? added : {})}
+      <h5>Latest</h5>
+      <table class="tx">
+        ${live ? `<tr class="new"><td>22 Nov</td><td>Mercadona</td><td class="m">Groceries</td><td class="v">38,00 €</td></tr>
+        <tr class="new"><td>22 Nov</td><td>La Tasca</td><td class="m">Eating out</td><td class="v">24,00 €</td></tr>
+        <tr class="new"><td>21 Nov</td><td>Bizi</td><td class="m">Transport</td><td class="v">12,00 €</td></tr>` : ''}
+        <tr><td>20 Nov</td><td>Leroy Merlin</td><td class="m">Home</td><td class="v">46,90 €</td></tr>
+        <tr><td>19 Nov</td><td>Farmacia</td><td class="m">Health</td><td class="v">12,40 €</td></tr>
+      </table>` : `
+      <h2>Spending</h2>
+      <p class="lede">November · from expenses.csv</p>
+      <div class="kp"><div><b>${fmt(nov)}</b><span>so far this month</span></div><div><b>7</b><span>categories</span></div><div><b>−2%</b><span>against October</span></div></div>
+      ${hbars(catsNow, 412)}`;
+  const chat = edited ? `
+      <div class="umsg"><div>Split it by month and add a budget line at 1.100 €</div></div>
+      <div class="stepl"><span>✓</span><span><b>Edited</b> apps/spending.html · +18 −6</span></div>
+      <p class="ans">Done: months across the top with the budget as a dashed line, and November by category under it. July and August went over. <a class="lk">Undo</a></p>
+      ${live ? `<div class="stepl" style="margin-top:14px"><span>↻</span><span>expenses.csv changed · 3 new rows · redrawn, no model. November is now over budget.</span></div>` : ''}` : `
+      <p class="ans" style="color:var(--fg2)">This app is a file in household. Ask to change it; it reloads as you go.</p>
+      <div class="sugg"><span data-act="type">Split it by month and add a budget line at 1.100 €</span><span>Show the five biggest expenses</span><span>Compare with last November</span></div>`;
+  return `
+  <div class="tb">
+    <span class="t">◫ Spending</span><span class="s">household · ${live ? 'Updated just now' : 'Updated 10:42'}</span>
+    ${live ? '<span class="toast">expenses.csv changed</span>' : ''}
+    <span class="rt"><span class="btn">↻ Refresh</span><span class="btn" data-act="sources">Sources</span><span class="ic" title="Offline: the page can't reach the internet">⊘</span><span class="btn on">◧</span></span>
+  </div>
+  <div class="appbody">
+    <div class="appview app">${body}</div>
+    <div class="appchat">
+      <div class="hd">About this app</div>
+      <div class="msgs">${chat}</div>
+      <div class="composer"><div class="ph${typed && !edited ? ' typed' : ''}">${typed && !edited ? 'Split it by month and add a budget line at 1.100 €' : 'Change this app…'}</div>
+        <div class="ch"><span>Sonnet 5.5</span><span class="send${typed && !edited ? '' : ' off'}" data-act="send">↑</span></div></div>
+    </div>
+  </div>
+  <div class="pop" id="srcPop" style="display:none; right:60px; top:40px; width:340px">
+    <h6>Sources</h6>
+    <p class="sub">What this app reads. The page only gets the result.</p>
+    <div class="src"><span class="g">▤</span><div>data/expenses.csv<div class="d">a file in household · ${live ? '217' : '214'} rows</div></div><span class="r">${live ? 'just now' : '10:42'}</span></div>
+    <div class="sep"></div>
+    <div class="src"><span class="g">↻</span><div>When you open it, and when the file changes</div><span class="r">$0</span></div>
+  </div>`;
+}
+
+function go(s) {
+  let flash = '';
+  if (s === '2k') { s = 1.5; }
+  if (s === 1.5) { step = 1.5; flash = 'spend'; }
+  else { step = +s; }
+  if (step !== 2) typed = false;
+  const side = document.getElementById('protoSide'), card = document.getElementById('protoCard');
+  const pinned = libPins.filter(id => step >= 1.5 || id !== 'spend').map(id => ({ id, name: LIB[id].name, click: id === 'spend' ? (step === 5 ? '4' : '2') : '' }));
+  const sel = step === 5 ? 'library' : step >= 2 ? 'spend' : 'conv';
+  side.innerHTML = sidebar({ pinned, sel, flash, libClick: '5' });
+  card.innerHTML = step < 2 ? conversation(step === 1.5) : step === 5 ? libraryPage({ sel: libSel, interactive: true }) : appPage();
+  const shown = step === 1.5 ? 1 : step;
+  const saved = step; step = shown; renderSteps(); step = saved;
+  if (step === 3) document.getElementById('hint').innerHTML = 'The model edited the file; the page reloaded. <a class="lk" data-sim>Simulate: 3 rows added to expenses.csv →</a>';
+  if (step === 1.5) {
+    document.getElementById('hint').textContent = 'Kept: the answer says what happened, and Spending is now pinned under Library. Open it.';
+    const sc = card.querySelector('.scroll'); sc.scrollTop = sc.scrollHeight;
+  }
+}
+document.getElementById('proto').addEventListener('click', e => {
+  const g = e.target.closest('[data-go]'); if (g) { go(g.dataset.go); return; }
+  const r = e.target.closest('[data-sel]'); if (r && !e.target.closest('[data-act]')) { libSel = r.dataset.sel === libSel ? '' : r.dataset.sel; go(5); return; }
+  const a = e.target.closest('[data-act]'); if (!a) return;
+  const act = a.dataset.act;
+  if (act === 'keep') go(1);
+  if (act === 'type') { typed = true; go(2); }
+  if (act === 'send' && typed) go(3);
+  if (act === 'pin') { const id = a.dataset.id; libPins = libPins.includes(id) ? libPins.filter(x => x !== id) : [...libPins, id]; go(5); return; }
+  if (act === 'sources') { const p = document.getElementById('srcPop'); p.style.display = p.style.display === 'none' ? 'block' : 'none'; }
+});
+go(0);
+document.getElementById('libStatic').innerHTML = libraryPage({ sel: 'ovw', filter: 'All' });
+
+// D · agents chart (weekly from 1 Oct, stacked; Oct + Nov = Rita 4.69 + 2.71, Briefing 2.68 + 2.18, Bookkeeper 1.36 + 0.32, as in Overview)
+(() => {
+  const rita = [0.85,0.90,0.95,1.00,0.99,0.45,0.50,1.76];
+  const brief = [0.54,0.53,0.54,0.53,0.54,0.73,0.73,0.72];
+  const book = [0.27,0.28,0.27,0.27,0.27,0.11,0.10,0.11];
+  const labels = ['1 Oct','8','15','22','29','5 Nov','12','19 · so far'];
+  const el = document.getElementById('agentsChart'); const max = 2.8, H = 150;
+  el.style.height = '180px';
+  el.innerHTML = rita.map((r, i) => {
+    const t = r + brief[i] + book[i];
+    return `<div class="bw"><div class="b" style="height:${t / max * H}px"><i style="height:${book[i] / t * 100}%;background:var(--bar2)"></i><i style="height:${brief[i] / t * 100}%;background:var(--bar1)"></i><i style="height:${r / t * 100}%;background:var(--fg)"></i></div><span class="lab">${labels[i]}</span></div>`;
+  }).join('');
+})();
+
+// E · flow diagram
+(() => {
+  const svg = document.getElementById('flow');
+  const box = (x, y, w, h, t, d, cls = 'bx') => `<rect class="${cls}" x="${x}" y="${y}" width="${w}" height="${h}" rx="8"/><text x="${x + 12}" y="${y + 20}">${t}</text>${d ? `<text class="d" x="${x + 12}" y="${y + 37}">${d}</text>` : ''}`;
+  const srcs = [['▤  file', 'a project file'], ['▦  tool', 'a connector, read only'], ['ƒ  script', 'codemode, listed tools'], ['◔  piopio', 'stats, runs, agents']];
+  let s = `<text class="h" x="16" y="22">Sources</text><text class="h" x="200" y="22">Engine</text><text class="h" x="400" y="22">The page</text>`;
+  srcs.forEach(([t, d], i) => { s += box(16, 36 + i * 64, 160, 50, t, d); s += `<path d="M176 ${61 + i * 64} C 190 ${61 + i * 64}, 190 165, 200 165"/>`; });
+  s += box(200, 110, 186, 110, 'Reads on refresh', '', 'bx');
+  s += `<text class="d" x="212" y="152">only the manifest's sources</text><text class="d" x="212" y="168">read-only, allowed once</text><text class="d" x="212" y="184">no model, $0</text><text class="d" x="212" y="200">keeps the last result</text>`;
+  s += `<path d="M386 165 L 400 165"/><path d="M394 160 L 400 165 L 394 170"/>`;
+  s += box(400, 110, 128, 110, 'piopio.onData', '', 'bx2');
+  s += `<text class="d" x="412" y="152">offline sandbox</text><text class="d" x="412" y="168">no network</text><text class="d" x="412" y="184">no files</text><text class="d" x="412" y="200">draws, nothing else</text>`;
+  s += `<text class="h" x="200" y="292">When it refreshes</text>`;
+  s += box(200, 304, 250, 50, '↻  open · file changes · timer', 'the timer: an automation, no model');
+  s += `<text class="h" x="200" y="390">The only way back</text>`;
+  s += box(200, 402, 250, 50, 'Your click → send / prefill', 'words in the composer (25 §4.4)');
+  s += `<path class="back" d="M490 220 L 490 427 L 452 427"/><path d="M458 422 L 452 427 L 458 432"/>`;
+  svg.innerHTML = s;
+})();
+</script>
+</body>
+</html>
