@@ -485,19 +485,9 @@ private struct StartSheets: ViewModifier {
                 item = .home
                 if let id = note.object as? String { UserDefaults.standard.set(id, forKey: "inboxFocus") }
             }
-            // A new agent starts by talking (docs/spec/21 D4): an empty one that asks what it's for. "form" keeps the
-            // start page (a draft from a conversation).
-            .onReceive(NotificationCenter.default.publisher(for: .newAgent)) { note in
-                if note.object as? String == "form" { item = .start(.agent); return }
-                Task {
-                    if let ref = try? await engine.createAgent(name: "New agent", template: nil, avatar: "") {
-                        UserDefaults.standard.set("Chat", forKey: "agentTab")
-                        item = .agent(ref.id)
-                    } else {
-                        item = .start(.agent)
-                    }
-                }
-            }
+            // Every New Agent opens the start page: a template, your words, or nothing, which makes an empty agent
+            // that asks what it's for (docs/spec/21 D4).
+            .onReceive(NotificationCenter.default.publisher(for: .newAgent)) { _ in item = .start(.agent) }
             // New project is named in the sidebar (docs/spec/18 §17); its object, when a conversation asked, is that
             // conversation. The page stays for when the Projects section is hidden.
             .onReceive(NotificationCenter.default.publisher(for: .newProject)) { note in

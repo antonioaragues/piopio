@@ -189,6 +189,10 @@ and D6. D4 and D5 can swap.
   engine greets with "What should I do for you?" and three ideas to tap (the greeting carries `suggestions`), and the
   composer says "In your own words…". "Turn into an agent" from a conversation still opens the start page with its
   draft.
+  > **Changed (2026-11-20, tidied 2026-11-22):** every New Agent (+, ⌥⌘N, the palette, Agents' empty "Start from
+  > scratch…") opens the start page. Create with nothing typed makes this empty agent and its interview. The start page
+  > no longer picks a schedule (27 AU3: when an agent acts is set in Automations). A template's schedule shows as the
+  > automation it will make, and × drops it.
 - **One question at a time** (5a-2): the interview asks with `ask_owner` (the question, two to four answers to tap,
   its number). It shows as "Question 2 of 3" and the question in the chat, the same in the header, and its answers as
   chips above the composer. Tapping one sends it; writing your own works too. The chips go once you answer.

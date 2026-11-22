@@ -190,7 +190,7 @@ final class EngineController {
                 // In background mode launchd owns the engine: wait for it instead of starting a second one.
                 if runsInBackground {
                     if Self.agent.status == .requiresApproval {
-                        throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Allow Piopio in System Settings › General › Login Items, or turn off background mode in Settings › Engines.")
+                        throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Allow Piopio in System Settings › General › Login Items, or turn off background mode in Settings › This Mac & cloud.")
                     }
                 } else {
                     try launchEngine()
@@ -1067,6 +1067,12 @@ final class EngineController {
         runsAs == "piopio" ? "Piopio" : (agents.first { $0.ref.id == runsAs }?.title ?? "An agent")
     }
 
+    /// Whether an automation's runner is an agent in your cloud (docs/spec/30 K1): its time automations run up there as
+    /// its own schedules; what the Mac still lists for it is parked, off, until it comes back.
+    func runsInCloud(_ runsAs: String) -> Bool {
+        agents.first { $0.ref.id == runsAs }?.agent?.location == "cloud"
+    }
+
     /// What the work branch would bring to the project's; nil for a project whose work isn't on a branch.
     func landing(_ work: ProjectWork) async -> WorkLanding? {
         guard work.git != nil else { return nil }
@@ -1258,8 +1264,8 @@ final class EngineController {
             d.schedule = draft.schedule ?? ""
             d.template = nil
         }
-        // "form": the start page with the draft, not a new agent made by talking.
-        NotificationCenter.default.post(name: .newAgent, object: "form")
+        // The start page, with the draft in it.
+        NotificationCenter.default.post(name: .newAgent, object: nil)
     }
 
     /// A conversation continues in a project folder (docs/spec/18 §5): a new conversation there, with this one's text

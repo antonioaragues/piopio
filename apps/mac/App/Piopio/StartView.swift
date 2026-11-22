@@ -836,7 +836,7 @@ struct RecentFolder: Identifiable, Hashable, Sendable {
 
 // MARK: Agent
 
-/// New agent: icon and name as the title, what it should do in your words, its schedule, and a template to start
+/// New agent: icon and name as the title, what it should do in your words, and a template to start
 /// from. The name and the instructions are required.
 private struct AgentStart: View {
     let engine: EngineController
@@ -878,7 +878,9 @@ private struct AgentStart: View {
             } extra: {
                 EmptyView()
             } leading: {
-                ScheduleMenu(cron: drafts.binding(.agent, \.schedule))
+                // When it acts is set in Automations (docs/spec/27 AU3): a template's (or a draft's) schedule shows as
+                // the automation it will make, which you can drop here but not edit.
+                if !draft.schedule.isEmpty { TemplateAutomation(cron: drafts.binding(.agent, \.schedule)) }
                 HStack(spacing: 5) {
                     Image(systemName: "bell").font(.system(size: 12))
                     Text("Notifies you in Piopio")
@@ -928,7 +930,7 @@ private struct AgentStart: View {
         return templates.sorted { (order.firstIndex(of: $0.id) ?? 9) < (order.firstIndex(of: $1.id) ?? 9) }
     }
 
-    /// A template sets the schedule, and drafts the name, icon and instructions unless you wrote your own.
+    /// A template brings its automation, and drafts the name, icon and instructions unless you wrote your own.
     private func pick(_ t: AgentTemplate?) {
         if let job = PiopioJob.forTemplate(t?.id) { piopio.wear(job) }
         let previous = templates.first { $0.id == draft.template }
@@ -972,56 +974,22 @@ private struct AgentStart: View {
     }
 }
 
-/// When it runs: days and a time, or only when you message it. Built from and into a cron ("0 8 * * 1-5").
-private struct ScheduleMenu: View {
+/// The automation a template (or a draft) comes with, in words ("Weekdays at 8:00"): made with the agent, then
+/// changed or paused in Automations like any other. The × drops it.
+private struct TemplateAutomation: View {
     @Binding var cron: String
 
-    private static let days: [(String, String)] = [("*", "Every day"), ("1-5", "Weekdays"), ("0,6", "Weekends"), ("1", "Mondays")]
-    private static let hours = [7, 8, 9, 12, 18, 21]
-
     var body: some View {
-        Menu {
-            Section("Days") {
-                ForEach(Self.days, id: \.0) { value, title in
-                    Button { set(days: value) } label: { if parts?.days == value { Label(title, systemImage: "checkmark") } else { Text(title) } }
-                }
-                Button { cron = "" } label: { if cron.isEmpty { Label("Only when you message it", systemImage: "checkmark") } else { Text("Only when you message it") } }
-            }
-            Section("Time") {
-                ForEach(Self.hours, id: \.self) { h in
-                    Button { set(hour: h) } label: { if parts?.hour == h && parts?.minute == 0 { Label(String(format: "%02d:00", h), systemImage: "checkmark") } else { Text(String(format: "%02d:00", h)) } }
-                }
-            }
-        } label: {
-            FooterSelector(symbol: "clock", title: label)
+        HStack(spacing: 5) {
+            Image(systemName: "clock").font(.system(size: 12))
+            Text(CronText.describe(cron))
+            Button { cron = "" } label: { Image(systemName: "xmark").font(.system(size: 9, weight: .bold)) }
+                .buttonStyle(.plain).foregroundStyle(Color.dsFg3)
+                .help("Don't make this automation")
+                .accessibilityLabel("Don't make this automation")
         }
-        .menuStyle(.button).buttonStyle(SelectorStyle()).menuIndicator(.hidden).fixedSize()
-        .help("When it runs on its own")
-        .accessibilityLabel("Schedule: \(label)")
-    }
-
-    private var parts: (minute: Int, hour: Int, days: String)? {
-        let f = cron.split(separator: " ").map(String.init)
-        guard f.count == 5, let m = Int(f[0]), let h = Int(f[1]), f[2] == "*", f[3] == "*" else { return nil }
-        return (m, h, f[4])
-    }
-
-    /// "Weekdays · 08:00", "When you message it".
-    private var label: String {
-        if cron.isEmpty { return "When you message it" }
-        guard let p = parts else { return cron }
-        let days = Self.days.first { $0.0 == p.days }?.1 ?? CronText.describe(cron)
-        return "\(days) · \(String(format: "%02d:%02d", p.hour, p.minute))"
-    }
-
-    private func set(days: String) {
-        let p = parts ?? (0, 8, days)
-        cron = "\(p.minute) \(p.hour) * * \(days)"
-    }
-
-    private func set(hour: Int) {
-        let p = parts ?? (0, hour, "*")
-        cron = "0 \(hour) * * \(p.days)"
+        .font(.system(size: 13)).foregroundStyle(Color.dsFg2).padding(.horizontal, 6)
+        .help("Makes this automation with the agent. Change or pause it later in Automations, or just ask the agent.")
     }
 }
 

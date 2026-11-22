@@ -426,7 +426,7 @@ struct BuildSessionView: View {
                     Circle().fill(Color.accentColor).frame(width: 7, height: 7)
                         .overlay(Circle().strokeBorder(Color.dsWin, lineWidth: 1.5))
                         .offset(x: -4, y: 3)
-                        .accessibilityLabel("Needs you")
+                        .accessibilityLabel("Waiting on you")
                 }
             }
     }

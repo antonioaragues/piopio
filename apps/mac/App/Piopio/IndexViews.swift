@@ -178,7 +178,7 @@ struct ProjectsIndex: View {
                 Text(s.worktree?.branch ?? p.branch ?? "—").font(.system(size: 12, design: .monospaced)).foregroundStyle(Color.dsFg2).frame(width: 150, alignment: .leading)
                 Group {
                     switch status {
-                    case .waitingApproval?: Text("Needs you").foregroundStyle(Color.dsAmber)
+                    case .waitingApproval?: Text("Waiting on you").foregroundStyle(Color.dsAmber)
                     case .running?: Text("Running").foregroundStyle(Color.dsFg2)
                     default: Text(BuildSessionView.relative(s.updatedAt)).foregroundStyle(Color.dsFg2)
                     }
@@ -208,7 +208,7 @@ struct SectionIndex: View {
                         Text("\(rows.count) \(rows.count == 1 ? String(section.title.lowercased().dropLast()) : section.title.lowercased())").font(.system(size: 13)).foregroundStyle(Color.dsFg2)
                     }
                     Spacer()
-                    Button(newTitle) { NotificationCenter.default.post(name: newName, object: section == .agents ? "form" : nil) }.buttonStyle(PillStyle(kind: .strong))
+                    Button(newTitle) { NotificationCenter.default.post(name: newName, object: nil) }.buttonStyle(PillStyle(kind: .strong))
                 }
                 HStack(spacing: 7) {
                     Image(systemName: "magnifyingglass").font(.system(size: 11)).foregroundStyle(Color.dsFg3)

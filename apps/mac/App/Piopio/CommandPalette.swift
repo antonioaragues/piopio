@@ -213,7 +213,7 @@ struct CommandPalette: View {
             rows.append(Row(id: "c:folder", icon: "folder", title: "Open Folder…", trailing: "⌘O") { close(); NotificationCenter.default.post(name: .openProject, object: nil) })
         }
         if areas.contains(.agents) {
-            rows.append(Row(id: "c:agent", icon: "bird", title: "New Agent", trailing: nil) { close(); NotificationCenter.default.post(name: .newAgent, object: "form") })
+            rows.append(Row(id: "c:agent", icon: "bird", title: "New Agent", trailing: nil) { close(); NotificationCenter.default.post(name: .newAgent, object: nil) })
         }
         rows += [
             Row(id: "c:library", icon: "books.vertical", title: "Library", trailing: nil) { close(); NotificationCenter.default.post(name: .selectItem, object: SidebarItem.library.raw) },

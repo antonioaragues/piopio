@@ -211,7 +211,7 @@ private struct AreaChoiceCard: View {
         switch area {
         case .build: ["Projects", "Git", "Terminal"]
         case .chat: ["Conversations", "Projects", "Memory"]
-        case .agents: ["Schedules", "Reminders", "Inbox"]
+        case .agents: ["Automations", "Reminders", "Approvals"]
         }
     }
 
@@ -342,7 +342,7 @@ private struct WelcomeModelStep: View {
                     .buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.accentColor)
                     .padding(.top, 4)
                     if areas.contains(.agents) {
-                        Text("Agents in the cloud (coming next) need an API key, like OpenRouter's. A ChatGPT sign-in works for agents on this Mac.")
+                        Text("Agents in your cloud need an API key, like OpenRouter's. A ChatGPT sign-in works for agents on this Mac.")
                             .font(.system(size: 12)).foregroundStyle(Color.dsFg3).fixedSize(horizontal: false, vertical: true)
                             .padding(.top, 2)
                     }
@@ -613,7 +613,7 @@ private struct WelcomeSetupStep: View {
                 .background(Color.dsWin, in: RoundedRectangle(cornerRadius: 9))
                 .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(Color.dsLine, lineWidth: 0.5))
                 .disabled(setup.savedFacts > 0)
-            Text(setup.savedFacts > 0 ? "Saved \(setup.savedFacts) fact\(setup.savedFacts == 1 ? "" : "s") to About me." : "Saved to About me, which chats read. Edit it later in Settings › Chat.")
+            Text(setup.savedFacts > 0 ? "Saved \(setup.savedFacts) fact\(setup.savedFacts == 1 ? "" : "s") to About me." : "Saved to About me, which chats read. Edit it later in Settings › Memory.")
                 .font(.system(size: 12)).foregroundStyle(Color.dsFg3)
         }
         Rectangle().fill(Color.dsLine).frame(height: 0.5)

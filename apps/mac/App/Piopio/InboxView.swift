@@ -12,13 +12,13 @@ private extension JSONValue {
     }
 }
 
-/// The menu bar's Inbox: what needs you, newest first; picking one opens it.
+/// The menu bar's list of what waits on you (Home's Waiting on you), newest first; picking one opens it in Home.
 struct InboxMenu: View {
     let engine: EngineController
 
     var body: some View {
         let waiting = engine.inbox.filter(\.needsYou)
-        if waiting.isEmpty { Text("Nothing needs you") }
+        if waiting.isEmpty { Text("Nothing is waiting on you") }
         ForEach(waiting.prefix(8)) { item in
             Button("\(item.agentName): \(item.approval?.title ?? item.body)".prefix(80)) { show(item.approval?.approvalId ?? item.id) }
         }

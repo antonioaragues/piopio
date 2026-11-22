@@ -224,7 +224,7 @@ struct AgentsOffSheet: View {
                 AreaTile(area: .agents, size: 36)
                 Text("Hide Agents?").font(.system(size: 17, weight: .bold))
             }
-            Text("\(running.count == 1 ? "1 agent runs" : "\(running.count) agents run") on a schedule. Hidden agents keep working: what they need from you still shows in Needs you and as notifications.")
+            Text("\(running.count == 1 ? "1 agent runs" : "\(running.count) agents run") on a schedule. Hidden agents keep working: what they need from you still shows in Home, under Waiting on you, and as notifications.")
                 .font(.system(size: 13)).foregroundStyle(Color.dsFg2).fixedSize(horizontal: false, vertical: true)
             VStack(spacing: 0) {
                 ForEach(Array(running.prefix(4).enumerated()), id: \.element.ref.id) { i, agent in

@@ -180,7 +180,7 @@ struct AgentsFirstRun: View {
     @State private var error: String?
 
     var body: some View {
-        HatchEmpty(title: "Hatch your first agent", message: "Agents remember what you teach them and reach you when something matters. What they do on their own is in Automations. They run on this Mac.") {
+        HatchEmpty(title: "Hatch your first agent", message: "Agents remember what you teach them and reach you when something matters. What they do on their own is in Automations. \(engine.cloudConnected ? "They run on this Mac, or in your cloud with your Mac off." : "They run on this Mac.")") {
             VStack(spacing: 12) {
                 HStack(alignment: .top, spacing: 10) {
                     ForEach(featured) { t in card(t) }

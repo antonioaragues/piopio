@@ -761,7 +761,7 @@ struct ComposeButton: View {
                 }
                 .keyboardShortcut("n")
                 if areas.showsAgents {
-                    Button { NotificationCenter.default.post(name: .newAgent, object: "form") } label: {
+                    Button { NotificationCenter.default.post(name: .newAgent, object: nil) } label: {
                         Label("New Agent", systemImage: "bird")
                     }
                     .keyboardShortcut("n", modifiers: [.command, .option])
@@ -819,7 +819,7 @@ struct SidebarDot: View {
     var body: some View {
         switch status {
         case .running: RunningRing()
-        case .waiting: Circle().fill(Color.accentColor).frame(width: 6, height: 6).accessibilityLabel("Needs you")
+        case .waiting: Circle().fill(Color.accentColor).frame(width: 6, height: 6).accessibilityLabel("Waiting on you")
         case .failed: Circle().strokeBorder(Color.dsFg3, lineWidth: 1).frame(width: 7, height: 7).accessibilityLabel("Failed")
         case .done, .idle: EmptyView()
         }

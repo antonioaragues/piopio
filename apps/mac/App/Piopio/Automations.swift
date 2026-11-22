@@ -9,7 +9,7 @@ import SwiftUI
 // rather not.
 
 /// The list (the agents and automations handoff, screen 4): a title and line, New automation, chips by who runs it,
-/// and the automations in three groups, Needs you · On · Paused, each group's header naming the columns.
+/// and the automations in three groups, Waiting on you · On · Paused, each group's header naming the columns.
 ///
 /// You make one by asking (AU4), so asking is here too (docs/design/automations/prototype): with nothing yet, the page
 /// is a box to ask in; New automation asks in a popover, or sets one up by hand on a draft of its page.
@@ -97,14 +97,14 @@ struct AutomationsPage: View {
                             .help("Show every project's")
                         }
                         Spacer(minLength: 12)
-                        RunsOnNote()
+                        RunsOnNote(engine: engine, runner: fixedRunner)
                     }
                 }
                 if shown.isEmpty {
                     empty
                 } else {
                     VStack(alignment: .leading, spacing: 26) {
-                        group("Needs you", tone: .dsWarn, shown.filter { $0.lastStatus == "waiting" })
+                        group("Waiting on you", tone: .dsWarn, shown.filter { $0.lastStatus == "waiting" })
                         group("On", tone: .dsFg, shown.filter { $0.enabled && $0.lastStatus != "waiting" })
                         group("Paused", tone: .dsFg3, shown.filter { !$0.enabled && $0.lastStatus != "waiting" })
                     }
@@ -181,7 +181,7 @@ struct AutomationsPage: View {
                 .font(.system(size: 19, weight: .semibold)).foregroundStyle(Color.dsFg)
                 .multilineTextAlignment(.center)
                 .padding(.top, 14)
-            Text("Say when and what, in plain words. \(name) sets it up and it shows here.")
+            Text(engine.runsInCloud(runner) ? "Say when and what, in plain words. \(name) keeps it in your cloud, as its own schedule." : "Say when and what, in plain words. \(name) sets it up and it shows here.")
                 .font(.system(size: 13.5)).foregroundStyle(Color.dsFg2).multilineTextAlignment(.center)
                 .padding(.top, 6)
             composer(size: 14)
@@ -200,7 +200,7 @@ struct AutomationsPage: View {
             }
             .padding(.top, 12)
             HStack(spacing: 8) {
-                RunsOnNote()
+                RunsOnNote(engine: engine, runner: runner)
                 Text("·").foregroundStyle(Color.dsFg3)
                 Button("Set one up yourself") { startDraft() }
                     .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Color.accentColor)
@@ -486,14 +486,27 @@ struct OutlineButtonStyle: ButtonStyle {
     }
 }
 
-/// "Runs on this Mac, only while it's awake" (AU9), with a green dot: said plainly, never as a warning.
+/// Where automations run (AU9), said plainly, never as a warning: "Runs on this Mac, only while it's awake" with a
+/// green dot; for an agent in your cloud, that its own run up there (docs/spec/30 K1).
 struct RunsOnNote: View {
+    let engine: EngineController
+    /// The agent the page is about, if any; nil or Piopio is this Mac.
+    var runner: String?
+
     var body: some View {
+        let cloud = runner.map(engine.runsInCloud) ?? false
+        let anyCloud = engine.agents.contains { $0.agent?.location == "cloud" }
         HStack(spacing: 6) {
-            Circle().fill(Color(nsColor: Self.green)).frame(width: 6, height: 6)
-            Text("Runs on this Mac, only while it's awake").font(.system(size: 12)).foregroundStyle(Color.dsFg2)
+            if cloud {
+                Image(systemName: "cloud.fill").font(.system(size: 10)).foregroundStyle(Color.dsFg2)
+            } else {
+                Circle().fill(Color(nsColor: Self.green)).frame(width: 6, height: 6)
+            }
+            Text(cloud ? "Runs in your cloud, with your Mac off" : "Runs on this Mac, only while it's awake").font(.system(size: 12)).foregroundStyle(Color.dsFg2)
         }
-        .help("Automations run in Piopio's engine on this Mac. A run missed while it sleeps happens when it wakes. The cloud comes later.")
+        .help(cloud
+            ? "\(engine.runnerName(runner ?? "")) keeps its automations in your cloud, as its own schedules and reminders; ask it in its chat to add or change one. Any listed here wait on this Mac, off, and come back with it when it moves to this Mac."
+            : "Automations run in Piopio's engine on this Mac. A run missed while it sleeps happens when it wakes.\(anyCloud ? " Agents in your cloud keep theirs up there." : "")")
     }
 
     /// The live dot (oklch 0.72 0.14 150).
@@ -999,8 +1012,16 @@ struct AutomationPage: View {
             }
             awayRow("Runs on") {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("This Mac, only while it's awake.").font(.system(size: 13)).foregroundStyle(Color.dsFg)
-                    Text("If your Mac is asleep at run time, it runs as soon as it wakes.").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                    if engine.runsInCloud(a.runsAs) {
+                        // Parked when its agent moved up (docs/spec/30 K1): only time automations go to the cloud.
+                        let name = engine.runnerName(a.runsAs)
+                        Text("Nowhere while \(name) is in your cloud.").font(.system(size: 13)).foregroundStyle(Color.dsFg)
+                        Text("It waits on this Mac, off, and comes back with \(name) when it moves to this Mac. What \(name) runs up there, it keeps as its own schedules.").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } else {
+                        Text("This Mac, only while it's awake.").font(.system(size: 13)).foregroundStyle(Color.dsFg)
+                        Text("If your Mac is asleep at run time, it runs as soon as it wakes.").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                    }
                 }
             }
         }
