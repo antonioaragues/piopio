@@ -937,6 +937,7 @@ final class EngineController {
 
     func reorderLibraryPins(_ ids: [String]) async throws {
         guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        // Shown at once (the shelf and the sidebar animate it), before the engine confirms.
         libraryPins = ids
         _ = try await client.call("library.reorder", LibraryIdsParams(ids: ids), as: Empty.self)
         await loadLibrary()

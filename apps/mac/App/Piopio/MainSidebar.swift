@@ -498,6 +498,9 @@ struct MainSidebar: View {
         .buttonStyle(.plain)
     }
 
+    /// The Library pin a dragged pin is over (it lights up where the dragged one lands).
+    @State private var pinDropTarget: String?
+
     // MARK: Library
 
     /// The Library (docs/spec/35 §4.4): its row, and the five most recent pins under it. A pin opens the item itself.
@@ -512,6 +515,13 @@ struct MainSidebar: View {
         }
         .buttonStyle(.plain)
         ForEach(engine.pinnedLibrary.prefix(5)) { pin in
+            libraryPinRow(pin)
+        }
+        .animation(.easeOut(duration: 0.22), value: engine.libraryPins)
+    }
+
+    private func libraryPinRow(_ pin: LibraryEntry) -> some View {
+        Group {
             Button {
                 LibraryOpen.open(pin, engine: engine) { item = $0 } missing: { engine.focusLibrary(pin.id) }
             } label: {
@@ -525,10 +535,14 @@ struct MainSidebar: View {
             .buttonStyle(.plain)
             .help(pin.missing == true ? "\(pin.name): the file isn't where it was" : pin.name)
             .draggable(LibraryPinDrag.text(pin.id)) { LibraryDragPreview(item: pin) }
+            .modifier(LibraryDropTarget(targeted: pinDropTarget == pin.id, radius: DS.Radius.row))
             .dropDestination(for: String.self) { drops, _ in
+                pinDropTarget = nil
                 guard let id = LibraryPinDrag.id(drops) else { return false }
                 Task { await engine.movePin(id, onto: pin.id) }
                 return true
+            } isTargeted: { on in
+                if on { pinDropTarget = pin.id } else if pinDropTarget == pin.id { pinDropTarget = nil }
             }
             .contextMenu {
                 Button("Open") { LibraryOpen.open(pin, engine: engine) { item = $0 } missing: { engine.focusLibrary(pin.id) } }

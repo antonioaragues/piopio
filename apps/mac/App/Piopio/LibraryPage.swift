@@ -19,6 +19,8 @@ struct LibraryPage: View {
     /// The item just removed, for Undo (a few seconds).
     @State private var undoing: LibraryEntry?
     @State private var showsRemoved = false
+    /// The pin a dragged pin is over: it lights up where the dragged one will land.
+    @State private var dropTarget: String?
 
     private var filtering: Bool { kind != nil || place != nil || !query.isEmpty }
 
@@ -175,13 +177,19 @@ struct LibraryPage: View {
                         .contextMenu { menu(p) }
                         // Drag a pin onto another to change their order (the sidebar follows).
                         .draggable(LibraryPinDrag.text(p.id)) { LibraryDragPreview(item: p) }
+                        .modifier(LibraryDropTarget(targeted: dropTarget == p.id, radius: DS.Radius.card - 2))
                         .dropDestination(for: String.self) { drops, _ in
+                            dropTarget = nil
                             guard let id = LibraryPinDrag.id(drops) else { return false }
                             Task { await engine.movePin(id, onto: p.id) }
                             return true
+                        } isTargeted: { on in
+                            if on { dropTarget = p.id } else if dropTarget == p.id { dropTarget = nil }
                         }
                 }
             }
+            // Pins slide into their new places when one is dropped on another.
+            .animation(.easeOut(duration: 0.22), value: pins.map(\.id))
         }
     }
 
@@ -356,6 +364,24 @@ enum LibraryPinDrag {
     static func text(_ id: String) -> String { prefix + id }
     static func id(_ dropped: [String]) -> String? {
         dropped.first.flatMap { $0.hasPrefix(prefix) ? String($0.dropFirst(prefix.count)) : nil }
+    }
+}
+
+/// Where a dragged pin will land: the pin under it gets the accent outline and a tint, and grows a little.
+struct LibraryDropTarget: ViewModifier {
+    let targeted: Bool
+    let radius: CGFloat
+
+    func body(content: Content) -> some View {
+        content
+            .overlay {
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .fill(Color.dsAccentSoft.opacity(targeted ? 0.6 : 0))
+                    .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(Color.accentColor, lineWidth: 2).opacity(targeted ? 1 : 0))
+                    .allowsHitTesting(false)
+            }
+            .scaleEffect(targeted ? 1.02 : 1)
+            .animation(.easeOut(duration: 0.12), value: targeted)
     }
 }
 
