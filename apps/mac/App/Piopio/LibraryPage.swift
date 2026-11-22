@@ -713,6 +713,8 @@ struct LibraryThumb: View {
                 } else {
                     Image(systemName: LibraryKind.symbol(item.kind))
                         .font(.system(size: min(size.height * 0.42, 26))).foregroundStyle(Color.dsFg3)
+                        // The overlay is top-aligned for pictures; the glyph sits in the middle of the field.
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
             .clipped()
