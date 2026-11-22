@@ -2001,7 +2001,8 @@ describe("Agents: proactivity (milestone 4.3)", () => {
 		const again = (await (await post(url)).json()) as { runId: string };
 		expect(again.runId).toBe(first.runId);
 		r = await until(runs, (x) => x.runs[0]?.source === hook.id && x.runs[0].status === "done");
-		expect(r.runs[0]).toMatchObject({ kind: "automation", sent: 0, summary: "Echo: New activity: Ran 10 km" });
+		// The body comes fenced as a webhook caller's text (audit M6); the summary is the start of the echo.
+		expect(r.runs[0]).toMatchObject({ kind: "automation", sent: 0, summary: expect.stringMatching(/^Echo: New activity: The text between the two outside-[0-9a-f]{12} lines came from outside: a webhook's body/) });
 
 		// Restart: a reminder due while the engine is off fires when it comes back.
 		const soon = new Date(Date.now() + 1_500).toISOString();

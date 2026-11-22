@@ -12,3 +12,4 @@ export { confine, OUTSIDE_PROJECT, sandboxExtension, sandboxRoots, sandboxUnavai
 export { presentExtension, presentedFiles, MAX_PRESENTED, type PresentedFile } from "./present.js";
 export { goalExtension, goalFrom, goalPrompt, GOAL_ENTRY, MAX_ROUNDS, type Goal, type GoalStatus } from "./goal.js";
 export { parseVerdict, REVIEW_SYSTEM, reviewPrompt, type Verdict } from "./review.js";
+export { outsideText } from "./outside.js";

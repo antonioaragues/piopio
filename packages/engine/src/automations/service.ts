@@ -8,6 +8,7 @@
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { EngineError } from "../models.js";
+import { outsideText } from "@piopio/pi-extensions";
 import type { AutomationSummary } from "@piopio/runtime";
 import { DEFAULT_BUDGET, nameOf, nextOf, parseWhen, PIOPIO, resultLabel, systemZone, whenLabel, type Automation, type AutomationRun, type ResultTo, type RunStatus, type Trigger } from "./model.js";
 import { writeFileAtomic } from "../atomic.js";
@@ -65,7 +66,12 @@ export type AutomationInput = {
 type Store = { automations: Automation[]; fired: string[] };
 
 const MAX_RUNS = 100;
-const quote = (text: string) => text.split("\n").map((l) => `> ${l}`).join("\n");
+/** Who wrote what an event brings, by the automation's trigger. */
+const OUTSIDE: Record<string, string> = {
+	email: "an email, written by whoever sent it",
+	folder: "a file's name, chosen by whoever made the file",
+	webhook: "a webhook's body, written by whoever called it",
+};
 
 export class Automations {
 	private store: Store;
@@ -394,9 +400,11 @@ export class Automations {
 		a.runCount++;
 		a.lastRun = new Date(now).toISOString();
 		this.save();
-		// What happened goes where the prompt asks for it ({{body}}, as webhook triggers had), or after it.
+		// What happened goes where the prompt asks for it ({{body}}, as webhook triggers had), or after it, marked as
+		// coming from outside: an email's sender, a webhook's caller or whoever named a file wrote it, not the user.
 		const detail = happened?.trim().slice(0, 20_000) ?? "";
-		const prompt = a.prompt.includes("{{body}}") ? a.prompt.replaceAll("{{body}}", detail) : `${a.prompt}${detail ? `\n\nWhat happened:\n${quote(detail)}` : ""}`;
+		const outside = detail ? outsideText(detail, OUTSIDE[a.on] ?? "something that happened") : "";
+		const prompt = a.prompt.includes("{{body}}") ? a.prompt.replaceAll("{{body}}", outside) : `${a.prompt}${outside ? `\n\nWhat happened:\n${outside}` : ""}`;
 		const run: AutomationRun = { id: `ar${now.toString(36)}${Math.random().toString(36).slice(2, 5)}`, automation: a.id, firedAt: new Date(now).toISOString(), cause, status: "running" };
 		try {
 			if (a.runsAs === PIOPIO) {
