@@ -60,6 +60,8 @@ final class EngineController {
     @ObservationIgnored private let scriptedSecrets = ScriptedSecrets()
     @ObservationIgnored private(set) var client: EngineClient?
     @ObservationIgnored private var process: Process?
+    /// Spend, read again every few minutes while connected: one at a time (each connection used to add its own).
+    @ObservationIgnored private var usagePoller: Task<Void, Never>?
     @ObservationIgnored private var openThreads: [String: ThreadModel] = [:]
     @ObservationIgnored private var handlers: [String: ([SessionEvent]) -> Void] = [:]
     @ObservationIgnored private var orphans: [String: [[SessionEvent]]] = [:]
@@ -397,10 +399,15 @@ final class EngineController {
                 }
             }
         }
-        Task { [weak self] in
-            // Spend (sidebar footer, Home): now, then every few minutes.
-            while let self, self.client != nil {
-                await self.loadUsage()
+        // Spend (sidebar footer, Home): now, then every few minutes. A new connection replaces the last one's poller.
+        usagePoller?.cancel()
+        usagePoller = Task { [weak self] in
+            while !Task.isCancelled {
+                do {
+                    // Held only while reading, not while waiting, so the controller can go.
+                    guard let self, self.client != nil else { return }
+                    await self.loadUsage()
+                }
                 try? await Task.sleep(for: .seconds(180))
             }
         }

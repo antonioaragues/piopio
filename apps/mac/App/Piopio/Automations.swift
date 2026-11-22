@@ -612,6 +612,7 @@ struct AutomationPage: View {
     @State private var turningOn = false
     @State private var promptError: String?
     @FocusState private var promptFocused: Bool
+    @FocusState private var nameFocused: Bool
     @State private var detail: AutomationDetail?
     @State private var missing = false
     @State private var name = ""
@@ -658,6 +659,8 @@ struct AutomationPage: View {
         }
         .background(Color.dsWin)
         .task(id: engine.automationsGeneration) { await load() }
+        // Going to another page while renaming.
+        .onDisappear { commitName() }
         .onReceive(NotificationCenter.default.publisher(for: .automationsDemo)) { note in
             // Captures: "turn-on:<what it's told>" on a draft.
             guard isDraft, let what = note.object as? String, what.hasPrefix("turn-on:") else { return }
@@ -729,7 +732,10 @@ struct AutomationPage: View {
                     TextField("", text: $name, prompt: Text(isDraft ? "New automation" : "Name").foregroundStyle(Color.dsFg3))
                         .textFieldStyle(.plain).font(.system(size: 28, weight: .bold)).tracking(-0.6)
                         .opacity(a.enabled || isDraft ? 1 : 0.5)
-                        .onSubmit { if !isDraft { save(AutomationChange(name: name)) } }
+                        .focused($nameFocused)
+                        .onSubmit { commitName() }
+                        // Leaving the field keeps the new name too, as Return does.
+                        .onChange(of: nameFocused) { _, focused in if !focused { commitName() } }
                     Spacer()
                     if !isDraft {
                         Text(a.enabled ? "On" : "Paused").font(.system(size: 12)).foregroundStyle(Color.dsFg2)
@@ -1155,6 +1161,15 @@ struct AutomationPage: View {
         // An agent never works in a project (AU6); Piopio has no channels (AU7).
         save(runner == "piopio" ? AutomationChange(runsAs: runner, result: a.result == "quiet" ? "quiet" : "conversation")
                                 : AutomationChange(runsAs: runner, project: .clear, result: a.result == "quiet" ? "quiet" : "chat"))
+    }
+
+    /// A saved automation's new name, when it is one; an emptied name goes back to the saved one.
+    private func commitName() {
+        guard !isDraft, let saved = a?.name else { return }
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { name = saved; return }
+        guard trimmed != saved else { return }
+        save(AutomationChange(name: trimmed))
     }
 
     private func save(_ change: AutomationChange) {

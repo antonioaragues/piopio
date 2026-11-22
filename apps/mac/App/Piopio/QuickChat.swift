@@ -145,6 +145,8 @@ final class QuickChatModel {
     var text = ""
     /// Shown in the header while the answer is on screen (docs/design 3a).
     var lastQuestion: String?
+    /// Why the last message didn't go (it's back in the field), until you type again.
+    var problem: String?
     var focusToken = 0
     @ObservationIgnored var hide: (() -> Void)?
 
@@ -164,20 +166,37 @@ final class QuickChatModel {
 
     func send() {
         let message = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !message.isEmpty, engine.status == .ready else { return }
+        guard !message.isEmpty else { return }
+        guard engine.status == .ready else {
+            problem = "Piopio is still starting. Your message is still here; press Return again in a moment."
+            return
+        }
+        let previous = lastQuestion
         text = ""
         lastQuestion = message
+        problem = nil
         UserDefaults.standard.set(Date(), forKey: "quickChatLastUsed")
         Task {
             if thread == nil {
-                guard let ref = await engine.createThread(model: engine.quickChatModel) else { return }
+                guard let ref = await engine.createThread(model: engine.quickChatModel) else {
+                    return giveBack(message, previous, "The chat couldn't start. Your message is back; press Return to try again.")
+                }
                 let t = ThreadModel(ref: ref, engine: engine, notifies: false, compact: true)
                 t.document.bottomInset = 12
                 thread = t
                 await t.open()
             }
-            await thread?.send(message)
+            guard let thread, await thread.send(message) else {
+                return giveBack(message, previous, "It couldn't be sent. Your message is back; press Return to try again.")
+            }
         }
+    }
+
+    /// A message that didn't go: back in the field (unless you've typed something since), and the header as it was.
+    private func giveBack(_ message: String, _ previous: String?, _ why: String) {
+        if text.isEmpty { text = message }
+        if lastQuestion == message { lastQuestion = previous }
+        problem = why
     }
 
     var modelName: String {
@@ -234,6 +253,12 @@ struct QuickChatView: View {
             }
             .padding(.horizontal, 18)
             .frame(minHeight: 52)
+            if let problem = model.problem {
+                Text(problem)
+                    .font(.system(size: 12)).foregroundStyle(Color.dsFg2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 18).padding(.bottom, 10)
+            }
             if let thread = model.thread {
                 Rectangle().fill(Color.dsLine).frame(height: 0.5)
                 TranscriptView(document: thread.document)
@@ -259,6 +284,7 @@ struct QuickChatView: View {
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.quickChat, style: .continuous))
         .onAppear { focused = true }
         .onChange(of: model.focusToken) { _, _ in focused = true }
+        .onChange(of: model.text) { _, text in if !text.isEmpty { model.problem = nil } }
     }
 }
 
