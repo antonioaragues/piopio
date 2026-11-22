@@ -2,7 +2,8 @@
 
 Status: draft 2026-11-22, from the operational review (batch 3). Batch 1 (523693b) already took the clock out of
 Connected apps and the round out of `/goal`. This spec covers the rest: what changes from turn to turn leaves the system
-prompt and travels with the message it belongs to. Nothing the user sees changes.
+prompt and travels with the message it belongs to. Nothing the user sees changes. **T0 ran the same day (§8) and found
+that pi already does most of this; §8's revised path goes first, and §2–§6 are the fallback.**
 
 ## 1. Why
 
@@ -116,5 +117,53 @@ provider is a function from the conversation to its current text (`undefined`: n
 - pi-durable: does the compaction token estimate count blocks that `beforeRequest` adds? If not, it has to, or the
   context fills up sooner than pi-durable expects.
 - pi-durable's positional system entries already keep the cache for models that accept mid-conversation system
-  messages. For those models, the section mechanism could stay. One mechanism everywhere is simpler, and it's what
-  this spec does unless T0's numbers argue otherwise.
+  messages, and so would pi-coding-agent's without the forced prompt. T0 settled it: §8's revised path uses pi's own
+  mechanism first.
+
+## 8. T0 results (2026-11-22)
+
+**The test.** [engine/test/prompt-prefix.test.ts](../../packages/engine/test/prompt-prefix.test.ts) records each request
+a conversation sends, as a provider without mid-conversation system messages gets it (pi-ai's own
+`resolveTranscript(…, false)`), and checks that each one starts with the one before. Plain Build, a Build turn with a
+tool step, and a plain Chat keep their prefix. Four cases are marked `test.fails` until they're fixed: a `NOTES.md`
+edit (Build), an About me change (Chat), an `@mention` (Build), and recalled memory (an agent). Each one changes block 0,
+the system prompt. `PIOPIO_PREFIX_REPORT=1` prints where each break is and how much an ideal prefix cache could reuse:
+
+| Scripted conversation | Reusable |
+|---|---|
+| Build, 5 plain turns | 100% |
+| Build, 5 turns with one `@mention` | 50% (it breaks on the mention and again on the next turn) |
+| Build, `NOTES.md` edited once | 50% |
+| Chat, About me changed once | 0% on the turn after the change |
+| Agent, 7 messages with memory | 36% |
+
+These are short conversations. In a long one, each break costs the whole history. The numbers from the default model
+(`cacheReadTokens`) need a working OpenRouter key, which is still to do.
+
+**What T0 found in pi.** pi already appends prompt changes in place instead of rewriting the start, which is what
+TC2 asks for:
+
+- **pi-coding-agent** (Build and Chat) diffs the prompt's named `sections` before each run and appends only what
+  changed as a system message in place (`_preparePromptAndToolLoadout`). **But a `before_agent_start` handler that
+  returns `systemPrompt` forces the prompt:** pi then collapses every system message into one head with the forced
+  text, for every model. Piopio does that in about twenty handlers (`buildPromptExtension`, `notesExtension`, side,
+  consult, board, About me, …). pi's own route is to edit `event.systemPromptOptions.sections` (or
+  `promptGuidelines`, `appendSystemPrompt`) instead.
+- **pi-durable** (agents) writes changed sections as positional system entries already (§1).
+- **pi-ai** sends those in place when the model accepts them. For Anthropic it renders each one as "Updated system
+  prompt section …" in the conversation, which is this spec's turn context, built by pi. The direct Anthropic catalog
+  marks `claude-haiku-5-5` (and Sonnet 5.5, Opus 5 and 5.5, Fable 5.x) as accepting them. OpenRouter's
+  `anthropic/claude-haiku-5.5` uses the same Anthropic Messages API, but its catalog entry doesn't carry
+  `supportsMidConvoSystemMessages`, so pi-ai collapses.
+
+**The revised path**, closest to pi first:
+
+| Step | What | Helps |
+|---|---|---|
+| R1 | Build and Chat's handlers stop returning `systemPrompt`; each writes its named section in `event.systemPromptOptions.sections` (or the guideline fields) instead | Every model that accepts mid-conversation system messages, at once: OpenAI's, and Anthropic's on its own API |
+| R2 | Check, with one real request, whether OpenRouter's Anthropic endpoint takes mid-conversation system blocks for Claude. If it does, set `supportsMidConvoSystemMessages` for those models in Piopio's OpenRouter wrap (openrouter-live.ts) and propose the catalog change to pi-ai | The default model |
+| R3 | Keep TC3, TC4 and TC6 as hygiene in either mechanism: send state when it changes, recall each record once, no dates. Every in-place update also stays in the history, so flip-flopping (the `@mention` on, then off) costs two updates for nothing | Context size |
+| R4 | Spec 38's own turn context (§4), only for models that accept no mid-conversation system messages at all, and only if their numbers say it matters | The rest |
+
+R1 and R3 need no decision about providers. R2 needs one real request on a working key. The prefix test needs a
+second mode for R1 (recorded with `resolveTranscript(…, true)`, the in-place form) so it shows the gain.
