@@ -250,7 +250,7 @@ struct LibraryPage: View {
                         LibraryThumb(engine: engine, item: r, size: CGSize(width: 40, height: 32), corner: 5).opacity(0.6)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(r.name).font(.system(size: 13.5)).foregroundStyle(Color.dsFg2).lineLimit(1)
-                            Text(LibraryText.place(r, engine)).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1)
+                            LibraryPlaceLabel(engine: engine, item: r, interactive: false)
                         }
                         Spacer()
                         Button("Put Back") { run { try await engine.restoreLibraryItem(r.id) } }.buttonStyle(PillStyle(compact: true))
@@ -309,7 +309,8 @@ struct LibraryPage: View {
                     if undoing?.id == i.id { undoing = nil }
                 }
             },
-            trash: { trashing = $0 }
+            trash: { trashing = $0 },
+            filterPlace: { place = $0 }
         )
     }
 
@@ -426,6 +427,33 @@ struct LibraryActions {
     var locate: (LibraryEntry) -> Void
     var remove: (LibraryEntry) -> Void
     var trash: (LibraryEntry) -> Void
+    /// Show only one place (a click on a row's place).
+    var filterPlace: (LibraryPlace) -> Void
+}
+
+/// Where an item lives, as the sidebar says it: a project's folder, an agent's tile, a conversation's bubble.
+struct LibraryPlaceLabel: View {
+    let engine: EngineController
+    let item: LibraryEntry
+    let interactive: Bool
+    @State private var hovering = false
+
+    var body: some View {
+        let place = LibraryPlace.of(item)
+        HStack(spacing: 6) {
+            switch place {
+            case .agent(let id):
+                RunnerTile(engine: engine, runsAs: id, size: 16)
+            default:
+                Image(systemName: place.symbol).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).frame(width: 16)
+            }
+            Text(place.rowLabel(engine)).font(.system(size: 12.5)).foregroundStyle(hovering ? Color.dsFg : Color.dsFg2)
+                .lineLimit(1).truncationMode(.tail)
+                .underline(hovering, color: Color.dsFg3)
+        }
+        .contentShape(Rectangle())
+        .onHover { hovering = interactive && $0 }
+    }
 }
 
 /// The ⋯ menu and the context menu: the same items.
@@ -482,8 +510,12 @@ private struct LibraryRow: View {
                 Text(LibraryText.second(item)).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1).truncationMode(.tail)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            Text(LibraryText.place(item, engine)).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2).lineLimit(1).truncationMode(.middle)
-                .frame(width: compact ? 150 : 200, alignment: .leading)
+            // Where it lives, in the sidebar's words; a click shows only that place. The exact conversation is in the
+            // tooltip, the preview and Open the Conversation.
+            Button { actions.filterPlace(LibraryPlace.of(item)) } label: { LibraryPlaceLabel(engine: engine, item: item, interactive: true) }
+                .buttonStyle(.plain)
+                .help(LibraryText.placeHelp(item, engine))
+                .frame(width: compact ? 140 : 170, alignment: .leading)
             ZStack(alignment: .trailing) {
                 Text(LibraryText.time(item.at)).font(.system(size: 12)).foregroundStyle(Color.dsFg3).opacity(hovering ? 0 : 1)
                 if hovering {
@@ -863,6 +895,20 @@ enum LibraryPlace: Hashable {
         return items.map(of).filter { seen.insert($0).inserted }
     }
 
+    var symbol: String {
+        switch self {
+        case .project: "folder"
+        case .agent: "person.crop.circle"
+        case .conversations: "bubble.left"
+        case .added: "plus.circle"
+        }
+    }
+
+    /// In a row: one place, so a free conversation is "Conversation".
+    @MainActor func rowLabel(_ engine: EngineController) -> String {
+        self == .conversations ? "Conversation" : label(engine)
+    }
+
     @MainActor func label(_ engine: EngineController) -> String {
         switch self {
         case .project(let path): engine.projects.first { $0.path == path }?.name ?? (path as NSString).lastPathComponent
@@ -874,15 +920,11 @@ enum LibraryPlace: Hashable {
 }
 
 enum LibraryText {
-    @MainActor static func place(_ item: LibraryEntry, _ engine: EngineController) -> String {
-        guard let origin = item.origin else { return "Added by you" }
-        switch LibraryPlace.of(item) {
-        case .project:
-            let name = LibraryPlace.of(item).label(engine)
-            return origin.title == name ? name : "\(name) › \(origin.title)"
-        default:
-            return origin.title
-        }
+    /// The tooltip on a row's place: the exact conversation, and what a click does.
+    @MainActor static func placeHelp(_ item: LibraryEntry, _ engine: EngineController) -> String {
+        let only = "Click to show only \(LibraryPlace.of(item).label(engine))"
+        guard let origin = item.origin else { return only }
+        return "Made in “\(origin.title)”. \(only)."
     }
 
     static func matches(_ item: LibraryEntry, _ query: String) -> Bool {

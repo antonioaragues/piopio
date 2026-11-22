@@ -446,3 +446,10 @@ below; the rest it found in the code. All were real.
 **Still not checked by hand:** dragging pins, Add/Show in Library from each place, Save… from a card, a visual's
 buttons from the Library, Undo and Put Back, refreshing after a move in Finder, dark mode. That's the review's
 proposed task: find last week's rate comparison and open the exact conversation that made it.
+
+**Fourth pass (2026-11-22): where an item lives.** The row's place column showed the conversation's title, often
+the start of a prompt ("Mañana tengo e…"). It now says only where the item lives, in the sidebar's words and
+icons: a folder and the project's name, the agent's tile and name, "Conversation" for a chat without a project, or
+"Added by you". A click shows only that place (the same as the place menu). The exact conversation is in the
+tooltip ("Made in “…”"), the preview's Made in, and Open the Conversation. The user chose this from three options;
+the others were the place on the note line, and grouping by place, which stays a possible later Day / Place switch.
