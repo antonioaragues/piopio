@@ -16,6 +16,7 @@ import type { ModelRef } from "@piopio/protocol";
 import { agentUtility } from "./runtimes/agent.js";
 import { SearchIndex } from "./search.js";
 import { replacedVisuals } from "./tools/visuals.js";
+import { isAppFile } from "./apps.js";
 
 /** Where an item came from, as the session manager knows it. */
 export type LibraryOrigin = {
@@ -60,9 +61,10 @@ const KINDS: Record<string, LibraryKind> = {
 	pptx: "slides", key: "slides",
 };
 
-/** What a file is, by its extension; `file` for anything else (only listed when handed over or added). */
+/** What a file is, by its extension (an `.html` with an app manifest is an app); `file` for anything else. */
 export function kindOf(path: string): LibraryKind {
-	return KINDS[extname(path).slice(1).toLowerCase()] ?? "file";
+	const kind = KINDS[extname(path).slice(1).toLowerCase()] ?? "file";
+	return kind === "page" && isAppFile(path) ? "app" : kind;
 }
 
 const idOf = (key: string) => createHash("sha1").update(key).digest("hex").slice(0, 16);
@@ -353,7 +355,8 @@ export class Library {
 	private take(origin: LibraryOrigin, item: Extract<TimelineItem, { kind: "tool" }>): string[] {
 		if (item.status !== "done") return [];
 		const base = { at: item.at, by: origin.by, origin: originOf(origin) };
-		if (item.tool === "present_files") {
+		// make_app hands over the app it wrote, as present_files does its files (docs/spec/35 §14).
+		if (item.tool === "present_files" || item.tool === "make_app") {
 			const files = item.details?.type === "files" ? item.details.files : [];
 			return files.flatMap((f) => {
 				if ((f as { missing?: boolean }).missing || !f.path || !isAbsolute(f.path)) return [];

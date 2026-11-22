@@ -26,6 +26,8 @@ import type { ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import { codingBrowserExtension } from "./tools/browser-tools.js";
 import { codingConnectorsExtension } from "./connectors/extension.js";
 import { codingVisualsExtension } from "./tools/visuals.js";
+import { codingAppsExtension } from "./tools/apps-tool.js";
+import type { Apps, MakeContext } from "./apps.js";
 import { historySdkExtension } from "./tools/history.js";
 import { isCodingAgent } from "./coding-agents.js";
 import { fileItems, handoffSummary, innerOf, pastItems, SegmentedRuntime, type Segment } from "./runtimes/segments.js";
@@ -209,6 +211,8 @@ export class Sessions {
 		}
 	}
 	secrets?: SecretBroker;
+	/** Apps (docs/spec/35 §14), set by the engine: make_app in chats and Build. */
+	apps?: Apps;
 	/** A cloud agent's open conversations, by `<agent>|<conversation>`. */
 	private cloudViews = new Map<string, Promise<CloudAgentView>>();
 
@@ -1907,6 +1911,17 @@ export class Sessions {
 		};
 	}
 
+	/** make_app for a conversation: where it is, and whether that's a chat's own folder (which goes with the chat). */
+	private appsFor(entry: CatalogEntry): { apps?: { service: Apps; where: () => MakeContext } } {
+		const service = this.apps;
+		if (!service) return {};
+		const where = (): MakeContext => {
+			const cwd = entry.cwd && existsSync(entry.cwd) ? entry.cwd : this.scratch(entry.ref.id);
+			return { cwd, ...(resolve(cwd).startsWith(`${resolve(this.paths.scratchDir)}/`) ? { chatFolder: cwd } : {}) };
+		};
+		return { apps: { service, where } };
+	}
+
 	/** The check of visuals for a conversation or Build session, by the Mac app (docs/spec/25 §3.2). */
 	private visualsFor(ref: ContainerRef): { visuals?: VisualCheck } {
 		const app = this.agentHost?.app;
@@ -2854,6 +2869,7 @@ export class Sessions {
 			keepImages: toolImageKeeper(attachmentsDir(this.paths.home, entry.ref.id)),
 			...this.browserFor(entry.ref),
 			...this.visualsFor(entry.ref),
+			...this.appsFor(entry),
 			sandbox: () => this.chat?.settings.get().build?.sandbox !== false,
 			// Auto review on the session's own model (Settings › Approvals; off by default).
 			review: async (command, request) => {
@@ -2975,6 +2991,7 @@ export class Sessions {
 			keepImages: toolImageKeeper(attachmentsDir(this.paths.home, entry.ref.id)),
 			...this.browserFor(entry.ref),
 			...this.visualsFor(entry.ref),
+			...this.appsFor(entry),
 			...(this.historyBridge(entry) ? { history: this.historyBridge(entry)! } : {}),
 			// Side conversations (docs/spec/24), here or in one of your projects (SCQ5).
 			side: this.sideBridge(entry),
@@ -3066,6 +3083,7 @@ export class Sessions {
 			...(browser ? [codingBrowserExtension(browser, (callId, signal) => (request) => decision(request, callId, signal), browserPreview)] : []),
 			...(this.connectors ? [codingConnectorsExtension(this.connectors, (callId, signal) => (request) => decision(request, callId, signal, request.canAllowAlways), (id) => off().includes(`connector:${id}`))] : []),
 			codingVisualsExtension(visuals),
+			...(this.appsFor(entry).apps ? [codingAppsExtension(this.apps!, this.appsFor(entry).apps!.where, (callId, signal) => (request) => decision(request, callId, signal, false))] : []),
 			...(history ? [historySdkExtension(history)] : []),
 			...(entry.ref.kind === "thread" && this.aboutMeSdk ? [this.aboutMeSdk] : []),
 			// A review on a coding agent reports its findings the same way (05-build "Review by an agent").

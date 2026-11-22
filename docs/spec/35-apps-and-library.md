@@ -2,7 +2,7 @@
 
 Status: draft 2026-11-22, from a conversation with the user. The user asked for the Library as a section of its own,
 with pins kept there instead of the sidebar's Pinned (AL1, AL9). The other decisions are proposed and still need
-confirming (§12). **L1 (the Library) built 2026-11-22 (§13)**; apps are not built. Mockup: [docs/design/apps](../design/apps/Apps.html), which includes a clickable
+confirming (§12). **L1 (the Library) built 2026-11-22 (§13); L2 (apps on files) built the same day (§14)**. Mockup: [docs/design/apps](../design/apps/Apps.html), which includes a clickable
 prototype. This spec continues [25](25-visuals.md): VS3 (saved visuals are files), VS4 (the engine records and the
 app draws), VS5 (no network) and VS7 (a visual talks back only on your click) all still hold.
 
@@ -456,3 +456,105 @@ the others were the place on the note line, and grouping by place, which stays a
 As the window narrows, the name keeps about 260 pt: the place gives way first (to its icon alone below 80 pt,
 with the place in the tooltip), then the "in a conversation" badge. The time keeps 52 pt, and the hover actions
 float over the end of the row instead of holding a column of their own. The search field shrinks too.
+
+## 14. L2: decisions after the review (2026-11-22)
+
+A design review of L2–L4 found that the riskiest failure is an app that looks current while showing old or wrong
+data. These decisions replace §2's Keep flow and refine §3 for L2. L3 (the conversation panel) and L4 (tools,
+scripts, Piopio's numbers, timers) are unchanged and come later.
+
+**Making an app**
+- **`make_app`** is a tool in chats and Build sessions. It takes a title, the page's HTML (which draws from
+  `piopio.onData`), and the sources: `{ name: { file, columns? } }`.
+- **From a visual:** the card's header has **Make app** (it replaces Keep; AL6). It sends "Make the “*title*” visual
+  into an app" as your message, and the model calls `make_app`. You can also ask for an app directly.
+- **Nothing is written until you allow it.** The approval card names the exact files the app will read and where
+  it will be saved. Allowing it is what allows those sources (§3.4). After it, the app is in the Library, kind App.
+
+**Where the data comes from**
+- **The model names the files**, and the engine checks that each one exists and can be read: CSV, TSV, JSON,
+  Markdown or text, at most 2 MB.
+- **Figures that only exist in the conversation** get written to a CSV first. The tool's description says so; the
+  engine refuses a source that isn't a file.
+- **One base for paths:** the engine writes the manifest itself, with each path relative to the app's own file.
+  The model gives paths as it knows them (relative to its folder, or absolute). Absolute paths are kept, so a file in
+  a synced Drive or OneDrive folder (`~/Library/CloudStorage/`) works.
+- **Chat folders are temporary** (deleting a chat deletes its folder). A source in a chat's own folder is copied
+  beside the app, and the app reads the copy. The approval card says so.
+
+**Where an app is saved**
+- In a project: `<project>/apps/<name>.html`.
+- Elsewhere: `~/Piopio/Apps/<name>/<name>.html`, with any copied data in the same folder.
+
+**When the data is wrong**
+- **Checks in the engine, not the page.** A CSV source can list the `columns` it needs. A missing column, an empty
+  file, a file that's gone or can't be parsed makes that source fail.
+- **A failed source keeps its last good data**, and the page gets `stale: ["expenses"]`.
+- **The app page's toolbar says it**, in Piopio's own UI rather than the page's: "expenses.csv has no “amount”
+  column · showing 10:42's data".
+- **Values:** a CSV row is an object by column. Plain numbers (`12.5`, `-3`) become numbers; anything else stays
+  text.
+
+**What the file is**
+- **Opened anywhere else,** the file shows "Open in Piopio to see live data". The cache lives in the engine's
+  folder, not in the page. A dated snapshot to share is later.
+- **Pinning is only for finding it.** L2 has no timer; L4 keeps Pin and Refresh in the background as two settings.
+
+**Protocol (L2)**
+
+| Method / event | Does |
+|---|---|
+| `apps.open { path }` | The manifest, the page's HTML, each source's data and status, and whether the sources are allowed; watches its files while open |
+| `apps.refresh { path }` | Reads every source now |
+| `apps.close { path }` | Stops watching |
+| `apps.allow { path }` | Allows the sources the manifest lists now |
+| `apps.data` (event) | New data and status for an open app, after one of its files changed |
+
+**L2 is done when:**
+1. A chart of a CSV becomes an app that redraws when the CSV changes, with no model turn.
+2. A row in a new category that crosses the budget changes every figure the app shows (checked by hand on a real
+   model's app).
+3. An empty file and a renamed column fail with the last good data kept and dated.
+4. An app made in a chat still opens from the Library after the chat is deleted.
+
+### L2 as built (2026-11-22)
+
+**Engine**
+- `apps.ts`: the manifest (checked, and written by the engine), reading and checking sources, the cache
+  (`apps-cache/`), what's allowed (`apps.json`), and watching an open app's page and source folders.
+- `tools/apps-tool.ts`: `make_app`, in chats, Build sessions and conversations on a coding agent. It asks through
+  each one's approval card, and writes nothing before Allow.
+- **The Library** lists the app from the tool's result as kind App: an `.html` with a manifest is an app.
+- **The protocol** methods are `apps.*` rather than `app.*`, because `app.tool` is already the engine asking the Mac
+  app.
+
+**App**
+- **Make app** in a visual card's header, in chats and Build. Agents don't have `make_app`, so their cards don't
+  show it.
+- **The app opens in a large sheet** wherever a file opens: the Library, a pin, the app's card in the conversation.
+  The toolbar has the title, "Updated 10:42" (or "Data from 10:42" when a source failed), Refresh, Sources and
+  Show in Finder.
+- **Notices above the page**, in ink as the design system's warnings are: a source that failed, with what's shown
+  and since when; sources waiting for Allow.
+- **`piopio.onData`** is in every visual's bridge. A page opened outside Piopio gets a stand-in that says to open it
+  in Piopio.
+- `PIOPIO_DEMO_APP=<path>` for captures.
+
+**Different from §14:**
+- **A sheet, not a page with a conversation panel.** The page and its panel come with L3.
+- **An app's buttons send nothing yet**: there's no conversation to send to until L3.
+
+**Checked**
+- **Engine tests:** `apps.test.ts` (14) covers tables, making in a project and from a chat, refusals, a new
+  category, an empty file, a renamed column, a gone file, the watch, Allow and a restart. An `engine.test.ts` case
+  covers a scripted chat that writes a CSV and calls `make_app`: the card's text, nothing written before Allow, the
+  Library's App item, and opening the app after the chat was deleted. The whole engine suite passes (323), and so do
+  the Swift tests.
+- **In a copy of the app, with a chart of a CSV:**
+  - **A new row:** "Car, 450 €" in November changed every figure: the total (1.032 → 1.482 €), the categories
+    (3 → 4), the months over budget (1 → 2 of 3), the chart and the latest rows.
+  - **A renamed column** ("amount" → "importe") showed the notice and kept the last good data.
+  - **A scripted chat** showed Make app on its visual and waited on `make_app`'s card.
+
+**Not checked:** a real model making an app from a visual; the app redrawing while open as a file is saved, by
+hand (the engine's watch is tested); Allow after a page edit adds a source, by hand; dark mode.

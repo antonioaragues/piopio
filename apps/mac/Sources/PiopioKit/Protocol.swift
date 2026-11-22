@@ -927,6 +927,36 @@ public struct LibraryIdParams: Encodable, Sendable { public var id: String; publ
 public struct LibraryPathParams: Encodable, Sendable { public var path: String; public init(path: String) { self.path = path } }
 public struct LibraryRelocateParams: Encodable, Sendable { public var id, path: String; public init(id: String, path: String) { self.id = id; self.path = path } }
 
+// MARK: Apps (docs/spec/35 §14)
+
+/// One source of an app: a file, its last read, and why it failed.
+public struct AppSourceStatus: Codable, Sendable, Hashable {
+    public var name: String
+    /// As the manifest says it: relative to the app's file, or absolute.
+    public var file: String
+    public var path: String
+    public var columns: [String]?
+    /// ok · failed (the page has the last good data) · waiting (not allowed yet)
+    public var state: String
+    public var error: String?
+    public var readAt: String?
+    public var failedAt: String?
+}
+
+/// An app as it is now: its page, each source's state, and what `piopio.onData` gets.
+public struct AppView: Codable, Sendable, Hashable {
+    public var path: String
+    public var title: String
+    public var html: String
+    public var sources: [AppSourceStatus]
+    public var data: [String: JSONValue]
+    public var stale: [String]
+    /// False when the manifest lists sources not allowed yet: the page draws what was read before.
+    public var allowed: Bool
+    public var updatedAt: String?
+}
+public struct AppResult: Decodable, Sendable { public var app: AppView }
+
 public struct AutomationsParams: Encodable, Sendable {
     public var runsAs, project: String?
     public init(runsAs: String? = nil, project: String? = nil) { self.runsAs = runsAs; self.project = project }
@@ -1747,7 +1777,7 @@ public struct ProviderAuthEvent: Decodable, Sendable, Hashable {
     public init(type: String, message: String? = nil) { self.type = type; self.message = message }
 }
 public struct ProviderAuthNotification: Decodable, Sendable { public var loginId, provider: String; public var event: ProviderAuthEvent }
-public enum ProviderNotification: Sendable { case auth(ProviderAuthNotification), changed, connectorAuth(ConnectorAuthNotification), connectorsChanged, workChanged, watchdogChanged, automationsChanged, libraryChanged }
+public enum ProviderNotification: Sendable { case auth(ProviderAuthNotification), changed, connectorAuth(ConnectorAuthNotification), connectorsChanged, workChanged, watchdogChanged, automationsChanged, libraryChanged, appData(AppView) }
 
 // MARK: Connected apps (docs/spec/12-connectors)
 

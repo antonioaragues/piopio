@@ -87,10 +87,16 @@ public enum VisualPage {
     <script>(() => {
       const post = (m) => { try { window.webkit.messageHandlers.piopio.postMessage(m); } catch (e) {} };
       const offset = \(lineOffsetMark);
+      // An app's data (docs/spec/35 §14): Piopio calls __piopioData with it now and whenever a file changes; the page's
+      // onData callback gets the latest, even when it registers after the data came.
+      let onData = null, latest = null;
+      const deliver = () => { try { onData(latest[0], latest[1]); } catch (e) { post({ type: "error", text: "onData: " + String((e && e.message) || e).slice(0, 280) }); } };
       window.piopio = Object.freeze({
         send: (text) => post({ type: "send", text: String(text) }),
         prefill: (text) => post({ type: "prefill", text: String(text) }),
+        onData: (callback) => { if (typeof callback !== "function") return; onData = callback; if (latest) deliver(); },
       });
+      Object.defineProperty(window, "__piopioData", { value: (data, meta) => { latest = [data, meta || {}]; if (onData) deliver(); } });
       let last = -1;
       const report = () => {
         if (!document.body) return;
@@ -121,7 +127,7 @@ public enum VisualPage {
             "<title>\(escape(title))</title>",
             "<style>\(tokens())\(baseStyle(scrolls: scrolls))</style>",
             importMap,
-            standalone ? "<script>window.piopio = { send: () => {}, prefill: () => {} };</script>" : bridge,
+            standalone ? "<script>window.piopio = { send: () => {}, prefill: () => {}, onData: () => {} };</script>" : bridge,
         ].joined(separator: "\n")
         let headLines = head.filter { $0 == "\n" }.count
         // A whole document keeps its own head, after ours (so its styles win and our CSP still comes first).
@@ -310,6 +316,9 @@ public final class VisualWebView: WKWebView, ClickThroughArea {
     var loaded = false
     /// When false (the sheet), the page scrolls itself.
     var forwardsScroll = true
+    /// An app's page (no card): where `send` and `prefill` go, and what runs once it has loaded.
+    var answer: (@MainActor (String, Bool) -> Void)?
+    var onLoaded: (@MainActor () -> Void)?
 
     public override func scrollWheel(with event: NSEvent) {
         if forwardsScroll { nextResponder?.scrollWheel(with: event) } else { super.scrollWheel(with: event) }
@@ -388,7 +397,7 @@ final class VisualBridge: NSObject, WKScriptMessageHandler {
                 guard view.userJustActed, let text = (body["text"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else { return }
                 view.lastSent = .now
                 let clipped = String(text.prefix(2000)), sends = type == "send"
-                if let card = view.card { card.answer(clipped, send: sends) } else { VisualSheetSender.current?(clipped, sends) }
+                if let card = view.card { card.answer(clipped, send: sends) } else if let answer = view.answer { answer(clipped, sends) } else { VisualSheetSender.current?(clipped, sends) }
             default:
                 break
             }
@@ -423,6 +432,7 @@ final class VisualNavigation: NSObject, WKNavigationDelegate, WKUIDelegate {
             guard let view = webView as? VisualWebView else { return }
             view.loaded = true
             view.card?.pageLoaded(view)
+            view.onLoaded?()
         }
     }
 
@@ -434,6 +444,63 @@ final class VisualNavigation: NSObject, WKNavigationDelegate, WKUIDelegate {
             VisualStore.shared.drop(view.key)
             view.card?.failed()
         }
+    }
+}
+
+// MARK: Apps
+
+/// An app's page (docs/spec/35 §14): a visual's sandbox at full size, scrolling, with its data handed in through
+/// `piopio.onData`. The page reloads only when its HTML changes; new data goes straight to the page.
+public struct AppCanvas: NSViewRepresentable {
+    let html: String
+    let title: String
+    /// `[data, meta]` as JSON.
+    let payload: String
+    let answer: @MainActor (String, Bool) -> Void
+
+    public init(html: String, title: String, payload: String, answer: @escaping @MainActor (String, Bool) -> Void) {
+        self.html = html
+        self.title = title
+        self.payload = payload
+        self.answer = answer
+    }
+
+    public final class Coordinator {
+        var html = ""
+        var sent = ""
+        var payload = ""
+        weak var view: VisualWebView?
+
+        @MainActor func push() {
+            guard let view, view.loaded, payload != sent else { return }
+            sent = payload
+            view.evaluateJavaScript("window.__piopioData && window.__piopioData.apply(null, \(payload))", completionHandler: nil)
+        }
+    }
+
+    public func makeCoordinator() -> Coordinator { Coordinator() }
+
+    public func makeNSView(context: Context) -> VisualWebView {
+        let view = VisualWebView.make(scrolls: true)
+        context.coordinator.view = view
+        view.onLoaded = { [weak coordinator = context.coordinator] in coordinator?.push() }
+        load(view, context.coordinator)
+        return view
+    }
+
+    public func updateNSView(_ view: VisualWebView, context: Context) {
+        view.answer = answer
+        context.coordinator.payload = payload
+        if context.coordinator.html != html { load(view, context.coordinator) } else { context.coordinator.push() }
+    }
+
+    @MainActor private func load(_ view: VisualWebView, _ coordinator: Coordinator) {
+        coordinator.html = html
+        coordinator.payload = payload
+        coordinator.sent = ""
+        view.answer = answer
+        view.loaded = false
+        view.show(html, title: title, scrolls: true)
     }
 }
 
@@ -492,10 +559,13 @@ public final class VisualCardModel: @unchecked Sendable {
     let html: String
     /// The conversation's folder, where Save… starts.
     let root: String?
+    /// Make app is offered (chats and Build sessions, which have make_app; docs/spec/35 §14).
+    let makesApps: Bool
     var onAction: (@MainActor (TranscriptAction) -> Void)?
     var onResize: (@MainActor (VisualCardModel) -> Void)?
 
-    init(itemId: String, key: String, title: String, html: String, root: String?) {
+    init(itemId: String, key: String, title: String, html: String, root: String?, makesApps: Bool = false) {
+        self.makesApps = makesApps
         self.itemId = itemId
         self.key = key
         self.title = title.isEmpty ? "Visual" : title
@@ -574,7 +644,7 @@ public final class VisualCardView: NSView, ArrowCursorArea {
         layer?.borderWidth = 1
         layer?.masksToBounds = true
         layer?.borderColor = DS.line.cgColor
-        header = ArrowHostingView(rootView: VisualHeader(title: model.title, clipped: model.clipped) { [weak self] command in self?.run(command) })
+        header = ArrowHostingView(rootView: VisualHeader(title: model.title, clipped: model.clipped, makesApps: model.makesApps) { [weak self] command in self?.run(command) })
         addSubview(header)
         content.wantsLayer = true
         addSubview(content)
@@ -644,7 +714,7 @@ public final class VisualCardView: NSView, ArrowCursorArea {
         let before = model.contentHeight
         VisualStore.shared.noteHeight(height, key: model.key)
         if abs(model.contentHeight - before) >= 1 {
-            (header as? ArrowHostingView<VisualHeader>)?.rootView = VisualHeader(title: model.title, clipped: model.clipped) { [weak self] command in self?.run(command) }
+            (header as? ArrowHostingView<VisualHeader>)?.rootView = VisualHeader(title: model.title, clipped: model.clipped, makesApps: model.makesApps) { [weak self] command in self?.run(command) }
             model.onResize?(model)
         }
         scheduleSettle()
@@ -698,12 +768,15 @@ public final class VisualCardView: NSView, ArrowCursorArea {
         needsLayout = true
     }
 
-    enum Command { case open, save, copy, reload }
+    enum Command { case open, save, copy, reload, makeApp }
 
     private func run(_ command: Command) {
         switch command {
         case .open:
             model.onAction?(.openVisual(itemId: model.itemId))
+        case .makeApp:
+            // The model calls make_app; its card names the files the app will read before anything is written.
+            model.onAction?(.reply(text: "Make the “\(model.title)” visual into an app"))
         case .copy:
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(model.html, forType: .string)
@@ -747,6 +820,7 @@ public final class VisualCardView: NSView, ArrowCursorArea {
 struct VisualHeader: View {
     let title: String
     let clipped: Bool
+    var makesApps = false
     let act: (VisualCardView.Command) -> Void
 
     var body: some View {
@@ -757,6 +831,11 @@ struct VisualHeader: View {
             if clipped {
                 Button("Show all") { act(.open) }.buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Color(nsColor: DS.fg2))
                     .help("It's taller than the conversation shows; open it whole")
+            }
+            if makesApps {
+                Button { act(.makeApp) } label: { Text("Make app").font(.system(size: 12)).foregroundStyle(Color(nsColor: DS.fg2)).padding(.horizontal, 6).frame(height: 24).contentShape(Rectangle()) }
+                    .buttonStyle(.plain)
+                    .help("Keep it up to date: an app that reads its data from files and redraws when they change")
             }
             button("arrow.up.left.and.arrow.down.right", "Open", .open)
             button("square.and.arrow.down", "Save as a file…", .save)

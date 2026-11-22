@@ -160,6 +160,10 @@ public actor EngineClient {
                     providersContinuation.yield(.automationsChanged)
                 } else if method == "library.changed" {
                     providersContinuation.yield(.libraryChanged)
+                } else if method == "apps.data" {
+                    if let n = try? decoder.decode(NotificationEnvelope<AppResult>.self, from: line) {
+                        providersContinuation.yield(.appData(n.params.app))
+                    }
                 } else if method == "watchdog.changed" {
                     providersContinuation.yield(.watchdogChanged)
                 } else if method == "projects.changed" {

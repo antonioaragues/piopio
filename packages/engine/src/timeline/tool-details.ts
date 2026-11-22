@@ -33,6 +33,9 @@ export function startDetails(tool: string, args: unknown): ToolDetails | undefin
 			// An agent hands over its kept files by name (06 §14): where they are comes with the result.
 			if (Array.isArray(a.names)) return { type: "files", files: [] };
 			return Array.isArray(a.files) ? { type: "files", files: (a.files as { path?: unknown; description?: unknown }[]).flatMap((f) => (typeof f?.path === "string" ? [{ path: f.path, name: f.path.split("/").pop() || f.path, ...(typeof f.description === "string" ? { description: f.description } : {}) }] : [])) } : undefined;
+		case "make_app":
+			// The app's file comes with the result, once it's written (docs/spec/35 §14).
+			return { type: "files", files: [] };
 		case "propose_plan": {
 			const strings = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
 			const files = strings(a.files);
@@ -74,7 +77,7 @@ export function endDetails(tool: string, args: unknown, result: PiToolResult | u
 		const d = (result?.details ?? {}) as { agent?: { id: string; name: string }; joined?: boolean; status?: "replied" | "no_reply" | "failed" };
 		return { type: "agent", agent: d.agent ?? (start.type === "agent" ? start.agent : { id: "", name: "agent" }), ...(d.joined ? { joined: true } : {}), ...(d.status ? { status: d.status } : {}) };
 	}
-	if (tool === "present_files") {
+	if (tool === "present_files" || tool === "make_app") {
 		// The engine's view: absolute paths, sizes and which files were missing (persisted with the result).
 		const files = (result?.details as { files?: unknown } | undefined)?.files;
 		return Array.isArray(files) ? { type: "files", files: files as Extract<ToolDetails, { type: "files" }>["files"] } : start;

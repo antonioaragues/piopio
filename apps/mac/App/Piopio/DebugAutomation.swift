@@ -288,6 +288,13 @@ enum DebugAutomation {
                 if let hit { engine.libraryFocus = hit.id }
             }
         }
+        // PIOPIO_DEMO_APP=<path>: that app open, as opening it from the Library does (docs/spec/35 §14).
+        if let path = env["PIOPIO_DEMO_APP"], engine.status == .ready {
+            Task {
+                try? await Task.sleep(for: .seconds(1))
+                NotificationCenter.default.post(name: .viewFile, object: URL(fileURLWithPath: path))
+            }
+        }
         // PIOPIO_DEMO_AGENT=<template>: a new agent "Coach"; PIOPIO_DEMO_AGENT_MESSAGES: messages to it ("||");
         // PIOPIO_DEMO_AGENT_CONTACT=<name>: add that contact and write as them once; PIOPIO_DEMO_AGENT_TAB: the tab to show.
         if let template = env["PIOPIO_DEMO_AGENT"], engine.status == .ready {

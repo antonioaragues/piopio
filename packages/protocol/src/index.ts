@@ -1042,6 +1042,33 @@ export const LibraryItem = Type.Object({
 	pinned: Type.Optional(Type.Boolean()),
 });
 export type LibraryItem = Static<typeof LibraryItem>;
+/** One source of an app (docs/spec/35 §14): a file, its last read, and why it failed. */
+export const AppSourceStatus = Type.Object({
+	name: Type.String(),
+	/** As the manifest says it: relative to the app's file, or absolute. */
+	file: Type.String(),
+	path: Type.String(),
+	columns: Type.Optional(Type.Array(Type.String())),
+	/** ok: read now; failed: the latest read failed (the page has the last good data); waiting: not allowed yet. */
+	state: literals("ok", "failed", "waiting"),
+	error: Type.Optional(Type.String()),
+	readAt: Type.Optional(Type.String()),
+	failedAt: Type.Optional(Type.String()),
+});
+export type AppSourceStatus = Static<typeof AppSourceStatus>;
+/** An app as it is now: its page, each source's state, and the data `piopio.onData` gets. */
+export const AppView = Type.Object({
+	path: Type.String(),
+	title: Type.String(),
+	html: Type.String(),
+	sources: Type.Array(AppSourceStatus),
+	data: Type.Record(Type.String(), Type.Unknown()),
+	stale: Type.Array(Type.String()),
+	/** False when the manifest lists sources not allowed yet: the page draws what was read before. */
+	allowed: Type.Boolean(),
+	updatedAt: Type.Optional(Type.String()),
+});
+export type AppView = Static<typeof AppView>;
 /** What `automations.add` and `automations.update` take: the trigger in words (`when`), the rest as the record. */
 export const AutomationChange = Type.Object({
 	name: Type.Optional(Type.String()),
@@ -1868,6 +1895,13 @@ export const methods = {
 	"library.add": { params: Type.Object({ path: Type.String() }), result: Type.Object({ item: LibraryItem }) },
 	/** A visual in the Library: its title and HTML, to draw its picture and show it large. */
 	"library.visual": { params: Type.Object({ id: Type.String() }), result: Type.Object({ title: Type.String(), html: Type.String() }) },
+	/** An app (docs/spec/35 §14): its page, sources and data, its files read again; watched until apps.close. */
+	"apps.open": { params: Type.Object({ path: Type.String() }), result: Type.Object({ app: AppView }) },
+	/** Reads every source now. */
+	"apps.refresh": { params: Type.Object({ path: Type.String() }), result: Type.Object({ app: AppView }) },
+	"apps.close": { params: Type.Object({ path: Type.String() }), result: Type.Object({}) },
+	/** Allows the sources the manifest lists now. */
+	"apps.allow": { params: Type.Object({ path: Type.String() }), result: Type.Object({ app: AppView }) },
 	/** Locate…: where a missing file is now. */
 	"library.relocate": { params: Type.Object({ id: Type.String(), path: Type.String() }), result: Type.Object({ item: LibraryItem }) },
 	/** Runs: schedules, heartbeat, reminders, triggers and manual runs, newest first (06 §6, Runs tab). Open one with `conversationId: "run:<id>"`. */
@@ -2136,6 +2170,8 @@ export const notifications = {
 	"automations.changed": Type.Object({}),
 	/** The Library changed (docs/spec/35): list it again. */
 	"library.changed": Type.Object({}),
+	/** An open app's new data, after one of its files changed. */
+	"apps.data": Type.Object({ app: AppView }),
 	"inbox.changed": Type.Object({ count: Type.Number(), approval: Type.Optional(Type.Object({ agent: ContainerRef, agentName: Type.String(), approvalId: Type.String(), title: Type.String() })) }),
 } satisfies Record<string, TSchema>;
 

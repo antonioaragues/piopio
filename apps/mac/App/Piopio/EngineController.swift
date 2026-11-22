@@ -30,6 +30,8 @@ final class EngineController {
     private(set) var libraryFailed = false
     /// An item the Library should select when it shows (from a pin, ⌘K or Show in Library); the page clears it.
     var libraryFocus: String?
+    /// Open apps' latest data, by path, as their files change (docs/spec/35 §14).
+    var appUpdates: [String: AppView] = [:]
     /// Which migration report is showing ("work" or "automations").
     @ObservationIgnored private var reportFrom = "work"
     /// The Watchdog's notes about your conversations (docs/spec/17 §4): in Needs you.
@@ -386,6 +388,8 @@ final class EngineController {
                     await self.loadAutomations()
                 case .libraryChanged:
                     await self.loadLibrary()
+                case .appData(let app):
+                    self.appUpdates[app.path] = app
                 case .connectorAuth(let auth):
                     if self.connectorLogin?.loginId == auth.loginId { self.connectorLogin?.apply(auth.event) }
                     if auth.event.type == "done" { await self.loadConnectors() }
@@ -963,6 +967,28 @@ final class EngineController {
         let item = try await addToLibrary(path)
         libraryFocus = item.id
         NotificationCenter.default.post(name: .selectItem, object: SidebarItem.library.raw)
+    }
+
+    /// An app: its page, sources and data, its files read again; the engine watches it until `closeApp`.
+    func openApp(_ path: String) async throws -> AppView {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        return try await client.call("apps.open", LibraryPathParams(path: path), as: AppResult.self).app
+    }
+
+    func refreshApp(_ path: String) async throws -> AppView {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        return try await client.call("apps.refresh", LibraryPathParams(path: path), as: AppResult.self).app
+    }
+
+    /// Allow: the sources the app's manifest lists now.
+    func allowApp(_ path: String) async throws -> AppView {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        return try await client.call("apps.allow", LibraryPathParams(path: path), as: AppResult.self).app
+    }
+
+    func closeApp(_ path: String) async {
+        _ = try? await client?.call("apps.close", LibraryPathParams(path: path), as: Empty.self)
+        appUpdates[path] = nil
     }
 
     /// A visual in the Library: its title and HTML (kept beside the index), for its picture and to show it large.

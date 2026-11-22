@@ -43,7 +43,7 @@ import Testing
 @Test @MainActor func aSavedVisualWorksAnywhere() {
     let page = VisualPage.portable(#"<script src="piopio-lib://chart.js"></script><link rel="stylesheet" href="piopio-lib://katex/katex.css"><p>x</p>"#, title: "Saved")
     #expect(page.contains(VisualPage.portableCSP) && page.contains("connect-src 'none'"))
-    #expect(page.contains("window.piopio = { send: () => {}, prefill: () => {} }"))
+    #expect(page.contains("window.piopio = { send: () => {}, prefill: () => {}, onData: () => {} }"))
     #expect(!page.contains("messageHandlers") && !page.contains("piopio-lib://"))
     #expect(page.contains("Chart.js v4.4.7") && page.contains("url(data:font/woff2;base64,"))
     #expect(!page.contains("importmap"))

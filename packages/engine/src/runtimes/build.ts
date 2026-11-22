@@ -2,6 +2,8 @@
 import { codingConnectorsExtension } from "../connectors/extension.js";
 import { codingBrowserExtension, type BrowserCall } from "../tools/browser-tools.js";
 import { codingVisualsExtension, type VisualCheck } from "../tools/visuals.js";
+import { codingAppsExtension } from "../tools/apps-tool.js";
+import type { Apps, MakeContext } from "../apps.js";
 import { groupOf } from "../connectors/permissions.js";
 import type { ConnectorHub } from "../connectors/hub.js";
 import {
@@ -81,6 +83,8 @@ export type BuildOpenOptions = {
 	browserPreview?: boolean;
 	/** Visuals drawn and checked by the Mac app (docs/spec/25 §3.2). */
 	visuals?: VisualCheck;
+	/** make_app (docs/spec/35 §14): the apps service, and where this conversation is. */
+	apps?: { service: Apps; where: () => MakeContext };
 	/** Connected apps: their tools, asking through Build's approval prompt before a change. */
 	connectors?: ConnectorHub;
 	/** Connectors and MCP servers this session turned off ("connector:<id>", "mcp:<server>"). */
@@ -276,6 +280,14 @@ export class BuildRuntime implements Runtime {
 				todosExtension(),
 				presentExtension(),
 				codingVisualsExtension(o.visuals),
+				...(o.apps
+					? [
+							codingAppsExtension(o.apps.service, o.apps.where, (callId, signal) => async (request) => {
+								const response = await broker.ask({ kind: "approval", title: request.title, tool: request.tool, callId }, signal);
+								return { approved: response?.decision === "allow" || response?.decision === "always", ...(response?.text ? { reason: response.text } : {}) };
+							}),
+						]
+					: []),
 				goalExtension(),
 				...(o.history ? [historySdkExtension(o.history)] : []),
 				...(o.side ? [sideExtension(o.side)] : []),
@@ -1155,6 +1167,7 @@ function chatFactories(o: BuildOpenOptions, broker: PromptBroker, runtime: () =>
 		guardsExtension(),
 		chatProfileExtension(o.hub, o.webOptions, () => false),
 		codingVisualsExtension(o.visuals),
+		...(o.apps ? [codingAppsExtension(o.apps.service, o.apps.where, (callId, signal) => (request) => card(callId, signal)({ ...request, always: "" }))] : []),
 		// Questions for the user get the question card, as in Build, not a form drawn with show_visual.
 		notifyExtension(notifyBridge(o, broker, runtime)),
 		...(o.connectors

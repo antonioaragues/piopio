@@ -524,8 +524,9 @@ struct ViewedFile: Identifiable {
     var id: String { url.path }
 }
 
-/// Shows files posted with `.viewFile` in the viewer sheet (the main window has one).
+/// Shows files posted with `.viewFile` in the viewer sheet (the main window has one). An app opens as an app.
 struct FileViewerSheet: ViewModifier {
+    let engine: EngineController
     @State private var viewed: ViewedFile?
 
     func body(content: Content) -> some View {
@@ -533,7 +534,9 @@ struct FileViewerSheet: ViewModifier {
             .onReceive(NotificationCenter.default.publisher(for: .viewFile)) { note in
                 if let url = note.object as? URL { viewed = ViewedFile(url: url) }
             }
-            .sheet(item: $viewed) { FileSheet(url: $0.url) }
+            .sheet(item: $viewed) { file in
+                if AppFile.isApp(file.url) { AppSheet(path: file.url.path, engine: engine) } else { FileSheet(url: file.url) }
+            }
     }
 }
 

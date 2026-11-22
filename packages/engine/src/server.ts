@@ -1,7 +1,7 @@
 /** Local Engine: Engine Protocol over a Unix domain socket. */
 import { keepAttachments } from "./attachment-files.js";
 import { randomUUID } from "node:crypto";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { appendFileSync, existsSync, mkdirSync, unlinkSync, chmodSync, statSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { createConnection, createServer, type Server } from "node:net";
@@ -52,6 +52,7 @@ import { TelegramChannels } from "./channels/manager.js";
 import { AgentWatchers } from "./watchers.js";
 import { Automations } from "./automations/service.js";
 import { Library } from "./library.js";
+import { Apps } from "./apps.js";
 import { PIOPIO, systemZone, type Automation } from "./automations/model.js";
 import { fromProjects, REPORT_FILE as AUTOMATIONS_REPORT, reportOf as automationsReport, type LegacyPlace } from "./automations/migrate.js";
 import type { Automation as AutomationView } from "@piopio/protocol";
@@ -129,6 +130,10 @@ export class Engine {
 	readonly watchers: AgentWatchers;
 	readonly work: WorkRunner;
 	readonly automations: Automations;
+	/** Apps (docs/spec/35 §14): pages that read their data from files. */
+	readonly apps: Apps;
+	/** The apps each client has open, closed with it. */
+	private appOpens = new Map<RpcConnection, string[]>();
 	readonly watchdog: Watchdog;
 	readonly github: GitHub;
 	private prTimer?: NodeJS.Timeout;
@@ -265,6 +270,14 @@ export class Engine {
 			}, 300);
 			libraryNote.unref?.();
 		});
+		this.apps = new Apps({
+			home: options.paths.home,
+			appsDir: join(options.paths.projectsRoot, "Apps"),
+			changed: (app) => {
+				for (const conn of this.authed) conn.notify("apps.data", { app });
+			},
+		});
+		this.sessions.apps = this.apps;
 		this.sessions.secrets = this.secrets;
 		// Automations (docs/spec/27): one list of what starts on its own, run as Piopio or as one of your agents.
 		this.automations = new Automations({
@@ -587,6 +600,15 @@ export class Engine {
 	}
 
 	/** An automation as the app sees it: the record, and its words. */
+	/** An app's errors as the client's to show (a missing file, a broken manifest). */
+	private appCall<T>(f: () => T): T {
+		try {
+			return f();
+		} catch (error) {
+			throw new EngineError("INVALID", (error as Error).message);
+		}
+	}
+
 	private get library(): Library {
 		return this.sessions.library!;
 	}
@@ -619,6 +641,7 @@ export class Engine {
 		this.telegram?.stop();
 		this.watchers?.stop();
 		this.automations?.stop();
+		this.apps?.stop();
 		this.work?.stop();
 		this.watchdog?.stop();
 		clearInterval(this.prTimer);
@@ -689,6 +712,8 @@ export class Engine {
 
 		conn.onClose(() => {
 			this.authed.delete(conn);
+			for (const path of this.appOpens.get(conn) ?? []) this.apps.closeApp(path);
+			this.appOpens.delete(conn);
 			unregisterSecrets?.();
 			unregisterTools?.();
 			for (const id of owned) {
@@ -1224,6 +1249,26 @@ export class Engine {
 			case "automations.update": {
 				const { id, ...change } = params as Params<"automations.update">;
 				return { automation: this.automationView(this.automations.update(id, change)) } satisfies Result<"automations.update">;
+			}
+			case "apps.open": {
+				const p = params as Params<"apps.open">;
+				const app = this.appCall(() => this.apps.openApp(p.path));
+				this.appOpens.set(conn, [...(this.appOpens.get(conn) ?? []), app.path]);
+				return { app } satisfies Result<"apps.open">;
+			}
+			case "apps.refresh":
+				return { app: this.appCall(() => this.apps.refresh((params as Params<"apps.refresh">).path)) } satisfies Result<"apps.refresh">;
+			case "apps.allow":
+				return { app: this.appCall(() => this.apps.allow((params as Params<"apps.allow">).path)) } satisfies Result<"apps.allow">;
+			case "apps.close": {
+				const path = (params as Params<"apps.close">).path;
+				const opens = this.appOpens.get(conn) ?? [];
+				const i = opens.findIndex((o) => o === path || o === resolve(path));
+				if (i >= 0) {
+					this.apps.closeApp(opens[i]!);
+					opens.splice(i, 1);
+				}
+				return {} satisfies Result<"apps.close">;
 			}
 			case "library.list":
 				return this.library.list() satisfies Result<"library.list">;

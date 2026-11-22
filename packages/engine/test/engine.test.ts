@@ -3028,3 +3028,31 @@ test("Build history is searchable after restart without loading extensions or re
 	expect(results.results.some((hit: { ref: { id: string }; itemId?: string }) => hit.ref.id === ref.id && hit.itemId)).toBe(true);
 	expect(b.engine.sessions.openCount).toBe(0);
 });
+
+test("make_app in a chat (docs/spec/35 §14): asks first, writes the app beside a copy of its data, lists it, and it outlives the chat", async () => {
+	const a = await start();
+	const { ref } = await a.client.call("sessions.create", { kind: "thread" });
+	await a.client.call("sessions.subscribe", { ref });
+	const approvals = () => a.client.events.flatMap((n) => n.events).filter((e) => (e.type === "item.added" || e.type === "item.updated") && e.item.kind === "approval").map((e) => (e as { item: { approvalId: string; status: string; title: string } }).item);
+	const app = { title: "Spending", html: "<div id=n></div><script>piopio.onData((d) => { n.textContent = d.expenses.length; })</script>", sources: { expenses: { file: "expenses.csv", columns: ["category", "amount"] } } };
+	const script = ["write: expenses.csv | category,amount\\nFood,12\\nRent,800\\n", `call: make_app | ${JSON.stringify(app)}`].join("\n");
+	await a.client.call("sessions.submit", { ref, input: { text: script } });
+	for (let i = 0; i < 100 && !approvals().some((x) => x.status === "pending"); i++) await new Promise((r) => setTimeout(r, 50));
+	const pending = approvals().find((x) => x.status === "pending")!;
+	expect(pending.title).toBe("Make the app “Spending” in Piopio/Apps/spending/spending.html, reading a copy of expenses.csv kept beside it");
+	const path = join(a.home, "Piopio", "Apps", "spending", "spending.html");
+	expect(existsSync(path)).toBe(false);
+	await a.client.call("sessions.decide", { ref, approvalId: pending.approvalId, approve: true });
+	for (let i = 0; i < 100 && !existsSync(path); i++) await new Promise((r) => setTimeout(r, 50));
+	let listed: { kind: string; path?: string }[] = [];
+	for (let i = 0; i < 100 && !listed.some((x) => x.kind === "app"); i++) {
+		listed = (await a.client.call("library.list", {})).items;
+		await new Promise((r) => setTimeout(r, 50));
+	}
+	expect(listed.find((x) => x.kind === "app")).toMatchObject({ path, name: "spending.html" });
+	const opened = (await a.client.call("apps.open", { path })).app;
+	expect(opened).toMatchObject({ title: "Spending", allowed: true, stale: [], data: { expenses: [{ category: "Food", amount: 12 }, { category: "Rent", amount: 800 }] } });
+	await a.client.call("apps.close", { path });
+	await a.client.call("sessions.delete", { ref });
+	expect((await a.client.call("apps.open", { path })).app.sources[0]).toMatchObject({ state: "ok", file: "expenses.csv" });
+}, 30_000);

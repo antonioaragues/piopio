@@ -145,7 +145,7 @@ nonisolated struct ItemRenderer: Sendable {
             return sideProposal(t)
         case .tool(let t) where t.tool == "propose_plan":
             return attachmentParagraph(DisclosureAttachment(card: DisclosureCard(plan: Self.planContent(t))))
-        case .tool(let t) where t.tool == "present_files" && t.status == .done:
+        case .tool(let t) where (t.tool == "present_files" || t.tool == "make_app") && t.status == .done:
             // Files the agent handed over: a card per file that opens it (piopio-present).
             guard case .files(let files)? = t.typedDetails, !files.isEmpty else { return attachmentParagraph(DisclosureAttachment(card: Self.toolCard(t, root: root))) }
             let out = NSMutableAttributedString()
@@ -154,7 +154,7 @@ nonisolated struct ItemRenderer: Sendable {
         case .tool(let t) where t.tool == "show_visual" && t.status != .error:
             // A visual (docs/spec/25): live HTML in a card; until its HTML has arrived, the usual running card.
             guard let html = t.args?["html"]?.stringValue, !html.isEmpty else { return attachmentParagraph(DisclosureAttachment(card: Self.toolCard(t, root: root))) }
-            let model = VisualCardModel(itemId: t.id, key: t.callId, title: t.args?["title"]?.stringValue ?? "", html: html, root: root)
+            let model = VisualCardModel(itemId: t.id, key: t.callId, title: t.args?["title"]?.stringValue ?? "", html: html, root: root, makesApps: !compact && (versions || build))
             return attachmentParagraph(VisualAttachment(model: model), spacing: 14)
         case .tool(let t):
             return attachmentParagraph(DisclosureAttachment(card: Self.toolCard(t, root: root)))
