@@ -375,6 +375,19 @@ public final class TranscriptDocument {
         }
     }
 
+    /// Where this conversation's subagents stand, and which one is open beside (docs/spec/37): their rows are drawn
+    /// again when that changes.
+    public func setSubagents(_ subagents: [SubagentInfo], open: String?) {
+        guard subagents != renderer.subagents || open != renderer.openSubagent else { return }
+        renderer.subagents = subagents
+        renderer.openSubagent = open
+        guard !loading else { return }
+        for id in documentIDs {
+            guard let item = items.last(where: { $0.id == id }) else { continue }
+            if case .tool(let t) = item, t.tool == "task" { replace(item) }
+        }
+    }
+
     /// The automations that exist now (docs/spec/27): a card for one that's gone is drawn again as "Removed".
     public func setAutomations(_ ids: Set<String>) {
         guard ids != renderer.automations else { return }
@@ -804,6 +817,7 @@ public final class TranscriptDocument {
             (value as? UserImagesAttachment)?.model.onAction = { [weak self] action in self?.handle(action) }
             (value as? AutomationCardAttachment)?.model.onAction = { [weak self] action in self?.handle(action) }
             (value as? SideOfferAttachment)?.model.onAction = { [weak self] action in self?.handle(action) }
+            (value as? SubagentRowAttachment)?.model.onAction = { [weak self] action in self?.handle(action) }
             if let visual = (value as? VisualAttachment)?.model {
                 visual.onAction = { [weak self] action in self?.handle(action) }
                 visual.onResize = { [weak self] model in self?.relayout { ($0 as? VisualAttachment)?.model === model } }

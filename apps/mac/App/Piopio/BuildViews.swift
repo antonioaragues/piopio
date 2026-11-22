@@ -71,6 +71,10 @@ struct BuildSessionView: View {
     /// The conversation keeps at least this much beside the panel.
     static let minConversation = 460.0
     private var panelShown: Bool { showInspector && !panelAutoHidden }
+    /// The subagent open in the column instead of its panel (docs/spec/37 SB4).
+    @State private var subagentOpen: String?
+    @AppStorage("subagentWidth") private var subagentPreferred = 400.0
+    private var columnShown: Bool { (showInspector || subagentOpen != nil) && !panelAutoHidden }
     @AppStorage("sessionPanel") private var inspectorTab = SessionPanel.inspector
     /// Each panel's width as you last dragged it (every session shares them; the Browser's also with chats).
     @AppStorage("filesWidth") private var filesPreferred = 280.0
@@ -78,12 +82,13 @@ struct BuildSessionView: View {
     @AppStorage("inspectorWidth") private var inspectorPreferred = 300.0
     @State private var panelDragStart: Double?
     /// The narrowest each panel goes; below that line the window hides it instead.
-    private var panelMin: Double { inspectorTab == .browser ? 320 : inspectorTab == .files ? 240 : 280 }
+    private var panelMin: Double { subagentOpen != nil ? 340 : inspectorTab == .browser ? 320 : inspectorTab == .files ? 240 : 280 }
     /// The widest the panel may be: the conversation keeps at least `minConversation`.
     private var panelMax: Double { max(panelMin, sessionWidth - CardLayout.margin - Self.minConversation) }
     private var panelPreferred: Double {
-        get { inspectorTab == .browser ? browserPreferred : inspectorTab == .files ? filesPreferred : inspectorPreferred }
+        get { subagentOpen != nil ? subagentPreferred : inspectorTab == .browser ? browserPreferred : inspectorTab == .files ? filesPreferred : inspectorPreferred }
         nonmutating set {
+            if subagentOpen != nil { subagentPreferred = newValue; return }
             switch inspectorTab {
             case .browser: browserPreferred = newValue
             case .files: filesPreferred = newValue
@@ -164,8 +169,13 @@ struct BuildSessionView: View {
                 }
             }
             .contentCard()
-            if panelShown && !reviewing {
+            if columnShown && !reviewing {
                 VStack(spacing: 0) {
+                    if let open = subagentOpen {
+                        SubagentPanel(engine: engine, parentId: summary.ref.id, selected: open,
+                                      select: { id in subagentOpen = id },
+                                      close: { withAnimation(.easeOut(duration: 0.15)) { subagentOpen = nil } })
+                    } else {
                     switch inspectorTab {
                     case .files:
                         if let cwd = summary.cwd {
@@ -182,10 +192,11 @@ struct BuildSessionView: View {
                                            inspectorTab = .files
                                        })
                     }
+                    }
                 }
                 .frame(width: panelWidth)
                 .frame(maxHeight: .infinity, alignment: .top)
-                .contentCard(inspectorTab == .browser)
+                .contentCard(subagentOpen == nil && inspectorTab == .browser)
                 .overlay(alignment: .leading) { panelResizeHandle }
             }
         }
@@ -278,7 +289,6 @@ struct BuildSessionView: View {
                 // What the session waits on you for is the composer's tray (docs/design/grey "Composer tray").
                 // This conversation's tasks on the board (docs/spec/26 §5), live, then the merge card.
                 if let work = project.flatMap({ engine.work(in: $0) }) { ConversationPlan(engine: engine, work: work, conversationId: summary.ref.id) }
-                SideConversations(engine: engine, parentId: summary.ref.id)
                 // Its pull request (docs/spec/05-build G7): checks, comments, Fix CI and Address comments.
                 PullRequestBlock(engine: engine, summary: summary)
                 Composer(engine: engine, thread: session).frame(maxWidth: DS.column)
@@ -290,6 +300,13 @@ struct BuildSessionView: View {
             }
         }
         .modifier(SideOffers(engine: engine, ref: summary.ref, document: session.document))
+        // Its subagents' rows say where each stands, and which one is open beside (docs/spec/37).
+        .onChange(of: subagents, initial: true) { _, now in
+            session.document.setSubagents(now, open: subagentOpen)
+            // PIOPIO_DEMO_SUBAGENT=1: captures open the first subagent beside once there is one.
+            if ProcessInfo.processInfo.environment["PIOPIO_DEMO_SUBAGENT"] == "1", subagentOpen == nil, let first = now.first { openSubagent(first.id) }
+        }
+        .onChange(of: subagentOpen) { _, open in session.document.setSubagents(subagents, open: open) }
         .onReceive(NotificationCenter.default.publisher(for: .createPullRequest)) { note in
             if note.object as? String == summary.ref.id { creatingPR = true }
         }
@@ -297,7 +314,7 @@ struct BuildSessionView: View {
         .sheet(isPresented: $reviewingPR) { ReviewPullRequestSheet(session: session) }
         .onReceive(NotificationCenter.default.publisher(for: .transcriptOffer)) { note in
             guard note.object as? String == summary.ref.id, let kind = note.userInfo?["kind"] as? String, let call = note.userInfo?["call"] as? String else { return }
-            takeOffer(kind, call: call)
+            if kind == SubagentActionKind.open { openSubagent(call) } else { takeOffer(kind, call: call) }
         }
     }
 
@@ -336,14 +353,34 @@ struct BuildSessionView: View {
         }
     }
 
+    /// This conversation's subagents, oldest first, as their rows show them (docs/spec/37).
+    private var subagents: [SubagentInfo] {
+        engine.buildSessions.filter { $0.parent?.id == summary.ref.id }.sorted { $0.createdAt < $1.createdAt }.map { s in
+            SubagentInfo(id: s.ref.id, title: s.title, state: s.parent?.state ?? "working", line: s.parent?.line,
+                         startedAt: s.parent?.startedAt.flatMap(ISODate.parse), endedAt: s.parent?.endedAt.flatMap(ISODate.parse), costUsd: s.parent?.costUsd)
+        }
+    }
+
+    /// A subagent's row: it opens beside the conversation; a click on the open one closes it. When the window is too
+    /// narrow for the column, it opens the subagent's session instead (SB4).
+    private func openSubagent(_ id: String) {
+        if panelAutoHidden {
+            NotificationCenter.default.post(name: .selectBuildSession, object: id)
+            return
+        }
+        withAnimation(.easeOut(duration: 0.15)) { subagentOpen = subagentOpen == id ? nil : id }
+    }
+
     private static func inspectorChoice(_ id: String) -> Bool? {
         (UserDefaults.standard.dictionary(forKey: "inspectorOpen") as? [String: Bool])?[id]
     }
 
-    /// A toolbar view icon: opens the column on that view, or closes it when that view is already showing.
+    /// A toolbar view icon: opens the column on that view, or closes it when that view is already showing. With a
+    /// subagent open there, it takes the column back.
     private func show(_ view: SessionPanel) {
         withAnimation(.easeOut(duration: 0.15)) {
-            if panelShown && inspectorTab == view { showInspector = false } else { inspectorTab = view; showInspector = true; panelAutoHidden = false }
+            if subagentOpen != nil { subagentOpen = nil; inspectorTab = view; showInspector = true; panelAutoHidden = false }
+            else if panelShown && inspectorTab == view { showInspector = false } else { inspectorTab = view; showInspector = true; panelAutoHidden = false }
         }
         rememberInspector()
     }
@@ -376,7 +413,7 @@ struct BuildSessionView: View {
     }
 
     private func viewButton(_ view: SessionPanel) -> some View {
-        let on = panelShown && inspectorTab == view
+        let on = panelShown && subagentOpen == nil && inspectorTab == view
         // A blue dot on Inspector while something waits on you (an approval, a question, a command the sandbox stopped).
         let needsYou = view == .inspector && session.state?.status == .waitingApproval
         return ToolbarIcon(symbol: view.symbol, label: view.title, on: on, help: on ? "Hide the \(view.title.lowercased())" : view.help) { show(view) }

@@ -97,7 +97,6 @@ struct ThreadView: View {
                     if !thread.isFollowing {
                         JumpToLatestButton { thread.scrollToLatest() }
                     }
-                    SideConversations(engine: engine, parentId: summary.ref.id)
                     Composer(engine: engine, thread: thread).frame(maxWidth: DS.column)
                 }
                 .padding(.horizontal, 32)

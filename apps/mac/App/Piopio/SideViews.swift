@@ -4,7 +4,7 @@ import SwiftUI
 
 // Side conversations (docs/spec/24 §6): in a side conversation, the "Started from <parent> ›" bar; in its parent, their
 // lines in the transcript (a grey line each that says where it stands, a card only for what needs you: a proposal, a
-// side waiting on an approval), whose links act here; above the composer, only subagents still at work; and the offer
+// side waiting on an approval), whose links act here; and the offer
 // card's answers, with "Always start" after three New conversation in a row.
 
 /// Opens a conversation by id: a project's (a session) or one without a project (a chat).
@@ -35,60 +35,6 @@ struct SideStartedBar: View {
         }
         .padding(.horizontal, 20).padding(.vertical, 8)
         .background(Color.dsChip.opacity(0.5))
-    }
-}
-
-/// Subagents still at work (docs/spec/17 §3), above the composer: their results come back as [Task] rows, and finished
-/// ones leave here. Side conversations have their lines in the transcript instead.
-struct SideConversations: View {
-    let engine: EngineController
-    let parentId: String
-    @State private var open = true
-
-    private var subagents: [SessionSummary] {
-        engine.buildSessions.filter { $0.parent?.id == parentId && ($0.parent?.state == "working" || $0.parent?.state == "queued") }.sorted { $0.createdAt < $1.createdAt }
-    }
-
-    var body: some View {
-        let subagents = subagents
-        if !subagents.isEmpty {
-            VStack(alignment: .leading, spacing: 0) {
-                Button { withAnimation(.easeOut(duration: 0.15)) { open.toggle() } } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).foregroundStyle(Color.dsFg3)
-                            .rotationEffect(.degrees(open ? 90 : 0))
-                        Text("Subagents").font(.system(size: 12.5, weight: .semibold))
-                        Text("\(subagents.count) running").font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1)
-                        Spacer()
-                    }
-                    .padding(.horizontal, 12).padding(.vertical, 8)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                if open {
-                    VStack(alignment: .leading, spacing: 0) { ForEach(subagents, id: \.ref.id) { subagent($0) } }.padding(.bottom, 6)
-                }
-            }
-            .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 1))
-            .frame(maxWidth: DS.column)
-        }
-    }
-
-    /// A subagent at work: its title and what it's doing; it opens its session.
-    private func subagent(_ s: SessionSummary) -> some View {
-        Button { NotificationCenter.default.post(name: .selectItem, object: SidebarItem.session(s.ref.id).raw) } label: {
-            HStack(spacing: 10) {
-                if s.parent?.state == "working" { ProgressView().controlSize(.mini).frame(width: 7, height: 7) } else { Circle().fill(Color.dsFg3).frame(width: 7, height: 7) }
-                Text(s.title).font(.system(size: 13)).foregroundStyle(Color.dsFg).lineLimit(1)
-                Text(s.parent?.state == "queued" ? "queued" : (s.parent?.line ?? "working")).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1)
-                Spacer(minLength: 8)
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .help("Open it")
-        .padding(.horizontal, 12).padding(.vertical, 4)
     }
 }
 

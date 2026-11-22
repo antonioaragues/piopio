@@ -70,6 +70,7 @@ import type { CloudMemory, Params, Result, SessionEvent } from "@piopio/protocol
 import { CloudAgentView, type CloudLink } from "./cloud.js";
 import type { SecretBroker } from "./secrets.js";
 import { TelegramChannels as TelegramSecrets } from "./channels/manager.js";
+import { progressLine } from "./progress-line.js";
 
 type CatalogEntry = SessionSummary & {
 	thinking?: string;
@@ -911,7 +912,7 @@ export class Sessions {
 		// turned off (see `toolsOff` in build(), which also follows later changes to the parent).
 		const ref = await this.create({ kind: "build", cwd: parent.cwd!, ...(parent.model ? { model: parent.model } : {}), approvalMode: parent.approvalMode ?? this.policy.modeFor(parent.projectPath ?? parent.cwd!), title: task.description });
 		const child = this.entry(ref);
-		child.parent = { id: parent.ref.id, callId: task.callId, state: working >= MAX_SUBAGENTS ? "queued" : "working" };
+		child.parent = { id: parent.ref.id, callId: task.callId, state: working >= MAX_SUBAGENTS ? "queued" : "working", ...(working >= MAX_SUBAGENTS ? {} : { startedAt: new Date().toISOString() }) };
 		if (parent.toolsOff?.length) child.toolsOff = [...parent.toolsOff];
 		if (parent.projectPath) child.projectPath = parent.projectPath;
 		if (child.parent.state === "queued") child.sideBrief = task.prompt;
@@ -971,6 +972,7 @@ export class Sessions {
 	/** A subagent's turn ended: its result to whoever waits for it, else a [Task] note; the next queued one starts. */
 	private async taskSettled(child: CatalogEntry, runtime: Runtime): Promise<void> {
 		const result = this.taskResultOf(child, runtime);
+		if (child.parent && result.costUsd) child.parent.costUsd = result.costUsd;
 		this.setChildState(child, result.status === "error" ? "failed" : result.status);
 		const waiters = this.taskWaiters.get(child.ref.id);
 		if (waiters?.length) {
@@ -2195,6 +2197,20 @@ export class Sessions {
 		this.childWatched.add(runtime);
 		let started = runtime.snapshot().state.status === "running";
 		let lineAt = 0;
+		let lineTimer: ReturnType<typeof setTimeout> | undefined;
+		// At most one line a second; the latest one always lands (a quick read then a long command shows the command).
+		const showLine = (link: { line?: string }, line: string) => {
+			clearTimeout(lineTimer);
+			const wait = 1000 - (Date.now() - lineAt);
+			const apply = () => {
+				lineAt = Date.now();
+				if ((child.side ?? child.parent)?.state !== "working") return;
+				link.line = line;
+				this.changed(child);
+			};
+			if (wait <= 0) apply();
+			else lineTimer = setTimeout(apply, wait);
+		};
 		runtime.onEvents((events) => {
 			for (const e of events) {
 				const link = child.side ?? child.parent;
@@ -2202,11 +2218,7 @@ export class Sessions {
 				if ((e.type === "item.added" || e.type === "item.updated") && e.item.kind === "tool" && e.item.status === "running") {
 					const line = progressLine(e.item.tool, e.item.args);
 					this.taskProgress.get(child.ref.id)?.(line);
-					if (Date.now() - lineAt > 1000) {
-						lineAt = Date.now();
-						link.line = line;
-						this.changed(child);
-					}
+					showLine(link, line);
 				}
 				if (e.type === "state" && e.state.status === "waiting_approval") this.taskProgress.get(child.ref.id)?.("Waiting for your approval in the subagent…");
 				if (e.type !== "state") continue;
@@ -2230,6 +2242,11 @@ export class Sessions {
 			if (state !== "working") delete child.side.line;
 		} else if (child.parent && state !== "needs_you") {
 			child.parent.state = state;
+			// When its turn started and ended, for its row (docs/spec/37 SB2).
+			if (state === "working") {
+				child.parent.startedAt = new Date().toISOString();
+				delete child.parent.endedAt;
+			} else if (state !== "queued") child.parent.endedAt = new Date().toISOString();
 			if (state !== "working") delete child.parent.line;
 		} else return;
 		this.save();
@@ -3110,13 +3127,6 @@ function summary({ file: _f, sessionFile: _s, agentFile: _af, segments: _sg, han
 	// A chat's folder is the engine's: the app knows a chat by having no project.
 	if (rest.ref.kind === "thread") delete rest.cwd;
 	return rest;
-}
-
-/** What a subagent is doing, for its task card. */
-function progressLine(tool: string, args: unknown): string {
-	const a = (args ?? {}) as Record<string, unknown>;
-	const detail = [a.path, a.command, a.pattern, a.query, a.url].find((v) => typeof v === "string") as string | undefined;
-	return detail ? `${tool} ${detail.split("\n")[0]!.slice(0, 120)}` : tool;
 }
 
 /** Moves a file into the Trash folder under a free name (same volume: a rename). */

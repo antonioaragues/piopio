@@ -24,6 +24,9 @@ nonisolated struct ItemRenderer: Sendable {
     /// This conversation's side conversations now, and the proposals still open (docs/spec/24): their lines in the
     /// transcript show where each stands.
     var sides: [SideInfo] = []
+    /// This conversation's subagents now, and the one open beside (docs/spec/37): their rows say where each stands.
+    var subagents: [SubagentInfo] = []
+    var openSubagent: String?
     /// Open proposals (side_propose call ids) and when each expires.
     var openProposals: [String: Date] = [:]
     /// Offers (side_offer call ids) you answered with Do it here: the question and your answer instead of the card.
@@ -59,7 +62,8 @@ nonisolated struct ItemRenderer: Sendable {
             // Reports from side conversations and subagents (docs/spec/24 §5, 17 §3): "Message from About page ·
             // finished" or "Result from Explore auth · finished", the answer under it. Several arrive together.
             if compact { return NSAttributedString() }
-            return Self.sideNotes(u.text).reduce(into: NSMutableAttributedString()) { out, n in
+            // A result that only says how a subagent ended isn't drawn: its row says it (docs/spec/37 SB5).
+            return Self.sideNotes(u.text).filter { !Self.endsOnly($0.title) }.reduce(into: NSMutableAttributedString()) { out, n in
                 out.append(n.body.isEmpty ? note(n.title) : thinkingCard(DisclosureCard(kind: .thinking, title: n.title, body: n.body)))
             }
         case .user(let u) where u.text.hasPrefix("[Automation] "):
@@ -127,6 +131,8 @@ nonisolated struct ItemRenderer: Sendable {
             return out
         case .tool(let t) where t.tool == "ask_agent":
             return agentAnswer(t)
+        case .tool(let t) where Self.isPiopioTask(t) && !compact:
+            return subagentRow(t)
         case .tool(let t) where t.tool == "side_start" && t.status != .error:
             return sideStarted(t)
         case .tool(let t) where t.tool == "side_offer" && t.status == .done:

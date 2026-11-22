@@ -1,0 +1,806 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Piopio · Subagents, three directions</title>
+<style>
+/* A document column around three live window mockups, in Piopio's grey ink (docs/design/grey). */
+:root {
+  --canvas:#e9e8e4; --win:#fcfcfb; --side:#f4f4f2; --fg:#1f1f1e; --fg2:#6b6b67; --fg3:#9b9b96;
+  --line:rgba(0,0,0,.08); --sel:rgba(0,0,0,.06); --bubble:#f0f0ed; --field:#ffffff;
+  --inv:#1f1f1e; --invfg:#ffffff; --accent:#2f6fde; --page:#f7f7f5; --ok:#3a8a55; --bad:#c2493f; --warn:#b7791f;
+  --shadow:0 0 0 .5px rgba(0,0,0,.2),0 24px 70px rgba(0,0,0,.14);
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark) { :root {
+  --canvas:#0f0f0e; --win:#1e1e1d; --side:#191918; --fg:#ececea; --fg2:#a6a6a1; --fg3:#77776f;
+  --line:rgba(255,255,255,.09); --sel:rgba(255,255,255,.07); --bubble:#2b2b29; --field:#252524;
+  --inv:#ececea; --invfg:#1e1e1d; --accent:#6ea0ff; --page:#151514; --ok:#6cc28a; --bad:#ef7d72; --warn:#e0a84a;
+  --shadow:0 0 0 .5px rgba(255,255,255,.14),0 24px 70px rgba(0,0,0,.6); color-scheme:dark } }
+
+* { box-sizing:border-box }
+body { background:var(--page); color:var(--fg); font-family:var(--sans); font-size:15px; line-height:1.55; margin:0; padding:56px 16px 80px }
+.doc { max-width:720px; margin:0 auto; display:flex; flex-direction:column; gap:16px }
+h1 { font-size:34px; line-height:1.15; letter-spacing:-.8px; margin:0 }
+h2 { font-size:22px; letter-spacing:-.3px; margin:40px 0 0 }
+h3 { font-size:15px; margin:8px 0 0 }
+p, ul { margin:0 } ul { padding-left:20px } li { margin:3px 0 }
+.lede { font-size:17px; color:var(--fg2) }
+.eyebrow { font-size:12px; color:var(--fg3); letter-spacing:.04em; text-transform:uppercase }
+.muted { color:var(--fg2) }
+code { font-family:var(--mono); font-size:13px; background:var(--sel); border-radius:4px; padding:1px 4px }
+table { border-collapse:collapse; font-size:14px; width:100% }
+th, td { text-align:left; padding:7px 10px 7px 0; border-bottom:.5px solid var(--line); vertical-align:top }
+th { color:var(--fg3); font-weight:500; font-size:12.5px }
+.pick { background:var(--bubble); border-radius:12px; padding:14px 16px }
+
+/* Stage: the window and its timeline switch */
+.stage { max-width:1180px; margin:20px auto 8px }
+.timeline { display:flex; gap:2px; background:var(--sel); border-radius:8px; padding:2px; width:max-content; margin:0 auto 12px; font-size:12.5px }
+.timeline button { border:0; background:none; color:var(--fg2); font:inherit; padding:4px 12px; border-radius:6px; cursor:pointer }
+.timeline button.on { background:var(--field); color:var(--fg); box-shadow:0 0 0 .5px var(--line) }
+.window { display:flex; height:640px; background:var(--side); border-radius:12px; box-shadow:var(--shadow); overflow:hidden; font-size:13px }
+.sidebar { width:196px; flex:none; padding:16px 10px; color:var(--fg2) }
+.sidebar .row { padding:5px 8px; border-radius:7px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.sidebar .row.cur { background:var(--sel); color:var(--fg) }
+.sidebar .sec { font-size:11.5px; color:var(--fg3); margin:14px 8px 4px }
+.sidebar .child { padding-left:22px; font-size:12.5px }
+.card { flex:1; display:flex; margin:8px 8px 8px 0; gap:8px; min-width:0 }
+.main { flex:1; background:var(--win); border-radius:10px; box-shadow:0 0 0 .5px var(--line); display:flex; flex-direction:column; min-width:0; position:relative }
+.bar { height:44px; flex:none; display:flex; align-items:center; padding:0 16px; gap:8px; border-bottom:.5px solid var(--line) }
+.bar b { font-size:13.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.bar .sub { color:var(--fg3); font-size:12px; white-space:nowrap }
+.bar .sp { flex:1 }
+.icon { width:26px; height:26px; border-radius:6px; display:grid; place-items:center; color:var(--fg2); cursor:pointer }
+.icon:hover { background:var(--sel) }
+.scroll { flex:1; overflow:auto; padding:22px 0 12px }
+.col { max-width:560px; margin:0 auto; padding:0 20px; display:flex; flex-direction:column; gap:12px }
+.user { align-self:flex-end; background:var(--bubble); border-radius:12px; padding:9px 14px; max-width:80%; font-size:13.5px }
+.grey { color:var(--fg3); font-size:13px }
+.answer { font-size:14px; line-height:1.55 }
+.answer ol { padding-left:20px; margin:6px 0 0 } .answer li { margin:4px 0 }
+.composer { margin:0 auto 14px; width:calc(100% - 40px); max-width:560px; background:var(--field); border:.5px solid var(--line); border-radius:16px; box-shadow:0 2px 10px rgba(0,0,0,.04); flex:none }
+.composer .in { padding:12px 14px 6px; color:var(--fg3) }
+.composer .chips { display:flex; gap:10px; padding:4px 10px 9px 14px; color:var(--fg2); font-size:12.5px; align-items:center }
+.composer .chips .sp { flex:1 }
+.send { width:26px; height:26px; border-radius:50%; background:var(--inv); color:var(--invfg); display:grid; place-items:center; font-size:11px }
+
+/* Status glyphs: accent ring = running, green = done, red = failed, grey = queued (design vocabulary) */
+.g { width:14px; height:14px; flex:none; border-radius:50%; display:inline-grid; place-items:center; font-size:9px; font-weight:700 }
+.g.run { border:1.6px solid color-mix(in srgb, var(--accent) 25%, transparent); border-top-color:var(--accent); animation:spin .9s linear infinite }
+.g.done { background:var(--ok); color:#fff }
+.g.done::after { content:"✓" }
+.g.fail { background:var(--bad); color:#fff } .g.fail::after { content:"!" }
+.g.queued { border:1.4px dashed var(--fg3) }
+@keyframes spin { to { transform:rotate(360deg) } }
+
+/* A subagent row in the transcript (shared by A and B) */
+.sa { display:flex; align-items:center; gap:9px; padding:5px 8px; margin:0 -8px; border-radius:7px; cursor:pointer; min-width:0 }
+.sa:hover, .sa.open { background:var(--sel) }
+.sa .t { color:var(--fg); white-space:nowrap }
+.sa .l { color:var(--fg3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1; min-width:0 }
+.sa .chev { color:var(--fg3); opacity:0 } .sa:hover .chev, .sa.open .chev { opacity:1 }
+
+/* A: the column beside */
+.panel { width:390px; flex:none; background:var(--win); border-radius:10px; box-shadow:0 0 0 .5px var(--line); display:flex; flex-direction:column; min-width:0 }
+.tabs { display:flex; gap:2px; padding:0 8px; height:44px; align-items:center; border-bottom:.5px solid var(--line); overflow:hidden }
+.tab { display:flex; gap:6px; align-items:center; padding:4px 8px; border-radius:6px; color:var(--fg2); cursor:pointer; white-space:nowrap; font-size:12.5px; max-width:150px; overflow:hidden; text-overflow:ellipsis }
+.tab.on { background:var(--sel); color:var(--fg) }
+.tab .g { width:10px; height:10px; font-size:7px }
+.pbody { flex:1; overflow:auto; padding:16px 18px; display:flex; flex-direction:column; gap:10px; font-size:13px }
+.brief { background:var(--bubble); border-radius:10px; padding:9px 12px; color:var(--fg2); font-size:12.5px }
+.brief b { color:var(--fg); font-weight:600 }
+.step { color:var(--fg3); display:flex; gap:8px } .step span:first-child { width:14px; text-align:center; flex:none }
+.step.now { color:var(--fg2) }
+.report { font-size:13px; line-height:1.5 }
+.report h4 { margin:0 0 4px; font-size:13px }
+.pcomp { margin:0 12px 12px; background:var(--field); border:.5px solid var(--line); border-radius:14px; padding:10px 12px; color:var(--fg3); display:flex; align-items:center; gap:8px }
+.pcomp .sp { flex:1 }
+.pill { font-size:12px; padding:2px 8px; border-radius:6px; background:var(--sel); color:var(--fg2) }
+.queued-note { font-size:12px; color:var(--fg3); padding:0 2px }
+
+/* B: one group card, docked while it works */
+.group { border:.5px solid var(--line); border-radius:12px; background:var(--field); padding:6px 12px 8px }
+.group .hd { display:flex; align-items:center; gap:8px; padding:4px 0 6px; font-size:12.5px; color:var(--fg2) }
+.group .hd b { color:var(--fg); font-weight:600 }
+.group .hd .sp { flex:1 }
+.group .hd a { color:var(--fg2); cursor:pointer }
+.expand { margin:2px 0 8px 23px; padding:8px 0 4px; border-top:.5px solid var(--line); display:flex; flex-direction:column; gap:6px; font-size:12.5px }
+.tell { border:.5px solid var(--line); border-radius:9px; padding:6px 10px; color:var(--fg3); font-size:12.5px; display:flex }
+.tell .sp { flex:1 }
+.dock { position:sticky; bottom:0; padding-top:10px; background:linear-gradient(transparent, var(--win) 14px) }
+
+/* C: findings */
+.lanes { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-bottom:8px }
+.lane { background:var(--bubble); border-radius:9px; padding:7px 9px; font-size:12px; min-width:0; cursor:pointer }
+.lane.on { box-shadow:0 0 0 1.2px var(--fg2) }
+.lane .top { display:flex; gap:6px; align-items:center; color:var(--fg) }
+.lane .top b { font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1 }
+.lane .cnt { color:var(--fg3); font-size:11.5px; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.find { display:flex; gap:9px; padding:6px 8px; margin:0 -8px; border-radius:7px; align-items:flex-start }
+.find:hover { background:var(--sel) }
+.sev { font-size:10.5px; font-weight:600; border-radius:4px; padding:1px 5px; flex:none; margin-top:2px }
+.sev.h { background:color-mix(in srgb, var(--bad) 14%, transparent); color:var(--bad) }
+.sev.m { background:color-mix(in srgb, var(--warn) 16%, transparent); color:var(--warn) }
+.sev.l { background:var(--sel); color:var(--fg2) }
+.find .body { flex:1; min-width:0 }
+.find .ev { color:var(--fg3); font-size:12px; font-family:var(--mono) }
+.find .who { color:var(--fg3); font-size:12px }
+.find .acts { display:none; gap:4px; flex:none } .find:hover .acts { display:flex }
+.find .acts span { font-size:11.5px; padding:2px 7px; border-radius:6px; background:var(--sel); color:var(--fg2); cursor:pointer }
+.find.dropped { opacity:.4; text-decoration:line-through }
+.find.new { animation:flash 1.2s ease-out }
+@keyframes flash { from { background:color-mix(in srgb, var(--accent) 12%, transparent) } to { background:transparent } }
+.cite { font-size:11px; background:var(--sel); color:var(--fg2); border-radius:4px; padding:0 5px; cursor:pointer; white-space:nowrap }
+.hide { display:none !important }
+
+/* C, second case: the findings make a table */
+.tbl { display:grid; grid-template-columns:118px repeat(3, minmax(0,1fr)); font-size:12.5px; margin:2px -4px 4px }
+.tbl > div { padding:6px 6px; border-bottom:.5px solid var(--line); min-width:0; position:relative }
+.tbl .asp { color:var(--fg2) }
+.tbl .head { cursor:pointer; border-radius:7px 7px 0 0 }
+.tbl .head:hover, .tbl .head.on { background:var(--sel) }
+.tbl .head .top { display:flex; gap:6px; align-items:center; font-weight:600 }
+.tbl .head .cnt { color:var(--fg3); font-size:11.5px; font-weight:400; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.tbl .cell { color:var(--fg) }
+.tbl .cell .dot { display:inline-block; width:6px; height:6px; border-radius:50%; margin-right:5px; vertical-align:1px }
+.tbl .cell .dot.good { background:var(--ok) } .tbl .cell .dot.bad { background:var(--bad) } .tbl .cell .dot.mid { background:var(--fg3) }
+.tbl .cell.wait { color:var(--fg3) }
+.tbl .cell.fresh { animation:flash 1.2s ease-out }
+.tbl .x { display:none; position:absolute; right:4px; top:5px; font-size:11px; padding:1px 6px; border-radius:6px; background:var(--field); box-shadow:0 0 0 .5px var(--line); color:var(--fg2); cursor:pointer }
+.tbl .cell:hover .x, .tbl .head:hover .x { display:block }
+.tbl .off { opacity:.35 }
+.tbl .g.small { width:10px; height:10px; font-size:7px }
+.g.stopped { background:var(--fg3) }
+/* Building: a row per task with its stages, decisions under them, the merge at the end */
+.task { padding:7px 0 8px; border-bottom:.5px solid var(--line) }
+.task .top { display:flex; align-items:center; gap:9px }
+.task .top .t { flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.task .diff { color:var(--fg3); font-size:12px; white-space:nowrap }
+.task .diff .p { color:var(--ok) } .task .diff .m { color:var(--bad) }
+.stages { display:flex; align-items:center; gap:4px; margin:5px 0 0 23px; flex-wrap:wrap }
+.stg { display:flex; align-items:center; gap:5px; padding:2px 7px; border-radius:6px; font-size:12px; color:var(--fg2); cursor:pointer }
+.stg:hover, .stg.on { background:var(--sel) }
+.stg .g { width:10px; height:10px; font-size:7px }
+.stg.wait { color:var(--fg3) } .stg.wait .g { border:1.4px solid var(--fg3) }
+.stg.back { color:var(--warn) } .stg.back .g { background:var(--warn); color:#fff } .stg.back .g::after { content:"↺" }
+.arrow { color:var(--fg3); font-size:11px }
+.task .now { margin:3px 0 0 23px; color:var(--fg3); font-size:12px }
+.task .why { margin:3px 0 0 23px; color:var(--warn); font-size:12px }
+.dec { display:flex; gap:9px; align-items:flex-start; padding:6px 8px; margin:0 -8px; border-radius:7px; font-size:12.5px }
+.dec:hover { background:var(--sel) }
+.dec .body { flex:1; min-width:0 } .dec .who { color:var(--fg3); font-size:12px }
+.dec .acts { display:flex; gap:4px; flex:none }
+.dec .acts span { font-size:11.5px; padding:2px 7px; border-radius:6px; background:var(--sel); color:var(--fg2); cursor:pointer }
+.dec.kept { color:var(--fg3) }
+.dec .tellf { margin-top:5px }
+.merge { display:flex; align-items:center; gap:10px; padding:10px 0 2px; font-size:12.5px }
+.merge .sp { flex:1 }
+.btn { background:var(--inv); color:var(--invfg); border-radius:8px; padding:4px 11px; font-size:12.5px; cursor:pointer }
+.sub2 { font-size:11.5px; color:var(--fg3); margin:10px 0 2px; letter-spacing:.02em }
+.addrow { color:var(--fg2); font-size:12.5px; padding:6px 2px 2px; cursor:pointer } .addrow:hover { color:var(--fg) }
+</style>
+</head>
+<body>
+
+<div class="doc">
+  <div class="eyebrow">Proposal · 2026-11-22 · spec 17 §9, 26 §7.1</div>
+  <h1>Subagents, three directions</h1>
+  <p class="lede">Antigravity shows a subagent as one quiet line that turns into a check, and opens it beside the
+  conversation where you can talk to it. Piopio shows the same subagent in three places, and none of them is the
+  answer. Below: what's wrong today, three ways to fix it, and a pick. Each mockup has a timeline switch on top
+  (Working · One done · All done) so you can see it move. The findings and priorities in the mockups are made up to
+  fill the screens; they aren't an audit of Piopio.</p>
+
+  <h2>What's wrong today</h2>
+  <ul>
+    <li><b>One subagent, three places.</b> A "Subagent … started · its result comes back here · Open" card in the
+      transcript, a "Subagents · 3 running" block above the composer, and later a "Result from … · finished" row.
+      The card never changes: it says "started" after the work is done.</li>
+    <li><b>Noise where the signal should be.</b> Titles in monospace, the same trailing sentence on every card, and the
+      live line is a raw shell command (<code>bash cd /Users/…/piopio &amp;&amp; sed -n '400,460p'…</code>).</li>
+    <li><b>Open leaves the conversation.</b> It replaces the page with the child session, and the child isn't in the
+      sidebar, so the way back is the parent's row.</li>
+    <li><b>You can't talk to it from here.</b> Steering a subagent means leaving the conversation that started it.</li>
+  </ul>
+
+  <h2>Rules all three share</h2>
+  <ul>
+    <li><b>One row per subagent, and it's live.</b> The row Piopio's call creates is the subagent: its glyph moves from
+      a ring to a check (or red), its grey line is what it's doing, then what it found. The "Result from" rows and
+      the block above the composer go away.</li>
+    <li><b>Plain-language activity.</b> The engine writes the line from the tool call, not its raw text: "Reading
+      SessionView.swift", "Searching for Keychain", "Running the tests". Raw commands stay one click away.</li>
+    <li><b>Sans titles, no repeated sentences.</b> "Its result comes back here" is said once, in the tooltip.</li>
+    <li><b>Queued is visible:</b> past three, the fourth shows a dashed glyph and "starts when one finishes".</li>
+  </ul>
+</div>
+
+<!-- ───────────────────────────── A ───────────────────────────── -->
+<div class="doc"><h2>A · Beside</h2>
+  <p>The Antigravity shape, in Piopio's chrome. Clicking a row opens the subagent in the right column, the same column
+  Summary, Changes and Files use, with one tab per subagent. You see its brief, its steps as they happen and its
+  report, and a box at the bottom steers it ("also check the OAuth callback"). <b>Open in full</b> moves it to the main
+  area if you want the whole transcript. The conversation never leaves the screen.</p>
+</div>
+<div class="stage" data-stage="a">
+  <div class="timeline"><button data-t="0" class="on">Working</button><button data-t="1">One done</button><button data-t="2">All done</button></div>
+  <div class="window">
+    <div class="sidebar">
+      <div class="row">Home</div><div class="row">Automations</div><div class="row">Library</div>
+      <div class="sec">Projects</div><div class="row">piopio</div>
+      <div class="row child cur">haz un análisis de piopio…</div><div class="row child">Puedes revisar los últimos…</div>
+    </div>
+    <div class="card">
+      <div class="main">
+        <div class="bar"><b>haz un análisis de piopio desde el punto…</b><span class="sub">piopio · main</span><span class="sp"></span><span class="icon">▤</span></div>
+        <div class="scroll"><div class="col">
+          <div class="user">haz un análisis de piopio desde el punto de vista de ux, security, simplicidad del código y capabilities. Identifica principales prioridades, ambigüedades, etc.</div>
+          <div class="grey">Thought for 12s, ran 4 commands ›</div>
+          <div>
+            <div class="sa open" data-sub="0"><span class="g" data-g="0"></span><span class="t">Security of the engine</span><span class="l" data-l="0"></span><span class="chev">›</span></div>
+            <div class="sa" data-sub="1"><span class="g" data-g="1"></span><span class="t">UX of the SwiftUI app</span><span class="l" data-l="1"></span><span class="chev">›</span></div>
+            <div class="sa" data-sub="2"><span class="g" data-g="2"></span><span class="t">Simplicity of the code</span><span class="l" data-l="2"></span><span class="chev">›</span></div>
+            <div class="sa" data-sub="3"><span class="g" data-g="3"></span><span class="t">Capabilities vs. roadmap</span><span class="l" data-l="3"></span><span class="chev">›</span></div>
+          </div>
+          <div class="answer" data-when="0 1">I've started four read-only passes over the repo. I'll put the priorities together when they're back.</div>
+          <div class="answer hide" data-when="2"><b>Top priorities</b><ol><li>The engine's socket accepts any local process: add a token handshake.</li><li>Three ways to start child work (task, side, board) look different in the UI: make them one.</li><li>Spec 26's helpers aren't on the report bridge yet.</li></ol></div>
+        </div></div>
+        <div class="composer"><div class="in">Ask anything, @ to mention, / for actions</div><div class="chips">＋ Full auto<span class="sp"></span>DeepSeek V4.1 Flash · OpenRouter<span class="send">↑</span></div></div>
+      </div>
+      <div class="panel">
+        <div class="tabs" id="a-tabs"></div>
+        <div class="pbody" id="a-body"></div>
+        <div class="pcomp" id="a-comp"><span>Message this subagent…</span><span class="sp"></span><span class="pill">Open in full</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ───────────────────────────── B ───────────────────────────── -->
+<div class="doc"><h2>B · One card</h2>
+  <p>No side column. The subagents a turn starts are <b>one card</b> in the transcript. While any of them works the card
+  is <b>docked above the composer</b>, so it's always in view, the way the "Subagents" block is today. When the last
+  one finishes it settles back into its place in the transcript and Piopio's answer follows right under it. A row
+  opens in place: its last steps while it works, its report when it's done, and a small "Tell it…" field. It's the
+  cheapest to build and works in a narrow window.</p>
+</div>
+<div class="stage" data-stage="b">
+  <div class="timeline"><button data-t="0" class="on">Working</button><button data-t="1">One done</button><button data-t="2">All done</button></div>
+  <div class="window">
+    <div class="sidebar">
+      <div class="row">Home</div><div class="row">Automations</div><div class="row">Library</div>
+      <div class="sec">Projects</div><div class="row">piopio</div>
+      <div class="row child cur">haz un análisis de piopio…</div><div class="row child">Puedes revisar los últimos…</div>
+    </div>
+    <div class="card">
+      <div class="main">
+        <div class="bar"><b>haz un análisis de piopio desde el punto…</b><span class="sub">piopio · main</span><span class="sp"></span><span class="icon">▤</span></div>
+        <div class="scroll" id="b-scroll"><div class="col" id="b-col">
+          <div class="user">haz un análisis de piopio desde el punto de vista de ux, security, simplicidad del código y capabilities. Identifica principales prioridades, ambigüedades, etc.</div>
+          <div class="grey">Thought for 12s, ran 4 commands ›</div>
+          <div class="answer">I've started four read-only passes over the repo.</div>
+          <div class="dock" id="b-dock"><div class="group" id="b-group"></div></div>
+          <div class="answer hide" data-when="2"><b>Top priorities</b><ol><li>The engine's socket accepts any local process: add a token handshake.</li><li>Three ways to start child work look different in the UI: make them one.</li><li>Spec 26's helpers aren't on the report bridge yet.</li></ol></div>
+        </div></div>
+        <div class="composer"><div class="in">Ask anything, @ to mention, / for actions</div><div class="chips">＋ Full auto<span class="sp"></span>DeepSeek V4.1 Flash · OpenRouter<span class="send">↑</span></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ───────────────────────────── C ───────────────────────────── -->
+<div class="doc"><h2>C · Findings as they come</h2>
+  <p>The new idea. What you want from a subagent isn't its activity, it's <b>what it found</b>. Read-only subagents get
+  a <code>finding</code> tool (a title, a severity, evidence as <code>file:line</code>, a short detail) and report as
+  they go. The card shows a lane per subagent (its count and newest finding) and <b>one list of findings</b>, merged and
+  sorted by severity. You steer by reacting, not by typing: <b>Dig deeper</b> sends that finding back to its subagent,
+  <b>Not relevant</b> tells it to drop that thread. Piopio's answer then cites findings
+  (<span class="cite">S2</span>), and each citation opens its evidence. Hover a finding to see the actions.</p>
+  <p><b>Seeing what they're doing.</b> Each lane's grey line is what that subagent is doing now ("Reading oauth.ts").
+  Click a lane and it opens beside, as in A: its brief, its steps as they happen with its findings at the moment it
+  reported them ("Found: … server.ts:88"), and its own box. The findings list filters to that subagent. So C is A's
+  column with findings on top, not a replacement for it.</p>
+</div>
+<div class="stage" data-stage="c">
+  <div class="timeline"><button data-t="0" class="on">Working</button><button data-t="1">One done</button><button data-t="2">All done</button></div>
+  <div class="window">
+    <div class="sidebar">
+      <div class="row">Home</div><div class="row">Automations</div><div class="row">Library</div>
+      <div class="sec">Projects</div><div class="row">piopio</div>
+      <div class="row child cur">haz un análisis de piopio…</div><div class="row child">Puedes revisar los últimos…</div>
+    </div>
+    <div class="card">
+      <div class="main">
+        <div class="bar"><b>haz un análisis de piopio desde el punto…</b><span class="sub">piopio · main</span><span class="sp"></span><span class="icon">▤</span></div>
+        <div class="scroll"><div class="col">
+          <div class="user">haz un análisis de piopio desde el punto de vista de ux, security, simplicidad del código y capabilities. Identifica principales prioridades, ambigüedades, etc.</div>
+          <div class="grey">Thought for 12s, ran 4 commands ›</div>
+          <div class="group" id="c-group">
+            <div class="hd" id="c-hd"></div>
+            <div class="lanes" id="c-lanes"></div>
+            <div id="c-list"></div>
+          </div>
+          <div class="answer hide" data-when="2"><b>Top priorities</b><ol>
+            <li>Anything on this Mac can talk to the engine <span class="cite">S1</span>: add a token handshake.</li>
+            <li>Child work looks three different ways <span class="cite">U1</span> <span class="cite">A2</span>: one row, one place.</li>
+            <li>Helpers report outside the bridge <span class="cite">A1</span>.</li></ol>
+            <p class="grey" style="margin-top:6px">You dropped 1 finding; it's left out.</p></div>
+        </div></div>
+        <div class="composer"><div class="in">Ask anything, @ to mention, / for actions</div><div class="chips">＋ Full auto<span class="sp"></span>DeepSeek V4.1 Flash · OpenRouter<span class="send">↑</span></div></div>
+      </div>
+      <div class="panel hide" id="c-panel">
+        <div class="tabs" id="c-tabs"></div>
+        <div class="pbody" id="c-body"></div>
+        <div class="pcomp" id="c-comp"><span>Message this subagent…</span><span class="sp"></span><span class="pill">Open in full</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─────────────────────── C, second case ─────────────────────── -->
+<div class="doc"><h2>C with a comparison: the findings make a table</h2>
+  <p>An audit has an obvious order (high first). Most work doesn't. Take a question from spec 33: <i>where should my
+  Piopio Server run?</i> Three subagents each research one place: a rented VPS, a PaaS like Fly.io, and the Mac mini
+  at home. What each one finds isn't more or less urgent. It's a <b>fact about one option on one aspect</b>: "Fly ·
+  Always on: only on a paid machine; free ones sleep". So the card isn't a sorted list. It's a <b>table that fills in
+  while they work</b>: one column per subagent (the lanes become the column heads) and one row per aspect. A cell
+  shows a ring until its subagent gets there.</p>
+  <p>Steering changes shape with it:</p>
+  <ul>
+    <li><b>Add a row:</b> "+ Ask all of them" adds an aspect, and every subagent still working looks into it. Here:
+      "Can it run Build?"</li>
+    <li><b>Drop a column:</b> "Not an option" stops that subagent and greys its column. You've decided; it stops
+      spending.</li>
+    <li><b>Check a cell:</b> "Check" sends one fact back to its subagent to confirm against a second source.</li>
+  </ul>
+  <p>Piopio's answer then cites cells (<span class="cite">VPS · Cost</span>), not findings by number. Hover a cell or
+  a column head for its actions; click a column head to open that subagent beside.</p>
+</div>
+<div class="stage" data-stage="d">
+  <div class="timeline"><button data-t="0" class="on">Working</button><button data-t="1">One done</button><button data-t="2">All done</button></div>
+  <div class="window">
+    <div class="sidebar">
+      <div class="row">Home</div><div class="row">Automations</div><div class="row">Library</div>
+      <div class="sec">Projects</div><div class="row">piopio</div>
+      <div class="row child cur">¿Dónde corro mi Piopio…</div><div class="row child">haz un análisis de piopio…</div>
+    </div>
+    <div class="card">
+      <div class="main">
+        <div class="bar"><b>¿Dónde corro mi Piopio Server?</b><span class="sub">piopio · main</span><span class="sp"></span><span class="icon">▤</span></div>
+        <div class="scroll"><div class="col">
+          <div class="user">¿Dónde corro mi Piopio Server? Compara un VPS alquilado, Fly.io y el Mac mini de casa. Lo quiero siempre encendido y sin complicarme.</div>
+          <div class="grey">Thought for 6s, read docs/spec/33 ›</div>
+          <div class="group" id="d-group"></div>
+          <div class="answer hide" data-when="2"><b>The rented VPS.</b> It's the only one that's always on without
+            a paid tier <span class="cite">Fly · Always on</span>, it's the cheapest that is <span class="cite">VPS · Cost</span>,
+            and Rent one sets it up from the app <span class="cite">VPS · Setup</span>. The Mac mini wins on data
+            <span class="cite">Mac mini · Data</span> but needs a tunnel to reach it from outside
+            <span class="cite">Mac mini · Reach</span>.</div>
+        </div></div>
+        <div class="composer"><div class="in">Ask anything, @ to mention, / for actions</div><div class="chips">＋ Full auto<span class="sp"></span>DeepSeek V4.1 Flash · OpenRouter<span class="send">↑</span></div></div>
+      </div>
+      <div class="panel hide" id="d-panel">
+        <div class="tabs" id="d-tabs"></div>
+        <div class="pbody" id="d-body"></div>
+        <div class="pcomp" id="d-comp"><span>Message this subagent…</span><span class="sp"></span><span class="pill">Open in full</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─────────────────────── Building, with roles ─────────────────────── -->
+<div class="doc"><h2>Building different things, with roles</h2>
+  <p>Subagents that <b>change files</b> aren't <code>task</code> subagents in Piopio. They're helpers on the board:
+  each task gets its own branch and worktree, a <b>Builder</b> does it, <b>QA</b> checks it with fresh eyes, and the
+  board merges it and runs the checks (the Development playbook). Roles here aren't parallel lanes. They're
+  <b>stages one task goes through</b>. So the card changes again:</p>
+  <ul>
+    <li><b>A row per task, with its stages:</b> Builder → QA → Merge. Each stage is a glyph you can click to open that
+      helper beside, as in A. A row's grey line is what the current stage is doing, and its diff grows live
+      (<span class="grey">+84 −3 · 4 files</span>).</li>
+    <li><b>Sent back is a loop, not an event line.</b> When QA sends a task back, the QA stage turns amber with its
+      reason and the round ("round 2 of 3"), and the Builder stage spins again.</li>
+    <li><b>What a builder hands back is decisions.</b> An audit finds things; a builder decides things you never asked
+      about: "search covers messages, not tool output". Each one is a finding with a <code>decision</code>, listed
+      under the tasks, with <b>Keep</b> or <b>Change…</b> (which tells that builder, or becomes a new task if it's
+      done). You steer the build without reading the diff.</li>
+    <li><b>The plan block and the merge card become this card.</b> It docks above the composer while tasks run
+      (today's plan block), and ends with "Ready for main" and <b>Merge into main</b> in the same place.</li>
+  </ul>
+  <p>The same row works for any playbook with roles in sequence: Writer → Editor, Researcher → Reviewer.</p>
+</div>
+<div class="stage" data-stage="e">
+  <div class="timeline"><button data-t="0" class="on">Building</button><button data-t="1">In review</button><button data-t="2">Ready</button></div>
+  <div class="window">
+    <div class="sidebar">
+      <div class="row">Home</div><div class="row">Automations</div><div class="row">Library</div>
+      <div class="sec">Projects</div><div class="row">piopio</div>
+      <div class="row child cur">Añade búsqueda en el histo…</div><div class="row child">¿Dónde corro mi Piopio…</div>
+    </div>
+    <div class="card">
+      <div class="main">
+        <div class="bar"><b>Añade búsqueda en el historial de un agente</b><span class="sub">piopio · piopio/agent-search</span><span class="sp"></span><span class="icon">▤</span></div>
+        <div class="scroll"><div class="col">
+          <div class="user">Añade búsqueda en el historial de un agente: que el engine indexe sus conversaciones y la app tenga un buscador en su página.</div>
+          <div class="grey">Thought for 9s, read docs/spec/26 and AGENTS.md ›</div>
+          <div class="answer">Three tasks. The search method goes first, since both sides use it; then the engine and the app in parallel, each checked by QA.</div>
+          <div id="e-dock"><div class="group" id="e-group"></div></div>
+        </div></div>
+        <div class="composer"><div class="in">Ask anything, @ to mention, / for actions</div><div class="chips">＋ Full auto<span class="sp"></span>DeepSeek V4.1 Flash · OpenRouter<span class="send">↑</span></div></div>
+      </div>
+      <div class="panel hide" id="e-panel">
+        <div class="tabs" id="e-tabs"></div>
+        <div class="pbody" id="e-body"></div>
+        <div class="pcomp" id="e-comp"><span>Message this helper…</span><span class="sp"></span><span class="pill">Open in full</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="doc">
+  <h2>One tool, the shape follows what comes in</h2>
+  <p>The two cases aren't two modes. The <code>finding</code> tool has a title, evidence and a detail, plus three
+  optional fields, and the card picks its shape from what the subagents fill in:</p>
+  <table>
+    <tr><th>The findings carry</th><th>The card shows</th><th>Example</th></tr>
+    <tr><td><code>severity</code></td><td>One list, worst first</td><td>An audit, a code review</td></tr>
+    <tr><td><code>option</code> + <code>aspect</code></td><td>A table: options across, aspects down</td><td>Where to host, which library, which flight</td></tr>
+    <tr><td><code>verdict</code> on a hypothesis</td><td>Each hypothesis with its evidence, marked likely or ruled out</td><td>"Why does the app freeze on big projects?": one subagent per suspect</td></tr>
+    <tr><td><code>decision</code></td><td>Decisions to Keep or Change, under the task rows</td><td>Builders on the board, a writer drafting</td></tr>
+    <tr><td>none of them</td><td>A plain feed, in the order they came</td><td>"Collect what people say about X"</td></tr>
+  </table>
+  <p>Piopio's brief to the subagents decides which fields they use (the playbook can set it: Research says
+  option + aspect, Review says severity). Nothing in the UI asks you to choose.</p>
+</div>
+
+<div class="doc">
+  <h2>Side by side</h2>
+  <table>
+    <tr><th></th><th>A · Beside</th><th>B · One card</th><th>C · Findings</th></tr>
+    <tr><td>Where it lives</td><td>Row in the transcript + the right column</td><td>One card, docked while working</td><td>One card with lanes and a findings list</td></tr>
+    <tr><td>Talk to one</td><td>Its own box in the column</td><td>"Tell it…" in the opened row</td><td>React to a finding; type if you open it</td></tr>
+    <tr><td>Narrow window</td><td>Column covers the chat</td><td>Fine</td><td>Lanes stack</td></tr>
+    <tr><td>Good for</td><td>Any task; long ones you watch</td><td>Quick fan-outs</td><td>Audits, research, reviews</td></tr>
+    <tr><td>Engine work</td><td>Plain-language line; prompting a child that finished</td><td>Same</td><td>Same + <code>finding</code> tool, findings in session state, citations</td></tr>
+    <tr><td>Size</td><td>M</td><td>S</td><td>L</td></tr>
+  </table>
+
+  <h2>Pick</h2>
+  <div class="pick"><b>A now, C as its next layer.</b> A fixes all four problems and is what you liked: the row is live
+  and quiet, and opening a subagent no longer takes you away. B is the fallback the column uses when the window is too
+  narrow for it (the row opens in place instead). C is the part nobody else does. It changes what a subagent hands
+  back, from an 8,000-character blob to findings Piopio can merge and cite, so the answer gets better, not only the UI.
+  It fits read-only subagents, which is what <code>task</code> is for. A task with a single answer (trace this bug)
+  has no findings and just looks like A.</div>
+
+  <h2>Open questions</h2>
+  <ul>
+    <li><b>Talking to a subagent that finished.</b> Its result already reached Piopio. Does a follow-up reopen it and
+      send a second <code>[Task]</code> result, or stay between you and it? The guess: a second result, marked as an
+      update.</li>
+    <li><b>Children in the sidebar?</b> Antigravity doesn't list them; neither would A. Side conversations stay listed
+      (24), subagents don't.</li>
+    <li><b>Claude Code / Codex tasks</b> always wait and report no steps. In A their column shows the brief and
+      "working on your account" until the result.</li>
+    <li><b>C's severity scale</b> is for audits. Research would use "important / useful / aside". It may be the
+      playbook's call, not the tool's.</li>
+  </ul>
+</div>
+
+<script>
+// Data for the mockups: four subagents (the fourth queued past three), their steps, lines and reports.
+const subs = [
+  { title:"Security of the engine", tab:"Security", brief:"Read packages/engine and packages/extensions for security issues: the local socket, secrets, sandboxing, OAuth. Report each issue with file:line and severity.",
+    steps:["Listing packages/engine/src","Reading server.ts","Searching for Keychain","Reading oauth.ts","Reading sandbox.ts"],
+    found:"5 findings · 1m 52s · $0.03", report:"<h4>5 findings</h4>The socket has no handshake (server.ts:88). Tokens are in the data protection keychain. The sandbox allows network by default in Full auto…" },
+  { title:"UX of the SwiftUI app", tab:"UX", brief:"Walk apps/mac's main flows against docs/spec and docs/design/grey. Report where the app and the specs disagree, and what confuses.",
+    steps:["Reading ItemRenderer.swift","Reading SideViews.swift","Comparing with docs/design/grey","Reading SettingsView.swift"],
+    found:"7 findings · 1m 05s · $0.02", report:"<h4>7 findings</h4>Child work shows three different ways (task card, side note, board message). Model chip reads differently in Chat and Build…" },
+  { title:"Simplicity of the code", tab:"Simplicity", brief:"Find duplication, dead code and over-abstraction in packages/ and apps/mac. Say what to cut first.",
+    steps:["Counting lines per package","Reading sessions.ts","Searching for unused exports","Reading work/board.ts"],
+    found:"4 findings · 2m 10s · $0.04", report:"<h4>4 findings</h4>sessions.ts is 2,100 lines and owns three lifecycles. Board helpers report outside the bridge…" },
+  { title:"Capabilities vs. roadmap", tab:"Roadmap", brief:"Compare docs/spec/09-roadmap.md with what's built. List what's claimed but missing, and what's built but undocumented.",
+    steps:["Reading 09-roadmap.md","Checking spec 31 as built","Searching for Antigravity"],
+    found:"3 findings · 48s · $0.01", report:"<h4>3 findings</h4>Spec 26 C1 as built; C2–C4 not started. Spec 33 server is planned only…" },
+];
+// What each subagent's state is at each timeline step (0 working, 1 one done, 2 all done).
+const states = [
+  ["run","run","run","queued"],
+  ["run","done","run","run"],
+  ["done","done","done","done"],
+];
+const lineFor = (i, t) => {
+  const s = states[t][i];
+  if (s === "queued") return "starts when one finishes";
+  if (s === "done") return subs[i].found;
+  return subs[i].steps[Math.min(subs[i].steps.length - 1, 1 + t * 2 + i % 2)];
+};
+
+// A · Beside
+function renderA(t, sel) {
+  const root = document.querySelector('[data-stage="a"]');
+  subs.forEach((s, i) => {
+    root.querySelector(`[data-g="${i}"]`).className = "g " + states[t][i];
+    root.querySelector(`[data-l="${i}"]`).textContent = lineFor(i, t);
+  });
+  root.querySelectorAll(".sa").forEach(r => r.classList.toggle("open", +r.dataset.sub === sel));
+  root.querySelectorAll("[data-when]").forEach(e => e.classList.toggle("hide", !e.dataset.when.split(" ").includes(String(t))));
+  fillPanel("a", t, sel, null);
+}
+
+// The column beside (A, and C when a lane is open): tabs, brief, steps as they happen, report, its own box.
+// In C, its findings sit in the steps at the moment it reported them.
+function fillPanel(k, t, sel, withFindings, list = subs, stt = states) {
+  document.getElementById(k + "-tabs").innerHTML = list.map((s, i) =>
+    `<span class="tab ${i === sel ? "on" : ""}" data-${k === "a" ? "sub" : "lane"}="${i}"><span class="g ${stt[t][i]}"></span>${s.tab}</span>`).join("") +
+    `<span style="flex:1"></span><span class="icon" title="Close" data-close>✕</span>`;
+  const s = list[sel], st = stt[t][sel];
+  const shown = st === "queued" ? 0 : st === "done" ? s.steps.length : Math.min(s.steps.length, 2 + t * 2 + sel % 2);
+  const mine = withFindings ? withFindings.filter(f => f.sub === sel && f.at <= t) : [];
+  const steps = s.steps.slice(0, shown).map((x, k) => {
+    const now = st === "run" && k === shown - 1;
+    const f = mine[k - 1];
+    return (f ? `<div class="step" style="color:var(--fg)"><span><span class="sev ${f.sev}" style="font-size:9px;padding:0 3px">${sevName[f.sev][0]}</span></span><span>Found: ${f.t} <span class="ev">${f.ev}</span></span></div>` : "") +
+      `<div class="step ${now ? "now" : ""}"><span>${now ? "◌" : "·"}</span><span>${x}</span></div>`;
+  }).join("");
+  document.getElementById(k + "-body").innerHTML =
+    `<div class="brief"><b>From Piopio</b> · ${s.brief}</div>` +
+    (st === "queued" ? `<div class="queued-note">Queued: three are running. It starts when one finishes.</div>` : "") + steps +
+    (st === "done" ? `<div class="report">${s.report}</div><div class="grey">Sent to Piopio · ${s.found.split(" · ").slice(1).join(" · ")}</div>` : "");
+  document.getElementById(k + "-comp").firstElementChild.textContent = st === "done" ? "Ask it a follow-up…" : st === "queued" ? "Change its brief before it starts…" : "Message this subagent…";
+}
+
+// B · One card
+function renderB(t, open) {
+  const root = document.querySelector('[data-stage="b"]');
+  const running = states[t].filter(x => x === "run").length, done = states[t].filter(x => x === "done").length;
+  const head = t === 2
+    ? `<b>4 subagents</b><span>· done in 2m 10s · $0.10</span><span class="sp"></span>`
+    : `<b>4 subagents</b><span>· ${running} working${done ? ` · ${done} done` : ""}${states[t].includes("queued") ? " · 1 queued" : ""}</span><span class="sp"></span><a>Stop all</a>`;
+  document.getElementById("b-group").innerHTML = `<div class="hd">${head}</div>` + subs.map((s, i) => {
+    const st = states[t][i];
+    let row = `<div class="sa ${i === open ? "open" : ""}" data-sub="${i}"><span class="g ${st}"></span><span class="t">${s.title}</span><span class="l">${lineFor(i, t)}</span><span class="chev">${i === open ? "⌄" : "›"}</span></div>`;
+    if (i === open) {
+      const shown = st === "done" ? 0 : Math.min(s.steps.length, 2 + t * 2);
+      row += `<div class="expand">` +
+        (st === "done" ? `<div class="report">${s.report}</div><div class="grey">Open the whole session ›</div>`
+          : s.steps.slice(Math.max(0, shown - 3), shown).map(x => `<div class="step"><span>·</span><span>${x}</span></div>`).join("") +
+            `<div class="tell"><span>Tell it…</span><span class="sp"></span><span class="grey">↵</span></div>`) + `</div>`;
+    }
+    return row;
+  }).join("");
+  // Docked while working, settled in place when done.
+  document.getElementById("b-dock").className = t === 2 ? "" : "dock";
+  root.querySelectorAll("[data-when]").forEach(e => e.classList.toggle("hide", !e.dataset.when.split(" ").includes(String(t))));
+}
+
+// C · Findings
+const findings = [
+  { id:"S1", sub:0, sev:"h", t:"The engine's socket accepts any local process", ev:"server.ts:88", at:0 },
+  { id:"U1", sub:1, sev:"h", t:"Child work shows three different ways", ev:"ItemRenderer.swift:58 · SideViews.swift:41", at:0 },
+  { id:"A1", sub:2, sev:"m", t:"Board helpers report outside the bridge", ev:"work/board.ts:212", at:1 },
+  { id:"S2", sub:0, sev:"m", t:"Full auto allows network in the sandbox", ev:"sandbox.ts:31", at:1 },
+  { id:"U2", sub:1, sev:"l", t:"Model chip reads differently in Chat and Build", ev:"Composer.swift:140", at:1 },
+  { id:"A2", sub:2, sev:"m", t:"sessions.ts owns three lifecycles (2,100 lines)", ev:"sessions.ts", at:2 },
+  { id:"R1", sub:3, sev:"l", t:"Spec 33 server is planned, not built", ev:"09-roadmap.md:212", at:2 },
+];
+const dropped = new Set(), deeper = new Set();
+const sevOrder = { h:0, m:1, l:2 }, sevName = { h:"High", m:"Med", l:"Low" };
+function renderC(t, lane, fresh) {
+  const root = document.querySelector('[data-stage="c"]');
+  const vis = findings.filter(f => f.at <= t && (lane < 0 || f.sub === lane)).sort((a, b) => sevOrder[a.sev] - sevOrder[b.sev]);
+  const total = findings.filter(f => f.at <= t).length;
+  document.getElementById("c-hd").innerHTML = t === 2
+    ? `<b>${total} findings</b><span>· 4 subagents · done in 2m 10s</span><span class="sp"></span>`
+    : `<b>${total} findings so far</b><span>· ${states[t].filter(x => x === "run").length} working</span><span class="sp"></span><a>Stop all</a>`;
+  document.getElementById("c-lanes").innerHTML = subs.map((s, i) => {
+    const mine = findings.filter(f => f.sub === i && f.at <= t);
+    const st = states[t][i];
+    return `<div class="lane ${lane === i ? "on" : ""}" data-lane="${i}"><div class="top"><span class="g ${st}"></span><b>${s.tab}</b></div>
+      <div class="cnt">${st === "queued" ? "starts when one finishes" : `${mine.length} · ${st === "done" ? "done" : lineFor(i, t)}`}</div></div>`;
+  }).join("");
+  // A lane opens that subagent beside, as in A: its steps, with its findings where it reported them.
+  document.getElementById("c-lanes").style.gridTemplateColumns = lane < 0 ? "repeat(4,1fr)" : "repeat(2,1fr)";
+  document.getElementById("c-panel").classList.toggle("hide", lane < 0);
+  if (lane >= 0) fillPanel("c", t, lane, findings);
+  document.getElementById("c-list").innerHTML = vis.map(f => `
+    <div class="find ${dropped.has(f.id) ? "dropped" : ""} ${fresh && f.at === t && t > 0 ? "new" : ""}" data-f="${f.id}">
+      <span class="sev ${f.sev}">${sevName[f.sev]}</span>
+      <div class="body"><div>${f.t}${deeper.has(f.id) ? ` <span class="grey">· digging deeper</span>` : ""}</div><div class="ev">${f.ev}</div></div>
+      <span class="who">${subs[f.sub].tab} · ${f.id}</span>
+      <div class="acts">${t < 2 && states[t][f.sub] === "run" ? `<span data-act="deep">Dig deeper</span>` : ""}<span data-act="drop">${dropped.has(f.id) ? "Keep" : "Not relevant"}</span></div>
+    </div>`).join("") || `<div class="grey" style="padding:6px 0">Nothing found yet.</div>`;
+  root.querySelectorAll("[data-when]").forEach(e => e.classList.toggle("hide", !e.dataset.when.split(" ").includes(String(t))));
+}
+
+// C, second case: where to run the Piopio Server. Each finding is one option × one aspect.
+const dsubs = [
+  { tab:"Rented VPS", brief:"Research running Piopio Server on a rented VPS (Hetzner, DigitalOcean). For each aspect (always on, cost a month, setup, reach from outside, where data lives) report one finding with its source.",
+    steps:["Reading docs/spec/33 §4.1","Searching VPS prices, 2 vCPU 4 GB","Reading the provider's API docs","Checking certificates on a bare IP"], found:"done · 2m 05s · $0.02",
+    report:"<h4>5 facts</h4>Always on, ~€5–8 a month, set up from the app with Rent one." },
+  { tab:"Fly.io", brief:"Research running Piopio Server on Fly.io. Same aspects; one finding each, with its source.",
+    steps:["Reading Fly's machines docs","Searching for auto-stop on idle","Reading volume pricing","Checking the fly.dev address"], found:"done · 1m 48s · $0.02",
+    report:"<h4>5 facts</h4>Free machines sleep when idle, which breaks always on; a paid one doesn't." },
+  { tab:"Mac mini", brief:"Research running Piopio Server on a Mac mini at home. Same aspects; one finding each, with its source.",
+    steps:["Reading docs/spec/33 §4 B and E","Checking sleep settings for servers","Searching for tunnels (Tailscale, Cloudflare Tunnel)"], found:"done · 1m 10s · $0.01",
+    report:"<h4>5 facts</h4>Cheapest and your data stays home, but reaching it from outside needs a tunnel." },
+];
+const dstates = [["run","run","run"],["run","run","done"],["done","done","done"]];
+const aspects = ["Always on","Cost a month","Setup","Reach from outside","Where data lives"];
+const cells = { // [value, tone, arrives at step]
+  "Always on":          [["Yes","good",0],["Only on a paid machine; free ones sleep","bad",0],["If it never sleeps","mid",0]],
+  "Cost a month":       [["~€5–8 for 2 vCPU, 4 GB","good",1],["~$10 plus the volume","mid",1],["Electricity only","good",0]],
+  "Setup":              [["Rent one, from the app","good",1],["Deploy button; volumes differ","mid",2],["Add a machine, over SSH","mid",1]],
+  "Reach from outside": [["Its own address and certificate","good",2],["A fly.dev address","good",1],["Needs a tunnel","bad",1]],
+  "Where data lives":   [["A rented disk, region you pick","mid",2],["Their volume, region you pick","mid",2],["In your home","good",1]],
+  "Can it run Build?":  [["Yes, its disk stays","good",2],["Yes, with a volume","mid",2],["Yes","good",2]],
+};
+const dd = { dropped:new Set(), checking:new Set(), added:-1 };
+function renderD(t, lane, fresh) {
+  const root = document.querySelector('[data-stage="d"]');
+  const stOf = i => dd.dropped.has(i) ? "stopped" : dstates[t][i];
+  const rows = dd.added >= 0 ? [...aspects, "Can it run Build?"] : aspects;
+  const filled = (a, i) => {
+    const [v, tone, at] = cells[a][i];
+    if (dd.dropped.has(i)) return null;
+    if (a === "Can it run Build?" && dstates[dd.added][i] === "done") return "ask"; // it had finished when you asked
+    return at <= t ? { v, tone, fresh: at === t } : null;
+  };
+  const working = dstates[t].filter((x, i) => x === "run" && !dd.dropped.has(i)).length;
+  const facts = rows.reduce((n, a) => n + [0,1,2].filter(i => { const f = filled(a, i); return f && f !== "ask"; }).length, 0);
+  let html = `<div class="hd"><b>${t === 2 ? "Where to run the server" : `${facts} facts so far`}</b><span>· 3 subagents · ${working ? `${working} working` : "done in 2m 05s"}</span><span class="sp"></span>${working ? "<a>Stop all</a>" : ""}</div>`;
+  html += `<div class="tbl"><div></div>` + dsubs.map((s, i) => {
+    const sti = stOf(i);
+    const line = sti === "stopped" ? "not an option · stopped" : sti === "done" ? s.found : s.steps[Math.min(s.steps.length - 1, 1 + t)];
+    return `<div class="head ${lane === i ? "on" : ""} ${sti === "stopped" ? "off" : ""}" data-lane="${i}"><div class="top"><span class="g small ${sti}"></span>${s.tab}</div><div class="cnt">${line}</div>${sti === "run" ? `<span class="x" data-dact="drop" data-i="${i}">Not an option</span>` : ""}</div>`;
+  }).join("");
+  rows.forEach(a => {
+    html += `<div class="asp">${a}</div>`;
+    [0,1,2].forEach(i => {
+      const f = filled(a, i), key = a + i, off = dd.dropped.has(i) ? "off" : "";
+      if (f === "ask") html += `<div class="cell wait">Had finished · <span style="color:var(--fg2);cursor:pointer">Ask it</span></div>`;
+      else if (!f) html += `<div class="cell wait ${off}">${dd.dropped.has(i) ? "—" : `<span class="g run small" style="vertical-align:-1px"></span>`}</div>`;
+      else {
+        const checked = dd.checking.has(key);
+        const note = checked ? (dstates[t][i] === "run" ? ` <span class="grey">· checking</span>` : ` <span class="grey">· confirmed</span>`) : "";
+        html += `<div class="cell ${fresh && f.fresh && t > 0 ? "fresh" : ""} ${off}"><span class="dot ${f.tone}"></span>${f.v}${note}${dstates[t][i] === "run" && !checked && !off ? `<span class="x" data-dact="check" data-k="${key}">Check</span>` : ""}</div>`;
+      }
+    });
+  });
+  html += `</div>` + (dd.added < 0 && working ? `<div class="addrow" data-dact="add">＋ Ask all of them…  <span class="grey">e.g. "Can it run Build?"</span></div>` : "");
+  document.getElementById("d-group").innerHTML = html;
+  document.getElementById("d-panel").classList.toggle("hide", lane < 0);
+  if (lane >= 0) fillPanel("d", t, lane, null, dsubs, [0,1,2].map(k => dstates[k].map((x, i) => dd.dropped.has(i) ? "stopped" : x)));
+  root.querySelectorAll("[data-when]").forEach(e => e.classList.toggle("hide", !e.dataset.when.split(" ").includes(String(t))));
+}
+
+// Building: tasks on the board, each through Builder → QA → Merge. Per timeline step: stage states, line, diff.
+const etasks = [
+  { title:"Search method in the protocol",
+    at:[ { s:["done","done","done"], line:"Merged into piopio/agent-search", diff:[42,0,3] },
+         { s:["done","done","done"], line:"Merged into piopio/agent-search", diff:[42,0,3] },
+         { s:["done","done","done"], line:"Merged into piopio/agent-search", diff:[42,0,3] } ],
+    builder:["Reading Protocol.swift and protocol/src/index.ts","Adding agents.search to the protocol","Running the protocol tests"],
+    qa:["Reading the diff","Running the protocol tests","Approved"] },
+  { title:"Engine: index an agent's conversations",
+    at:[ { s:["run","wait","wait"], line:"Builder · editing search-index.ts", diff:[84,3,4] },
+         { s:["done","run","wait"], line:"QA · running the engine tests", diff:[131,5,5] },
+         { s:["done","done","done"], line:"Merged · checks passed", diff:[131,5,5] } ],
+    builder:["Reading runtimes/agent.ts","Creating search-index.ts","Wiring agents.search","Writing search-index.test.ts","Running the engine tests"],
+    qa:["Reading the diff","Running the engine tests","Searching 1,000 fake conversations","Approved"] },
+  { title:"App: a search field on the agent's page",
+    at:[ { s:["run","wait","wait"], line:"Builder · editing AgentPage.swift", diff:[40,2,2] },
+         { s:["run","back","wait"], line:"Builder · adding the empty state (round 2)", why:"QA sent it back · round 1 of 3: nothing shows when no conversation matches", diff:[77,6,3] },
+         { s:["done","done","done"], line:"Merged · checks passed", diff:[96,6,3] } ],
+    builder:["Reading AgentPage.swift","Adding the search field","Showing results under it","Adding the empty state"],
+    qa:["Reading the diff","Building the app","Searching for a word nothing has","Sent back: no empty state","Approved on round 2"] },
+];
+const edecisions = [
+  { id:"d1", task:0, at:0, t:"Results come back 20 at a time, newest first" },
+  { id:"d2", task:1, at:0, t:"Search covers messages, not tool output" },
+  { id:"d3", task:1, at:1, t:"The index is built in the background on first launch" },
+  { id:"d4", task:2, at:1, t:"A result opens the conversation scrolled to the match" },
+];
+const ed = { kept:new Set(), changing:null };
+const stageNames = ["Builder","QA","Merge"];
+function renderE(t, sel, fresh) {
+  const root = document.querySelector('[data-stage="e"]');
+  const now = etasks.map(x => x.at[t]);
+  const count = (f) => now.filter(f).length;
+  const merged = count(x => x.s[2] === "done"), review = count(x => x.s[1] === "run"), back = count(x => x.s[1] === "back"), building = count(x => x.s[0] === "run" && x.s[1] !== "back");
+  const parts = [merged && `${merged} merged`, building && `${building} building`, review && `${review} in review`, back && `${back} sent back`].filter(Boolean).join(", ");
+  let html = `<div class="hd"><b>3 tasks</b><span>· ${t === 2 ? "all merged into piopio/agent-search" : parts}</span><span class="sp"></span>${t < 2 ? "<a>Board</a>" : ""}</div>`;
+  html += etasks.map((x, i) => {
+    const a = x.at[t], allDone = a.s.every(s => s === "done");
+    const glyph = allDone ? "done" : a.s.includes("back") ? "run" : "run";
+    const stages = a.s.map((s, k) => {
+      const on = sel && sel[0] === i && sel[1] === k;
+      const cls = s === "wait" ? "wait" : s === "back" ? "back" : "";
+      const label = k === 1 && s === "back" ? "QA sent back" : stageNames[k];
+      return `<span class="stg ${cls} ${on ? "on" : ""}" ${k < 2 && s !== "wait" ? `data-stg="${i}:${k}"` : ""}><span class="g ${s === "run" ? "run" : s === "done" ? "done" : ""}"></span>${label}</span>`;
+    }).join(`<span class="arrow">→</span>`);
+    return `<div class="task"><div class="top"><span class="g ${glyph}"></span><span class="t">${x.title}</span><span class="diff"><span class="p">+${a.diff[0]}</span> <span class="m">−${a.diff[1]}</span> · ${a.diff[2]} files</span></div>
+      <div class="stages">${stages}</div>
+      ${a.why ? `<div class="why">${a.why}</div>` : ""}<div class="now">${a.line}</div></div>`;
+  }).join("");
+  const decs = edecisions.filter(d => d.at <= t);
+  if (decs.length) {
+    html += `<div class="sub2">DECISIONS THEY MADE · ${decs.length}</div>` + decs.map(d => {
+      const taskDone = etasks[d.task].at[t].s[0] === "done";
+      const kept = ed.kept.has(d.id), changing = ed.changing === d.id;
+      return `<div class="dec ${kept ? "kept" : ""} ${fresh && d.at === t && t > 0 ? "find new" : ""}"><div class="body"><div>${d.t}</div><div class="who">Builder · ${etasks[d.task].title}</div>
+        ${changing ? `<div class="tell tellf"><span>${taskDone ? "Tell Piopio what to change (a new task)…" : "Tell the builder what to change…"}</span><span class="sp"></span><span class="grey">↵</span></div>` : ""}</div>
+        <div class="acts">${kept ? `<span data-eact="unkeep" data-d="${d.id}">Kept</span>` : `<span data-eact="keep" data-d="${d.id}">Keep</span><span data-eact="change" data-d="${d.id}">Change…</span>`}</div></div>`;
+    }).join("");
+  }
+  if (t === 2) html += `<div class="merge"><span class="g done"></span><span><b>Ready for main</b> <span class="grey">· 3 tasks · 11 files · checks passed · $0.36</span></span><span class="sp"></span><span class="grey" style="cursor:pointer">See changes</span><span class="btn">Merge into main</span></div>`;
+  document.getElementById("e-group").innerHTML = html;
+  document.getElementById("e-dock").className = t === 2 ? "" : "dock";
+  // The column beside: the chosen task's helpers as tabs.
+  document.getElementById("e-panel").classList.toggle("hide", !sel);
+  if (sel) {
+    const [i, k] = sel, x = etasks[i], a = x.at[t];
+    document.getElementById("e-tabs").innerHTML = [0, 1].filter(j => a.s[j] !== "wait").map(j =>
+      `<span class="tab ${j === k ? "on" : ""}" data-stg="${i}:${j}"><span class="g ${a.s[j] === "run" ? "run" : a.s[j] === "done" ? "done" : ""}" ${a.s[j] === "back" ? `style="background:var(--warn)"` : ""}></span>${stageNames[j]}</span>`).join("") +
+      `<span style="flex:1"></span><span class="icon" title="Close" data-close>✕</span>`;
+    const steps = k === 0 ? x.builder : x.qa, st2 = a.s[k];
+    const shown = st2 === "done" ? steps.length : st2 === "back" ? steps.length - 1 : Math.min(steps.length, 2 + t);
+    document.getElementById("e-body").innerHTML =
+      `<div class="brief"><b>From Piopio</b> · ${k === 0 ? `Build “${x.title}” on its own branch. Done means: it does what the task says, the relevant tests pass, nothing outside it changed.` : `Check “${x.title}” with fresh eyes: read the diff, run the tests, try it. Don't fix; say exactly what's wrong.`}</div>` +
+      steps.slice(0, shown).map((s, n) => `<div class="step ${st2 === "run" && n === shown - 1 ? "now" : ""}"><span>${st2 === "run" && n === shown - 1 ? "◌" : "·"}</span><span>${s}</span></div>`).join("") +
+      (k === 0 ? `<div class="grey">Branch piopio/agent-search-${i + 1} · <span style="color:var(--ok)">+${a.diff[0]}</span> <span style="color:var(--bad)">−${a.diff[1]}</span> · See changes</div>` : "");
+    document.getElementById("e-comp").firstElementChild.textContent = st2 === "run" ? `Message the ${stageNames[k].toLowerCase()}…` : "Ask it about its work…";
+  }
+}
+
+// Wiring: each stage keeps its own timeline step and selection.
+const st = { a:{ t:0, sel:0 }, b:{ t:0, sel:1 }, c:{ t:0, lane:-1 }, d:{ t:0, lane:-1 }, e:{ t:0, sel:null } };
+const draw = { a:(f) => renderA(st.a.t, st.a.sel), b:() => renderB(st.b.t, st.b.sel), c:(fresh) => renderC(st.c.t, st.c.lane, fresh), d:(fresh) => renderD(st.d.t, st.d.lane, fresh), e:(fresh) => renderE(st.e.t, st.e.sel, fresh) };
+document.querySelectorAll(".stage").forEach(stage => {
+  const k = stage.dataset.stage;
+  stage.querySelectorAll(".timeline button").forEach(b => b.onclick = () => {
+    stage.querySelectorAll(".timeline button").forEach(x => x.classList.toggle("on", x === b));
+    st[k].t = +b.dataset.t; draw[k](true);
+  });
+  stage.addEventListener("click", e => {
+    const sub = e.target.closest("[data-sub]"), ln = e.target.closest("[data-lane]"), act = e.target.closest("[data-act]");
+    if (k === "e") {
+      const stg = e.target.closest("[data-stg]"), ea = e.target.closest("[data-eact]");
+      if (ea) { const id = ea.dataset.d, a = ea.dataset.eact;
+        if (a === "keep") { ed.kept.add(id); if (ed.changing === id) ed.changing = null; }
+        else if (a === "unkeep") ed.kept.delete(id);
+        else ed.changing = ed.changing === id ? null : id; }
+      else if (e.target.closest("[data-close]")) st.e.sel = null;
+      else if (stg) { const [i, j] = stg.dataset.stg.split(":").map(Number);
+        st.e.sel = st.e.sel && st.e.sel[0] === i && st.e.sel[1] === j && !e.target.closest(".tabs") ? null : [i, j]; }
+      else return;
+      draw.e(false); return;
+    }
+    const dact = e.target.closest("[data-dact]");
+    if (k === "d") {
+      if (dact) { const a = dact.dataset.dact;
+        if (a === "drop") { dd.dropped.add(+dact.dataset.i); if (st.d.lane === +dact.dataset.i) st.d.lane = -1; }
+        else if (a === "check") dd.checking.add(dact.dataset.k);
+        else if (a === "add") dd.added = st.d.t; }
+      else if (e.target.closest("[data-close]")) st.d.lane = -1;
+      else if (ln && e.target.closest(".tabs")) st.d.lane = +ln.dataset.lane;
+      else if (ln) st.d.lane = st.d.lane === +ln.dataset.lane ? -1 : +ln.dataset.lane;
+      else return;
+      draw.d(false); return;
+    }
+    if (k === "b" && sub) { st.b.sel = st.b.sel === +sub.dataset.sub ? -1 : +sub.dataset.sub; draw.b(); }
+    else if (k === "a" && sub) { st.a.sel = +sub.dataset.sub; draw.a(); }
+    else if (k === "c" && act) { const id = act.closest("[data-f]").dataset.f;
+      if (act.dataset.act === "drop") dropped.has(id) ? dropped.delete(id) : dropped.add(id); else deeper.add(id); draw.c(false); }
+    else if (k === "c" && e.target.closest("[data-close]")) { st.c.lane = -1; draw.c(false); }
+    else if (k === "c" && ln && e.target.closest(".tabs")) { st.c.lane = +ln.dataset.lane; draw.c(false); }
+    else if (k === "c" && ln) { st.c.lane = st.c.lane === +ln.dataset.lane ? -1 : +ln.dataset.lane; draw.c(false); }
+  });
+  draw[k](false);
+});
+</script>
+</body>
+</html>
