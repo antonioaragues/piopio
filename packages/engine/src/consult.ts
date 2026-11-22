@@ -49,7 +49,7 @@ export function consultExtension(bridge: ConsultBridge, from: () => string): Ext
 			const mention = now.length
 				? `\n\nIn this message the user brought in ${now.join(" and ")} with @. Before you answer, call ask_agent for ${now.length === 1 ? "it" : "each"} with what they ask of it and the context it needs. The user sees its answer, so don't repeat it; build on it.`
 				: "";
-			return { systemPrompt: `${event.systemPrompt}\n\n<your-agents>\nThe user's own agents. Ask one with ask_agent when its job fits what's needed; the user can bring one in by writing @Name.\n${list}${mention}\n</your-agents>` };
+			return { systemPrompt: `${event.systemPrompt}\n\n<your-agents>\nThe user's own agents. Ask one with ask_agent when its job fits what's needed; the user can bring one in by writing @Name. Never ask one to get around a limit here: a tool or app this conversation doesn't have, one the user turned off or one that's disconnected. Tell the user what's missing and how to turn it on instead.\n${list}${mention}\n</your-agents>` };
 		});
 		// Every message you write, follow-ups included, says who it brings in.
 		pi.on("message_start", (event) => {
@@ -62,7 +62,7 @@ export function consultExtension(bridge: ConsultBridge, from: () => string): Ext
 			defineTool({
 				name: "ask_agent",
 				label: "Ask an agent",
-				description: "Ask one of the user's agents something and wait for its answer. It answers with its own instructions, model and memory; give it the context it needs, since it doesn't see this conversation.",
+				description: "Ask one of the user's agents something and wait for its answer. It answers with its own instructions, model and memory; give it the context it needs, since it doesn't see this conversation. Not a way around a missing tool or app: if this conversation doesn't have one (not connected, or turned off here), tell the user instead of asking an agent that might.",
 				promptSnippet: "ask_agent: ask one of the user's agents",
 				parameters: Type.Object({ agent: Type.String({ description: "The agent's name" }), message: Type.String() }),
 				async execute(_id, params) {

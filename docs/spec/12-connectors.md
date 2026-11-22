@@ -179,3 +179,21 @@ A conversation can turn a connected app (or an MCP server) off for itself only, 
 Summary column: `sessions.configure { toolsOff: ["connector:google-calendar", "mcp:github"] }`. Settings still decides
 what's on; the per-conversation list only takes things away. See docs/design/session-panel (step 3).
 
+
+## When an app isn't there (C6, 2026-11-22)
+
+A Build session that had used Linear lost it overnight (Linear was disconnected). `tool_search` found nothing, so the
+model asked one of the user's agents (Pinpin) whether it had Linear. That's the wrong move. If an app is missing, the
+model tells the user how to get it back. If the user turned an app off, that was their choice, and nothing should get
+around it.
+
+- **The prompt names what's missing, and why.** Every conversation's *Connected apps* section lists the apps it can't
+  use: not connected (connect in Settings › Connectors), not allowed in conversations (Settings › Connectors), or
+  turned off for this conversation (its Tools). An agent sees only the first reason. `unavailable()` in
+  `connectors/tools.ts` builds the list.
+- **Tell, don't work around.** When a task needs a missing app, the model says what's missing and how to turn it on,
+  and leaves that part. It never asks another agent to do it. For an app the user turned off, it doesn't reach the app
+  any other way either: no API, website or command-line tool. An app that was only never connected stays open to normal
+  coding tools (`gh`, `git`) in Build.
+- **`ask_agent` is not a way around a limit.** Its description and the *your agents* section both say so.
+- **A tool turned off in Settings** answers the same way: tell the user, don't try again, don't get it done another way.
