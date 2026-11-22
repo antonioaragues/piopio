@@ -238,7 +238,7 @@ struct RootView: View {
         case .library:
             LibraryPage(engine: engine, item: itemBinding)
         case .app(let path):
-            AppPage(engine: engine, path: path).id(path)
+            AppPage(engine: engine, path: path, back: backFromApp(path)).id(path)
         case .index(.agents) where engine.agents.isEmpty:
             AgentsFirstRun(engine: engine, item: itemBinding)
         case .index(.chats) where engine.threads.isEmpty:
@@ -255,7 +255,7 @@ struct RootView: View {
         case .chat(let id):
             // A conversation about an app opens the app, with the conversation beside it (docs/spec/35 §15).
             if let summary = engine.threads.first(where: { $0.ref.id == id }), let app = summary.app, FileManager.default.fileExists(atPath: app) {
-                AppPage(engine: engine, path: app).id(app)
+                AppPage(engine: engine, path: app, back: backFromApp(app)).id(app)
             } else if let summary = engine.threads.first(where: { $0.ref.id == id }) {
                 ThreadView(engine: engine, thread: engine.thread(summary.ref), summary: summary)
                     .id(id)
@@ -301,6 +301,25 @@ struct RootView: View {
     /// Anything that says this Mac used Piopio before: a model, or something made.
     private var hasHistory: Bool {
         !engine.needsKey || !engine.projects.isEmpty || !engine.threads.isEmpty || !engine.agents.isEmpty
+    }
+
+    /// Back from an app to where you opened it (a conversation, the Library…), named as it is there.
+    private func backFromApp(_ path: String) -> AppBack? {
+        let previous = SidebarItem(raw: previousRaw)
+        let name: String? = switch previous {
+        case .home: "Home"
+        case .library: "Library"
+        case .automations, .automation: "Automations"
+        case .board: "Board"
+        case .index(let section): section.title
+        case .chat(let id): engine.threads.first { $0.ref.id == id }.flatMap { $0.app == path ? nil : $0.title }
+        case .session(let id): engine.buildSessions.first { $0.ref.id == id }?.title
+        case .agent(let id): engine.agents.first { $0.ref.id == id }?.title
+        case .app(let other): other == path ? nil : URL(fileURLWithPath: other).deletingPathExtension().lastPathComponent
+        case .project, .start, .newSession: nil
+        }
+        guard let name else { return nil }
+        return AppBack(name: name) { itemRaw = previousRaw }
     }
 
     /// The item is gone (deleted elsewhere) or not in the catalog yet.

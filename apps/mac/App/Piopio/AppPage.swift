@@ -21,6 +21,8 @@ enum AppFile {
 struct AppPage: View {
     let engine: EngineController
     let path: String
+    /// Where you opened it from, to go back (⌘[).
+    var back: AppBack? = nil
     @State private var app: AppView?
     @State private var problem: String?
     @State private var busy = false
@@ -79,6 +81,17 @@ struct AppPage: View {
 
     private var toolbar: some View {
         HStack(spacing: 8) {
+            if let back {
+                Button(action: back.go) {
+                    // As wide as its name (a long conversation title is cut), so the app's title stays beside it.
+                    HStack(spacing: 3) { Image(systemName: "chevron.left").font(.system(size: 10.5, weight: .semibold)); Text(back.name.count > 32 ? String(back.name.prefix(30)) + "…" : back.name).lineLimit(1) }
+                        .font(.system(size: 13)).foregroundStyle(Color.dsFg2).fixedSize().contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .keyboardShortcut("[", modifiers: .command)
+                .help("Back to \(back.name) (⌘[)")
+                Rectangle().fill(Color.dsLine).frame(width: 0.5, height: 16).padding(.horizontal, 4)
+            }
             Image(systemName: "square.grid.2x2").foregroundStyle(Color.dsFg3)
             Text(app?.title ?? URL(fileURLWithPath: path).deletingPathExtension().lastPathComponent)
                 .font(.system(size: 13, weight: .semibold)).lineLimit(1)
@@ -184,6 +197,12 @@ struct AppPage: View {
         if abs(d.timeIntervalSinceNow) < 6 * 86_400 { return "\(d.formatted(.dateTime.weekday(.abbreviated))) \(d.formatted(date: .omitted, time: .shortened))" }
         return d.formatted(date: .abbreviated, time: .shortened)
     }
+}
+
+/// Where an app was opened from: its name, and how to go back there.
+struct AppBack {
+    let name: String
+    let go: () -> Void
 }
 
 /// Words from a button in an app, for its conversation's box.
