@@ -4,7 +4,8 @@ Status: draft 2026-11-22, from a conversation with the user. The decisions in §
 nothing is built. This spec extends [27](27-automations.md) (automations) and shares one piece with
 [35](35-apps-and-library.md) (an app's `script` source). The model in 27 §3 stays: who runs it, the project, where
 the result goes, what it may do while you're away. Two things are added: a **filter** on the trigger, and **steps**
-in the run.
+in the run. §13 adds a third use of the same script runner, **hooks an agent writes for itself**. It is **pending
+review**: written down so it isn't lost, with nothing decided about whether or when to do it.
 
 **The idea:** an automation's trigger can carry a small filter written in code, so the runner wakes only for the
 events that matter and the rest cost nothing. A run can be a short list of steps, where code steps do the fixed work
@@ -293,3 +294,88 @@ W1 is the smallest useful part, and it also gives 35's L4 its script runner.
 - That models write correct filters from a sentence, and that the backtest catches the misses that matter.
 - Recording step results in pi-durable for agents, and in the work runner for Piopio, with the same shape.
 - Backtesting mail over 30 days against Gmail's and Outlook's rate limits.
+
+## 13. Hooks an agent writes for itself (pending review)
+
+**Status: pending review.** Added 2026-11-22 at the user's request "to look at what we do with it later". Nothing
+here is decided or planned. §13.6 lists what the review should settle.
+
+### 13.1 Where it comes from
+
+The memo (§1) says agents should run as actors, because "the actor model provides runtime isolation, which is
+necessary for self-improving harnesses", meaning an agent that writes its own extensions or hooks on the fly. Piopio
+can't do that safely today:
+
+- **pi extensions run inside the engine's single Node process,** with your permissions and access to every
+  conversation and key. A Build session in a trusted project could write `.pi/extensions/*.ts`, and the next session
+  would load it with no isolation at all. 07 §6 already refuses in-process plugins for this reason.
+- **Agents run on pi-durable,** which can't load pi extensions (07 EX4).
+- **In the cloud,** agent definitions are data, not code (02 §5.2). Each agent is its own Durable Object, so its
+  state is isolated (an actor), but every agent runs the same code.
+
+The isolation that matters here comes from a **sandbox boundary**, a **small blast radius per agent**, and **versions
+you can roll back**, not from the actor model as such. The script runner in §2 already gives all three. So the
+proposal is hooks as scripts, not extensions as code in the engine's process.
+
+### 13.2 The idea
+
+A hook is a script (§2) that runs at a fixed point in an agent's loop. It runs where approvals and budgets already
+run: the tool hook that holds a call for your OK (06 §9) and stops a run at its budget (27 §10).
+
+| Point | Gets | May return |
+|---|---|---|
+| `beforeTool` | The tool's name and arguments, who the agent is talking to, the run or conversation | `allow`, `refuse` with a reason the model sees, or `adjust` with new arguments |
+| `afterTool` | The call and its result | `note` (a line added for the model), or nothing |
+| `onTurnEnd` | The turn's final text and its tool calls | `ok`, or `retry` with a reason (at most once per turn) |
+
+Examples of what an agent might write for itself:
+- "Never email more than 5 people at once"
+- "When I create a task, always add the link to the Notion page"
+- "Refuse `web_fetch` on these domains"
+- "After a booking, note the confirmation number in memory"
+- "Before answering about a date, check the year in my notes"
+
+The car-keeper trial (27 §13) is the kind of mistake this could catch: "the year was wrong", "a reminder went
+stale".
+
+### 13.3 Rules
+
+- **It can only narrow, never widen.** A hook can refuse or adjust a call, but it can't approve one. An adjusted call
+  still goes through the normal approval, as if the model had made it. A hook's own tools are read tools only (§2).
+- **One agent's hooks, one agent's loop.** Hooks live in the agent's folder (`~/Piopio/Agents/<name>/hooks/`) and
+  run only in that agent's conversations and runs. A broken hook can't reach another agent.
+- **Made like everything else.** Hooks come from the agent when you ask ("don't ever email more than five people"),
+  or from `/learn` (32) as a proposal. Either way it's a card with Show code, a **backtest** and Undo. The backtest
+  replays the agent's last 100 tool calls through the hook: "would have refused 2 calls: …, …". Nothing is
+  active until you say yes.
+- **It fails safe.** A hook that throws or times out (1 s per call) counts as `allow`, is logged, and turns itself
+  off after three errors in a row, with a line in Home's Waiting on you. The agent keeps working without it.
+- **Visible.** The agent's Setup lists its hooks, each with on/off, Show code and "refused 4 calls this week".
+  Every refusal or adjustment shows in the transcript as a small step ("Hook *five-recipients* refused this call").
+- **$0.** Hooks run no model.
+
+### 13.4 What it isn't
+
+- Not pi extensions, and not a plugin API. No TypeScript, no npm, nothing loaded into the engine's process.
+- Not a way to change the agent's prompt or tools. Instructions stay in Setup, and know-how stays in skills (26 CL6).
+- Not for Piopio's own sessions in projects. Those already have AGENTS.md, the way of working (26 CL5) and Build's
+  approvals. The review should decide whether that changes.
+
+### 13.5 Where it would fit
+
+After the skills `/learn` writes (PAR12, 32), which most of the value of "self-improving" comes from, as
+[self-improvement.md](../research/self-improvement.md) concludes. And after W1 (§9), which builds the script runner.
+It would be one phase, **W5 · Hooks**: the three hook points in the agent's tool hook, the backtest over past calls,
+the card, Setup's list, and the transcript steps.
+
+### 13.6 For the review
+
+| # | Question | First thought |
+|---|---|---|
+| HK1 | Is it worth it, next to skills and the agent's instructions? A rule in text is followed most of the time; a hook always is. | Only for rules that must always hold (limits, refusals); the rest stays text |
+| HK2 | Allow `adjust`, or only `allow` and `refuse`? | Start with refuse only; add adjust if trials need it |
+| HK3 | May an agent propose a hook on its own, after a correction, or only when you ask? | Only when you ask, or through `/learn` |
+| HK4 | `onTurnEnd` with `retry`: useful, or a way to burn turns? | Leave it out of a first version |
+| HK5 | Piopio's sessions in projects too (§13.4)? | No |
+| HK6 | In the cloud, where QuickJS can run in the Worker? | Later, with 30's sync |
+| HK7 | Does a real agent write useful hooks from a sentence? | Try it on the car keeper before deciding |
