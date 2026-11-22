@@ -54,6 +54,8 @@ class FakeQuery implements AgentQuery {
 		return this.mcp;
 	}
 
+	private costSoFar = 0;
+
 	async interrupt(): Promise<void> {
 		this.interrupted = true;
 	}
@@ -71,7 +73,8 @@ class FakeQuery implements AgentQuery {
 	}
 
 	async *[Symbol.asyncIterator](): AsyncIterator<AgentMessage> {
-		yield { type: "system", subtype: "init", session_id: this.sessionId, model: this.model, permissionMode: this.mode };
+		// PIOPIO_FAKE_CLAUDE_KEY=1: signed in with an API key, not a plan (its cost is spending, CA6).
+		yield { type: "system", subtype: "init", session_id: this.sessionId, model: this.model, permissionMode: this.mode, apiKeySource: process.env.PIOPIO_FAKE_CLAUDE_KEY === "1" ? "ANTHROPIC_API_KEY" : "none" };
 		const messages: AsyncIterable<AgentUserMessage> =
 			typeof this.prompt === "string" ? (async function* (p: string) { yield { type: "user", message: { role: "user", content: p }, parent_tool_use_id: null } as AgentUserMessage; })(this.prompt) : this.prompt;
 		for await (const m of messages) {
@@ -120,7 +123,9 @@ class FakeQuery implements AgentQuery {
 		// "effort?": which effort the session started with (thinking level tests).
 		const answer = text.trim() === "effort?" ? `Effort: ${(this.options.effort as string | undefined) ?? "default"}` : `Echo: ${text}`;
 		yield* this.message([{ type: "text", text: answer }], true);
-		yield { type: "result", subtype: "success", is_error: false, result: `Echo: ${text}`, session_id: this.sessionId, total_cost_usd: 0.01, usage: { input_tokens: 10, output_tokens: 5 } };
+		// As the SDK reports it: the query's running total, $0.01 a turn.
+		this.costSoFar += 0.01;
+		yield { type: "result", subtype: "success", is_error: false, result: `Echo: ${text}`, session_id: this.sessionId, total_cost_usd: this.costSoFar, usage: { input_tokens: 10, output_tokens: 5 } };
 	}
 
 	/** One API message: stream events around the SDK's assistant message, deltas for text. */

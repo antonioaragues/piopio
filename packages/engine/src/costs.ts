@@ -7,7 +7,7 @@ export class ExtraCosts {
 		this.db = new DatabaseSync(file);
 		this.db.exec("CREATE TABLE IF NOT EXISTS extra_costs (at TEXT NOT NULL, scope TEXT NOT NULL, kind TEXT NOT NULL, model TEXT NOT NULL, usd REAL)");
 	}
-	record(kind: "web_search" | "utility", model: string, usd: number | undefined, scope = "app"): void {
+	record(kind: "web_search" | "utility" | "embeddings", model: string, usd: number | undefined, scope = "app"): void {
 		this.db.prepare("INSERT INTO extra_costs VALUES (?, ?, ?, ?, ?)").run(new Date().toISOString(), scope, kind, model, typeof usd === "number" && Number.isFinite(usd) && usd >= 0 ? usd : null);
 	}
 	summary(scope?: string) {

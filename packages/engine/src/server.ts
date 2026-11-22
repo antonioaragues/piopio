@@ -217,10 +217,17 @@ export class Engine {
 		this.browserSites = new BrowserSites(join(options.paths.home, "browser-sites.json"));
 		this.settings = new Settings(join(options.paths.home, "settings.json"));
 		this.hub.utilityChoice = () => this.settings.get().models?.utility;
-		this.memory = new MemoryProviders(join(options.paths.home, "memory.db"), this.mcp, this.settings, async (provider) => {
-			const credential = await this.hub.credentials.read(provider).catch(() => undefined);
-			return credential?.type === "api_key" ? credential.key : undefined;
-		});
+		this.memory = new MemoryProviders(
+			join(options.paths.home, "memory.db"),
+			this.mcp,
+			this.settings,
+			async (provider) => {
+				const credential = await this.hub.credentials.read(provider).catch(() => undefined);
+				return credential?.type === "api_key" ? credential.key : undefined;
+			},
+			// Search by meaning's embeddings, with the other spending outside conversations (Settings › Models › Costs).
+			(model, usd) => this.hub.extraCosts.record("embeddings", model, usd),
+		);
 		// Records written before semantic search (or while offline) get their vectors in the background.
 		setTimeout(() => this.memory.fill(), 15_000).unref();
 		void this.notesFromMemory();

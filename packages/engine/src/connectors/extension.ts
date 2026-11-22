@@ -6,7 +6,7 @@ import { awaitWithContext, type Context } from "@earendil-works/chord/context";
 import { defineTool as defineCodingTool, type ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import { defineExtension, defineTool, section } from "@earendil-works/pi-durable";
 import type { ConnectorHub } from "./hub.js";
-import { connectorsSection, connectorTools, type Confirm } from "./tools.js";
+import { connectorsSection, connectorTools, offeredNow, type Confirm } from "./tools.js";
 import { promptSection, type PromptEvent } from "../tools/prompt-sections.js";
 
 export const CONNECTORS_EXTENSION = "piopio-connectors";
@@ -16,7 +16,8 @@ const TOOL_SEARCH = "tool_search";
 export type CallSite = { conversationId: string; callId: string; context: Context };
 
 export function durableConnectorsExtension(hub: ConnectorHub, scope: "chat" | "agent", confirmFor: (site: CallSite) => Confirm, off: (connector: string) => boolean = () => false) {
-	const tools = connectorTools(hub, scope, off).map((tool) =>
+	// Rebuilt by the agent when this list changes (runtimes/agent.ts), so a calendar connected later brings its tools.
+	const tools = connectorTools(hub, scope, off).filter((t) => offeredNow(t.name, hub, scope, off)).map((tool) =>
 		defineTool({
 			name: tool.name,
 			description: tool.description,
@@ -53,10 +54,24 @@ export function codingConnectorsExtension(hub: ConnectorHub, confirmFor: (callId
 			const active = pi.getActiveTools();
 			if (search && !active.includes(TOOL_SEARCH)) pi.setActiveTools([...active, TOOL_SEARCH]);
 		};
-		pi.on("session_start", () => ensureToolSearch());
+		// The calendar and mail tools only while an account of theirs is on (as a chat's applyMode does): read each turn,
+		// so connecting one later brings them without reopening.
+		const syncOffered = () => {
+			const names = new Set(tools.filter((t) => !t.deferred).map((t) => t.name));
+			const active = pi.getActiveTools();
+			const next = [...active.filter((n) => !names.has(n) || offeredNow(n, hub, "chat", off)), ...[...names].filter((n) => !active.includes(n) && offeredNow(n, hub, "chat", off))];
+			if (next.length !== active.length || next.some((n, i) => n !== active[i])) pi.setActiveTools(next);
+		};
+		const hasSearch = () => pi.getAllTools().some((t) => t.name === TOOL_SEARCH && (t as { reachesTools?: boolean }).reachesTools);
+		pi.on("session_start", () => {
+			ensureToolSearch();
+			syncOffered();
+		});
 		pi.on("before_agent_start", (event) => {
 			ensureToolSearch();
-			promptSection(event as unknown as PromptEvent, "connected-apps", connectorsSection(hub, "chat", off));
+			syncOffered();
+			// The tool_search line only where there is one: a coding agent (Claude Code, Codex) has its own way.
+			promptSection(event as unknown as PromptEvent, "connected-apps", connectorsSection(hub, "chat", off, hasSearch()));
 			return undefined;
 		});
 		for (const tool of tools) {

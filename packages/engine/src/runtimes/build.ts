@@ -269,7 +269,8 @@ export class BuildRuntime implements Runtime {
 						return { decision: response.decision ?? "deny", ...(response.text ? { note: response.text } : {}) };
 					},
 				}),
-				chatProfileExtension(o.hub, o.webOptions, () => o.approvals.mode() === "read_only", () => true),
+				// web_search's cost goes on this conversation, not on "the app" (as an agent's goes on the agent).
+				chatProfileExtension(o.hub, { ...o.webOptions, scope: o.ref.id }, () => o.approvals.mode() === "read_only", () => true),
 				...(o.connectors
 					? [
 							codingConnectorsExtension(o.connectors, (callId, signal) => async (request) => {
@@ -1166,7 +1167,7 @@ function chatFactories(o: BuildOpenOptions, broker: PromptBroker, runtime: () =>
 		presentExtension(),
 		...(o.browser ? [codingBrowserExtension(o.browser, (callId, signal) => (request) => card(callId, signal)({ ...request, always: `Always allow ${request.site}` }))] : []),
 		guardsExtension(),
-		chatProfileExtension(o.hub, o.webOptions, () => false),
+		chatProfileExtension(o.hub, { ...o.webOptions, scope: o.ref.id }, () => false),
 		codingVisualsExtension(o.visuals),
 		...(o.apps ? [codingAppsExtension(o.apps.service, o.apps.where, (callId, signal) => (request) => card(callId, signal)({ ...request, always: "" }))] : []),
 		// Questions for the user get the question card, as in Build, not a form drawn with show_visual.

@@ -21,6 +21,8 @@ export function openAiEmbedder(options: {
 	/** Stored with the vectors; defaults to `model@dims`. */
 	id?: string;
 	fetch?: typeof fetch;
+	/** What a request used, as the server says: its tokens, and its cost when it reports one (OpenRouter does). */
+	onUsage?: (usage: { tokens?: number; costUsd?: number }) => void;
 }): Embedder {
 	const doFetch = options.fetch ?? fetch;
 	return {
@@ -35,7 +37,9 @@ export function openAiEmbedder(options: {
 				body: JSON.stringify({ model: options.model, input: texts.map((t) => t.slice(0, 8000)), dimensions: options.dims }),
 			});
 			if (!res.ok) throw new Error(`Embeddings failed (${res.status}): ${(await res.text()).slice(0, 200)}`);
-			const body = (await res.json()) as { data?: { index?: number; embedding: number[] }[] };
+			const body = (await res.json()) as { data?: { index?: number; embedding: number[] }[]; usage?: { prompt_tokens?: number; total_tokens?: number; cost?: number } };
+			const tokens = body.usage?.prompt_tokens ?? body.usage?.total_tokens;
+			options.onUsage?.({ ...(tokens !== undefined ? { tokens } : {}), ...(typeof body.usage?.cost === "number" ? { costUsd: body.usage.cost } : {}) });
 			const data = [...(body.data ?? [])].sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
 			if (data.length !== texts.length) throw new Error(`Embeddings: asked for ${texts.length}, got ${data.length}`);
 			return data.map((d) => Float32Array.from(d.embedding));

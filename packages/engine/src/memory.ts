@@ -17,6 +17,8 @@ import { transport, withTimeout } from "./tools/mcp-chat.js";
 
 /** The default embedding model (docs/spec/14-memory §5.1): the same model through OpenRouter or the OpenAI API, so vectors match either way. */
 export const EMBEDDING_MODEL = { id: "openai/text-embedding-3-small@256", openrouter: "openai/text-embedding-3-small", openai: "text-embedding-3-small", dims: 256 };
+/** Its list price, for when the server doesn't say what a request cost (docs/spec/14: $0.02 per million tokens). */
+const EMBEDDING_USD_PER_TOKEN = 0.02 / 1_000_000;
 /** Search by meaning is opt-in (docs/spec/14 §7): on when set, or when a custom endpoint is configured. */
 function semanticOn(memory: { semantic?: boolean; localOnly?: boolean; embeddings?: unknown }): boolean {
 	if (memory.localOnly) return false;
@@ -25,6 +27,11 @@ function semanticOn(memory: { semantic?: boolean; localOnly?: boolean; embedding
 
 /** After a failure (no key, offline), recall stays keyword-only this long before trying again. */
 const EMBEDDINGS_RETRY_MS = 60_000;
+
+/** The default embedding model's cost: as the server reports it, else its tokens at the list price. */
+function listed(u: { tokens?: number; costUsd?: number }): number | undefined {
+	return u.costUsd ?? (u.tokens !== undefined ? u.tokens * EMBEDDING_USD_PER_TOKEN : undefined);
+}
 
 export class MemoryProviders {
 	readonly builtin: BuiltinMemory;
@@ -41,6 +48,8 @@ export class MemoryProviders {
 		private readonly settings: Settings,
 		/** A provider's API key (OpenRouter, OpenAI API), read per request so a new key applies at once. */
 		private readonly keyFor: (provider: string) => Promise<string | undefined> = async () => undefined,
+		/** Records what an embeddings request cost (undefined: not known), with the other costs outside conversations. */
+		private readonly recordCost: (model: string, usd: number | undefined) => void = () => {},
 	) {
 		const db = new DatabaseSync(file);
 		// What's deleted is overwritten on disk, not left in free pages: forgetting has to mean it. (Here, not in
@@ -70,7 +79,7 @@ export class MemoryProviders {
 		if (!semanticOn(memory)) return undefined;
 		const custom = memory.embeddings;
 		const inner = custom
-			? openAiEmbedder({ baseUrl: custom.baseUrl, model: custom.model, dims: custom.dims, id: `${custom.model}@${custom.dims}`, key: async () => (custom.provider ? this.keyFor(custom.provider) : undefined) })
+			? openAiEmbedder({ baseUrl: custom.baseUrl, model: custom.model, dims: custom.dims, id: `${custom.model}@${custom.dims}`, key: async () => (custom.provider ? this.keyFor(custom.provider) : undefined), onUsage: (u) => this.recordCost(custom.model, u.costUsd) })
 			: undefined;
 		const tracked: Embedder = {
 			model: inner?.model ?? EMBEDDING_MODEL.id,
@@ -96,12 +105,12 @@ export class MemoryProviders {
 		const openrouter = await this.keyFor("openrouter");
 		if (openrouter) {
 			this.via = "OpenRouter";
-			return openAiEmbedder({ baseUrl: "https://openrouter.ai/api/v1", model: EMBEDDING_MODEL.openrouter, dims: EMBEDDING_MODEL.dims, id: EMBEDDING_MODEL.id, key: async () => openrouter }).embed(texts);
+			return openAiEmbedder({ baseUrl: "https://openrouter.ai/api/v1", model: EMBEDDING_MODEL.openrouter, dims: EMBEDDING_MODEL.dims, id: EMBEDDING_MODEL.id, key: async () => openrouter, onUsage: (u) => this.recordCost(EMBEDDING_MODEL.openrouter, listed(u)) }).embed(texts);
 		}
 		const openai = await this.keyFor("openai-api");
 		if (openai) {
 			this.via = "OpenAI API";
-			return openAiEmbedder({ baseUrl: "https://api.openai.com/v1", model: EMBEDDING_MODEL.openai, dims: EMBEDDING_MODEL.dims, id: EMBEDDING_MODEL.id, key: async () => openai }).embed(texts);
+			return openAiEmbedder({ baseUrl: "https://api.openai.com/v1", model: EMBEDDING_MODEL.openai, dims: EMBEDDING_MODEL.dims, id: EMBEDDING_MODEL.id, key: async () => openai, onUsage: (u) => this.recordCost(EMBEDDING_MODEL.openai, listed(u)) }).embed(texts);
 		}
 		throw new Error("no_key");
 	}

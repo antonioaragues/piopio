@@ -28,19 +28,37 @@ type PromptHandler = (event: { systemPrompt: string; systemPromptOptions: Prompt
 export function collectTools(factories: readonly ExtensionFactory[]): { tools: CapturedTool[]; prompt: () => Promise<string> } {
 	const tools: CapturedTool[] = [];
 	const prompts: PromptHandler[] = [];
+	const starts: (() => unknown)[] = [];
+	// The tools an extension turns on and off (the calendar's only with a calendar): only those on are served.
+	const active = new Set<string>();
 	const api = new Proxy(
 		{
 			registerTool: (tool: CapturedTool) => {
 				tools.push(tool);
+				active.add(tool.name);
+			},
+			getAllTools: () => tools.map((t) => ({ name: t.name })),
+			getActiveTools: () => [...active],
+			setActiveTools: (names: string[]) => {
+				active.clear();
+				for (const name of names) active.add(name);
 			},
 			on: (event: string, handler: PromptHandler) => {
 				if (event === "before_agent_start") prompts.push(handler);
+				if (event === "session_start") starts.push(() => handler({ systemPrompt: "", systemPromptOptions: {} as PromptOptions }, {}));
 			},
 		} as Record<string, unknown>,
 		// Commands, shortcuts, flags and the rest have no place in Claude Code.
 		{ get: (target, key) => (key in target ? target[key as string] : () => undefined) },
 	);
 	for (const factory of factories) void (factory as unknown as (pi: unknown) => unknown)(api);
+	for (const start of starts) {
+		try {
+			void start();
+		} catch {
+			// An extension's start that needs more of pi than this stand-in has.
+		}
+	}
 	// The handlers write pi's named prompt sections (prompt-sections.ts): each one's sections, rendered as pi does.
 	const prompt = async () => {
 		const options: PromptOptions = { selectedTools: [], hiddenTools: [], toolSnippets: {}, toolGuidelines: {}, promptGuidelines: [], sections: {} };
@@ -55,7 +73,7 @@ export function collectTools(factories: readonly ExtensionFactory[]): { tools: C
 		for (const [name, text] of Object.entries(options.sections)) if (text.trim()) parts.push(`<${name}>\n${text}\n</${name}>`);
 		return parts.join("\n\n");
 	};
-	return { tools, prompt };
+	return { tools: tools.filter((t) => active.has(t.name)), prompt };
 }
 
 /**

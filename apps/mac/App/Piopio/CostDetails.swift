@@ -17,7 +17,7 @@ struct CostDetails: View {
             if let extra {
                 LabeledContent("Additional requests", value: money(extra.knownUsd))
                 ForEach(extra.breakdown) { row in
-                    LabeledContent(row.kind == "web_search" ? "Web search (\(row.calls))" : "Utility requests (\(row.calls))", value: money(row.knownUsd))
+                    LabeledContent(row.kind == "web_search" ? "Web search (\(row.calls))" : row.kind == "embeddings" ? "Memory search (\(row.calls))" : "Utility requests (\(row.calls))", value: money(row.knownUsd))
                 }
                 if extra.unknownCalls > 0 { Text("Cost unavailable for \(extra.unknownCalls) request(s). They are excluded from these amounts.").foregroundStyle(Color.dsAmber) }
                 if thread != nil { Text("Additional requests cover this whole conversation or agent, including its branches. Utility work without a conversation belongs to Piopio's app total.") }

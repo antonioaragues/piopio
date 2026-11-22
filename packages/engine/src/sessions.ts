@@ -1959,6 +1959,8 @@ export class Sessions {
 	 */
 	private async suggestFollowUps(entry: CatalogEntry, runtime: Runtime): Promise<void> {
 		if (this.chat?.settings.get().chat.followUps === false) return;
+		// Nobody reads a subagent's, a board helper's or a reviewer's: asking the utility model for them was spending for nothing.
+		if (entry.parent || entry.helper || entry.reviewFor) return;
 		const items = runtime.snapshot().items;
 		const answer = [...items].reverse().find((i) => i.kind === "assistant" && i.status === "done" && i.parts.some((p) => p.type === "text" && p.text.trim()));
 		const asked = [...items].reverse().find((i) => i.kind === "user");

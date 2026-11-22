@@ -66,7 +66,9 @@ covered by Antigravity plans. So the Google agent is Antigravity CLI, phase A3.
 - **CA5 No other provider needed.** Titles, follow-up suggestions and commit messages for a conversation on an agent are
   asked from that agent as a one-off question on its smallest model, so a Mac with only Claude Code works.
 - **CA6 Plan, not spending.** Usage is shown, but an agent's reported cost isn't counted as spending (as AP7 already does
-  for Claude Code tasks). Its billing line is the plan ("Claude Pro plan").
+  for Claude Code tasks). Its billing line is the plan ("Claude Pro plan"). **Except on an API key** (2026-11-23): when
+  Claude Code's `init` says its `apiKeySource` is a key (anything but `none` or `oauth`), what each result's
+  `total_cost_usd` adds to the query's running total is spending, on that turn's answer, so budgets and limits see it.
 - **CA7 Switching between Piopio's agent and a coding agent** works at any point. The new runner starts from a summary of
   the conversation, shown as a line in the transcript ("Now running in Claude Code · it starts from a summary of the 14
   messages above"). Switching back before sending anything is an undo. Switching models inside the same agent keeps its

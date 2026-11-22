@@ -112,6 +112,14 @@ describe("semantic recall (docs/spec/14-memory, M1)", () => {
 		expect([...b!]).toEqual([0, 1]);
 		expect(e.model).toBe("openai/text-embedding-3-small@2");
 	});
+
+	test("it reports what a request used: its tokens, and its cost when the server says", async () => {
+		const reply = (usage: object) => (async () => new Response(JSON.stringify({ data: [{ index: 0, embedding: [1, 0] }], usage }))) as unknown as typeof fetch;
+		const seen: { tokens?: number; costUsd?: number }[] = [];
+		await openAiEmbedder({ baseUrl: "https://openrouter.ai/api/v1", model: "m", dims: 2, key: async () => "k", fetch: reply({ prompt_tokens: 12, total_tokens: 12, cost: 0.0000024 }), onUsage: (u) => seen.push(u) }).embed(["a"]);
+		await openAiEmbedder({ baseUrl: "https://api.openai.com/v1", model: "m", dims: 2, key: async () => "k", fetch: reply({ prompt_tokens: 7, total_tokens: 7 }), onUsage: (u) => seen.push(u) }).embed(["b"]);
+		expect(seen).toEqual([{ tokens: 12, costUsd: 0.0000024 }, { tokens: 7 }]);
+	});
 });
 
 describe("learned facts (docs/spec/14-memory, M2)", () => {

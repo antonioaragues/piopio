@@ -9,7 +9,7 @@
  * changes show result cards with Undo (06 §4.2, §9).
  */
 import { durableConnectorsExtension } from "../connectors/extension.js";
-import { connectorTools } from "../connectors/tools.js";
+import { connectorTools, offeredNow } from "../connectors/tools.js";
 import type { ConnectorHub } from "../connectors/hub.js";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { ConversationBusy, createRegistry, Harness, type Conversation, type ConversationWatch, type Extension, type SubmissionDraft } from "@earendil-works/pi-durable";
@@ -110,7 +110,7 @@ export class AgentRuntime implements Runtime {
 		const toolSearch = createToolSearchExtension() as unknown as Extension;
 		const appExtensions = (): Extension[] => {
 			if (!hub || !(hub.calendars("agent").length || hub.mailboxes("agent").length || hub.mcpUses("agent").length)) return [];
-			const tools = connectorTools(hub, "agent");
+			const tools = connectorTools(hub, "agent").filter((t) => offeredNow(t.name, hub, "agent"));
 			const key = tools.map((t) => `${t.name}${t.deferred ? "*" : ""}`).join(",");
 			if (built?.key !== key) {
 				const apps = durableConnectorsExtension(hub, "agent", () => async () => ({ approved: true })) as unknown as Extension;

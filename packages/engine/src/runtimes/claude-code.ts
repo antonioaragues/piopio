@@ -146,10 +146,15 @@ function imagesOf(content: unknown): PiContentBlock[] {
 	);
 }
 
+/** An API key pays (Anthropic Console, a helper, an org key); a Claude plan signs in with OAuth and reports "none". */
+export function billedByKey(source: unknown): boolean {
+	return typeof source === "string" && source !== "none" && source !== "oauth";
+}
+
 function usageOf(u: unknown): PiUsage | undefined {
 	if (!u || typeof u !== "object") return undefined;
 	const x = u as { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number };
-	// The plan pays, not Piopio's spending (CA6).
+	// A plan pays, not Piopio's spending (CA6); with an API key, the result's total is added (`charge`).
 	return { input: x.input_tokens ?? 0, output: x.output_tokens ?? 0, cacheRead: x.cache_read_input_tokens ?? 0, cacheWrite: x.cache_creation_input_tokens ?? 0, cost: { total: 0 } };
 }
 
@@ -202,6 +207,12 @@ export class ClaudeCodeRuntime implements Runtime {
 	private readonly toolStarted = new Map<string, { name: string; input: Record<string, unknown>; at: number }>();
 	private stderr = "";
 	private busy = false;
+	/**
+	 * Claude Code signed in with an API key (not a plan): what it reports spending is spending (docs/spec/31 CA6 covers
+	 * plans). `spent` is the query's running total already counted; the SDK's `total_cost_usd` is cumulative per query.
+	 */
+	private billed = false;
+	private spent = 0;
 	/** Stopped by the user: the turn's "interrupted" result isn't an error. */
 	private stopping = false;
 	/** The thinking level changed: Claude Code's session restarts (resumed) with the new effort after this turn. */
@@ -327,6 +338,8 @@ export class ClaudeCodeRuntime implements Runtime {
 		const append = piopio ? await piopio.prompt().catch(() => "") : "";
 		this.inbox = new Inbox();
 		this.stderr = "";
+		// A resumed session's first result carries its earlier turns' total, which its messages already count.
+		this.spent = this.stored.sessionId ? this.stored.messages.reduce((sum, m) => sum + (((m as { usage?: PiUsage }).usage?.cost?.total as number | undefined) ?? 0), 0) : 0;
 		this.query = query({
 			prompt: this.inbox,
 			options: {
@@ -383,6 +396,7 @@ export class ClaudeCodeRuntime implements Runtime {
 
 	private apply(m: AgentMessage): void {
 		if (m.parent_tool_use_id) return; // a subagent's inner messages (Claude Code's Task tool): its result arrives as the tool's output
+		if (m.type === "system" && m.subtype === "init") this.billed = billedByKey(m.apiKeySource);
 		if (m.type === "system" && m.subtype === "init" && typeof m.session_id === "string") {
 			if (this.stored.sessionId !== m.session_id) {
 				this.stored.sessionId = m.session_id;
@@ -488,6 +502,7 @@ export class ClaudeCodeRuntime implements Runtime {
 
 	private result(m: AgentMessage): void {
 		this.endAssistant();
+		if (this.billed && typeof m.total_cost_usd === "number") this.charge(m.total_cost_usd);
 		if (this.stopping) this.stopping = false;
 		else if (m.subtype !== "success" || m.is_error === true) {
 			const errors = Array.isArray(m.errors) ? (m.errors as string[]).join(" ") : "";
@@ -507,6 +522,21 @@ export class ClaudeCodeRuntime implements Runtime {
 			this.builder.setState({ queue: this.followUps.map((f, i) => ({ id: `q${i}`, mode: "followUp" as const, text: f.text })) });
 			void this.start(next);
 		}
+	}
+
+	/** What a result's running total adds (a /clear inside Claude Code starts it again), on the turn's last answer. */
+	private charge(total: number): void {
+		const added = total >= this.spent ? total - this.spent : total;
+		this.spent = total;
+		if (added <= 0) return;
+		const last = [...this.stored.messages].reverse().find((m) => (m as { role?: string }).role === "assistant") as { usage?: PiUsage } | undefined;
+		if (last) {
+			const usage = last.usage ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: { total: 0 } };
+			last.usage = { ...usage, cost: { ...usage.cost, total: ((usage.cost?.total as number | undefined) ?? 0) + added } } as PiUsage;
+			this.save();
+		}
+		const usage = this.builder.snapshot().state.usage;
+		this.builder.setState({ usage: { ...usage, costUsd: usage.costUsd + added } });
 	}
 
 	/** Claude Code's permission requests, as Piopio's prompts (CA4). */
