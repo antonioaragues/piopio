@@ -181,7 +181,8 @@ final class EngineController {
         }
         status = .starting
         do {
-            try FileManager.default.createDirectory(at: home.appending(path: "logs"), withIntermediateDirectories: true)
+            // Only yours (the engine tightens the folders it makes as well, but this one often comes first).
+            try FileManager.default.createDirectory(at: home.appending(path: "logs"), withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
             var hello = try await connect()
             if hello == nil {
                 // In background mode launchd owns the engine: wait for it instead of starting a second one.
@@ -427,7 +428,8 @@ final class EngineController {
         if env["PIOPIO_FM"] == nil, let fm = Bundle.main.url(forAuxiliaryExecutable: "piopio-fm") { env["PIOPIO_FM"] = fm.path }
         p.environment = env
         let log = home.appending(path: "logs/engine.log")
-        if !FileManager.default.fileExists(atPath: log.path) { FileManager.default.createFile(atPath: log.path, contents: nil) }
+        if !FileManager.default.fileExists(atPath: log.path) { FileManager.default.createFile(atPath: log.path, contents: nil, attributes: [.posixPermissions: 0o600]) }
+        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: log.path)
         if let handle = try? FileHandle(forWritingTo: log) {
             handle.seekToEndOfFile()
             p.standardError = handle

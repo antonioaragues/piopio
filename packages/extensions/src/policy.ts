@@ -100,15 +100,20 @@ export function decide(mode: ApprovalMode, tool: string, input: Record<string, u
 	return { action: "ask", rule: { kind: "tool", pattern: tool } };
 }
 
-/** The deny-list (AP3): commands that always ask, even in full auto. Returns why, or undefined. */
+/**
+ * The deny-list (AP3): commands that always ask, even in full auto. Returns why, or undefined.
+ * It reads the command's text, so it stops mistakes, not someone set on getting past it (a script can do any of this):
+ * keeping commands from places is the sandbox's job, and Full access has none.
+ */
 export function deniedCommand(command: string, cwd: string, home = homedir()): string | undefined {
 	if (/(^|[\s;&|(])sudo\s/.test(command)) return "Uses sudo";
 	if (/\bgit\s+push\b[^;&|\n]*\s(--force(-with-lease)?|-f)\b/.test(command)) return "Force-pushes";
 	if (/\b(curl|wget)\b[^\n]*\|\s*(sudo\s+)?(ba|z|da)?sh\b/.test(command)) return "Pipes a download into a shell";
-	if (/\bsecurity\s+(find|dump|delete|export|add|unlock)-/.test(command)) return "Touches the keychain";
-	if (/(~|\$HOME|\$\{HOME\})\/\.(ssh|aws|gnupg)\b/.test(command) || command.includes(`${home}/.ssh`) || command.includes(`${home}/.aws`)) return "Touches credentials (~/.ssh, ~/.aws)";
+	const homes = ["~", "$HOME", "${HOME}", home];
+	if (/\bsecurity\s+(find|dump|delete|export|add|unlock)-/.test(command) || homes.some((h) => command.includes(`${h}/Library/Keychains`))) return "Touches the keychain";
+	if (homes.some((h) => [".ssh", ".aws", ".gnupg"].some((dir) => new RegExp(`${escapeRegExp(`${h}/${dir}`)}(?![\\w.-])`).test(command)))) return "Touches credentials (~/.ssh, ~/.aws, ~/.gnupg)";
 	for (const segment of commandSegments(command)) {
-		const words = segment.split(/\s+/);
+		const words = program(segment.split(/\s+/));
 		if (words[0] !== "rm") continue;
 		const flags = words.filter((w) => w.startsWith("-")).join("");
 		if (!(flags.includes("r") || flags.includes("R")) || !flags.includes("f")) continue;
@@ -118,6 +123,19 @@ export function deniedCommand(command: string, cwd: string, home = homedir()): s
 		}
 	}
 	return undefined;
+}
+
+/** A command's words from its program on: "/bin/rm", "\\rm", "'rm'", "command rm" and "env X=1 rm" are all rm. */
+function program(words: string[]): string[] {
+	let i = 0;
+	while (i < words.length && (["command", "builtin", "exec", "nohup", "time", "env"].includes(words[i]!) || /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[i]!))) i++;
+	const rest = words.slice(i);
+	if (rest[0]) rest[0] = rest[0].replace(/^\\/, "").replace(/^(["'])(.*)\1$/, "$2").split("/").pop()!;
+	return rest;
+}
+
+function escapeRegExp(s: string): string {
+	return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 /** The rule "Always allow" adds for a command: its program, plus the subcommand for runners. */

@@ -41,8 +41,12 @@ export function enginePaths(home = process.env.PIOPIO_HOME ?? DEFAULT_HOME): Eng
 	};
 }
 
+/** The data folders, only yours (0700): `mode` applies only to a folder mkdir makes, and the app may have made them first. */
 export function ensureDirs(paths: EnginePaths): void {
-	for (const dir of [paths.home, paths.chatsDir, paths.scratchDir, paths.logsDir]) mkdirSync(dir, { recursive: true, mode: 0o700 });
+	for (const dir of [paths.home, paths.chatsDir, paths.scratchDir, paths.logsDir]) {
+		mkdirSync(dir, { recursive: true, mode: 0o700 });
+		chmodSync(dir, 0o700);
+	}
 }
 
 /** Reads the shared engine token, creating it (0600) on first run. */

@@ -1,6 +1,6 @@
 /** Local Engine: Engine Protocol over a Unix domain socket. */
 import { keepAttachments } from "./attachment-files.js";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import { dirname, join, resolve } from "node:path";
 import { appendFileSync, existsSync, mkdirSync, unlinkSync, chmodSync, statSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -675,7 +675,7 @@ export class Engine {
 			}
 			if (method === "engine.hello") {
 				const p = params as Params<"engine.hello">;
-				if (p.token !== this.token) throw new EngineError("AUTH", "Bad engine token.");
+				if (!sameToken(p.token, this.token)) throw new EngineError("AUTH", "Bad engine token.");
 				authed = true;
 				this.authed.add(conn);
 				// Clients offering `secrets.set` also store sign-ins and refreshed tokens (docs/spec/10 §10).
@@ -1761,3 +1761,8 @@ class RpcConnectionFor {
 	constructor(readonly stream: import("node:net").Socket) {}
 }
 
+/** The engine token, compared in constant time (hashed first, so lengths match). */
+function sameToken(given: string, token: string): boolean {
+	const digest = (s: string) => createHash("sha256").update(s).digest();
+	return timingSafeEqual(digest(given), digest(token));
+}
