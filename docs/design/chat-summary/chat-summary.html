@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Piopio · Chat Summary, like Build's</title>
+<style>
+  :root {
+    --win: #FCFCFB; --side: #F4F4F2; --field: #E9E9E6; --sel: rgba(0,0,0,.05);
+    --fg: #1F1F1E; --fg2: #6B6B67; --fg3: #9B9B96; --line: rgba(0,0,0,.08);
+    --inv: #1F1F1E; --invfg: #FCFCFB; --accent: #2F6FEB;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #E4E4E0; font: 13px/1.35 -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif; color: var(--fg); -webkit-font-smoothing: antialiased; }
+  header.page { padding: 28px 36px 8px; max-width: 1400px; }
+  header.page h1 { font-size: 20px; margin: 0 0 6px; font-weight: 650; }
+  header.page p { margin: 0 0 10px; color: var(--fg2); max-width: 860px; }
+  .seg { display: inline-flex; background: var(--field); border-radius: 7px; padding: 2px; gap: 2px; margin-right: 14px; }
+  .seg button { border: 0; background: none; font: inherit; font-size: 12px; padding: 3px 10px; border-radius: 5px; color: var(--fg2); cursor: pointer; }
+  .seg button.on { background: var(--win); color: var(--fg); box-shadow: 0 .5px 1.5px rgba(0,0,0,.15); }
+  .row { display: flex; gap: 28px; padding: 20px 36px 48px; align-items: flex-start; flex-wrap: wrap; row-gap: 40px; }
+  .col { flex: 0 0 280px; }
+  .col h2 { font-size: 14px; margin: 0 0 3px; font-weight: 650; }
+  .col h2 .rec { font-size: 11px; font-weight: 600; color: var(--accent); margin-left: 6px; }
+  .col .tag { font-size: 12px; color: var(--fg2); margin: 0 0 12px; min-height: 48px; }
+  .notes { font-size: 12.5px; color: var(--fg2); margin-top: 14px; }
+  .notes b { color: var(--fg); font-weight: 600; }
+  .notes ul { margin: 4px 0 0; padding-left: 16px; }
+  .notes li { margin: 3px 0; }
+
+  /* The panel: the chat's right column, ~280 pt like the screenshot */
+  .panel { width: 280px; height: 760px; background: var(--side); border-radius: 10px; box-shadow: 0 0 0 .5px rgba(0,0,0,.1), 0 6px 20px rgba(0,0,0,.06); display: flex; flex-direction: column; position: relative; }
+  .pbody { flex: 1; padding: 0 18px; overflow: auto; }
+  .ptitle { height: 46px; display: flex; align-items: center; font-weight: 600; }
+  .block { padding: 18px 0; border-bottom: .5px solid var(--line); }
+  .block.last { border-bottom: 0; }
+  .btitle { font-weight: 600; font-size: 13px; }
+  .hrow { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .fg2 { color: var(--fg2); } .fg3 { color: var(--fg3); }
+  .grid { display: grid; grid-template-columns: 68px 1fr; column-gap: 10px; row-gap: 8px; margin-top: 10px; align-items: baseline; }
+  .lbl { color: var(--fg3); font-size: 12px; }
+  .link { color: var(--accent); font-size: 12px; cursor: pointer; white-space: nowrap; }
+  .chev { font-size: 13px; line-height: 1; color: var(--fg3); display: inline-block; transition: transform .15s; }
+  .open .chev.f { transform: rotate(90deg); }
+  .head { cursor: pointer; user-select: none; }
+  .foot { height: 44px; border-top: .5px solid var(--line); display: flex; align-items: center; justify-content: space-between; padding: 0 18px; color: var(--fg3); font-size: 12px; }
+  .foot .cost { color: var(--fg); }
+  .meter { display: inline-block; width: 32px; height: 3px; border-radius: 2px; background: var(--line); margin-right: 7px; vertical-align: middle; position: relative; }
+  .meter::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: var(--fg2); border-radius: 2px; }
+
+  .sw { width: 26px; height: 15px; border-radius: 8px; background: rgba(0,0,0,.12); position: relative; flex: 0 0 auto; cursor: pointer; transition: background .15s; }
+  .sw::after { content: ""; position: absolute; top: 1.5px; left: 1.5px; width: 12px; height: 12px; border-radius: 50%; background: #fff; box-shadow: 0 .5px 1.5px rgba(0,0,0,.25); transition: left .15s; }
+  .sw.on { background: var(--inv); }
+  .sw.on::after { left: 12.5px; }
+
+  .trow { display: flex; align-items: center; gap: 9px; min-height: 28px; }
+  .trow .name { flex: 1; min-width: 0; padding: 3px 0; }
+  .trow .n { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .trow .d { font-size: 11.5px; color: var(--fg3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .trow.offhere .n { color: var(--fg2); }
+  .trow.click { cursor: pointer; border-radius: 6px; margin: 0 -6px; padding: 0 6px; }
+  .trow.click:hover { background: var(--sel); }
+  .trow.click .arr { color: var(--fg3); font-size: 11px; visibility: hidden; }
+  .trow.click:hover .arr { visibility: visible; }
+  .ico { width: 18px; flex: 0 0 18px; color: var(--fg2); display: grid; place-items: center; align-self: flex-start; padding-top: 5px; }
+  .ico svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; }
+  .ico.dim { color: var(--fg3); }
+  .sub { font-size: 12px; color: var(--fg3); margin: 10px 0 2px; }
+  .sub:first-child { margin-top: 0; }
+  .hint { font-size: 11.5px; color: var(--fg3); margin-top: 10px; display: flex; gap: 6px; flex-wrap: wrap; align-items: baseline; }
+  .hide { display: none !important; }
+
+  /* "Now": the nested CardRow, as in the screenshot */
+  .before .squash { font-size: 11.5px; color: var(--fg3); width: 74px; }
+  .before .mid { white-space: nowrap; }
+</style>
+</head>
+<body>
+
+<header class="page">
+  <h1>Chat Summary — redesigned like Build's panel</h1>
+  <p>Build's panel is now a stack of blocks: a bold title on the left, the answer in grey on the right, and a › to open it at full width (Setup · Tools · Read · Changes · Plan; docs/design/tools-panel A). The chat column still uses the older card: grey labels in a 68 pt column, a second column inside it, and pages whose addresses are cut in the middle. Here are two ways to bring the chat panel in line. Folds and switches are clickable. The second switch compares Skills as a block of its own (proposed; Build would change the same way) with Skills inside Tools (as Build has it today).</p>
+  <div>
+    <span class="seg" id="scn"><button class="on" data-s="this">This chat</button><button data-s="busy">A busier chat</button></span>
+    <span class="seg" id="spl"><button class="on" data-v="split">Tools and Skills apart</button><button data-v="one">Skills inside Tools</button></span>
+  </div>
+</header>
+
+<div class="row">
+
+  <!-- NOW -->
+  <div class="col">
+    <h2>Now</h2>
+    <p class="tag">“Summary” as a title, Context › Read with each address cut in the middle, Setup › Uses with the switch and the footnote squeezed into the second column.</p>
+    <div class="panel before">
+      <div class="pbody">
+        <div class="ptitle">Summary</div>
+        <section class="block" style="padding-top:4px">
+          <div class="btitle">Context</div>
+          <div class="grid">
+            <span class="lbl">Read</span><div data-list="before-read"></div>
+          </div>
+        </section>
+        <section class="block last">
+          <div class="btitle">Setup</div>
+          <div class="grid">
+            <span class="lbl">Uses</span>
+            <div>
+              <span>the web <span class="chev" style="transform:rotate(90deg)">›</span></span>
+              <div class="trow" style="margin-top:4px"><span class="name">Web search</span><span class="sw on"></span></div>
+              <div style="display:flex;gap:8px;align-items:center"><span class="squash">Only here. Settings decides the rest.</span><span class="link">Connect…</span></div>
+            </div>
+            <span class="lbl">Skills</span><span><span class="fg3">None</span> <span class="link">Add skills…</span></span>
+          </div>
+        </section>
+      </div>
+      <div class="foot"><span><span class="meter"></span>49,6k of 1M ⌃</span><span class="cost">$0.02</span></div>
+    </div>
+  </div>
+
+  <!-- A -->
+  <div class="col">
+    <h2>A · Build's blocks, folded</h2>
+    <p class="tag">The same blocks as Build, in Build's order: Tools, then Read. Each is one line until you open it. No “Summary” title: the first block sits level with the toolbar, as Setup does in Build.</p>
+    <div class="panel" data-variant="A">
+      <div class="pbody" style="padding-top:4px">
+        <section class="block" data-fold="tools"></section>
+        <section class="block" data-fold="skills"></section>
+        <section class="block last" data-fold="read"></section>
+      </div>
+      <div class="foot"><span><span class="meter"></span>49,6k of 1M ⌃</span><span class="cost">$0.02</span></div>
+    </div>
+    <div class="notes">
+      <b>Exactly Build:</b> one look, one set of parts (the block, the fold line, the tool row).
+      <ul>
+        <li>Tools reads “N on”, where web search counts as one of them. Open, Web comes first, then Apps and MCP servers, all at full width.</li>
+        <li>Skills is a block of its own: they aren't switches (a chat can't turn one off), so they don't share a count with the switches. With none, it's one line with Add….</li>
+        <li>Read says “4 pages” or “3 pages · 1 file”. Open, each page shows its title, or its site when it has no title, with the address in grey below.</li>
+        <li>Cost: a chat has only these two blocks, so folded the panel is almost empty.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- B -->
+  <div class="col">
+    <h2>B · Tools folded, Read open <span class="rec">Recommended</span></h2>
+    <p class="tag">The same blocks and order. Read starts open because it's the chat's only content (Build opens Files instead). Up to five pages show, then “and N more”.</p>
+    <div class="panel" data-variant="B">
+      <div class="pbody" style="padding-top:4px">
+        <section class="block" data-fold="tools"></section>
+        <section class="block" data-fold="skills"></section>
+        <section class="block last open" data-fold="read"></section>
+      </div>
+      <div class="foot"><span><span class="meter"></span>49,6k of 1M ⌃</span><span class="cost">$0.02</span></div>
+    </div>
+    <div class="notes">
+      <b>Same parts as A, with different defaults.</b> What you set up stays one line, and what it read is in view.
+      <ul>
+        <li>Read stays a fold: closing it is remembered for every chat, like Build's Changes.</li>
+        <li>A page opens in the browser, and ↗ shows on hover. The full address is in the tooltip.</li>
+        <li>“Now” (Searching the web…) goes away, as it did in Build: the transcript already shows it.</li>
+      </ul>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const icons = {
+  web:   '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.8"/><path d="M2.2 8h11.6M8 2.2c1.7 1.8 2.4 3.7 2.4 5.8S9.7 12 8 13.8C6.3 12 5.6 10.1 5.6 8S6.3 4 8 2.2z"/></svg>',
+  app:   '<svg viewBox="0 0 16 16"><rect x="2.5" y="2.5" width="11" height="11" rx="3"/><path d="M5.5 8h5"/></svg>',
+  mcp:   '<svg viewBox="0 0 16 16"><rect x="2.5" y="3" width="11" height="4" rx="1.2"/><rect x="2.5" y="9" width="11" height="4" rx="1.2"/><path d="M5 5h.01M5 11h.01"/></svg>',
+  skill: '<svg viewBox="0 0 16 16"><path d="M8 2.5l1.3 3.2 3.2 1.3-3.2 1.3L8 11.5 6.7 8.3 3.5 7l3.2-1.3z"/><path d="M12 11l.5 1.2 1.2.5-1.2.5-.5 1.2-.5-1.2-1.2-.5 1.2-.5z"/></svg>',
+  page:  '<svg viewBox="0 0 16 16"><path d="M4 2.5h5.5L12 5v8.5H4z"/><path d="M9.5 2.5V5H12"/></svg>',
+  file:  '<svg viewBox="0 0 16 16"><path d="M10 4.5 5.6 8.9a1.6 1.6 0 0 0 2.3 2.3l4.6-4.6a2.8 2.8 0 0 0-4-4L3.9 7.2a4 4 0 0 0 5.7 5.7l3.4-3.4"/></svg>',
+};
+
+// The screenshot's chat: web on, no apps connected, MCP off for chats in Settings, four untitled pages, no skills.
+const scenarios = {
+  this: {
+    web: true,
+    tools: [],
+    offInSettings: 'MCP servers are off for chats in Settings.',
+    skills: [],
+    files: [],
+    pages: [
+      { url: 'https://jobs.ashbyhq.com/acme/7c1e2b9a-0d3f-4b8e-9a51-6f0e4de501ac' },
+      { url: 'https://jobalert.workable.com/view/senior-product-designer-64926' },
+      { url: 'https://www.jobijoba.es/oferta/disenador-producto-31fe6883' },
+      { url: 'https://empleo2.infojobs.net/ofertas/madrid/54097239' },
+    ],
+  },
+  busy: {
+    web: true,
+    tools: [
+      { id: 'linear', name: 'Linear', kind: 'app', on: true },
+      { id: 'notion', name: 'Notion', kind: 'app', on: true },
+      { id: 'gcal', name: 'Google Calendar', kind: 'app', on: false },
+      { id: 'playwright', name: 'playwright', kind: 'mcp', on: true },
+    ],
+    offInSettings: 'Sentry is off in Settings.',
+    skills: [{ name: 'job-tracker', d: 'Keeps a table of applications and their dates' }, { name: 'cover-letter', d: 'Drafts a letter in your voice from a job post' }],
+    files: [{ name: 'CV-2026.pdf', kind: 'PDF' }],
+    pages: [
+      { url: 'https://jobs.ashbyhq.com/acme/7c1e2b9a-0d3f-4b8e-9a51-6f0e4de501ac', title: 'Senior Product Designer · Acme' },
+      { url: 'https://jobalert.workable.com/view/senior-product-designer-64926', title: 'Senior Product Designer, Remote (EU)' },
+      { url: 'https://www.jobijoba.es/oferta/disenador-producto-31fe6883' },
+      { url: 'https://empleo2.infojobs.net/ofertas/madrid/54097239', title: 'Diseñador/a de producto – Madrid' },
+      { url: 'https://www.linkedin.com/jobs/view/4012399871', title: 'Product Designer, Payments' },
+      { url: 'https://www.glassdoor.es/Sueldos/product-designer', title: 'Product designer salaries in Spain' },
+      { url: 'https://remoteok.com/remote-design-jobs', title: 'Remote design jobs' },
+    ],
+  },
+};
+let S = 'this';
+let split = true;
+const state = { A: { tools: false, skills: false, read: false, all: false }, B: { tools: false, skills: false, read: true, all: false } };
+
+const strip = u => u.replace(/^https?:\/\/(www\.)?/, '');
+const host = u => strip(u).split('/')[0];
+const path = u => '/' + strip(u).split('/').slice(1).join('/');
+
+function toolsLine(sc) {
+  const switchable = sc.tools.length + 1; // web search counts
+  const on = sc.tools.filter(t => t.on).length + (sc.web ? 1 : 0);
+  const parts = [on === switchable ? `${on} on` : `${on} of ${switchable} on`];
+  if (!split && sc.skills.length) parts.push(sc.skills.length === 1 ? '1 skill' : `${sc.skills.length} skills`);
+  return parts.join(' · ');
+}
+function readLine(sc) {
+  const p = [];
+  if (sc.pages.length) p.push(sc.pages.length === 1 ? '1 page' : `${sc.pages.length} pages`);
+  if (sc.files.length) p.push(sc.files.length === 1 ? '1 file' : `${sc.files.length} files`);
+  return p.join(' · ') || 'Nothing yet';
+}
+
+function swRow(icon, name, on, fn, dim) {
+  return `<div class="trow ${on ? '' : 'offhere'}"><span class="ico ${dim ? 'dim' : ''}">${icons[icon]}</span><span class="name"><div class="n">${name}</div></span><span class="sw ${on ? 'on' : ''}" onclick="${fn}"></span></div>`;
+}
+
+function toolsBody(sc) {
+  let h = '<div class="sub">Web</div>' + swRow('web', 'Web search', sc.web, 'flipWeb()');
+  const apps = sc.tools.filter(t => t.kind === 'app'), mcp = sc.tools.filter(t => t.kind === 'mcp');
+  if (apps.length) h += '<div class="sub">Apps</div>' + apps.map(t => swRow('app', t.name, t.on, `flip('${t.id}')`)).join('');
+  if (mcp.length) h += '<div class="sub">MCP servers</div>' + mcp.map(t => swRow('mcp', t.name, t.on, `flip('${t.id}')`)).join('');
+  if (!split) h += '<div class="sub">Skills</div>' + skillsList(sc);
+  h += `<div class="hint">Switches apply to this chat only. <span class="link">Settings…</span></div>`;
+  if (sc.offInSettings) h += `<div class="hint" style="margin-top:4px">${sc.offInSettings} <span class="link">Turn on…</span></div>`;
+  return h;
+}
+
+function skillsList(sc) {
+  return sc.skills.length
+    ? sc.skills.map(s => `<div class="trow"><span class="ico">${icons.skill}</span><span class="name"><div class="n">${s.name}</div><div class="d">${s.d}</div></span></div>`).join('')
+    : `<div class="trow"><span class="ico dim">${icons.skill}</span><span class="name fg3">None yet</span><span class="link">Add…</span></div>`;
+}
+
+// Skills as a block of its own: one line with Add… when there are none, otherwise a fold.
+function skillsBlock(v, sc) {
+  if (!sc.skills.length) return `<div class="hrow"><span class="btitle">Skills</span><span><span class="fg3">None ·</span> <span class="link">Add…</span></span></div>`;
+  const body = skillsList(sc) + `<div class="hint">Loaded when a task needs one, or with /. <span class="link">Manage…</span></div>`;
+  return block(v, 'skills', 'Skills', sc.skills.length === 1 ? '1 skill' : `${sc.skills.length} skills`, body);
+}
+
+function readBody(sc, v) {
+  let h = '';
+  if (sc.files.length) {
+    h += '<div class="sub">You gave</div>' + sc.files.map(f => `<div class="trow click" title="Open ${f.name}"><span class="ico">${icons.file}</span><span class="name"><div class="n">${f.name}</div></span><span class="fg3" style="font-size:12px">${f.kind}</span></div>`).join('');
+    h += '<div class="sub">Pages</div>';
+  }
+  const shown = state[v].all ? sc.pages : sc.pages.slice(0, 5);
+  h += shown.map(p => {
+    const name = p.title || host(p.url);
+    const detail = p.title ? host(p.url) : path(p.url);
+    return `<div class="trow click" title="${p.url}"><span class="ico">${icons.page}</span><span class="name"><div class="n">${name}</div><div class="d">${detail}</div></span><span class="arr">↗</span></div>`;
+  }).join('');
+  if (sc.pages.length > 5) h += `<div style="margin-top:6px"><span class="link" onclick="state.${v}.all=!state.${v}.all;render()">${state[v].all ? 'Show fewer' : `and ${sc.pages.length - 5} more`}</span></div>`;
+  return h;
+}
+
+function block(v, key, title, line, body) {
+  const open = state[v][key];
+  return `<div class="hrow head ${open ? 'open' : ''}" onclick="state.${v}.${key}=!state.${v}.${key};render()">
+      <span class="btitle">${title}</span><span class="fg3">${line} <span class="chev f">›</span></span></div>
+    ${open ? `<div style="margin-top:10px">${body}</div>` : ''}`;
+}
+
+function render() {
+  const sc = scenarios[S];
+  for (const v of ['A', 'B']) {
+    const p = document.querySelector(`[data-variant="${v}"]`);
+    p.querySelector('[data-fold="tools"]').innerHTML = block(v, 'tools', 'Tools', toolsLine(sc), toolsBody(sc));
+    const sk = p.querySelector('[data-fold="skills"]');
+    sk.classList.toggle('hide', !split);
+    sk.innerHTML = split ? skillsBlock(v, sc) : '';
+    p.querySelector('[data-fold="read"]').innerHTML = block(v, 'read', 'Read', readLine(sc), readBody(sc, v));
+  }
+  // Before: middle-truncated addresses, as the app does at this width.
+  document.querySelector('[data-list="before-read"]').innerHTML = sc.pages.slice(0, 5).map(p => {
+    const a = strip(p.url); const t = p.title || (a.slice(0, 6) + '…' + a.slice(-8));
+    return `<div class="mid" style="margin-bottom:5px">${t.length > 24 ? t.slice(0, 10) + '…' + t.slice(-10) : t}</div>`;
+  }).join('') + (sc.files.length ? '' : '');
+}
+function flip(id) { const t = scenarios[S].tools.find(t => t.id === id); t.on = !t.on; render(); }
+function flipWeb() { scenarios[S].web = !scenarios[S].web; render(); }
+document.querySelectorAll('#scn button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('#scn button').forEach(x => x.classList.toggle('on', x === b));
+  S = b.dataset.s; render();
+});
+document.querySelectorAll('#spl button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('#spl button').forEach(x => x.classList.toggle('on', x === b));
+  split = b.dataset.v === 'split'; render();
+});
+render();
+</script>
+</body>
+</html>

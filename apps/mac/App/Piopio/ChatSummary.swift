@@ -3,118 +3,158 @@ import PiopioKit
 import PiopioTranscript
 import SwiftUI
 
-/// A chat's Summary column (docs/design/summary/ia.html), the same groups as Build's in style A (SummaryCard.swift):
-/// **Now** (while it answers or waits on you), **Context** (how full; You gave · Read), **Setup** (Uses: the web,
-/// apps and MCP servers, a switch each for this chat; Knows: skills), and the cost. Chats keep no plan and write no
-/// files, so they have no Plan or Made. The model is in the composer.
+/// A chat's Summary column, made of Build's blocks (docs/design/chat-summary, option B): **Tools** (web search, apps
+/// and MCP servers, a switch each for this chat), **Skills**, and **Read** (the files you gave it and the pages it
+/// opened or found), open by default because it's what a chat has to show. Context and cost are in the footer every
+/// panel shares. The model is in the composer; what it's doing now is in the transcript.
 struct ChatSummaryPanel: View {
     let engine: EngineController
     let thread: ThreadModel
     let summary: SessionSummary
-    @State private var allPages = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    ToolsBlock(engine: engine, thread: thread, summary: summary, web: true).inspectorBlock()
+                    SkillsBlock(thread: thread).inspectorBlock()
+                    ChatReadBlock(thread: thread).inspectorBlock(last: true)
+                }
+                .padding(.horizontal, 18)
+                .padding(.top, 4)
+            }
+            InspectorFooter(thread: thread)
+        }
+    }
+}
+
+/// Read: "4 pages · 1 file ›". Open (remembered for every chat), the files you gave it, then each page: its title, or
+/// its site when it has none, with the site or the rest of the address in grey below. Five, then "and N more".
+struct ChatReadBlock: View {
+    let thread: ThreadModel
+    @AppStorage("chatReadOpen") private var open = true
+    @State private var all = false
 
     private static let shortList = 5
 
     var body: some View {
+        // The document isn't observed: reading `revision` refreshes this block on every event batch.
+        let _ = thread.revision
         let found = ChatResults(items: thread.document.items)
         VStack(alignment: .leading, spacing: 0) {
-            // The panel's title, level with the chat's toolbar (docs/design/card-layout F2).
-            Text("Summary").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.dsFg)
-                .padding(.horizontal, 16).frame(height: Shell.cardBarHeight)
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    now
-                    contextGroup(found)
-                    VStack(alignment: .leading, spacing: 9) {
-                        GroupHeader("Setup") { EmptyView() }
-                        UsesRow(engine: engine, thread: thread, summary: summary, web: true)
-                        SkillsRow(thread: thread)
-                    }
-                    .padding(.vertical, 14)
+            if found.files.isEmpty && found.pages.isEmpty {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Read").font(.system(size: 13, weight: .semibold))
+                    Spacer(minLength: 8)
+                    Text("Nothing yet").font(.system(size: 13)).foregroundStyle(Color.dsFg3)
                 }
-                .padding(.horizontal, 16)
+            } else {
+                BlockFold(title: "Read", line: Self.line(found), open: $open,
+                          help: open ? "Hide what it read" : "The files you gave it and the pages it read")
+                if open { list(found).padding(.top, 10) }
             }
-            // Context and cost live in the footer every panel shares (docs/design/inspector §4).
-            InspectorFooter(thread: thread)
         }
     }
 
-    // MARK: Now
-
-    @ViewBuilder private var now: some View {
-        let status = thread.state?.status
-        if status == .running || status == .waitingApproval {
-            NowGroup(waiting: status == .waitingApproval, title: Self.activity(thread.document.items),
-                     detail: status == .waitingApproval ? "It's asking in the conversation" : nil)
+    private func list(_ found: ChatResults) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if !found.files.isEmpty {
+                BlockSubheading("You gave")
+                ForEach(found.files, id: \.name) { file in
+                    ReadRow(icon: "paperclip", title: file.name, detail: nil, trailing: Self.kind(file),
+                            help: file.stored == nil ? "Sent before Piopio kept copies of files" : "Open \(file.name)") {
+                        if let stored = file.stored { thread.handle(.openAttachment(stored: stored)) }
+                    }
+                    .disabled(file.stored == nil)
+                }
+                if !found.pages.isEmpty { BlockSubheading("Pages") }
+            }
+            ForEach(all ? found.pages : Array(found.pages.prefix(Self.shortList)), id: \.url) { page in
+                let untitled = page.title == page.url
+                ReadRow(icon: "doc", title: untitled ? page.host : page.title, detail: untitled ? page.path : page.host,
+                        trailing: nil, help: page.url) {
+                    if let url = URL(string: page.url) { NSWorkspace.shared.open(url) }
+                }
+            }
+            if found.pages.count > Self.shortList {
+                SummaryLink(all ? "Show fewer" : "and \(found.pages.count - Self.shortList) more") {
+                    withAnimation(.easeOut(duration: 0.15)) { all.toggle() }
+                }
+                .padding(.top, 6)
+            }
         }
     }
 
-    /// What the running turn is doing: searching, reading a page, using an app, or answering.
-    static func activity(_ items: [TimelineItem]) -> String {
-        for item in items.reversed() {
-            let tools: [ToolItem]
-            switch item {
-            case .tool(let t): tools = [t]
-            case .steps(let s): tools = s.tools
-            case .user: return "Answering"
-            default: continue
-            }
-            guard let running = tools.last(where: { $0.status == .running }) else { continue }
-            return switch running.tool {
-            case "web_search": "Searching the web"
-            case "web_fetch": "Reading a page"
-            default: "Using \(running.tool.replacingOccurrences(of: "_", with: " "))"
-            }
-        }
-        return "Answering"
+    /// "4 pages · 1 file".
+    static func line(_ found: ChatResults) -> String {
+        var parts: [String] = []
+        if !found.pages.isEmpty { parts.append(found.pages.count == 1 ? "1 page" : "\(found.pages.count) pages") }
+        if !found.files.isEmpty { parts.append(found.files.count == 1 ? "1 file" : "\(found.files.count) files") }
+        return parts.joined(separator: " · ")
     }
 
-    // MARK: Context
+    /// "PDF", "Image", "File".
+    static func kind(_ file: AttachmentInfo) -> String {
+        if file.kind == .image { return "Image" }
+        let ext = (file.name as NSString).pathExtension
+        return ext.isEmpty || ext.count > 4 ? "File" : ext.uppercased()
+    }
+}
 
-    @ViewBuilder private func contextGroup(_ found: ChatResults) -> some View {
-        if !found.files.isEmpty || !found.pages.isEmpty {
-            VStack(alignment: .leading, spacing: 9) {
-                GroupHeader("Context") { EmptyView() }
-                if !found.files.isEmpty {
-                    CardRow("You gave") {
-                        ForEach(found.files, id: \.name) { file in
-                            ItemButton(title: file.name, help: file.stored == nil ? "Sent before Piopio kept copies of files" : "Open \(file.name)") {
-                                if let stored = file.stored { thread.handle(.openAttachment(stored: stored)) }
-                            } trailing: {
-                                Text(file.kind == .image ? "image" : "file").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
-                            }
-                            .disabled(file.stored == nil)
-                        }
+/// A row of Read: an icon, the name with a grey line below, and what it is on the right (↗ on hover for pages).
+private struct ReadRow: View {
+    let icon: String
+    let title: String
+    let detail: String?
+    let trailing: String?
+    let help: String
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(alignment: .firstTextBaseline, spacing: 9) {
+                Image(systemName: icon).font(.system(size: 12)).foregroundStyle(Color.dsFg2).frame(width: 18)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title).font(.system(size: 13)).foregroundStyle(Color.dsFg).lineLimit(1)
+                    if let detail, !detail.isEmpty {
+                        Text(detail).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).lineLimit(1)
                     }
                 }
-                if !found.pages.isEmpty {
-                    CardRow("Read") {
-                        ForEach(allPages ? found.pages : Array(found.pages.prefix(Self.shortList)), id: \.url) { page in
-                            // A page without a title reads as its address, without the scheme.
-                            let untitled = page.title == page.url
-                            let address = page.url.replacingOccurrences(of: #"^https?://(www\.)?"#, with: "", options: .regularExpression)
-                            ItemButton(title: untitled ? address.trimmingCharacters(in: CharacterSet(charactersIn: "/")) : page.title, help: page.url) {
-                                if let url = URL(string: page.url) { NSWorkspace.shared.open(url) }
-                            } trailing: {
-                                if !untitled { Text(page.host).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1) }
-                            }
-                        }
-                        if found.pages.count > Self.shortList {
-                            SummaryLink(allPages ? "Show fewer" : "and \(found.pages.count - Self.shortList) more") {
-                                withAnimation(.easeOut(duration: 0.15)) { allPages.toggle() }
-                            }
-                        }
-                    }
+                Spacer(minLength: 4)
+                if let trailing {
+                    Text(trailing).font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                } else {
+                    Image(systemName: "arrow.up.right").font(.system(size: 9, weight: .semibold)).foregroundStyle(Color.dsFg3)
+                        .opacity(hovering ? 1 : 0)
                 }
             }
-            .summaryGroup()
+            .padding(.vertical, 4)
+            .padding(.horizontal, 6)
+            .background(RoundedRectangle(cornerRadius: 6).fill(hovering ? Color.primary.opacity(0.05) : .clear))
+            .padding(.horizontal, -6)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help(help)
     }
 }
 
 /// What a chat produced and used: the files you attached, and the pages it opened or found while searching.
 struct ChatResults {
-    struct Page: Hashable { let url: String; let title: String; var host: String { URL(string: url)?.host()?.replacingOccurrences(of: "www.", with: "") ?? "" } }
+    struct Page: Hashable {
+        let url: String
+        let title: String
+        /// "jobs.ashbyhq.com", without www.
+        var host: String { URL(string: url)?.host()?.replacingOccurrences(of: "www.", with: "") ?? url }
+        /// The rest of the address after the site ("/acme/7c1e…"), for a page with no title.
+        var path: String {
+            guard let parts = URLComponents(string: url) else { return "" }
+            let rest = parts.path + (parts.query.map { "?\($0)" } ?? "")
+            return rest == "/" ? "" : rest
+        }
+    }
     var files: [AttachmentInfo] = []
     var pages: [Page] = []
 

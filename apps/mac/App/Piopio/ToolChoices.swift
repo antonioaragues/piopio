@@ -65,7 +65,7 @@ struct ToolChoice: Identifiable, Hashable {
     }
 }
 
-/// One app or server with its switch for this conversation (Summary › Setup › Uses).
+/// One app or server with its switch for this conversation (the Tools block in Build and chats).
 struct ToolChoiceRow: View {
     let choice: ToolChoice
     let off: Set<String>

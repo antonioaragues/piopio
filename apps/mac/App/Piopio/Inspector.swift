@@ -3,9 +3,9 @@ import PiopioKit
 import PiopioTranscript
 import SwiftUI
 
-// The Inspector (docs/design/inspector, options 2a and 4a): Build's right-hand panel, one column (Setup, Read,
-// Changes, Plan; the Session and Changes tabs became one on 2026-11-15), and the footer every panel shares (context
-// and cost, nowhere else).
+// The Inspector (docs/design/inspector, options 2a and 4a): Build's right-hand panel, one column (Setup, Tools,
+// Skills, Read, Changes, Plan; the Session and Changes tabs became one on 2026-11-15), and the footer every panel
+// shares (context and cost, nowhere else).
 
 /// The Inspector: its column and the shared footer. Whether Changes is open is kept per session.
 struct InspectorPanel: View {
@@ -110,7 +110,7 @@ extension View {
 
 // MARK: Session
 
-/// Setup, then what it read, what it changed (not in a chat's lens), then the plan (4a's order).
+/// Setup, Tools and Skills, then what it read, what it changed (not in a chat's lens), then the plan (4a's order).
 struct SessionTab: View {
     let engine: EngineController
     let session: ThreadModel
@@ -131,6 +131,7 @@ struct SessionTab: View {
             let plan = PlanBlock.shown(session) != nil
             setup.inspectorBlock()
             ToolsBlock(engine: engine, thread: session, summary: summary).inspectorBlock()
+            SkillsBlock(thread: session).inspectorBlock()
             read.inspectorBlock(last: chatLens && !plan)
             if !chatLens {
                 ChangesBlock(engine: engine, session: session, summary: summary, git: git, files: files,
@@ -209,15 +210,17 @@ struct SessionTab: View {
     }
 }
 
-/// Tools, a block of its own (docs/design/tools-panel, option A): folded, how many apps and servers are on and the
-/// skills; open, at full width, the apps and MCP servers this session can switch (only for itself), then its skills.
-/// Connected apps or servers that Settings keeps off aren't switches here: one grey line at the end names them.
+/// Tools, a block of its own (docs/design/tools-panel, option A): folded, how many of its switches are on; open, at
+/// full width, what this conversation can switch (only for itself): web search in chats, then apps and MCP servers.
+/// Connected apps or servers that Settings keeps off aren't switches here: one grey line at the end names them. Skills
+/// aren't switches, so they're a block of their own (SkillsBlock; docs/design/chat-summary).
 struct ToolsBlock: View {
     let engine: EngineController
     let thread: ThreadModel
     let summary: SessionSummary
+    /// Chats: web search is the first switch.
+    var web = false
     @State private var servers: [McpServerInfo] = []
-    @State private var skills: [SessionCommand] = []
     /// PIOPIO_DEMO_TOOLS_OPEN=1: captures open with Tools unfolded.
     @State private var open = ProcessInfo.processInfo.environment["PIOPIO_DEMO_TOOLS_OPEN"] == "1"
 
@@ -226,84 +229,59 @@ struct ToolsBlock: View {
         let off = Set(summary.toolsOff ?? [])
         let switchable = choices.filter(\.available)
         let unavailable = choices.filter { !$0.available }
-        let on = switchable.filter { !off.contains($0.id) }.count
+        let on = switchable.filter { !off.contains($0.id) }.count + (web && thread.webEnabled ? 1 : 0)
+        let total = switchable.count + (web ? 1 : 0)
         VStack(alignment: .leading, spacing: 0) {
-            if switchable.isEmpty && skills.isEmpty {
+            if total == 0 {
                 HStack(alignment: .firstTextBaseline) {
                     Text("Tools").font(.system(size: 13, weight: .semibold))
                     Spacer(minLength: 8)
                     Text("None ·").font(.system(size: 13)).foregroundStyle(Color.dsFg3)
-                    SummaryLink("Add…") { ToolChoices.openSettings("Connectors") }
-                        .help("Connect apps and MCP servers, or add skills, in Settings")
+                    SummaryLink("Connect…") { ToolChoices.openSettings("Connectors") }
+                        .help("Connect apps and MCP servers in Settings")
                 }
             } else {
-                Button { withAnimation(.easeOut(duration: 0.15)) { open.toggle() } } label: {
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Text("Tools").font(.system(size: 13, weight: .semibold))
-                        Spacer(minLength: 8)
-                        Text(Self.line(on: on, of: switchable.count, skills: skills.count)).font(.system(size: 13)).foregroundStyle(Color.dsFg3)
-                        Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).foregroundStyle(Color.dsFg3)
-                            .rotationEffect(.degrees(open ? 90 : 0))
-                    }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help(open ? "Hide the tools" : "What it can use, and switches for this session")
-                .accessibilityValue(open ? "Expanded" : "Collapsed")
+                BlockFold(title: "Tools", line: Self.line(on: on, of: total), open: $open,
+                          help: open ? "Hide the tools" : "What it can use, and switches for this conversation")
                 if open { list(switchable: switchable, unavailable: unavailable, off: off).padding(.top, 10) }
             }
         }
         .task(id: summary.ref.id) {
             servers = await ToolChoices.load(engine: engine, cwd: summary.ref.kind == .build ? summary.cwd : nil)
-            skills = await thread.commands().filter { $0.kind == .skill }
         }
     }
 
     private func list(switchable: [ToolChoice], unavailable: [ToolChoice], off: Set<String>) -> some View {
         let apps = switchable.filter { $0.group == .app }, mcp = switchable.filter { $0.group == .mcp }
         return VStack(alignment: .leading, spacing: 0) {
+            if web {
+                BlockSubheading("Web")
+                HStack(spacing: 9) {
+                    Image(systemName: "globe").font(.system(size: 12)).foregroundStyle(Color.dsFg2).frame(width: 18)
+                    Text("Web search").font(.system(size: 13)).foregroundStyle(thread.webEnabled ? Color.dsFg : Color.dsFg2)
+                    Spacer(minLength: 4)
+                    Toggle("", isOn: Binding(get: { thread.webEnabled }, set: { on in Task { await thread.setWeb(on) } }))
+                        .toggleStyle(.switch).controlSize(.mini).labelsHidden()
+                        .accessibilityLabel("Web search in this conversation")
+                }
+                .frame(minHeight: 26)
+            }
             if !apps.isEmpty {
-                subheading("Apps")
+                BlockSubheading("Apps")
                 ForEach(apps) { ToolChoiceRow(choice: $0, off: off, thread: thread) }
             }
             if !mcp.isEmpty {
-                subheading("MCP servers")
+                BlockSubheading("MCP servers")
                 ForEach(mcp) { ToolChoiceRow(choice: $0, off: off, thread: thread) }
             }
-            subheading("Skills")
-            if skills.isEmpty {
-                HStack(spacing: 9) {
-                    Image(systemName: "sparkles").font(.system(size: 12)).foregroundStyle(Color.dsFg3).frame(width: 18)
-                    Text("None yet").font(.system(size: 13)).foregroundStyle(Color.dsFg3)
-                    Spacer(minLength: 4)
-                    SummaryLink("Add…") { ToolChoices.openSettings("Extensions") }
-                }
-                .frame(minHeight: 26)
-            } else {
-                ForEach(skills) { skill in
-                    HStack(alignment: .firstTextBaseline, spacing: 9) {
-                        Image(systemName: "sparkles").font(.system(size: 12)).foregroundStyle(Color.dsFg2).frame(width: 18)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(SkillsRow.name(skill)).font(.system(size: 13)).lineLimit(1)
-                            if !skill.description.isEmpty {
-                                Text(skill.description).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).lineLimit(2)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                        }
-                    }
-                    .padding(.vertical, 4)
-                    .help("Type /\(skill.name) to use it\(skill.source.map { " · from \($0)" } ?? "")")
-                }
-            }
             HStack(spacing: 6) {
-                Text("Switches apply to this session only.").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
+                Text("For this \(summary.ref.kind == .build ? "session" : "chat") only.").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
                 SummaryLink("Settings…") { ToolChoices.openSettings("Connectors") }
             }
             .padding(.top, 10)
             if !unavailable.isEmpty {
-                let names = unavailable.map(\.title)
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text("\(ListFormatter.localizedString(byJoining: names)) \(names.count == 1 ? "is" : "are") off in Settings.")
+                    Text(Self.offInSettings(unavailable, chatMcpOff: web && !(engine.settings?.chat.mcp ?? false)))
                         .font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).fixedSize(horizontal: false, vertical: true)
                     SummaryLink("Turn on…") { ToolChoices.openSettings(unavailable.contains { $0.group == .app } ? "Connectors" : "MCP servers") }
                 }
@@ -313,16 +291,108 @@ struct ToolsBlock: View {
         }
     }
 
-    private func subheading(_ text: String) -> some View {
-        Text(text).font(.system(size: 12)).foregroundStyle(Color.dsFg3).padding(.top, 8).padding(.bottom, 2)
+    /// "Sentry is off in Settings.", or, in a chat while Settings keeps MCP off for chats, "MCP servers are off for
+    /// chats in Settings."
+    static func offInSettings(_ unavailable: [ToolChoice], chatMcpOff: Bool) -> String {
+        if chatMcpOff, unavailable.allSatisfy({ $0.group == .mcp }) { return "MCP servers are off for chats in Settings." }
+        let names = unavailable.map(\.title)
+        return "\(ListFormatter.localizedString(byJoining: names)) \(names.count == 1 ? "is" : "are") off in Settings."
     }
 
-    /// "3 on", "2 of 3 on · 1 skill", "4 skills".
-    static func line(on: Int, of total: Int, skills: Int) -> String {
-        var parts: [String] = []
-        if total > 0 { parts.append(on == total ? "\(on) on" : "\(on) of \(total) on") }
-        if skills > 0 { parts.append(skills == 1 ? "1 skill" : "\(skills) skills") }
-        return parts.joined(separator: " · ")
+    /// "3 on", "2 of 3 on".
+    static func line(on: Int, of total: Int) -> String { on == total ? "\(on) on" : "\(on) of \(total) on" }
+}
+
+/// Skills, a block of its own (docs/design/chat-summary): instructions the model loads by itself when a task needs
+/// them, or that you call with / (pi's skills: SKILL.md folders in pi's and the shared agent skill folders, and in pi
+/// packages). They aren't switches, so they don't share Tools' count. None: one line with Add…; otherwise a fold with
+/// each one and what it's for.
+struct SkillsBlock: View {
+    let thread: ThreadModel
+    @State private var skills: [SessionCommand] = []
+    @State private var open = false
+
+    private static let explanation = "Skills are instructions the model loads by itself when a task needs them, or that you call with / in the box. They come from skill folders on this Mac and from pi packages."
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if skills.isEmpty {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Skills").font(.system(size: 13, weight: .semibold))
+                    Spacer(minLength: 8)
+                    Text("None ·").font(.system(size: 13)).foregroundStyle(Color.dsFg3)
+                    SummaryLink("Add…") { ToolChoices.openSettings("Extensions") }
+                }
+                .help(Self.explanation)
+            } else {
+                BlockFold(title: "Skills", line: skills.count == 1 ? "1 skill" : "\(skills.count) skills", open: $open,
+                          help: open ? "Hide the skills" : Self.explanation)
+                if open { list.padding(.top, 10) }
+            }
+        }
+        .task(id: thread.ref.id) { skills = await thread.commands().filter { $0.kind == .skill } }
+    }
+
+    private var list: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(skills) { skill in
+                HStack(alignment: .firstTextBaseline, spacing: 9) {
+                    Image(systemName: "sparkles").font(.system(size: 12)).foregroundStyle(Color.dsFg2).frame(width: 18)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(Self.name(skill)).font(.system(size: 13)).lineLimit(1)
+                        if !skill.description.isEmpty {
+                            Text(skill.description).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).lineLimit(2)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+                .padding(.vertical, 4)
+                .help("Type /\(skill.name) to use it\(skill.source.map { " · from \($0)" } ?? "")")
+            }
+            HStack(spacing: 6) {
+                Text("Loaded when a task needs one, or with /.").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
+                SummaryLink("Manage…") { ToolChoices.openSettings("Extensions") }
+            }
+            .padding(.top, 10)
+        }
+    }
+
+    /// pi names skill commands "skill:<name>"; the block shows the name.
+    static func name(_ skill: SessionCommand) -> String {
+        skill.name.hasPrefix("skill:") ? String(skill.name.dropFirst(6)) : skill.name
+    }
+}
+
+/// A block's head that folds: the bold title, then the answer in grey and a chevron on the right.
+struct BlockFold: View {
+    let title: String
+    let line: String
+    @Binding var open: Bool
+    let help: String
+
+    var body: some View {
+        Button { withAnimation(.easeOut(duration: 0.15)) { open.toggle() } } label: {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(title).font(.system(size: 13, weight: .semibold))
+                Spacer(minLength: 8)
+                Text(line).font(.system(size: 13)).foregroundStyle(Color.dsFg3).lineLimit(1)
+                Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).foregroundStyle(Color.dsFg3)
+                    .rotationEffect(.degrees(open ? 90 : 0))
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(help)
+        .accessibilityValue(open ? "Expanded" : "Collapsed")
+    }
+}
+
+/// A grey heading inside an open block (Web, Apps, MCP servers; You gave, Pages).
+struct BlockSubheading: View {
+    let text: String
+    init(_ text: String) { self.text = text }
+    var body: some View {
+        Text(text).font(.system(size: 12)).foregroundStyle(Color.dsFg3).padding(.top, 8).padding(.bottom, 2)
     }
 }
 
