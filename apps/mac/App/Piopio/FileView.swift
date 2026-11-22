@@ -526,17 +526,16 @@ struct ViewedFile: Identifiable {
 
 /// Shows files posted with `.viewFile` in the viewer sheet (the main window has one). An app opens as an app.
 struct FileViewerSheet: ViewModifier {
-    let engine: EngineController
     @State private var viewed: ViewedFile?
 
     func body(content: Content) -> some View {
         content
             .onReceive(NotificationCenter.default.publisher(for: .viewFile)) { note in
-                if let url = note.object as? URL { viewed = ViewedFile(url: url) }
+                guard let url = note.object as? URL else { return }
+                // An app opens as its page, with its conversation beside it (docs/spec/35 §15).
+                if AppFile.isApp(url) { NotificationCenter.default.post(name: .selectItem, object: SidebarItem.app(url.path).raw) } else { viewed = ViewedFile(url: url) }
             }
-            .sheet(item: $viewed) { file in
-                if AppFile.isApp(file.url) { AppSheet(path: file.url.path, engine: engine) } else { FileSheet(url: file.url) }
-            }
+            .sheet(item: $viewed) { FileSheet(url: $0.url) }
     }
 }
 

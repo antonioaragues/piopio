@@ -103,7 +103,7 @@ struct RootView: View {
                 }
             }
         }
-        .modifier(FileViewerSheet(engine: engine))
+        .modifier(FileViewerSheet())
         .modifier(VisualViewerSheet())
         // The conversation start page (docs/spec/18 §4, §16): ⌘N and compose open it with no project; a project's +
         // (and ⌘O) open it with that project chosen.
@@ -237,6 +237,8 @@ struct RootView: View {
                 .id(id)
         case .library:
             LibraryPage(engine: engine, item: itemBinding)
+        case .app(let path):
+            AppPage(engine: engine, path: path).id(path)
         case .index(.agents) where engine.agents.isEmpty:
             AgentsFirstRun(engine: engine, item: itemBinding)
         case .index(.chats) where engine.threads.isEmpty:
@@ -251,7 +253,10 @@ struct RootView: View {
                 missing
             }
         case .chat(let id):
-            if let summary = engine.threads.first(where: { $0.ref.id == id }) {
+            // A conversation about an app opens the app, with the conversation beside it (docs/spec/35 §15).
+            if let summary = engine.threads.first(where: { $0.ref.id == id }), let app = summary.app, FileManager.default.fileExists(atPath: app) {
+                AppPage(engine: engine, path: app).id(app)
+            } else if let summary = engine.threads.first(where: { $0.ref.id == id }) {
                 ThreadView(engine: engine, thread: engine.thread(summary.ref), summary: summary)
                     .id(id)
             } else {

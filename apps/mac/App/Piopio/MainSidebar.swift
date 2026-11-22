@@ -511,7 +511,7 @@ struct MainSidebar: View {
                 Text("Library").font(.system(size: 13)).foregroundStyle(Color.dsFg)
                 Spacer()
             }
-            .rowChrome(selected: item == .library)
+            .rowChrome(selected: { if case .app = item { return true }; return item == .library }())
         }
         .buttonStyle(.plain)
         ForEach(engine.pinnedLibrary.prefix(5)) { pin in

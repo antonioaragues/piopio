@@ -2,7 +2,7 @@
 
 Status: draft 2026-11-22, from a conversation with the user. The user asked for the Library as a section of its own,
 with pins kept there instead of the sidebar's Pinned (AL1, AL9). The other decisions are proposed and still need
-confirming (§12). **L1 (the Library) built 2026-11-22 (§13); L2 (apps on files) built the same day (§14)**. Mockup: [docs/design/apps](../design/apps/Apps.html), which includes a clickable
+confirming (§12). **L1 (the Library) built 2026-11-22 (§13); L2 (apps on files, §14) and L3 (changing an app, §15) built the same day**. Mockup: [docs/design/apps](../design/apps/Apps.html), which includes a clickable
 prototype. This spec continues [25](25-visuals.md): VS3 (saved visuals are files), VS4 (the engine records and the
 app draws), VS5 (no network) and VS7 (a visual talks back only on your click) all still hold.
 
@@ -541,8 +541,8 @@ scripts, Piopio's numbers, timers) are unchanged and come later.
 - `PIOPIO_DEMO_APP=<path>` for captures.
 
 **Different from §14:**
-- **A sheet, not a page with a conversation panel.** The page and its panel come with L3.
-- **An app's buttons send nothing yet**: there's no conversation to send to until L3.
+- **A sheet, not a page with a conversation panel.** L3 made it a page (§15).
+- **An app's buttons sent nothing.** Since L3 they fill in its conversation's box.
 
 **Checked**
 - **Engine tests:** `apps.test.ts` (14) covers tables, making in a project and from a chat, refusals, a new
@@ -558,3 +558,56 @@ scripts, Piopio's numbers, timers) are unchanged and come later.
 
 **Not checked:** a real model making an app from a visual; the app redrawing while open as a file is saved, by
 hand (the engine's watch is tested); Allow after a page edit adds a source, by hand; dark mode.
+
+## 15. L3: changing an app by talking about it (2026-11-22)
+
+**What you see**
+- **An app opens as a page** wherever it's opened from: the Library, a pin, its card in a conversation, or its
+  conversation in the sidebar. The app fills the content card. On the right is a 360 pt panel, **Ask or change**,
+  that's open the first time and then stays as you left it (AL11). The toolbar's ◧ shows or hides it.
+- **The conversation is made when you first write** in the panel, so opening an app leaves nothing behind. It's a
+  chat titled "*App* (app)", listed with your conversations, and it opens the app.
+- **Its place:** in a project, the project's folder, so it can read the project's data. Otherwise the app's own
+  folder, where a copied source sits too. A chat may only edit files in its place.
+- **A button in an app** (`piopio.send` or `piopio.prefill`) puts its words in the panel's box, for you to send.
+
+**A question isn't a change** (the review's point 5). Each turn, the conversation is told:
+- which page the app is, and what it reads;
+- that a question gets an answer, and the app doesn't change;
+- that a change you ask for is an edit to the page, keeping its sources unless you ask for new ones;
+- that when it's unsure which you meant, it answers and offers the change in one line;
+- that a change to how the app looks doesn't need the data, so it doesn't read the data for it.
+
+Data reaches a model only when the answer needs it, as an ordinary file read that says which file.
+
+**Undo is the page's, not the folder's** (the review's point 6)
+- **Each change is a revision of the page.** The engine keeps up to 30, with the page before and after, in
+  `apps-history/`. One request that edits the page several times is one revision, labelled with the request's first
+  line.
+- **Undo** (in the toolbar, with that label in its tooltip) puts back the page before the latest change the
+  conversation made. Data files aren't touched, so a purchase added since stays.
+- **Changes made outside Piopio** (your editor) are revisions too, but they aren't Undo's. If the page changed
+  outside after the change you're undoing, Undo says so and asks before overwriting: "spending.html changed outside
+  Piopio after “Green bars”. Undo would lose that change too." with **Undo Anyway** and Cancel.
+- **A change that breaks the page:** its script errors show above it, with Undo.
+- **A change that adds a source** keeps drawing with the data read before, and asks for Allow (§3.4).
+
+**Protocol:** `apps.conversation { path }` (made the first time) and `apps.undo { path, force? }` (CONFLICT when it
+would overwrite an outside change). An app's view also carries `undo` (the label and when) and `conversation`.
+A session summary carries `app`.
+
+**Checked**
+- **Engine tests:** `apps.test.ts` has 18 tests, 4 of them new:
+  - one request's edits make one revision, and Undo keeps the new data;
+  - Undo goes back one request at a time;
+  - an outside edit blocks Undo until it's forced;
+  - what the conversation is told.
+
+  An `engine.test.ts` case covers one conversation per app, its title and app, an edit through the chat's tools in
+  the app's folder, the label, and Undo. The whole engine suite passes (328), and so do the Swift tests.
+- **In a copy of the app:** opening an app showed the page with the panel. A message in the panel ("Lower the
+  budget to 1.000 €", with a scripted edit) changed the page, which reloaded by itself ("Over budget" went from 1 to
+  3 of 3), and Undo appeared.
+
+**Not checked:** a real model telling questions from changes; Undo, Undo Anyway and a broken page's notice clicked
+by hand; an app in a project with a real project chat; dark mode.

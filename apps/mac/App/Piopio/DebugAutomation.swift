@@ -293,6 +293,12 @@ enum DebugAutomation {
             Task {
                 try? await Task.sleep(for: .seconds(1))
                 NotificationCenter.default.post(name: .viewFile, object: URL(fileURLWithPath: path))
+                // PIOPIO_DEMO_APP_ASK=<text>: that message in the app's conversation (docs/spec/35 §15).
+                if let ask = env["PIOPIO_DEMO_APP_ASK"], let ref = try? await engine.appConversation(path) {
+                    let thread = engine.thread(ref)
+                    await thread.open()
+                    _ = await thread.send(ask)
+                }
             }
         }
         // PIOPIO_DEMO_AGENT=<template>: a new agent "Coach"; PIOPIO_DEMO_AGENT_MESSAGES: messages to it ("||");

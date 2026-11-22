@@ -49,11 +49,21 @@ export type AppView = {
 	allowed: boolean;
 	/** When the oldest data shown was read. */
 	updatedAt?: string;
+	/** The latest change the app's conversation made that Undo would take back (docs/spec/35 §15). */
+	undo?: { label: string; at: string };
+	/** The conversation about it, once there is one. */
+	conversation?: string;
 };
+
+/** One change to an app's page: what it was before and after, and who made it. */
+type Revision = { at: string; label: string; by: "conversation" | "outside"; before: string; after: string; request?: string; undone?: boolean };
+type History = { current?: string; revisions: Revision[] };
+/** How many changes Undo can go back. */
+const MAX_REVISIONS = 30;
 
 type Cached = { data?: unknown; readAt?: string; error?: string; failedAt?: string };
 type CacheFile = { sources: Record<string, Cached> };
-type State = { allowed: Record<string, string> };
+type State = { allowed: Record<string, string>; conversations: Record<string, string> };
 
 // ── The manifest ────────────────────────────────────────────────────────────────
 
@@ -263,7 +273,9 @@ function unique(path: string, taken: (p: string) => boolean): string {
 type Open = { count: number; watchers: FSWatcher[]; timer?: NodeJS.Timeout };
 
 export class Apps {
-	private state: State = { allowed: {} };
+	private state: State = { allowed: {}, conversations: {} };
+	/** What each app's conversation was last asked, by path, so the changes that follow are its (and Undo's). */
+	private readonly requests = new Map<string, { id: string; text: string; at: number }>();
 	private readonly open = new Map<string, Open>();
 
 	constructor(
@@ -281,7 +293,7 @@ export class Apps {
 	) {
 		try {
 			const read = JSON.parse(readFileSync(this.stateFile, "utf8")) as Partial<State>;
-			this.state = { allowed: read.allowed ?? {} };
+			this.state = { allowed: read.allowed ?? {}, conversations: read.conversations ?? {} };
 		} catch {
 			// Nothing allowed yet.
 		}
@@ -370,6 +382,68 @@ export class Apps {
 		return this.refresh(path);
 	}
 
+	// ── The app's conversation and Undo (docs/spec/35 §15) ─────────────────
+
+	/** The conversation about this app, if it has one. */
+	conversationOf(path: string): string | undefined {
+		return this.state.conversations[resolve(path)];
+	}
+
+	/** Which app a conversation is about. */
+	appOf(sessionId: string): string | undefined {
+		return Object.entries(this.state.conversations).find(([, id]) => id === sessionId)?.[0];
+	}
+
+	setConversation(path: string, sessionId: string): void {
+		this.state.conversations[resolve(path)] = sessionId;
+		this.saveState();
+	}
+
+	/** The app's conversation was asked something: the page's changes from now on are that request's. */
+	noteRequest(path: string, text: string): void {
+		path = resolve(path);
+		if (existsSync(path)) this.track(path, this.page(path));
+		this.requests.set(path, { id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, text: text.trim().split("\n")[0]!.slice(0, 120), at: Date.now() });
+	}
+
+	/** What the conversation is told about its app: where it is, what it reads, and when to change it. */
+	describe(path: string): string {
+		path = resolve(path);
+		let manifest: AppManifest | undefined;
+		try {
+			manifest = parseManifest(this.page(path));
+		} catch {
+			// A broken page: the conversation is still about it, and can fix it.
+		}
+		const sources = manifest ? Object.entries(manifest.sources).map(([name, s]) => `- ${name}: ${sourcePath(path, s.file)}${s.columns ? ` (columns ${s.columns.join(", ")})` : ""}`).join("\n") : "- (the manifest can't be read: fix it)";
+		return `# This conversation is about an app
+The app${manifest ? ` “${manifest.title}”` : ""} is the page ${path}. Piopio shows it beside this conversation. It reads its data from files and gets it through piopio.onData; it redraws when they change, with no model. Its sources:
+${sources}
+- A question about the app or its data ("which month was highest?", "why is this red?"): answer it here, and don't change the app. Read a source file only when the answer needs its data, and say which file you read.
+- A change the user asks for ("add a budget line", "split it by month", "make the bars green"): edit ${path} with your edit tool. Keep the manifest (the <script id="${MANIFEST_ID}"> block) as it is unless they ask for a new or different source; a new source waits for the user's Allow. Every number and label must still come from data. The page reloads when you save, and the user can Undo.
+- Unsure whether they want an answer or a change: answer, and offer the change in one line.
+- A change to how it looks needs the page only, not the data: don't read the data for it.`;
+	}
+
+	/**
+	 * Undo: the page as it was before the latest change its conversation made. Only the page: data files stay as they
+	 * are. If the page changed since in another way (your editor), it says so unless `force`.
+	 */
+	undo(path: string, force = false): AppView {
+		path = resolve(path);
+		const html = this.page(path);
+		const history = this.track(path, html);
+		const target = undoable(history);
+		if (!target) throw new Error("There's nothing to undo.");
+		if (history.current !== target.after && !force) throw new AppConflict(`${basename(path)} changed outside Piopio after “${target.label}”. Undo would lose that change too.`);
+		writeFileSync(path, target.before);
+		target.undone = true;
+		history.current = target.before;
+		this.writeHistory(path, history);
+		this.rewatch(path);
+		return this.refresh(path);
+	}
+
 	/** Stops every watch (the engine is stopping). */
 	stop(): void {
 		for (const o of this.open.values()) {
@@ -389,6 +463,7 @@ export class Apps {
 	private view(path: string, how: { readAll?: boolean }): AppView {
 		path = resolve(path);
 		const html = this.page(path);
+		const history = this.track(path, html);
 		const manifest = parseManifest(html);
 		const allowed = this.state.allowed[path] === sourcesHash(manifest);
 		const cache = this.readCache(path);
@@ -420,7 +495,59 @@ export class Apps {
 		for (const s of sources) if (cache.sources[s.name]?.readAt) data[s.name] = cache.sources[s.name]!.data;
 		const stale = sources.filter((s) => s.state !== "ok" || !s.readAt).map((s) => s.name);
 		const reads = sources.map((s) => s.readAt).filter((r): r is string => Boolean(r)).sort();
-		return { path, title: manifest.title, html, sources, data, stale, allowed, ...(reads[0] ? { updatedAt: reads[0] } : {}) };
+		const last = undoable(history);
+		return { path, title: manifest.title, html, sources, data, stale, allowed, ...(reads[0] ? { updatedAt: reads[0] } : {}), ...(last ? { undo: { label: last.label, at: last.at } } : {}), ...(this.state.conversations[path] ? { conversation: this.state.conversations[path] } : {}) };
+	}
+
+	/**
+	 * Notes a change to the page since it was last seen, as a revision: the conversation's when it was asked something
+	 * in the last half hour (one revision per request), otherwise made outside Piopio.
+	 */
+	private track(path: string, html: string): History {
+		const history = this.readHistory(path);
+		if (history.current === undefined) {
+			history.current = html;
+			this.writeHistory(path, history);
+			return history;
+		}
+		if (history.current === html) return history;
+		const request = this.requests.get(path);
+		const recent = request && Date.now() - request.at < 30 * 60_000 ? request : undefined;
+		const last = history.revisions.at(-1);
+		if (recent && last?.request === recent.id && !last.undone && last.after === history.current) last.after = html;
+		else
+			history.revisions.push({
+				at: new Date().toISOString(),
+				label: recent?.text ?? "Changed outside Piopio",
+				by: recent ? "conversation" : "outside",
+				before: history.current,
+				after: html,
+				...(recent ? { request: recent.id } : {}),
+			});
+		history.revisions = history.revisions.slice(-MAX_REVISIONS);
+		history.current = html;
+		this.writeHistory(path, history);
+		return history;
+	}
+
+	private historyFile(path: string): string {
+		return join(this.opts.home, "apps-history", `${createHash("sha1").update(resolve(path)).digest("hex").slice(0, 20)}.json`);
+	}
+
+	private readHistory(path: string): History {
+		try {
+			const read = JSON.parse(readFileSync(this.historyFile(path), "utf8")) as Partial<History>;
+			return { ...(read.current !== undefined ? { current: read.current } : {}), revisions: read.revisions ?? [] };
+		} catch {
+			return { revisions: [] };
+		}
+	}
+
+	private writeHistory(path: string, history: History): void {
+		const file = this.historyFile(path);
+		mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
+		writeFileSync(`${file}.tmp`, JSON.stringify(history), { mode: 0o600 });
+		renameSync(`${file}.tmp`, file);
 	}
 
 	private cacheFile(path: string): string {
@@ -515,3 +642,11 @@ export class Apps {
 		o.timer.unref?.();
 	}
 }
+
+/** The change Undo takes back: the conversation's latest that isn't undone (changes made outside aren't Undo's). */
+function undoable(history: History): Revision | undefined {
+	return [...history.revisions].reverse().find((r) => r.by === "conversation" && !r.undone);
+}
+
+/** Undo would overwrite a change made outside Piopio. */
+export class AppConflict extends Error {}

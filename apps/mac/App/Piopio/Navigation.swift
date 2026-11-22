@@ -26,6 +26,8 @@ enum SidebarItem: Hashable {
     case automation(String)
     /// The Library (docs/spec/35 §4): what Piopio and your agents made.
     case library
+    /// An app (its file, docs/spec/35 §15): the page, and the conversation about it beside it.
+    case app(String)
 
     var raw: String {
         switch self {
@@ -33,6 +35,7 @@ enum SidebarItem: Hashable {
         case .automations(let filter): filter.map { "automations:\($0)" } ?? "automations"
         case .automation(let id): "automation:\(id)"
         case .library: "library"
+        case .app(let path): "app:\(path)"
         case .index(let s): "index:\(s.rawValue)"
         case .project(let id): "project:\(id)"
         case .board(let id): "board:\(id)"
@@ -61,6 +64,7 @@ enum SidebarItem: Hashable {
         case "automations": self = .automations(value.isEmpty ? nil : value)
         case "automation": self = .automation(value)
         case "library": self = .library
+        case "app": self = value.isEmpty ? .library : .app(value)
         default: self = .home
         }
     }

@@ -1,7 +1,7 @@
 /** Local Engine: Engine Protocol over a Unix domain socket. */
 import { keepAttachments } from "./attachment-files.js";
 import { randomUUID } from "node:crypto";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { appendFileSync, existsSync, mkdirSync, unlinkSync, chmodSync, statSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { createConnection, createServer, type Server } from "node:net";
@@ -52,7 +52,7 @@ import { TelegramChannels } from "./channels/manager.js";
 import { AgentWatchers } from "./watchers.js";
 import { Automations } from "./automations/service.js";
 import { Library } from "./library.js";
-import { Apps } from "./apps.js";
+import { AppConflict, Apps } from "./apps.js";
 import { PIOPIO, systemZone, type Automation } from "./automations/model.js";
 import { fromProjects, REPORT_FILE as AUTOMATIONS_REPORT, reportOf as automationsReport, type LegacyPlace } from "./automations/migrate.js";
 import type { Automation as AutomationView } from "@piopio/protocol";
@@ -829,6 +829,9 @@ export class Engine {
 				const p = params as Params<"sessions.submit">;
 				const runtime = await this.sessions.runtime(p.ref);
 				const isFirst = runtime.snapshot().items.length === 0;
+				// An app's conversation: the page's changes from now on are this request's, for Undo (docs/spec/35 §15).
+				const appPath = this.apps.appOf(p.ref.id);
+				if (appPath) this.apps.noteRequest(appPath, p.input.text);
 				// Your own words (docs/spec/24 §5): side conversations may wake this one again; one you drive doesn't wake its parent.
 				this.sessions.youWrote(p.ref);
 				const { disposition } = await runtime.submit(p.input.text, {
@@ -1260,6 +1263,25 @@ export class Engine {
 				return { app: this.appCall(() => this.apps.refresh((params as Params<"apps.refresh">).path)) } satisfies Result<"apps.refresh">;
 			case "apps.allow":
 				return { app: this.appCall(() => this.apps.allow((params as Params<"apps.allow">).path)) } satisfies Result<"apps.allow">;
+			case "apps.conversation": {
+				const path = resolve((params as Params<"apps.conversation">).path);
+				const known = this.apps.conversationOf(path);
+				if (known && this.sessions.list().some((s) => s.ref.id === known)) return { ref: { kind: "thread", id: known } } satisfies Result<"apps.conversation">;
+				const app = this.appCall(() => this.apps.refresh(path));
+				// In its project when it's in one (it reads the project's files); otherwise in its own folder.
+				const cwd = this.projects.projectFor(path)?.path ?? dirname(path);
+				const ref = await this.sessions.create({ kind: "thread", app: path, cwd, title: `${app.title} (app)` });
+				this.apps.setConversation(path, ref.id);
+				return { ref } satisfies Result<"apps.conversation">;
+			}
+			case "apps.undo": {
+				const p = params as Params<"apps.undo">;
+				try {
+					return { app: this.apps.undo(p.path, p.force ?? false) } satisfies Result<"apps.undo">;
+				} catch (error) {
+					throw new EngineError(error instanceof AppConflict ? "CONFLICT" : "INVALID", (error as Error).message);
+				}
+			}
 			case "apps.close": {
 				const path = (params as Params<"apps.close">).path;
 				const opens = this.appOpens.get(conn) ?? [];

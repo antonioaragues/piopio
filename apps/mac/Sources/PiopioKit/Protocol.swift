@@ -516,6 +516,8 @@ public struct SessionEventsNotification: Decodable, Sendable {
 
 public struct SessionSummary: Codable, Sendable, Hashable {
     public var ref: ContainerRef
+    /// A conversation about an app (docs/spec/35 §15): the app's file.
+    public var app: String?
     public var title: String
     public var createdAt: String
     public var updatedAt: String
@@ -954,7 +956,14 @@ public struct AppView: Codable, Sendable, Hashable {
     /// False when the manifest lists sources not allowed yet: the page draws what was read before.
     public var allowed: Bool
     public var updatedAt: String?
+    /// The latest change the app's conversation made that Undo would take back.
+    public var undo: AppUndo?
+    /// The conversation about it (a chat's id), once there is one.
+    public var conversation: String?
 }
+public struct AppUndo: Codable, Sendable, Hashable { public var label: String; public var at: String }
+public struct AppConversationResult: Decodable, Sendable { public var ref: ContainerRef }
+public struct AppUndoParams: Encodable, Sendable { public var path: String; public var force: Bool; public init(path: String, force: Bool) { self.path = path; self.force = force } }
 public struct AppResult: Decodable, Sendable { public var app: AppView }
 
 public struct AutomationsParams: Encodable, Sendable {

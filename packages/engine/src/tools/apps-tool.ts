@@ -67,3 +67,10 @@ export function codingAppsExtension(apps: Apps, where: () => MakeContext, confir
 		);
 	};
 }
+
+/** An app's conversation (docs/spec/35 §15): what it's about, read fresh each turn (the page may have changed). */
+export function appConversationExtension(apps: Apps, path: string): ExtensionFactory {
+	return (pi) => {
+		pi.on("before_agent_start", (event) => ({ systemPrompt: `${event.systemPrompt}\n\n${apps.describe(path)}` }));
+	};
+}

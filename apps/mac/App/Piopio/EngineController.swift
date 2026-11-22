@@ -986,6 +986,20 @@ final class EngineController {
         return try await client.call("apps.allow", LibraryPathParams(path: path), as: AppResult.self).app
     }
 
+    /// The conversation about an app, made the first time (in the app's project, or its own folder).
+    func appConversation(_ path: String) async throws -> ContainerRef {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        let ref = try await client.call("apps.conversation", LibraryPathParams(path: path), as: AppConversationResult.self).ref
+        try? await refreshCatalog()
+        return ref
+    }
+
+    /// Undo the conversation's latest change to the page (its data stays). CONFLICT: it changed outside Piopio since.
+    func undoApp(_ path: String, force: Bool = false) async throws -> AppView {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        return try await client.call("apps.undo", AppUndoParams(path: path, force: force), as: AppResult.self).app
+    }
+
     func closeApp(_ path: String) async {
         _ = try? await client?.call("apps.close", LibraryPathParams(path: path), as: Empty.self)
         appUpdates[path] = nil

@@ -644,6 +644,8 @@ export const ReviewInfo = Type.Object({
 export type ReviewInfo = Static<typeof ReviewInfo>;
 
 export const SessionSummary = Type.Object({
+	/** A conversation about an app (docs/spec/35 §15): the app's file. */
+	app: Type.Optional(Type.String()),
 	ref: ContainerRef,
 	title: Type.String(),
 	createdAt: Type.String(),
@@ -1067,6 +1069,10 @@ export const AppView = Type.Object({
 	/** False when the manifest lists sources not allowed yet: the page draws what was read before. */
 	allowed: Type.Boolean(),
 	updatedAt: Type.Optional(Type.String()),
+	/** The latest change the app's conversation made that Undo would take back. */
+	undo: Type.Optional(Type.Object({ label: Type.String(), at: Type.String() })),
+	/** The conversation about it (a chat's id), once there is one. */
+	conversation: Type.Optional(Type.String()),
 });
 export type AppView = Static<typeof AppView>;
 /** What `automations.add` and `automations.update` take: the trigger in words (`when`), the rest as the record. */
@@ -1902,6 +1908,10 @@ export const methods = {
 	"apps.close": { params: Type.Object({ path: Type.String() }), result: Type.Object({}) },
 	/** Allows the sources the manifest lists now. */
 	"apps.allow": { params: Type.Object({ path: Type.String() }), result: Type.Object({ app: AppView }) },
+	/** The conversation about an app (docs/spec/35 §15), made the first time. */
+	"apps.conversation": { params: Type.Object({ path: Type.String() }), result: Type.Object({ ref: ContainerRef }) },
+	/** Undo the conversation's latest change to the page; its data files stay as they are. CONFLICT when the page changed outside Piopio since, unless `force`. */
+	"apps.undo": { params: Type.Object({ path: Type.String(), force: Type.Optional(Type.Boolean()) }), result: Type.Object({ app: AppView }) },
 	/** Locate…: where a missing file is now. */
 	"library.relocate": { params: Type.Object({ id: Type.String(), path: Type.String() }), result: Type.Object({ item: LibraryItem }) },
 	/** Runs: schedules, heartbeat, reminders, triggers and manual runs, newest first (06 §6, Runs tab). Open one with `conversationId: "run:<id>"`. */

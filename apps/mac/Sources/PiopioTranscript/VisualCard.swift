@@ -457,18 +457,22 @@ public struct AppCanvas: NSViewRepresentable {
     /// `[data, meta]` as JSON.
     let payload: String
     let answer: @MainActor (String, Bool) -> Void
+    /// The page's script errors and failed loads, as the visual check reports them.
+    let onProblem: @MainActor (String) -> Void
 
-    public init(html: String, title: String, payload: String, answer: @escaping @MainActor (String, Bool) -> Void) {
+    public init(html: String, title: String, payload: String, answer: @escaping @MainActor (String, Bool) -> Void, onProblem: @escaping @MainActor (String) -> Void = { _ in }) {
         self.html = html
         self.title = title
         self.payload = payload
         self.answer = answer
+        self.onProblem = onProblem
     }
 
     public final class Coordinator {
         var html = ""
         var sent = ""
         var payload = ""
+        var problem: (@MainActor (String) -> Void)?
         weak var view: VisualWebView?
 
         @MainActor func push() {
@@ -483,13 +487,18 @@ public struct AppCanvas: NSViewRepresentable {
     public func makeNSView(context: Context) -> VisualWebView {
         let view = VisualWebView.make(scrolls: true)
         context.coordinator.view = view
+        context.coordinator.problem = onProblem
         view.onLoaded = { [weak coordinator = context.coordinator] in coordinator?.push() }
+        view.observer = { [weak coordinator = context.coordinator] type, body in
+            if type == "error", let text = body["text"] as? String { coordinator?.problem?(text) }
+        }
         load(view, context.coordinator)
         return view
     }
 
     public func updateNSView(_ view: VisualWebView, context: Context) {
         view.answer = answer
+        context.coordinator.problem = onProblem
         context.coordinator.payload = payload
         if context.coordinator.html != html { load(view, context.coordinator) } else { context.coordinator.push() }
     }

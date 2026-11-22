@@ -3056,3 +3056,27 @@ test("make_app in a chat (docs/spec/35 §14): asks first, writes the app beside 
 	await a.client.call("sessions.delete", { ref });
 	expect((await a.client.call("apps.open", { path })).app.sources[0]).toMatchObject({ state: "ok", file: "expenses.csv" });
 }, 30_000);
+
+test("an app's conversation (docs/spec/35 §15): one per app, where the app is; its edit is the request's, and Undo takes it back", async () => {
+	const a = await start();
+	const dir = join(a.home, "Piopio", "Apps", "spending");
+	mkdirSync(dir, { recursive: true });
+	writeFileSync(join(dir, "expenses.csv"), "category,amount\nFood,12\n");
+	const plan = a.engine.apps.plan({ title: "Spending", html: '<b id="t">total</b><script>piopio.onData((d) => {})</script>', sources: { expenses: { file: join(dir, "expenses.csv") } } }, { cwd: dir });
+	a.engine.apps.write(plan);
+	const { ref } = await a.client.call("apps.conversation", { path: plan.path });
+	expect((await a.client.call("apps.conversation", { path: plan.path })).ref).toEqual(ref);
+	const summary = (await a.client.call("sessions.list", {})).sessions.find((s: { ref: { id: string } }) => s.ref.id === ref.id);
+	// It works in the app's folder: a chat may edit only files there, and the edit below goes through.
+	expect(summary).toMatchObject({ title: "Spending (app)", app: plan.path });
+	const sub = await a.client.call("sessions.subscribe", { ref });
+	const before = readFileSync(plan.path, "utf8");
+	await a.client.call("sessions.submit", { ref, input: { text: `edit: ${plan.path} | <b id="t">total</b> | <b id="t" style="color:var(--green)">total</b>` } });
+	await a.client.waitFor(settled(sub.subscriptionId));
+	expect(readFileSync(plan.path, "utf8")).toContain("color:var(--green)");
+	const opened = (await a.client.call("apps.open", { path: plan.path })).app;
+	expect(opened.undo?.label).toMatch(/^edit: /);
+	await a.client.call("apps.undo", { path: plan.path });
+	expect(readFileSync(plan.path, "utf8")).toBe(before);
+	await a.client.call("apps.close", { path: plan.path });
+}, 30_000);

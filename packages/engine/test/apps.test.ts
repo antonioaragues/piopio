@@ -1,6 +1,6 @@
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { Apps, isAppFile, parseManifest, parseTable, type AppView } from "../src/apps.js";
 import { kindOf } from "../src/library.js";
@@ -190,5 +190,62 @@ describe("in the transcript and the Library", () => {
 		const details = endDetails("make_app", {}, { details: { files: [{ path: "/p/apps/spending.html", name: "spending.html", description: "App: Spending" }] } }, "Made", false);
 		expect(details).toEqual({ type: "files", files: [{ path: "/p/apps/spending.html", name: "spending.html", description: "App: Spending" }] });
 		expect(existsSync("/p/apps/spending.html")).toBe(false);
+	});
+});
+
+describe("the app's conversation and Undo (docs/spec/35 §15)", () => {
+	it("one request's edits are one change; Undo puts the page back and keeps the new data", () => {
+		const { apps, plan, csv } = projectApp();
+		const original = readFileSync(plan.path, "utf8");
+		apps.noteRequest(plan.path, "Add a budget line at 1.100 €\nand more");
+		writeFileSync(plan.path, original.replace('<div id="out"></div>', '<div id="out"></div><hr>'));
+		apps.refresh(plan.path);
+		writeFileSync(plan.path, original.replace('<div id="out"></div>', '<div id="out"></div><hr class="budget">'));
+		appendFileSync(csv, "2026-11-20,Car,450\n");
+		const changed = apps.refresh(plan.path);
+		expect(changed.undo).toMatchObject({ label: "Add a budget line at 1.100 €" });
+		const back = apps.undo(plan.path);
+		expect(readFileSync(plan.path, "utf8")).toBe(original);
+		expect(back.data.expenses).toHaveLength(4);
+		expect(back.undo).toBeUndefined();
+		expect(() => apps.undo(plan.path)).toThrow(/nothing to undo/);
+	});
+
+	it("Undo goes back one request at a time", () => {
+		const { apps, plan } = projectApp();
+		const v0 = readFileSync(plan.path, "utf8");
+		apps.noteRequest(plan.path, "First");
+		writeFileSync(plan.path, `${v0}<p>1</p>`);
+		apps.refresh(plan.path);
+		apps.noteRequest(plan.path, "Second");
+		writeFileSync(plan.path, `${v0}<p>1</p><p>2</p>`);
+		expect(apps.refresh(plan.path).undo?.label).toBe("Second");
+		expect(apps.undo(plan.path).undo?.label).toBe("First");
+		apps.undo(plan.path);
+		expect(readFileSync(plan.path, "utf8")).toBe(v0);
+	});
+
+	it("an edit made outside Piopio isn't Undo's, and Undo won't overwrite it without asking", () => {
+		const { apps, plan } = projectApp();
+		const v0 = readFileSync(plan.path, "utf8");
+		writeFileSync(plan.path, `${v0}<!-- mine -->`);
+		expect(apps.refresh(plan.path).undo).toBeUndefined();
+		apps.noteRequest(plan.path, "Green bars");
+		writeFileSync(plan.path, `${v0}<!-- mine --><p>green</p>`);
+		apps.refresh(plan.path);
+		const forgotten = new Apps({ home: join(dirname(plan.path), "..", "..", "home"), appsDir: "/nowhere" });
+		writeFileSync(plan.path, `${v0}<!-- mine --><p>green</p><!-- later, in my editor -->`);
+		expect(() => forgotten.undo(plan.path)).toThrow(/changed outside Piopio after “Green bars”/);
+		forgotten.undo(plan.path, true);
+		expect(readFileSync(plan.path, "utf8")).toBe(`${v0}<!-- mine -->`);
+	});
+
+	it("tells its conversation where the app is, what it reads, and to answer questions without changing it", () => {
+		const { apps, plan, csv } = projectApp();
+		const text = apps.describe(plan.path);
+		expect(text).toContain(`The app “Spending” is the page ${plan.path}`);
+		expect(text).toContain(`- expenses: ${csv} (columns date, category, amount)`);
+		expect(text).toContain("answer it here, and don't change the app");
+		expect(text).toContain("don't read the data for it");
 	});
 });

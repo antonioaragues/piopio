@@ -26,7 +26,7 @@ import type { ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import { codingBrowserExtension } from "./tools/browser-tools.js";
 import { codingConnectorsExtension } from "./connectors/extension.js";
 import { codingVisualsExtension } from "./tools/visuals.js";
-import { codingAppsExtension } from "./tools/apps-tool.js";
+import { appConversationExtension, codingAppsExtension } from "./tools/apps-tool.js";
 import type { Apps, MakeContext } from "./apps.js";
 import { historySdkExtension } from "./tools/history.js";
 import { isCodingAgent } from "./coding-agents.js";
@@ -720,7 +720,7 @@ export class Sessions {
 		return entry;
 	}
 
-	async create(params: { kind: "thread" | "build"; instructions?: string; cwd?: string; model?: ModelRef; thinking?: string; title?: string; workOn?: WorkOn; approvalMode?: ApprovalMode; planMode?: boolean; profile?: "build" | "chat" }): Promise<ContainerRef> {
+	async create(params: { kind: "thread" | "build"; instructions?: string; app?: string; cwd?: string; model?: ModelRef; thinking?: string; title?: string; workOn?: WorkOn; approvalMode?: ApprovalMode; planMode?: boolean; profile?: "build" | "chat" }): Promise<ContainerRef> {
 		if (params.kind === "build" && !params.cwd) throw new EngineError("INVALID", "Build sessions need a cwd.");
 		if (params.planMode && params.kind !== "build") throw new EngineError("INVALID", "Only folder conversations support Plan mode.");
 		if (params.kind === "build" && !existsSync(params.cwd!)) throw new EngineError("INVALID", `No such folder: ${params.cwd}`);
@@ -751,7 +751,9 @@ export class Sessions {
 			...(params.thinking ? { thinking: params.thinking } : {}),
 			...(params.planMode ? { planMode: true } : {}),
 			...(params.kind === "build" ? buildMode(params.profile === "chat" ? "read_only" : (params.approvalMode ?? this.policy.modeFor(params.cwd!))) : {}),
-			...(params.kind === "thread" ? { cwd: this.scratch(ref.id) } : {}),
+			// An app's conversation works where the app is (docs/spec/35 §15): its project, or its own folder.
+			...(params.kind === "thread" ? { cwd: params.app && params.cwd ? params.cwd : this.scratch(ref.id) } : {}),
+			...(params.app ? { app: params.app } : {}),
 		};
 		this.entries.set(ref.id, entry);
 		this.save();
@@ -3005,7 +3007,7 @@ export class Sessions {
 					entry.web = on;
 					this.save();
 				},
-				...(this.aboutMeSdk ? { extensions: [this.aboutMeSdk] } : {}),
+				...(this.aboutMeSdk || entry.app ? { extensions: [...(this.aboutMeSdk ? [this.aboutMeSdk] : []), ...(entry.app && this.apps ? [appConversationExtension(this.apps, entry.app)] : [])] } : {}),
 			},
 		});
 		if (runtime.sessionFile && runtime.sessionFile !== entry.sessionFile) {
