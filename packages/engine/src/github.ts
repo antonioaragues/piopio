@@ -11,12 +11,16 @@
  * The API and the token can be pointed elsewhere for tests (`api`, `token`).
  */
 import { spawn } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { EngineError } from "./models.js";
 import { git } from "./git.js";
+import { enginePaths } from "./paths.js";
 
 export const SECRET_GITHUB = "github.token";
 
-export type GitHubOptions = { api?: string; token?: string; gh?: boolean };
+/** `home`: where git's short-lived sign-in file goes (Piopio's data folder by default, which the sandbox can't read). */
+export type GitHubOptions = { api?: string; token?: string; gh?: boolean; home?: string };
 
 export type Repo = { owner: string; name: string };
 export type RepoInfo = { fullName: string; description?: string; private: boolean; cloneUrl: string; updatedAt: string; defaultBranch: string };
@@ -117,11 +121,24 @@ export class GitHub {
 		await this.secrets.delete(SECRET_GITHUB);
 	}
 
-	/** git with your token on github.com URLs, so pushing and cloning private repos work without a credential helper. */
+	/**
+	 * git with your token on github.com URLs, so pushing and cloning private repos work without a credential helper.
+	 * The token goes in a file only you can read, in Piopio's data folder, which git includes for this one run: on git's
+	 * command line, or in its environment, `ps` would show it to every process of yours, sandboxed commands too.
+	 */
 	async git(cwd: string, args: string[], timeoutMs = 120_000): Promise<string> {
 		const auth = await this.token();
-		const header = auth ? ["-c", `http.https://github.com/.extraheader=AUTHORIZATION: basic ${Buffer.from(`x-access-token:${auth.token}`).toString("base64")}`] : [];
-		return git(cwd, [...header, ...args], { timeoutMs });
+		if (!auth) return git(cwd, args, { timeoutMs });
+		const dir = mkdtempSync(join(this.options.home ?? enginePaths().home, "git-auth-"));
+		try {
+			const file = join(dir, "config");
+			writeFileSync(file, `[http "https://github.com/"]\n\textraheader = AUTHORIZATION: basic ${Buffer.from(`x-access-token:${auth.token}`).toString("base64")}\n`, { mode: 0o600 });
+			// Added after any config already passed this way, which stays.
+			const n = Number(process.env.GIT_CONFIG_COUNT) || 0;
+			return await git(cwd, args, { timeoutMs, env: { GIT_CONFIG_COUNT: String(n + 1), [`GIT_CONFIG_KEY_${n}`]: "include.path", [`GIT_CONFIG_VALUE_${n}`]: file } });
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
 	}
 
 	// ── G5 ──
@@ -134,8 +151,10 @@ export class GitHub {
 	/** Clones into `dest` (which must not exist). `source` is owner/name or a URL. */
 	async clone(source: string, dest: string): Promise<void> {
 		const url = /^[\w.-]+\/[\w.-]+$/.test(source.trim()) ? `https://github.com/${source.trim()}.git` : source.trim();
+		// Not an option ("--upload-pack=…" runs a command), nor git's transports that run one (ext::, fd::).
+		if (url.startsWith("-") || /^(ext|fd)::/i.test(url)) throw new EngineError("INVALID", `“${source.trim()}” isn't a repository to clone.`);
 		const parent = dest.split("/").slice(0, -1).join("/") || "/";
-		await this.git(parent, ["clone", "--quiet", url, dest], 600_000);
+		await this.git(parent, ["clone", "--quiet", "--", url, dest], 600_000);
 	}
 
 	// ── G6 ──

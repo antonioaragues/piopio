@@ -40,6 +40,25 @@ import Testing
     #expect(page.range(of: "<!DOCTYPE html>") == nil)
 }
 
+@Test func aHeadInACommentCantMoveTheCSP() {
+    // Spliced into the first "<head>", our CSP would land inside the comment and the page would run without it.
+    let html = "<!-- <html><head> --><html lang=\"es\"><head><script>fetch('https://x.example')</script></head><body>x</body></html>"
+    for page in [VisualPage.html(html, title: "t"), VisualPage.html(html, title: "t", standalone: true)] {
+        let csp = page.range(of: "Content-Security-Policy")!.lowerBound
+        #expect(csp < page.range(of: "<!--")!.lowerBound)
+        #expect(page.hasPrefix("<!doctype html>\n<html><head>\n<meta charset=\"utf-8\">\n<meta http-equiv=\"Content-Security-Policy\""))
+        #expect(page.contains("<html lang=\"es\">"))
+    }
+}
+
+@Test func scriptLinesCountFromAWholeDocument() {
+    let page = VisualPage.html("<html><body>\nFIRST", title: "t")
+    let lines = page.components(separatedBy: "\n")
+    let first = lines.firstIndex(of: "FIRST")! + 1
+    let offset = Int(page.firstMatch(of: /const offset = (\d+);/)!.1)!
+    #expect(first - offset == 2)
+}
+
 @Test @MainActor func aSavedVisualWorksAnywhere() {
     let page = VisualPage.portable(#"<script src="piopio-lib://chart.js"></script><link rel="stylesheet" href="piopio-lib://katex/katex.css"><p>x</p>"#, title: "Saved")
     #expect(page.contains(VisualPage.portableCSP) && page.contains("connect-src 'none'"))

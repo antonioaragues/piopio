@@ -39,6 +39,11 @@ export type ClaudeCodeOpenOptions = {
 	 * as the "piopio" MCP server.
 	 */
 	tools?: (ask: ToolAsk) => ExtensionFactory[];
+	/**
+	 * May the project's own Claude Code settings load (hooks, MCP servers, CLAUDE.md)? Read when a session starts;
+	 * without it they do. Untrusted, only the user's own setup applies.
+	 */
+	projectTrusted?: () => boolean;
 };
 
 /** How one of Piopio's tools asks the user (a connector's change, acting on a site): through the composer tray. */
@@ -338,8 +343,9 @@ export class ClaudeCodeRuntime implements Runtime {
 				...(piopio?.tools.length ? { mcpServers: { [PIOPIO_MCP]: piopioServer(piopio.tools, (name, args) => this.callIdFor(name, args), () => this.turnAbort.signal) } } : {}),
 				// Claude Code's own system prompt, with what Piopio's tools add (connected apps, About me, visuals).
 				...(append ? { systemPrompt: { type: "preset", preset: "claude_code", append } } : {}),
-				// The user's own Claude Code setup applies: CLAUDE.md, their settings, MCP servers and skills (CA2).
-				settingSources: ["user", "project", "local"],
+				// The user's own Claude Code setup applies: CLAUDE.md, their settings, MCP servers and skills (CA2). The
+				// project's only when it's trusted: its hooks and MCP servers run code on this Mac.
+				settingSources: this.options.projectTrusted?.() === false ? ["user"] : ["user", "project", "local"],
 				stderr: (data: string) => (this.stderr = (this.stderr + data).slice(-2000)),
 			},
 		});

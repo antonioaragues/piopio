@@ -220,7 +220,12 @@ struct HTMLFile: NSViewRepresentable {
             loaded = url
             Task {
                 // The rule goes in before the first load, or the page's first requests would get through.
-                if !offline, let rules = await HTMLFile.offline() {
+                // Without it nothing of the page is shown.
+                if !offline {
+                    guard let rules = await HTMLFile.offline() else {
+                        view.loadHTMLString(VisualPage.unguarded, baseURL: nil)
+                        return
+                    }
                     view.configuration.userContentController.add(rules)
                     offline = true
                 }

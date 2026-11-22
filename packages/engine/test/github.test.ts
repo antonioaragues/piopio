@@ -199,3 +199,21 @@ test("G5: your repositories, and a clone that becomes a project", async () => {
 	expect(existsSync(join(project.path, "README.md"))).toBe(true);
 	expect(project.path.startsWith(join(realpathSync(home), "Piopio"))).toBe(true);
 }, 30_000);
+
+test("the token reaches git in a file it includes for one run, never on its command line, and clone takes no options", async () => {
+	const { GitHub } = await import("../src/github.js");
+	const { checkout } = await import("../src/git.js");
+	const home = realpathSync(mkdtempSync(join(tmpdir(), "piopio-gh-home-")));
+	const repo = realpathSync(mkdtempSync(join(tmpdir(), "piopio-gh-repo-")));
+	execFileSync("git", ["init", "-q"], { cwd: repo });
+	const github = new GitHub({ get: async () => null, set: async () => {}, delete: async () => {} } as never, { token: "tok-123", gh: false, home });
+	// git hears the header, though no argument carries it.
+	const header = await github.git(repo, ["config", "--get-urlmatch", "http.extraheader", "https://github.com/acme/shop"]);
+	expect(header.trim()).toBe(`AUTHORIZATION: basic ${Buffer.from("x-access-token:tok-123").toString("base64")}`);
+	// The file is gone once git is done.
+	expect(execFileSync("ls", ["-A", home], { encoding: "utf8" })).toBe("");
+	for (const source of ["--upload-pack=touch /tmp/pwned", "ext::sh -c touch% /tmp/pwned"]) {
+		await expect(github.clone(source, join(repo, "copy"))).rejects.toMatchObject({ code: "INVALID" });
+	}
+	await expect(checkout(repo, "topic", true, "--orphan")).rejects.toMatchObject({ code: "INVALID" });
+});

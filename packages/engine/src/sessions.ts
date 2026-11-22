@@ -8,7 +8,7 @@ import { randomUUID } from "node:crypto";
 import { cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, watch, writeFileSync, type FSWatcher } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
-import { SessionManager } from "@earendil-works/pi-coding-agent";
+import { getAgentDir, SessionManager } from "@earendil-works/pi-coding-agent";
 import type { ApprovalMode, ApprovalRule, ContainerRef, ModelRef, ProjectInfo, PromptResponse, SessionSummary, TimelineItem, WorkOn } from "@piopio/protocol";
 import { EngineError, type ModelHub } from "./models.js";
 import type { EnginePaths } from "./paths.js";
@@ -18,6 +18,7 @@ import { draftAgent, type AgentDraft } from "./agent-draft.js";
 import { addWorktree, checkout, git as runGit, mergeWorktree, removeWorktree, status as gitStatus } from "./git.js";
 import { BuildRuntime } from "./runtimes/build.js";
 import { ClaudeCodeRuntime, type ToolAsk } from "./runtimes/claude-code.js";
+import { claudeCodeProjectAllowed } from "./project-trust.js";
 import { AcpRuntime } from "./runtimes/acp.js";
 import { acpSpec } from "./acp.js";
 import { ToolServer } from "./tool-server.js";
@@ -68,6 +69,7 @@ import { sdkMessages, SdkEventMapper } from "./timeline/pi-sdk.js";
 import { migrateChat } from "./migrate-chats.js";
 import type { CloudMemory, Params, Result, SessionEvent } from "@piopio/protocol";
 import { CloudAgentView, type CloudLink } from "./cloud.js";
+import { readJsonFile, writeFileAtomic } from "./atomic.js";
 import type { SecretBroker } from "./secrets.js";
 import { TelegramChannels as TelegramSecrets } from "./channels/manager.js";
 import { progressLine } from "./progress-line.js";
@@ -236,7 +238,7 @@ export class Sessions {
 		});
 		this.checkpoints = new CheckpointStore(join(paths.home, "checkpoints"));
 		if (existsSync(paths.catalogIndex)) {
-			for (const e of JSON.parse(readFileSync(paths.catalogIndex, "utf8")) as CatalogEntry[]) {
+			for (const e of readJsonFile<CatalogEntry[]>(paths.catalogIndex, () => [])) {
 				// Chat-lens sessions are Read only now (docs/spec/18 §4): the profile follows the approval mode.
 				if (e.ref.kind === "build" && e.profile === "chat") e.approvalMode = "read_only";
 				// Notebooks are gone (docs/spec/18 CF8): their files stay in spaces/, they no longer show.
@@ -3083,6 +3085,7 @@ export class Sessions {
 			keepImages: toolImageKeeper(attachmentsDir(this.paths.home, entry.ref.id)),
 			onAttention: (_kind, message) => this.onAttention?.({ ref: entry.ref, title: entry.title, kind: "waiting", message }),
 			tools: (ask) => this.piopioTools(entry, ask),
+			projectTrusted: () => claudeCodeProjectAllowed(cwd, entry.projectPath ?? cwd, this.piOverrides.piAgentDir ?? getAgentDir()),
 		});
 	}
 
@@ -3113,9 +3116,7 @@ export class Sessions {
 	}
 
 	private save(): void {
-		const tmp = `${this.paths.catalogIndex}.tmp`;
-		writeFileSync(tmp, JSON.stringify([...this.entries.values()], null, "\t"));
-		renameSync(tmp, this.paths.catalogIndex);
+		writeFileAtomic(this.paths.catalogIndex, JSON.stringify([...this.entries.values()], null, "\t"));
 	}
 }
 

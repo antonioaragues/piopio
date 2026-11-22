@@ -24,11 +24,11 @@ export type GitStatus = { repo: boolean; branch?: string; detached?: boolean; up
 export type GitBranch = { name: string; upstream?: string; lastCommitAt?: string; current: boolean };
 export type GitCommit = { hash: string; subject: string; at: string; files?: { path: string; added: number; removed: number }[] };
 
-export async function git(cwd: string, args: string[], options: { stdin?: string; timeoutMs?: number } = {}): Promise<string> {
+export async function git(cwd: string, args: string[], options: { stdin?: string; timeoutMs?: number; env?: Record<string, string> } = {}): Promise<string> {
 	return new Promise((resolve, reject) => {
 		const child = spawn("git", args, {
 			cwd,
-			env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GIT_ASKPASS: "", SSH_ASKPASS: "", GIT_SSH_COMMAND: process.env.GIT_SSH_COMMAND ?? "ssh -o BatchMode=yes", LC_ALL: "C" },
+			env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GIT_ASKPASS: "", SSH_ASKPASS: "", GIT_SSH_COMMAND: process.env.GIT_SSH_COMMAND ?? "ssh -o BatchMode=yes", LC_ALL: "C", ...options.env },
 		});
 		let out = "";
 		let err = "";
@@ -182,6 +182,8 @@ export function parseLog(out: string): GitCommit[] {
 /** Switches branch, or creates one (from `base`, default HEAD). Uncommitted changes come along, as with git. */
 export async function checkout(cwd: string, branch: string, create = false, base?: string): Promise<void> {
 	validBranch(branch);
+	// A base starting with "-" would be read as one of switch's options.
+	if (base?.startsWith("-")) throw new EngineError("INVALID", `“${base}” isn't a branch or commit to start from.`);
 	await git(cwd, create ? ["switch", "-c", branch, ...(base ? [base] : [])] : ["switch", branch]);
 }
 

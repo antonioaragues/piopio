@@ -7,10 +7,12 @@ import { detectCheck } from "@piopio/pi-extensions";
 import { cpSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { hasTrustRequiringProjectResources, ProjectTrustStore } from "@earendil-works/pi-coding-agent";
+import { claudeCodeTrusted, hasClaudeCodeSetup } from "./project-trust.js";
 import type { ApprovalMode, ApprovalRule, ProjectInfo } from "@piopio/protocol";
 import { EngineError } from "./models.js";
 import { NOTES_FILE } from "./runtimes/build.js";
 import { newId } from "./sessions.js";
+import { readJsonFile, writeFileAtomic } from "./atomic.js";
 
 type Lens = "build" | "chat";
 /**
@@ -51,7 +53,7 @@ export class Projects {
 		/** Where projects without a folder kept their files before CF4 (`<home>/projects`), to move them out. */
 		oldDataDir?: string,
 	) {
-		if (existsSync(file)) this.entries = JSON.parse(readFileSync(file, "utf8")) as StoredProject[];
+		this.entries = readJsonFile<StoredProject[]>(file, () => this.entries);
 		this.trust = new ProjectTrustStore(agentDir);
 		// Lenses are gone (docs/spec/18 §4): a folder only used to chat about keeps that, as Read only, so removing the
 		// lens never leaves a folder of documents ready to edit. Folders in Build keep their mode.
@@ -121,7 +123,9 @@ export class Projects {
 	private describe(p: StoredProject): ProjectInfo {
 		const exists = existsSync(p.path);
 		const decision = exists ? this.trust.get(p.path) : null;
-		return { ...describe(p), trust: decision === true ? "trusted" : decision === false ? "untrusted" : "undecided", needsTrust: exists && hasTrustRequiringProjectResources(p.path) };
+		// Its own pi setup, or Claude Code hooks and MCP servers that Claude Code itself wasn't told to trust.
+		const needsTrust = exists && (hasTrustRequiringProjectResources(p.path) || (hasClaudeCodeSetup(p.path) && !claudeCodeTrusted(p.path)));
+		return { ...describe(p), trust: decision === true ? "trusted" : decision === false ? "untrusted" : "undecided", needsTrust };
 	}
 
 	get(id: string): ProjectInfo {
@@ -306,9 +310,7 @@ export class Projects {
 	}
 
 	private save(): void {
-		const tmp = `${this.file}.tmp`;
-		writeFileSync(tmp, JSON.stringify(this.entries, null, "\t"));
-		renameSync(tmp, this.file);
+		writeFileAtomic(this.file, JSON.stringify(this.entries, null, "\t"));
 		const projects = this.list();
 		for (const l of this.listeners) l(projects);
 	}

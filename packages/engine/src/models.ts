@@ -25,6 +25,7 @@ type FauxHandle = ReturnType<typeof fauxProvider>;
 import { ExtraCosts } from "./costs.js";
 import { OnDeviceModel, OnDeviceUnavailable } from "./on-device.js";
 import type { UtilityChoice } from "@piopio/protocol";
+import { writeFileAtomic } from "./atomic.js";
 
 
 export class ModelHub {
@@ -330,7 +331,7 @@ export class ModelHub {
 		if (hidden.length) this.hidden[provider] = [...new Set(hidden)];
 		else delete this.hidden[provider];
 		const path = this.visibilityPath;
-		if (path) writeFileSync(path, `${JSON.stringify(this.hidden, null, "\t")}\n`, { mode: 0o600 });
+		if (path) writeFileAtomic(path, `${JSON.stringify(this.hidden, null, "\t")}\n`, { mode: 0o600 });
 	}
 
 	/** Every model a connected provider offers, with whether it's hidden (endpoints: embeddings too). */

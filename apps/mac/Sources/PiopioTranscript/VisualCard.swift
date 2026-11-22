@@ -130,16 +130,13 @@ public enum VisualPage {
             standalone ? "<script>window.piopio = { send: () => {}, prefill: () => {}, onData: () => {} };</script>" : bridge,
         ].joined(separator: "\n")
         let headLines = head.filter { $0 == "\n" }.count
-        // A whole document keeps its own head, after ours (so its styles win and our CSP still comes first).
+        // A whole document goes after our head, not into the first "<head>" found in it: that one could sit in a comment
+        // or a script's string and leave our CSP outside the head. The parser folds what follows into the page: their
+        // <html> attributes onto the page, their head's style, meta, title and script into the head after ours (so
+        // their styles win), and their second <head> tag is ignored.
         if content.range(of: "<html", options: .caseInsensitive) != nil {
-            var page = content.replacingOccurrences(of: #"<!doctype[^>]*>"#, with: "", options: [.regularExpression, .caseInsensitive])
-            if let headTag = page.range(of: #"<head[^>]*>"#, options: [.regularExpression, .caseInsensitive]) {
-                page.insert(contentsOf: "\n" + head, at: headTag.upperBound)
-            } else if let htmlTag = page.range(of: #"<html[^>]*>"#, options: [.regularExpression, .caseInsensitive]) {
-                page.insert(contentsOf: "<head>\n\(head)\n</head>", at: htmlTag.upperBound)
-            }
-            // Our doctype line and the lines of our head, inserted before most of theirs (close enough for scripts).
-            return ("<!doctype html>\n" + page).replacingOccurrences(of: lineOffsetMark, with: "\(headLines + 2)")
+            let page = content.replacingOccurrences(of: #"<!doctype[^>]*>"#, with: "", options: [.regularExpression, .caseInsensitive])
+            return "<!doctype html>\n<html><head>\n\(head)\n</head>\n\(page)".replacingOccurrences(of: lineOffsetMark, with: "\(headLines + 4)")
         }
         // The fragment starts after the doctype, <html><head>, our head and </head><body>: that many lines down.
         return "<!doctype html>\n<html><head>\n\(head)\n</head><body>\n\(content)\n</body></html>".replacingOccurrences(of: lineOffsetMark, with: "\(headLines + 4)")
@@ -202,6 +199,9 @@ public enum VisualPage {
         svg{max-width:100%}canvas{max-width:100%}
         """
     }
+
+    /// Shown in place of a page when WebKit couldn't take the rules that keep it offline (it never loads without them).
+    public static let unguarded = #"<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'"><style>:root{color-scheme:light dark}body{font:13px -apple-system,sans-serif;color:GrayText;margin:16px}</style><p>This page can’t be shown: Piopio couldn’t keep it offline. Quitting and reopening Piopio usually fixes it.</p>"#
 
     /// A page that works anywhere: no network, and the libraries inline, as `data:` URLs for modules.
     static let portableCSP = "default-src 'none'; script-src 'unsafe-inline' data:; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:; connect-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'"
@@ -371,10 +371,13 @@ public final class VisualWebView: WKWebView, ClickThroughArea {
     /// Loads the page once the offline rules are in (before the first load, or its first requests would go out).
     @MainActor func show(_ content: String, title: String, scrolls: Bool) {
         Task { @MainActor in
-            if let rules = await VisualLibrary.offlineRules(allowing: [VisualLibrary.scheme, "piopio-visual", "about", "data", "blob"]) {
-                configuration.userContentController.removeAllContentRuleLists()
-                configuration.userContentController.add(rules)
+            // Without the rules the page could reach the network: nothing of it is shown.
+            guard let rules = await VisualLibrary.offlineRules(allowing: [VisualLibrary.scheme, "piopio-visual", "about", "data", "blob"]) else {
+                loadHTMLString(VisualPage.unguarded, baseURL: nil)
+                return
             }
+            configuration.userContentController.removeAllContentRuleLists()
+            configuration.userContentController.add(rules)
             loadHTMLString(VisualPage.html(content, title: title, scrolls: scrolls), baseURL: VisualPage.baseURL)
         }
     }

@@ -10,10 +10,11 @@
  * Telegram account (`t.me/<bot>?start=<code>`, valid for an hour).
  */
 import { randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { AgentDefinition } from "@piopio/runtime";
 import { TelegramBot, type TelegramMessage, type TelegramUpdate } from "./telegram.js";
+import { writeFileAtomic } from "../atomic.js";
 
 export type ChannelHost = {
 	/** Local agents and their definitions. */
@@ -242,6 +243,6 @@ export class TelegramChannels {
 	}
 
 	private writeState(agentId: string, state: State): void {
-		writeFileSync(this.file(agentId), JSON.stringify(state), { mode: 0o600 });
+		writeFileAtomic(this.file(agentId), JSON.stringify(state), { mode: 0o600 });
 	}
 }

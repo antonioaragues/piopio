@@ -262,12 +262,17 @@ export class AcpRuntime implements Runtime {
 	/** One of Piopio's tools asks the user. */
 	private ask: ToolAsk = (request, signal) => this.broker.ask({ kind: "approval", title: request.title, tool: request.tool, callId: request.callId }, signal);
 
-	/** One of Piopio's tools, if the agent's tool call is one (agents name MCP tools in their own ways). */
+	/**
+	 * One of Piopio's tools, if the agent's tool call is one (agents name MCP tools in their own ways). Its calls are let
+	 * through without asking, so a match is strict: a command, an edit or a move never is one, whatever its title says
+	 * (a command's title is the command, and "echo web_fetch && …" isn't web_fetch), and the name is the whole call
+	 * name or title, or the title as "mcp.piopio.search_conversations" (Codex) or "mcp_piopio_…" (Antigravity), with
+	 * nothing after it but its arguments in parentheses: a permission request may not say what kind of call it is.
+	 */
 	private piopioName(call: Pick<AcpToolCall, "title" | "kind"> & { name?: string }): string | undefined {
-		if (!this.piopio) return undefined;
-		// "mcp.piopio.search_conversations" (Codex), "mcp_piopio_search_conversations" (Antigravity), or the bare name.
-		const words = `${call.name ?? ""} ${call.title ?? ""}`.split(/[^A-Za-z0-9_]+/);
-		return this.piopio.tools.find((t) => words.some((w) => w === t.name || w.endsWith(`piopio_${t.name}`) || w.endsWith(`piopio__${t.name}`)))?.name;
+		if (!this.piopio || WRITES.has(call.kind ?? "")) return undefined;
+		const title = (call.title ?? "").trim();
+		return this.piopio.tools.find((t) => call.name === t.name || title === t.name || new RegExp(`^(?:mcp[._])?piopio(?:\\.|__|_)${t.name}(?:\\(|$)`).test(title))?.name;
 	}
 
 	/** The agent's tool call for this run of one of Piopio's tools (same name and arguments, else same name). */

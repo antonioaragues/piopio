@@ -991,8 +991,9 @@ extension Notification.Name {
     static let showCommit = Notification.Name("piopio.showCommit")
 }
 
-/// The project has its own pi resources (.pi extensions, MCP servers, settings, prompts or skills) and no trust
-/// decision yet: they don't load until you trust it. The decision is pi's, so the pi CLI uses it too.
+/// The project has its own setup that runs code (pi's .pi extensions, MCP servers, settings, prompts or skills; Claude
+/// Code's hooks and MCP servers in .claude or .mcp.json) and no trust decision yet: it doesn't load until you trust it.
+/// The decision is pi's, so the pi CLI uses it too.
 struct TrustBanner: View {
     let engine: EngineController
     let project: ProjectInfo
@@ -1000,7 +1001,7 @@ struct TrustBanner: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "checkmark.shield").foregroundStyle(Color.dsAmber)
-            Text("**\(project.name)** has its own pi setup in .pi (extensions, MCP servers, prompts or skills). It loads only if you trust the project; extensions run code on your Mac.")
+            Text("**\(project.name)** has its own setup (in .pi, .claude or .mcp.json: extensions, hooks, MCP servers, prompts or skills). It loads only if you trust the project; it can run code on your Mac.")
                 .font(.system(size: 12.5))
                 .foregroundStyle(Color.dsFg)
                 .fixedSize(horizontal: false, vertical: true)

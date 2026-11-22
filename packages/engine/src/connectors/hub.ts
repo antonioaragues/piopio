@@ -5,7 +5,7 @@
  * The list of accounts and the settings (no secrets) live in `connectors.json`.
  */
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import type { ProviderAuthEvent } from "@piopio/protocol";
 import type { SecretBroker } from "../secrets.js";
@@ -20,6 +20,7 @@ import { notion } from "./notion.js";
 import { outlook } from "./outlook.js";
 import { CAPABILITIES, type CapabilityGroup, defaultPermission, groupOf, type Permission } from "./permissions.js";
 import { type ApiConnector, type AuthorizedFetch, type Calendar, type CalendarEntry, type ConnectorDefinition, type ConnectorEndpoints, isMcp, type Mailbox, type McpCall, type McpConnector, type McpToolInfo, type Tokens } from "./types.js";
+import { writeFileAtomic } from "../atomic.js";
 
 export type Account = { id: string; connector: string; label: string; addedAt: string };
 /**
@@ -93,7 +94,7 @@ export class ConnectorHub {
 	}
 
 	private save(): void {
-		if (this.path) writeFileSync(this.path, `${JSON.stringify(this.state, null, "\t")}\n`, { mode: 0o600 });
+		if (this.path) writeFileAtomic(this.path, `${JSON.stringify(this.state, null, "\t")}\n`, { mode: 0o600 });
 		this.onChange?.();
 	}
 

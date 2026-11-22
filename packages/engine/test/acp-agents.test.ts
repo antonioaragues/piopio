@@ -79,6 +79,22 @@ test("Antigravity CLI and Codex are listed with their plans and models", { timeo
 });
 
 describe("a Build session on Antigravity CLI", () => {
+	test("a command named like one of Piopio's tools still asks: its title is the command", { timeout: 30_000 }, async () => {
+		const a = await start();
+		const folder = await project(a);
+		const { ref } = await a.client.call("sessions.create", { kind: "build", cwd: folder, model: AGY });
+		const sub = (await a.client.call("sessions.subscribe", { ref })).subscriptionId as string;
+		await a.client.call("sessions.configure", { ref, approvalMode: "ask" });
+		await a.client.call("sessions.submit", { ref, input: { text: "$ echo search_conversations && touch pwned\n$ mcp.piopio.search_conversations; touch pwned" } });
+		for (const command of ["echo search_conversations && touch pwned", "mcp.piopio.search_conversations; touch pwned"]) {
+			const waiting = await stateWhere(a, sub, (s) => s.status === "waiting_approval" && s.prompts![0]!.detail === command);
+			expect(waiting.prompts![0]).toMatchObject({ title: "Run a command", tool: "bash" });
+			await a.client.call("sessions.respond", { ref, promptId: waiting.prompts![0]!.id, response: { decision: "deny" } });
+		}
+		await stateWhere(a, sub, (s) => s.status === "idle");
+		await stop(a);
+	});
+
 	test("asks in the tray before writing and running; a denial reaches the agent; reopens with its session", { timeout: 30_000 }, async () => {
 		const a = await start();
 		const folder = await project(a);

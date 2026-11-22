@@ -5,10 +5,11 @@
  * A small non-secret index (`credentials.json`: provider → credential type) answers `list()` and tells which
  * providers to ask the Keychain about, so availability checks never touch it for providers you haven't connected.
  */
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import type { Credential, CredentialInfo, CredentialStore } from "@earendil-works/pi-ai";
 import { SECRET_OPENROUTER } from "@piopio/protocol";
 import type { SecretBroker } from "./secrets.js";
+import { writeFileAtomic } from "./atomic.js";
 
 export const credentialSecret = (providerId: string) => `provider.${providerId}.credential`;
 
@@ -110,7 +111,7 @@ export class KeychainCredentialStore implements CredentialStore {
 	}
 
 	private save(): void {
-		if (this.indexPath) writeFileSync(this.indexPath, `${JSON.stringify(this.index, null, "\t")}\n`, { mode: 0o600 });
+		if (this.indexPath) writeFileAtomic(this.indexPath, `${JSON.stringify(this.index, null, "\t")}\n`, { mode: 0o600 });
 	}
 
 	/** One operation at a time per provider (pi refreshes OAuth tokens inside `modify`). */
