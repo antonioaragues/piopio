@@ -196,7 +196,7 @@ struct BuildSessionView: View {
                 }
                 .frame(width: panelWidth)
                 .frame(maxHeight: .infinity, alignment: .top)
-                .contentCard(subagentOpen == nil && inspectorTab == .browser)
+                .contentCard(subagentOpen != nil || inspectorTab == .browser)
                 .overlay(alignment: .leading) { panelResizeHandle }
             }
         }

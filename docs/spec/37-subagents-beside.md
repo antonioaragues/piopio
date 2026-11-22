@@ -80,6 +80,9 @@ shows all of them. Not started.
   least 340); a toolbar view icon takes the column back. `SubagentPanel.swift` holds the tabs, the child's transcript
   and its `Composer`. In a window too narrow for the column, the row opens the session. `SideConversations` (the
   block above the composer) is gone, from Build sessions and chats.
-- **Captures:** `PIOPIO_DEMO_SUBAGENT=1` opens the first subagent beside once there is one.
+- **The column is a card** (white, like the conversation), and the composer fits it: the model chip shrinks with a
+  "…" instead of pushing the box wider than the column (it did with "DeepSeek V4.1 Flash 1017 · OpenRouter high").
+- **Captures:** `PIOPIO_DEMO_SUBAGENT=1` opens the first subagent beside once there is one;
+  `PIOPIO_FAUX_MODEL_NAME` gives the scripted model a long name.
 - **Not verified:** a follow-up to a finished subagent from the column (SB6) and its second `[Task]` result, with a
   real model; the narrow-window fallback.

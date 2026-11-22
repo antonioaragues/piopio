@@ -70,7 +70,9 @@ export class ModelHub {
 		this.extraCosts = new ExtraCosts(options.home ? join(options.home, "extra-costs.db") : undefined);
 		this.loadVisibility();
 		if (options.faux) {
-			this.faux = fauxProvider({ provider: "faux", tokensPerSecond: 40 });
+			// PIOPIO_FAUX_MODEL_NAME: captures of a long model name (the composer in a narrow column, docs/spec/37).
+			const name = process.env.PIOPIO_FAUX_MODEL_NAME;
+			this.faux = fauxProvider({ provider: "faux", tokensPerSecond: 40, ...(name ? { models: [{ id: "faux-1", name }] } : {}) });
 			installEcho(this.faux);
 		}
 	}

@@ -596,20 +596,24 @@ struct ChipStyle: ButtonStyle {
     var active = false
     /// Quieter than a selector: fg3 until hovered (the model on Home's box).
     var muted = false
-    func makeBody(configuration: Configuration) -> some View { ChipBody(configuration: configuration, active: active, muted: muted) }
+    /// Shrinks with a "…" when the row is narrow (the model's name), instead of pushing the composer wider.
+    var truncates = false
+    func makeBody(configuration: Configuration) -> some View { ChipBody(configuration: configuration, active: active, muted: muted, truncates: truncates) }
 }
 
 private struct ChipBody: View {
     let configuration: ButtonStyleConfiguration
     let active: Bool
     var muted = false
+    var truncates = false
     @State private var hovering = false
 
     var body: some View {
         configuration.label
             .font(.system(size: 12.5))
             .lineLimit(1)
-            .fixedSize()
+            .truncationMode(.tail)
+            .fixedSize(horizontal: !truncates, vertical: true)
             .foregroundStyle(active || hovering ? Color.dsFg : muted ? Color.dsFg3 : Color.dsFg2)
             .padding(.horizontal, 6)
             .frame(height: 24)
@@ -632,10 +636,11 @@ struct ModelChip: View {
                 if thread.state == nil, thread.errorIsAuth { Text("Model needed").foregroundStyle(Color.dsWarn) } else {
                     if let m = engine.model(thread.state?.model) { ModelLabel(model: m, engine: engine) } else { Text(thread.state?.model?.id ?? "Model") }
                 }
-                if thread.supportsThinking, let level = ThinkingLevel.title(thread.state?.thinking) { Text(level.lowercased()).foregroundStyle(Color.dsFg3) }
+                if thread.supportsThinking, let level = ThinkingLevel.title(thread.state?.thinking) { Text(level.lowercased()).foregroundStyle(Color.dsFg3).fixedSize() }
             }
         }
-        .buttonStyle(ComposerChipStyle())
+        // In a narrow composer (a subagent beside its conversation, docs/spec/37) the name gives way, not the box.
+        .buttonStyle(ComposerChipStyle(truncates: true))
         .help("Model and thinking")
         .popover(isPresented: Binding(get: { thread.showModelPicker }, set: { thread.showModelPicker = $0 }), arrowEdge: .top) {
             ModelPicker(engine: engine, selected: thread.state?.model, accessory: thread.supportsThinking ? AnyView(thinking) : nil, agents: thread.ref.kind == .thread || thread.ref.kind == .build) { model in
@@ -728,7 +733,8 @@ enum ThinkingLevel {
 /// Composer selectors (model, mode): plain text, a grey fill on hover (the same as ChipStyle).
 struct ComposerChipStyle: ButtonStyle {
     var muted = false
-    func makeBody(configuration: Configuration) -> some View { ChipStyle(muted: muted).makeBody(configuration: configuration) }
+    var truncates = false
+    func makeBody(configuration: Configuration) -> some View { ChipStyle(muted: muted, truncates: truncates).makeBody(configuration: configuration) }
 }
 
 /// What the conversation may do in its folder (docs/spec/18 §4): Read only, Ask, Auto-edit, Full auto (below a divider),
