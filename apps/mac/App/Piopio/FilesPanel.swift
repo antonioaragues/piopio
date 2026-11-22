@@ -191,7 +191,8 @@ struct LazyFileTree: View {
                 if !folder {
                     Button("Open") { open(entry.path) }
                     Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: cwd).appending(path: entry.path)]) }
-                    Button("Show in Library") { NotificationCenter.default.post(name: .showInLibrary, object: URL(fileURLWithPath: cwd).appending(path: entry.path).path) }
+                    let full = URL(fileURLWithPath: cwd).appending(path: entry.path).path
+                    Button(LibraryMembership.contains(full) ? "Show in Library" : "Add to Library") { NotificationCenter.default.post(name: .showInLibrary, object: full) }
                 }
             }
             if folder, expanded.contains(entry.path) { rows(dir: entry.path, depth: depth + 1) }

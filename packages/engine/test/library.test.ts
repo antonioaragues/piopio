@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { TimelineItem } from "@piopio/protocol";
-import { kindOf, Library, LibrarySearch, type LibraryOrigin } from "../src/library.js";
+import { kindOf, Library, LibrarySearch, type LibraryOrigin, noteRequest } from "../src/library.js";
 
 let dir: string;
 beforeEach(() => {
@@ -200,8 +200,75 @@ describe("Library (docs/spec/35 §4)", () => {
 		expect(lib.list(t0 + 10 * day).items.map((i) => [i.name, i.missing ?? false])).toEqual([["b.md", false], ["a.md", true]]);
 		rmSync(b);
 		lib.list(t0 + 20 * day);
-		expect(lib.list(t0 + 31 * day)).toEqual({ items: [expect.objectContaining({ name: "b.md", missing: true })], pins: [] });
+		expect(lib.list(t0 + 31 * day)).toEqual({ items: [expect.objectContaining({ name: "b.md", missing: true })], pins: [], removed: [] });
 		expect(lib.list(t0 + 51 * day).items).toEqual([]);
+	});
+
+	it("keeps one entry after Locate…, when the conversation is read again and after a restart", () => {
+		const path = join(dir, "library.json");
+		const lib = new Library(path);
+		const original = file("original.csv");
+		const handover = [presented(1, { path: original, name: "original.csv" })];
+		lib.observe(chat, handover);
+		const id = lib.list().items[0]!.id;
+		lib.pin(id, true);
+		const moved = join(dir, "presupuesto.csv");
+		renameSync(original, moved);
+		const found = lib.relocate(id, moved);
+		lib.observe(chat, handover);
+		const again = new Library(path);
+		again.observe(chat, handover);
+		for (const l of [lib, again]) expect(l.list()).toMatchObject({ items: [{ id: found.id, path: moved, pinned: true }], pins: [found.id] });
+		expect(again.list().items).toHaveLength(1);
+	});
+
+	it("takes a visual's new HTML even when it's the same size, with a new version", () => {
+		const lib = new Library(join(dir, "library.json"));
+		lib.observe(chat, [user(0), { ...visual(1, "N"), callId: "same", args: { title: "N", html: "<p>120</p>" } } as TimelineItem]);
+		const before = lib.list().items[0]!;
+		lib.observe(chat, [user(0), { ...visual(1, "N"), callId: "same", args: { title: "N", html: "<p>999</p>" } } as TimelineItem]);
+		const after = lib.list().items[0]!;
+		expect(lib.visual(after.id).html).toBe("<p>999</p>");
+		expect(after.visual?.version).not.toBe(before.visual?.version);
+	});
+
+	it("leaves out what a chat writes in hidden folders", () => {
+		const lib = new Library(join(dir, "library.json"));
+		const folder = join(dir, "scratch", "t1");
+		lib.observe({ ...chat, chatFolder: folder }, [tool(1, "write", { path: ".cache/metadata.json", content: "{}" }), tool(2, "write", { path: "out/.tmp/x.md", content: "x" }), tool(3, "write", { path: "notes/plan.md", content: "x" })]);
+		expect(lib.list().items.map((i) => i.name)).toEqual(["plan.md"]);
+	});
+
+	it("asks for a note the way the maker would: an agent's utility off means no call", () => {
+		expect(noteRequest({ default: "openrouter:anthropic/claude-sonnet-5.5", utility: "off" })).toBeNull();
+		expect(noteRequest({ default: "openrouter:anthropic/claude-sonnet-5.5", utility: "on-device" })).toEqual({ model: { provider: "openrouter", id: "anthropic/claude-sonnet-5.5" }, choice: "on_device" });
+		expect(noteRequest({ default: "openrouter:x/y" })).toEqual({ model: { provider: "openrouter", id: "x/y" } });
+		expect(noteRequest(undefined, { provider: "openrouter", id: "a/b" })).toEqual({ model: { provider: "openrouter", id: "a/b" } });
+	});
+
+	it("puts back what you removed, and lists it as removed meanwhile", () => {
+		const lib = new Library(join(dir, "library.json"));
+		lib.observe(chat, [user(0), visual(1, "Chart")]);
+		const id = lib.list().items[0]!.id;
+		lib.remove(id);
+		expect(lib.list()).toMatchObject({ items: [], removed: [{ id, name: "Chart" }] });
+		lib.restore(id);
+		expect(lib.list()).toMatchObject({ items: [{ id }], removed: [] });
+	});
+
+	it("links a saved visual to its file: one item, its pin kept, a later handover of the file finds it", () => {
+		const lib = new Library(join(dir, "library.json"));
+		lib.observe(chat, [user(0), { ...visual(1, "Chart"), callId: "cv" } as TimelineItem]);
+		const id = lib.list().items[0]!.id;
+		lib.pin(id, true);
+		const saved = file("Chart.html", "<html></html>");
+		expect(lib.saved("cv", saved)).toMatchObject({ id, kind: "visual", path: saved, pinned: true });
+		lib.observe(chat, [user(0), { ...visual(1, "Chart"), callId: "cv" } as TimelineItem, presented(3, { path: saved, name: "Chart.html" })]);
+		expect(lib.list()).toMatchObject({ items: [{ id, path: saved }], pins: [id] });
+		rmSync(saved);
+		expect(lib.list().items[0]).toMatchObject({ id, kind: "visual" });
+		expect(lib.list().items[0]!.path).toBeUndefined();
+		expect(lib.list(Date.now() + 40 * 86_400_000).items).toHaveLength(1);
 	});
 
 	it("forgets a deleted conversation's visuals and keeps its files", () => {

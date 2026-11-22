@@ -47,7 +47,7 @@ import type { Extension } from "@earendil-works/pi-durable";
 import type { WebOptions } from "./tools/web.js";
 import { exportTranscript, type ExportFormat } from "./export.js";
 import { SearchIndex } from "./search.js";
-import { type Library, LibrarySearch, type LibraryOrigin, NOTE_PROMPT } from "./library.js";
+import { type Library, LibrarySearch, type LibraryOrigin, NOTE_PROMPT, noteRequest } from "./library.js";
 import type { HistoryBridge } from "./tools/history.js";
 import { AGENT_NAMES, findAgent, installedAgents, runExternalAgent, type ExternalAgent } from "./external-agents.js";
 import type { TelegramChannels } from "./channels/manager.js";
@@ -201,8 +201,11 @@ export class Sessions {
 	set library(library: Library | undefined) {
 		this.libraryIndex = library;
 		if (library) {
-			library.describe = (file, origin) =>
-				this.hub.utility(NOTE_PROMPT, `File: ${file.name}\nFrom the conversation: ${origin.title}\n\n${file.text}`, origin.ref.id, { model: this.entries.get(origin.ref.id)?.model });
+			library.describe = async (file, origin) => {
+				const request = noteRequest(origin.ref.kind === "agent" ? this.agentModels(origin.ref.id) : undefined, this.entries.get(origin.ref.id)?.model);
+				if (!request) return undefined;
+				return this.hub.utility(NOTE_PROMPT, `File: ${file.name}\nFrom the conversation: ${origin.title}\n\n${file.text}`, origin.ref.id, request);
+			};
 		}
 	}
 	secrets?: SecretBroker;
@@ -1815,6 +1818,15 @@ export class Sessions {
 	}
 
 	/** The last valid definition: from memory, else from disk (falling back to nothing usable). */
+	/** An agent's models, for work done in its name; a definition that doesn't read counts as utility off. */
+	private agentModels(id: string): { default: string; utility?: string } {
+		try {
+			return this.agentDefinition(id).definition.models;
+		} catch {
+			return { default: "", utility: "off" };
+		}
+	}
+
 	agentDefinition(id: string): { definition: AgentDefinition; instructions: string } {
 		let cached = this.definitions.get(id);
 		if (!cached) {

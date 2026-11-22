@@ -720,9 +720,17 @@ public final class VisualCardView: NSView, ArrowCursorArea {
             panel.allowedContentTypes = [.html]
             if let root = model.root { panel.directoryURL = URL(fileURLWithPath: root, isDirectory: true) }
             let page = VisualPage.portable(model.html, title: model.title)
+            let key = model.key
             let done: (NSApplication.ModalResponse) -> Void = { response in
                 guard response == .OK, let url = panel.url else { return }
-                try? page.write(to: url, atomically: true, encoding: .utf8)
+                do {
+                    try page.write(to: url, atomically: true, encoding: .utf8)
+                } catch {
+                    NSAlert(error: error).runModal()
+                    return
+                }
+                // The Library links the file to this visual (docs/spec/35 §4.2): same item, conversation and pin.
+                NotificationCenter.default.post(name: .visualSaved, object: nil, userInfo: ["callId": key, "path": url.path])
             }
             if let window { panel.beginSheetModal(for: window, completionHandler: done) } else { done(panel.runModal()) }
         }

@@ -1033,8 +1033,8 @@ export const LibraryItem = Type.Object({
 	how: literals("presented", "written", "visual", "added"),
 	/** The conversation that made it: open it from the Library. `project` is the project's folder. */
 	origin: Type.Optional(Type.Object({ ref: ContainerRef, title: Type.String(), project: Type.Optional(Type.String()) })),
-	/** A visual: its tool call in that conversation. */
-	visual: Type.Optional(Type.Object({ callId: Type.String() })),
+	/** A visual: its tool call in that conversation, and a hash of its HTML (a new one means a new picture). */
+	visual: Type.Optional(Type.Object({ callId: Type.String(), version: Type.Optional(Type.String()) })),
 	/** The file isn't where it was: Locate… or Remove. */
 	missing: Type.Optional(Type.Boolean()),
 	size: Type.Optional(Type.Number()),
@@ -1853,7 +1853,11 @@ export const methods = {
 	"automations.migrationReport": { params: Type.Object({}), result: Type.Object({ report: Type.Optional(Type.String({ description: "Markdown" })) }) },
 	"automations.dismissMigrationReport": { params: Type.Object({}), result: Type.Object({}) },
 	/** The Library (docs/spec/35 §4): everything not removed, newest first, and the pins in their order. */
-	"library.list": { params: Type.Object({}), result: Type.Object({ items: Type.Array(LibraryItem), pins: Type.Array(Type.String()) }) },
+	"library.list": { params: Type.Object({}), result: Type.Object({ items: Type.Array(LibraryItem), pins: Type.Array(Type.String()), removed: Type.Array(LibraryItem, { description: "What you removed, to put back" }) }) },
+	/** Put back an item you removed. */
+	"library.restore": { params: Type.Object({ id: Type.String() }), result: Type.Object({}) },
+	/** Save… on a visual's card wrote it here: the visual has a file now (same item, conversation and pin). */
+	"library.saved": { params: Type.Object({ callId: Type.String(), path: Type.String() }), result: Type.Object({ item: Type.Optional(LibraryItem) }) },
 	/** Pin puts it on the shelf and under Library in the sidebar (first); unpin takes it off. */
 	"library.pin": { params: Type.Object({ id: Type.String(), pinned: Type.Boolean() }), result: Type.Object({}) },
 	/** The pins in a new order. */

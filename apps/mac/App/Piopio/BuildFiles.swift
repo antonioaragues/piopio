@@ -97,7 +97,8 @@ struct FileViewer: View {
                         dismiss()
                         NotificationCenter.default.post(name: .showInLibrary, object: url.path)
                     } label: { Image(systemName: "books.vertical") }
-                        .buttonStyle(IconButtonStyle()).help("Show in Library").accessibilityLabel("Show in Library")
+                        .buttonStyle(IconButtonStyle()).help(LibraryMembership.contains(url.path) ? "Show in Library" : "Add to Library")
+                        .accessibilityLabel(LibraryMembership.contains(url.path) ? "Show in Library" : "Add to Library")
                     Button("Done") { dismiss() }.buttonStyle(PillStyle(kind: .strong, compact: true)).keyboardShortcut(.cancelAction)
                 }
             }

@@ -16,6 +16,17 @@ struct LibraryPage: View {
     @State private var selected: String?
     @State private var trashing: LibraryEntry?
     @State private var problem: String?
+    /// The item just removed, for Undo (a few seconds).
+    @State private var undoing: LibraryEntry?
+    @State private var showsRemoved = false
+
+    private var filtering: Bool { kind != nil || place != nil || !query.isEmpty }
+
+    /// The preview shows only what the list shows (or what's in Removed while it's open).
+    private var picked: LibraryEntry? {
+        guard let selected else { return nil }
+        return shown.first { $0.id == selected } ?? (showsRemoved ? engine.libraryRemoved.first { $0.id == selected } : nil)
+    }
 
     private var shown: [LibraryEntry] {
         engine.library.filter { i in
@@ -30,17 +41,24 @@ struct LibraryPage: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     header
-                    if engine.library.isEmpty {
+                    if engine.libraryFailed {
+                        failed
+                    } else if engine.library.isEmpty && engine.libraryRemoved.isEmpty {
                         if engine.libraryLoaded { empty }
                     } else {
                         filters
                         let pins = engine.pinnedLibrary.filter { p in shown.contains { $0.id == p.id } }
                         if !pins.isEmpty { shelf(pins) }
                         if shown.isEmpty {
-                            Text("Nothing matches.").font(.system(size: 13)).foregroundStyle(Color.dsFg3).padding(.top, 8)
+                            HStack(spacing: 10) {
+                                Text(filtering ? "Nothing matches." : "Everything here was removed.").font(.system(size: 13)).foregroundStyle(Color.dsFg3)
+                                if filtering { Button("Clear Filters", action: clearFilters).buttonStyle(PillStyle(compact: true)) }
+                            }
+                            .padding(.top, 8)
                         } else {
                             ForEach(LibraryText.groups(shown), id: \.0) { title, items in group(title, items) }
                         }
+                        if !engine.libraryRemoved.isEmpty { removed }
                     }
                 }
                 .padding(.horizontal, 48)
@@ -49,7 +67,7 @@ struct LibraryPage: View {
                 .frame(maxWidth: 1080)
                 .frame(maxWidth: .infinity)
             }
-            if let id = selected, let picked = engine.library.first(where: { $0.id == id }) {
+            if let picked {
                 LibraryPreview(engine: engine, item: picked, actions: actions) { selected = nil }
                     .frame(width: 300)
                     .overlay(alignment: .leading) { Rectangle().fill(Color.dsLine).frame(width: 0.5) }
@@ -58,7 +76,24 @@ struct LibraryPage: View {
         }
         .background(Color.dsWin)
         .animation(.easeOut(duration: 0.15), value: selected)
-        .task { if !engine.libraryLoaded { await engine.loadLibrary() } }
+        // Read again when you come back: a file moved or edited in Finder meanwhile shows as it is now.
+        .task { await engine.loadLibrary() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            Task { await engine.loadLibrary() }
+        }
+        .overlay(alignment: .bottom) {
+            if let undoing {
+                LibraryUndoToast(name: undoing.name) {
+                    let id = undoing.id
+                    self.undoing = nil
+                    run { try await engine.restoreLibraryItem(id) }
+                } dismiss: { self.undoing = nil }
+                .padding(.bottom, 22)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .id(undoing.id)
+            }
+        }
+        .animation(.easeOut(duration: 0.2), value: undoing?.id)
         .onAppear(perform: takeFocus)
         .onChange(of: engine.libraryFocus) { takeFocus() }
         .onChange(of: engine.library) { takeFocus() }
@@ -86,6 +121,8 @@ struct LibraryPage: View {
             }
             Spacer()
             if !engine.library.isEmpty {
+                Button("Add File…", action: addFiles).buttonStyle(OutlineButtonStyle()).padding(.top, 4)
+                    .help("Add any file to the Library; it stays where it is")
                 HStack(spacing: 6) {
                     Image(systemName: "magnifyingglass").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
                     TextField("Search the Library", text: $query).textFieldStyle(.plain).font(.system(size: 13))
@@ -98,7 +135,8 @@ struct LibraryPage: View {
     }
 
     private var filters: some View {
-        let kinds = LibraryKind.filters.filter { f in engine.library.contains { LibraryKind.filter($0.kind) == f } }
+        // The kinds there are, and the one you picked even when nothing of it is left.
+        let kinds = LibraryKind.filters.filter { f in f == kind || engine.library.contains { LibraryKind.filter($0.kind) == f } }
         return HStack(spacing: 6) {
             chip(nil, "All")
             ForEach(kinds, id: \.self) { f in chip(f, LibraryKind.plural(f)) }
@@ -171,9 +209,70 @@ struct LibraryPage: View {
             Text("When Piopio or an agent hands you a file, writes a document in a chat or draws a visual, it shows here, with where it came from.")
                 .font(.system(size: 13.5)).foregroundStyle(Color.dsFg2).multilineTextAlignment(.center)
                 .frame(maxWidth: 420).padding(.top, 6)
+            Button("Add File…", action: addFiles).buttonStyle(OutlineButtonStyle()).padding(.top, 16)
+                .help("Add a file you already have; it stays where it is")
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 70)
+    }
+
+    private var failed: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("The Library couldn't be read.").font(.system(size: 13.5)).foregroundStyle(Color.dsFg2)
+            Button("Retry") { Task { await engine.loadLibrary() } }.buttonStyle(PillStyle(kind: .primary, compact: true))
+        }
+        .padding(.top, 8)
+    }
+
+    /// What you removed, folded at the end, each with Put Back.
+    private var removed: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Button { showsRemoved.toggle() } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).rotationEffect(.degrees(showsRemoved ? 90 : 0))
+                    Text("Removed · \(engine.libraryRemoved.count)")
+                }
+                .font(.system(size: 11.5, weight: .semibold)).foregroundStyle(Color.dsFg3)
+                .padding(.horizontal, 10).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            if showsRemoved {
+                ForEach(engine.libraryRemoved) { r in
+                    HStack(spacing: 12) {
+                        LibraryThumb(engine: engine, item: r, size: CGSize(width: 40, height: 32), corner: 5).opacity(0.6)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(r.name).font(.system(size: 13.5)).foregroundStyle(Color.dsFg2).lineLimit(1)
+                            Text(LibraryText.place(r, engine)).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1)
+                        }
+                        Spacer()
+                        Button("Put Back") { run { try await engine.restoreLibraryItem(r.id) } }.buttonStyle(PillStyle(compact: true))
+                    }
+                    .padding(.horizontal, 10).padding(.vertical, 5)
+                }
+            }
+        }
+        .padding(.top, 10)
+    }
+
+    private func clearFilters() {
+        kind = nil; place = nil; query = ""
+    }
+
+    /// Add File…: any files you have, listed where they are.
+    private func addFiles() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = true
+        panel.message = "Add to the Library. Files stay where they are."
+        panel.prompt = "Add"
+        guard panel.runModal() == .OK, !panel.urls.isEmpty else { return }
+        let paths = panel.urls.map(\.path)
+        run {
+            var last: LibraryEntry?
+            for path in paths { last = try await engine.addToLibrary(path) }
+            if let last { engine.libraryFocus = last.id }
+        }
     }
 
     // MARK: Actions
@@ -195,7 +294,12 @@ struct LibraryPage: View {
             locate: locate,
             remove: { i in
                 if selected == i.id { selected = nil }
-                run { try await engine.removeFromLibrary(i.id) }
+                run {
+                    try await engine.removeFromLibrary(i.id)
+                    undoing = i
+                    try? await Task.sleep(for: .seconds(6))
+                    if undoing?.id == i.id { undoing = nil }
+                }
             },
             trash: { trashing = $0 }
         )
@@ -268,6 +372,25 @@ struct LibraryDragPreview: View {
     }
 }
 
+/// "Removed … from the Library · Undo", at the foot of the page for a few seconds.
+private struct LibraryUndoToast: View {
+    let name: String
+    let undo: () -> Void
+    let dismiss: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text("Removed “\(name)” from the Library").font(.system(size: 13)).foregroundStyle(Color.dsInvFg).lineLimit(1)
+            Button("Undo", action: undo).buttonStyle(.plain).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.dsInvFg)
+            Button(action: dismiss) { Image(systemName: "xmark").font(.system(size: 10, weight: .bold)).foregroundStyle(Color.dsInvFg.opacity(0.7)) }
+                .buttonStyle(.plain).accessibilityLabel("Dismiss")
+        }
+        .padding(.horizontal, 16).frame(height: 38)
+        .background(Capsule().fill(Color.dsInv))
+        .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
+    }
+}
+
 /// What a row, a tile, the preview and the menus can do with an item.
 struct LibraryActions {
     var open: (LibraryEntry) -> Void
@@ -310,7 +433,7 @@ private struct LibraryRow: View {
     let engine: EngineController
     let item: LibraryEntry
     let selected: Bool
-    /// The preview is open: the "By" column goes.
+    /// The preview is open: the place column narrows.
     let compact: Bool
     let actions: LibraryActions
     let select: () -> Void
@@ -318,23 +441,23 @@ private struct LibraryRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            LibraryThumb(engine: engine, item: item, size: CGSize(width: 34, height: 26), corner: 5)
-            HStack(spacing: 7) {
-                Text(item.name).font(.system(size: 13.5)).foregroundStyle(item.missing == true ? Color.dsFg3 : Color.dsFg).lineLimit(1).truncationMode(.tail)
-                    .layoutPriority(1)
-                Text(LibraryKind.label(item.kind)).font(.system(size: 12)).foregroundStyle(Color.dsFg3).fixedSize()
-                if item.missing == true { LibraryBadge(text: "File missing") }
-                else if item.kind == "visual", !compact { LibraryBadge(text: "in a conversation") }
-                if item.pinned == true {
-                    Image(systemName: "pin.fill").font(.system(size: 9.5)).foregroundStyle(Color.dsFg3).accessibilityLabel("Pinned")
+            LibraryThumb(engine: engine, item: item, size: CGSize(width: 40, height: 32), corner: 5)
+            // Name, then what it is (its note), so three report.md files tell themselves apart.
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 7) {
+                    Text(item.name).font(.system(size: 13.5)).foregroundStyle(item.missing == true ? Color.dsFg3 : Color.dsFg).lineLimit(1).truncationMode(.tail)
+                        .layoutPriority(1)
+                    if item.missing == true { LibraryBadge(text: "File missing") }
+                    else if item.kind == "visual", item.path == nil, !compact { LibraryBadge(text: "in a conversation") }
+                    if item.pinned == true {
+                        Image(systemName: "pin.fill").font(.system(size: 9.5)).foregroundStyle(Color.dsFg3).accessibilityLabel("Pinned")
+                    }
                 }
+                Text(LibraryText.second(item)).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1).truncationMode(.tail)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             Text(LibraryText.place(item, engine)).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2).lineLimit(1).truncationMode(.middle)
-                .frame(width: 180, alignment: .leading)
-            if !compact {
-                Text(item.by).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2).lineLimit(1).frame(width: 110, alignment: .leading)
-            }
+                .frame(width: compact ? 150 : 200, alignment: .leading)
             ZStack(alignment: .trailing) {
                 Text(LibraryText.time(item.at)).font(.system(size: 12)).foregroundStyle(Color.dsFg3).opacity(hovering ? 0 : 1)
                 if hovering {
@@ -351,7 +474,7 @@ private struct LibraryRow: View {
             }
             .frame(width: 150, alignment: .trailing)
         }
-        .padding(.horizontal, 10).padding(.vertical, 6)
+        .padding(.horizontal, 10).padding(.vertical, 7)
         .background(selected ? Color.dsChip : hovering ? Color.dsSide : .clear, in: RoundedRectangle(cornerRadius: DS.Radius.button, style: .continuous))
         .contentShape(Rectangle())
         .onTapGesture(count: 2) { item.missing == true ? actions.locate(item) : actions.open(item) }
@@ -490,6 +613,8 @@ struct LibraryThumb: View {
     let size: CGSize
     let corner: CGFloat
     @State private var image: NSImage?
+    /// Markdown's first lines or a CSV's first rows, where Quick Look gives a blank page.
+    @State private var sample: LibrarySample?
 
     var body: some View {
         // The field fills what it's offered and the picture fills the field, cropped: a wide page never spills out.
@@ -501,6 +626,8 @@ struct LibraryThumb: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if let image {
                     Image(nsImage: image).resizable().aspectRatio(contentMode: .fill)
+                } else if let sample, size.height > 60 {
+                    LibrarySampleView(sample: sample)
                 } else {
                     Image(systemName: LibraryKind.symbol(item.kind))
                         .font(.system(size: min(size.height * 0.42, 26))).foregroundStyle(Color.dsFg3)
@@ -512,10 +639,14 @@ struct LibraryThumb: View {
         .overlay {
             if corner > 0 { RoundedRectangle(cornerRadius: corner, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 0.5) }
         }
-        .task(id: "\(item.id)|\(item.changedAt ?? "")|\(Int(size.width))") {
+        .task(id: "\(item.id)|\(item.changedAt ?? "")|\(item.visual?.version ?? "")|\(Int(size.width))") {
             image = nil
+            sample = nil
+            if size.height > 60, let path = item.path, item.missing != true, item.kind != "visual" {
+                sample = await LibrarySample.read(path)
+            }
             if item.kind == "visual" {
-                image = await LibraryThumbnails.visual(item.id, engine: engine)
+                image = await LibraryThumbnails.visual(item.id, version: item.visual?.version, engine: engine)
                 return
             }
             guard let path = item.path, item.missing != true, LibraryThumbnails.pictured(path) else { return }
@@ -535,12 +666,13 @@ enum LibraryThumbnails {
     private static var visuals: [String: Task<NSImage?, Never>] = [:]
     private static var lastVisual: Task<NSImage?, Never>?
 
-    static func visual(_ id: String, engine: EngineController) async -> NSImage? {
+    static func visual(_ id: String, version: String?, engine: EngineController) async -> NSImage? {
+        let id = "\(id)|\(version ?? "")"
         if let running = visuals[id] { return await running.value }
         let before = lastVisual
         let task = Task<NSImage?, Never> { @MainActor in
             _ = await before?.value
-            guard let v = await engine.libraryVisual(id) else { return nil }
+            guard let v = await engine.libraryVisual(String(id.prefix { $0 != "|" })) else { return nil }
             let drawn = await VisualChecker.check(html: v.html, title: v.title, look: true, width: 640)
             return drawn.jpeg.flatMap(NSImage.init(data:))
         }
@@ -565,6 +697,70 @@ enum LibraryThumbnails {
         if cache.count > 300 { cache.removeAll() }
         cache[key] = image
         return image
+    }
+}
+
+/// What a text or data file starts with, drawn in place of a blank Quick Look page: a heading and lines, or a table.
+enum LibrarySample: Equatable {
+    case text(title: String?, lines: [String])
+    case table([[String]])
+
+    /// Markdown, text, CSV, TSV and JSON; nil for anything else or a file that can't be read.
+    static func read(_ path: String) async -> LibrarySample? {
+        let ext = (path as NSString).pathExtension.lowercased()
+        guard ["md", "markdown", "txt", "csv", "tsv", "json"].contains(ext) else { return nil }
+        return await Task.detached(priority: .utility) { () -> LibrarySample? in
+            guard let handle = FileHandle(forReadingAtPath: path) else { return nil }
+            defer { try? handle.close() }
+            let data = (try? handle.read(upToCount: 4096)) ?? Data()
+            let text = String(decoding: data, as: UTF8.self)
+            let lines = text.split(separator: "\n", omittingEmptySubsequences: true).map { String($0).trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+            if ext == "csv" || ext == "tsv" {
+                let separator: Character = ext == "tsv" ? "\t" : (lines.first?.contains(";") == true && lines.first?.contains(",") == false ? ";" : ",")
+                let rows = lines.prefix(6).map { $0.split(separator: separator, omittingEmptySubsequences: false).prefix(5).map { $0.trimmingCharacters(in: CharacterSet(charactersIn: "\" ")) } }
+                return rows.isEmpty ? nil : .table(rows)
+            }
+            var title: String?
+            var rest = lines
+            if ext != "json", let first = rest.first, first.hasPrefix("#") {
+                title = first.drop { $0 == "#" }.trimmingCharacters(in: .whitespaces)
+                rest.removeFirst()
+            }
+            let shown = rest.prefix(7).map { $0.replacingOccurrences(of: "^[-*>#]+\\s*", with: "", options: .regularExpression) }
+            return title == nil && shown.isEmpty ? nil : .text(title: title, lines: shown)
+        }.value
+    }
+}
+
+struct LibrarySampleView: View {
+    let sample: LibrarySample
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            switch sample {
+            case .text(let title, let lines):
+                if let title { Text(title).font(.system(size: 11.5, weight: .semibold)).foregroundStyle(Color.dsFg).lineLimit(1) }
+                ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
+                    Text(line).font(.system(size: 10.5)).foregroundStyle(Color.dsFg2).lineLimit(1)
+                }
+            case .table(let rows):
+                Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 2) {
+                    ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
+                        GridRow {
+                            ForEach(Array(row.enumerated()), id: \.offset) { _, cell in
+                                Text(cell).font(.system(size: 10.5, weight: index == 0 ? .semibold : .regular, design: .monospaced))
+                                    .foregroundStyle(index == 0 ? Color.dsFg : Color.dsFg2).lineLimit(1)
+                            }
+                        }
+                    }
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(Color.dsWin)
+        .accessibilityHidden(true)
     }
 }
 
@@ -705,6 +901,13 @@ enum LibraryText {
         return time(item.at)
     }
 
+    /// A row's second line: its note, or its kind; and who made it when that's an agent the place doesn't name.
+    static func second(_ item: LibraryEntry) -> String {
+        let what = item.note ?? LibraryKind.label(item.kind)
+        let agent = item.by != "Piopio" && item.by != "You" && item.by != item.origin?.title
+        return agent ? "\(what) · by \(item.by)" : what
+    }
+
     static func what(_ item: LibraryEntry) -> String {
         switch item.how {
         case "visual": "A visual \(item.by) drew in a conversation."
@@ -724,7 +927,8 @@ enum LibraryOpen {
             NotificationCenter.default.post(name: .viewFile, object: URL(fileURLWithPath: path))
             return
         }
-        // A visual, large, in the visual sheet. What it sends or fills in goes to its conversation's composer.
+        // A visual, large, in the visual sheet. Its buttons don't send into a conversation you aren't looking at:
+        // what they'd send or fill in goes to that conversation's composer, after anything already there.
         Task {
             guard let v = await engine.libraryVisual(item.id) else {
                 if let target = reveal(item, engine: engine) { go(target) }
@@ -733,9 +937,14 @@ enum LibraryOpen {
             let back: @MainActor (String) -> Void = { text in
                 guard let target = reveal(item, engine: engine) else { return }
                 go(target)
-                if let ref = item.origin?.ref { engine.thread(ref).draft = text }
+                if let ref = item.origin?.ref, ref.kind != .agent || ref.conversationId == nil {
+                    let thread = engine.thread(ref)
+                    let had = thread.draft?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                    thread.draft = had.isEmpty ? text : had + "\n\n" + text
+                }
             }
-            NotificationCenter.default.post(name: .showVisual, object: ShownVisual(title: v.title, html: v.html, send: back, prefill: back))
+            let place = item.origin.map { "Its buttons fill in “\($0.title)”" }
+            NotificationCenter.default.post(name: .showVisual, object: ShownVisual(title: v.title, html: v.html, send: back, prefill: back, note: place))
         }
     }
 
@@ -745,10 +954,18 @@ enum LibraryOpen {
         return engine.item(for: ref.id)
     }
 
-    /// The conversation, scrolled to a visual's card (a chat or a Build session; an agent's opens the agent).
+    /// The exact conversation: a chat or Build session scrolled to a visual's card; an agent's page on the run or the
+    /// person's conversation it came from.
     static func reveal(_ item: LibraryEntry, engine: EngineController) -> SidebarItem? {
-        guard let target = conversation(item, engine: engine) else { return nil }
-        if let ref = item.origin?.ref, ref.kind != .agent, let call = item.visual?.callId { engine.thread(ref).reveal("tool:\(call)") }
+        guard let target = conversation(item, engine: engine), let ref = item.origin?.ref else { return nil }
+        if ref.kind == .agent {
+            if let conversation = ref.conversationId {
+                // The agent's page takes it once it's showing, as Automations opens a run.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { NotificationCenter.default.post(name: .openAgentRun, object: conversation) }
+            }
+        } else if let call = item.visual?.callId {
+            engine.thread(ref).reveal("tool:\(call)")
+        }
         return target
     }
 }

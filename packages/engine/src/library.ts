@@ -9,8 +9,11 @@
  */
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { basename, dirname, extname, isAbsolute, join, resolve } from "node:path";
+import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { ContainerRef, LibraryItem, LibraryKind, TimelineItem } from "@piopio/protocol";
+import { modelOf } from "@piopio/runtime";
+import type { ModelRef } from "@piopio/protocol";
+import { agentUtility } from "./runtimes/agent.js";
 import { SearchIndex } from "./search.js";
 import { replacedVisuals } from "./tools/visuals.js";
 
@@ -37,7 +40,9 @@ type Stored = {
 	how: "presented" | "written" | "visual" | "added";
 	origin?: { ref: ContainerRef; title: string; project?: string };
 	by: string;
-	visual?: { callId: string };
+	visual?: { callId: string; version?: string };
+	/** Paths it was known by before Locate… (`file:<path>` keys): a conversation that hands one over again finds it. */
+	aliases?: string[];
 	/** When its file was first found missing; after 30 days the item leaves (docs/spec/35 §6). */
 	missingSince?: string;
 };
@@ -72,6 +77,19 @@ export type Describe = (file: { name: string; text: string }, origin: LibraryOri
 /** Text files whose start says what they are; other files keep only the note they were handed over with. */
 const NOTED = new Set(["md", "markdown", "txt", "csv", "tsv", "json", "html", "htm"]);
 const NOTES_PER_HOUR = 20;
+
+/**
+ * Which utility model writes a note for a file from this conversation (docs/spec/35 §4.2), the way its maker would
+ * choose one: an agent's own `models.utility` (on its default model's provider), so `off` means no call at all; a
+ * conversation's model otherwise. `null`: write none.
+ */
+export function noteRequest(agent: { default: string; utility?: string } | undefined, conversationModel?: ModelRef): { model?: ModelRef; choice?: ReturnType<typeof agentUtility>["choice"] } | null {
+	if (!agent) return conversationModel ? { model: conversationModel } : {};
+	const own = agentUtility(agent.utility);
+	if (own.choice === "off") return null;
+	const { provider, modelId } = modelOf(agent.default);
+	return { model: { provider, id: modelId }, ...own };
+}
 
 export const NOTE_PROMPT = `You name files in a list of things an assistant made. Given a file's name and its first lines, answer with one line of at most 12 words that says what it is, specific enough to find it again ("Gas offers from Iberdrola, Naturgy and Repsol, compared"). No quotes, no final period, nothing else.`;
 
@@ -151,15 +169,42 @@ export class Library {
 	}
 
 	/** Every item you haven't removed, newest first, with what's on disk now. A file missing for 30 days leaves. */
-	list(now = Date.now()): { items: LibraryItem[]; pins: string[] } {
+	list(now = Date.now()): { items: LibraryItem[]; pins: string[]; removed: LibraryItem[] } {
 		this.sweepMissing(now);
 		const hidden = new Set(this.data.hidden);
-		const items = this.data.items
-			.filter((s) => !hidden.has(idOf(s.key)))
-			.map((s) => this.view(s))
-			.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
+		const newest = (a: LibraryItem, b: LibraryItem) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0);
+		const items = this.data.items.filter((s) => !hidden.has(idOf(s.key))).map((s) => this.view(s)).sort(newest);
+		const removed = this.data.items.filter((s) => hidden.has(idOf(s.key))).map((s) => this.view(s)).sort(newest);
 		const shown = new Set(items.map((i) => i.id));
-		return { items, pins: this.data.pins.filter((id) => shown.has(id)) };
+		return { items, pins: this.data.pins.filter((id) => shown.has(id)), removed };
+	}
+
+	/** Put back: an item you removed comes back where it was (Undo, or the Removed list). */
+	restore(id: string): void {
+		this.require(id);
+		this.data.hidden = this.data.hidden.filter((h) => h !== id);
+		this.save();
+	}
+
+	/**
+	 * Save… on a visual's card wrote it to a file: the visual keeps its conversation and pin, and now has a file too.
+	 * A later handover of that file finds the same item.
+	 */
+	saved(callId: string, path: string): LibraryItem | undefined {
+		const s = this.data.items.find((i) => i.kind === "visual" && i.visual?.callId === callId);
+		if (!s || !isAbsolute(path)) return undefined;
+		s.path = resolve(path);
+		const key = fileKey(path);
+		s.aliases = [...new Set([...(s.aliases ?? []), key])];
+		// A file item for the same path (handed over before, or added) gives way to the visual, keeping its pin.
+		const twin = this.data.items.find((i) => i !== s && i.key === key);
+		if (twin) {
+			const twinId = idOf(twin.key);
+			this.data.pins = this.data.pins.map((p) => (p === twinId ? idOf(s.key) : p)).filter((p, i, all) => all.indexOf(p) === i);
+			this.data.items = this.data.items.filter((i) => i !== twin);
+		}
+		this.save();
+		return this.view(s);
 	}
 
 	/** Pins go on the shelf and under Library in the sidebar; a new pin goes first. */
@@ -203,7 +248,9 @@ export class Library {
 		const key = fileKey(path);
 		const newId = idOf(key);
 		this.data.items = this.data.items.filter((o) => o.key !== key || o === s);
-		Object.assign(s, { key, path: resolve(path), name: basename(path), kind: kindOf(path) });
+		if (s.key !== key && s.key.startsWith("file:")) s.aliases = [...new Set([...(s.aliases ?? []), s.key])].filter((a) => a !== key);
+		Object.assign(s, { key, path: resolve(path), name: basename(path), ...(s.kind === "visual" ? {} : { kind: kindOf(path) }) });
+		delete s.missingSince;
 		this.data.pins = this.data.pins.map((p) => (p === id ? newId : p));
 		this.save();
 		return this.view(s);
@@ -233,7 +280,7 @@ export class Library {
 		const cutoff = now - MISSING_DAYS * 86_400_000;
 		const gone = new Set<string>();
 		for (const s of this.data.items) {
-			if (!s.path) continue;
+			if (!s.path || s.kind === "visual") continue;
 			const there = existsSync(s.path);
 			if (there && s.missingSince) {
 				delete s.missingSince;
@@ -310,17 +357,15 @@ export class Library {
 			const files = item.details?.type === "files" ? item.details.files : [];
 			return files.flatMap((f) => {
 				if ((f as { missing?: boolean }).missing || !f.path || !isAbsolute(f.path)) return [];
-				const key = fileKey(f.path);
-				this.upsert({ key, kind: kindOf(f.path), name: f.name || basename(f.path), path: resolve(f.path), how: "presented", ...(f.description ? { note: f.description } : {}), ...base });
-				return [key];
+				return [this.upsert({ key: fileKey(f.path), kind: kindOf(f.path), name: f.name || basename(f.path), path: resolve(f.path), how: "presented", ...(f.description ? { note: f.description } : {}), ...base })];
 			});
 		}
 		if (item.tool === "show_visual") {
 			const title = typeof (item.args as { title?: unknown })?.title === "string" ? ((item.args as { title: string }).title.trim() || "Visual") : "Visual";
-			const key = visualKey(origin.ref, item.callId);
-			this.upsert({ key, kind: "visual", name: title, how: "visual", visual: { callId: item.callId }, ...base });
-			const html = (item.args as { html?: unknown })?.html;
-			if (typeof html === "string" && html) this.keepVisual(idOf(key), html);
+			const html = typeof (item.args as { html?: unknown })?.html === "string" ? (item.args as { html: string }).html : "";
+			const version = html ? createHash("sha1").update(html).digest("hex").slice(0, 12) : undefined;
+			const key = this.upsert({ key: visualKey(origin.ref, item.callId), kind: "visual", name: title, how: "visual", visual: { callId: item.callId, ...(version ? { version } : {}) }, ...base });
+			if (html) this.keepVisual(idOf(key), html);
 			return [key];
 		}
 		if (item.tool === "write" && origin.chatFolder) {
@@ -328,33 +373,42 @@ export class Library {
 			if (typeof raw !== "string" || !raw) return [];
 			const path = resolve(origin.chatFolder, raw);
 			const folder = resolve(origin.chatFolder);
-			if (!path.startsWith(`${folder}/`) || kindOf(path) === "file" || basename(path).startsWith(".")) return [];
-			const key = fileKey(path);
-			this.upsert({ key, kind: kindOf(path), name: basename(path), path, how: "written", ...base });
-			return [key];
+			// Not a file a tool keeps for itself: anything in a hidden folder (.cache/, .piopio/) stays out.
+			const hidden = relative(folder, path).split(sep).some((part) => part.startsWith("."));
+			if (!path.startsWith(`${folder}/`) || kindOf(path) === "file" || hidden) return [];
+			return [this.upsert({ key: fileKey(path), kind: kindOf(path), name: basename(path), path, how: "written", ...base })];
 		}
 		return [];
 	}
 
+	/** By its key, or a path it was known by before Locate…. */
+	private find(key: string): Stored | undefined {
+		return this.data.items.find((s) => s.key === key) ?? this.data.items.find((s) => s.aliases?.includes(key));
+	}
+
 	private keepVisual(id: string, html: string): void {
 		const file = join(this.visualsDir, `${id}.html`);
-		if (existsSync(file) && statSync(file).size === Buffer.byteLength(html)) return;
+		if (existsSync(file) && readFileSync(file, "utf8") === html) return;
 		mkdirSync(this.visualsDir, { recursive: true, mode: 0o700 });
 		writeFileSync(file, html, { mode: 0o600 });
 	}
 
-	/** The first time decides where it came from; a later handover only adds a note it lacked. */
-	private upsert(next: Stored): void {
-		const had = this.data.items.find((s) => s.key === next.key);
+	/** The first time decides where it came from; a later handover only adds a note it lacked. Returns the item's key. */
+	private upsert(next: Stored): string {
+		const had = this.find(next.key) ?? (next.path ? this.data.items.find((s) => s.path === next.path && s.kind !== "visual") : undefined);
 		if (!had) {
 			this.data.items.push(next);
-			return;
+			return next.key;
 		}
 		// The conversation was renamed since (a chat's first title is its prompt): the item follows it.
 		if (had.origin && next.origin && sameRef(had.origin.ref, next.origin.ref)) had.origin.title = next.origin.title;
 		if (next.note && !had.note) had.note = next.note;
 		if (next.how === "presented" && had.how === "written") had.how = "presented";
-		if (next.kind === "visual") had.name = next.name;
+		if (next.kind === "visual") {
+			had.name = next.name;
+			if (next.visual?.version) had.visual = { ...had.visual!, version: next.visual.version };
+		}
+		return had.key;
 	}
 
 	private require(id: string): Stored {
@@ -366,6 +420,7 @@ export class Library {
 	private view(s: Stored): LibraryItem {
 		const id = idOf(s.key);
 		const disk = s.path ? stat(s.path) : undefined;
+		if (s.kind === "visual" && s.path && !disk) return this.view({ ...s, path: undefined });
 		return {
 			id,
 			kind: s.kind,

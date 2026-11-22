@@ -467,6 +467,8 @@ struct ShownVisual: Identifiable {
     let html: String
     let send: @MainActor (String) -> Void
     let prefill: @MainActor (String) -> Void
+    /// A line under the title: where its buttons' words go, when that isn't the conversation in front of you.
+    var note: String? = nil
 }
 
 /// Shows visuals posted with `.showVisual` in a sheet (the main window has one).
@@ -495,6 +497,7 @@ struct VisualSheet: View {
             HStack(spacing: 8) {
                 Image(systemName: "rectangle.3.group").foregroundStyle(Color.dsFg3)
                 Text(visual.title).font(.system(size: 13, weight: .semibold)).lineLimit(1).truncationMode(.tail)
+                if let note = visual.note { Text(note).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1).truncationMode(.tail) }
                 Spacer()
                 Button("Done", action: close).buttonStyle(PillStyle(kind: .strong, compact: true)).keyboardShortcut(.cancelAction)
             }
@@ -556,7 +559,8 @@ struct FileSheet: View {
                     dismiss()
                     NotificationCenter.default.post(name: .showInLibrary, object: url.path)
                 } label: { Image(systemName: "books.vertical") }
-                    .buttonStyle(IconButtonStyle()).help("Show in Library").accessibilityLabel("Show in Library")
+                    .buttonStyle(IconButtonStyle()).help(LibraryMembership.contains(url.path) ? "Show in Library" : "Add to Library")
+                    .accessibilityLabel(LibraryMembership.contains(url.path) ? "Show in Library" : "Add to Library")
                 Button("Open") { NSWorkspace.shared.open(url) }.buttonStyle(PillStyle(compact: true)).help("Open in its default app")
                 Button("Done") { dismiss() }.buttonStyle(PillStyle(kind: .strong, compact: true)).keyboardShortcut(.cancelAction)
             }

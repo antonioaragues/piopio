@@ -885,7 +885,11 @@ public struct LibraryEntry: Codable, Sendable, Hashable, Identifiable {
         /// The project's folder.
         public var project: String?
     }
-    public struct Visual: Codable, Sendable, Hashable { public var callId: String }
+    public struct Visual: Codable, Sendable, Hashable {
+        public var callId: String
+        /// A hash of its HTML: a new one means a new picture.
+        public var version: String?
+    }
     public var id: String
     /// app · document · page · visual · image · data · slides · file
     public var kind: String
@@ -909,7 +913,13 @@ public struct LibraryEntry: Codable, Sendable, Hashable, Identifiable {
     }
 }
 public struct LibraryVisual: Decodable, Sendable { public var title: String; public var html: String }
-public struct LibraryList: Decodable, Sendable { public var items: [LibraryEntry]; public var pins: [String] }
+public struct LibraryList: Decodable, Sendable {
+    public var items: [LibraryEntry]
+    public var pins: [String]
+    /// What you removed, to put back.
+    public var removed: [LibraryEntry]?
+}
+public struct LibrarySavedParams: Encodable, Sendable { public var callId, path: String; public init(callId: String, path: String) { self.callId = callId; self.path = path } }
 public struct LibraryEntryResult: Decodable, Sendable { public var item: LibraryEntry }
 public struct LibraryPinParams: Encodable, Sendable { public var id: String; public var pinned: Bool; public init(id: String, pinned: Bool) { self.id = id; self.pinned = pinned } }
 public struct LibraryIdsParams: Encodable, Sendable { public var ids: [String]; public init(ids: [String]) { self.ids = ids } }

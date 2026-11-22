@@ -1248,6 +1248,15 @@ export class Engine {
 				const p = params as Params<"library.visual">;
 				return this.libraryCall(() => this.library.visual(p.id)) satisfies Result<"library.visual">;
 			}
+			case "library.restore": {
+				this.libraryCall(() => this.library.restore((params as Params<"library.restore">).id));
+				return {} satisfies Result<"library.restore">;
+			}
+			case "library.saved": {
+				const p = params as Params<"library.saved">;
+				const item = this.library.saved(p.callId, p.path);
+				return (item ? { item } : {}) satisfies Result<"library.saved">;
+			}
 			case "library.relocate": {
 				const p = params as Params<"library.relocate">;
 				return { item: this.libraryCall(() => this.library.relocate(p.id, p.path)) } satisfies Result<"library.relocate">;

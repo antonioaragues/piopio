@@ -24,6 +24,10 @@ final class EngineController {
     private(set) var library: [LibraryEntry] = []
     private(set) var libraryPins: [String] = []
     private(set) var libraryLoaded = false
+    /// What you removed from the Library, newest first, to put back.
+    private(set) var libraryRemoved: [LibraryEntry] = []
+    /// The Library couldn't be read (the page offers Retry).
+    private(set) var libraryFailed = false
     /// An item the Library should select when it shows (from a pin, ⌘K or Show in Library); the page clears it.
     var libraryFocus: String?
     /// Which migration report is showing ("work" or "automations").
@@ -153,12 +157,24 @@ final class EngineController {
 
     /// Show in Library (docs/spec/35 §4.2), posted by a file card, the file viewer or Build's files; listened to once.
     @ObservationIgnored private var showsInLibrary: NSObjectProtocol?
+    @ObservationIgnored private var visualSaves: NSObjectProtocol?
 
     func start() async {
+        LibraryMembership.contains = { [weak self] path in self?.library.contains { $0.path == path } ?? false }
         if showsInLibrary == nil {
             showsInLibrary = NotificationCenter.default.addObserver(forName: .showInLibrary, object: nil, queue: .main) { [weak self] note in
                 guard let path = note.object as? String else { return }
                 MainActor.assumeIsolated { Task { try? await self?.showInLibrary(path) } }
+            }
+            // A visual saved from its card: the Library links the file to it.
+            visualSaves = NotificationCenter.default.addObserver(forName: .visualSaved, object: nil, queue: .main) { [weak self] note in
+                guard let callId = note.userInfo?["callId"] as? String, let path = note.userInfo?["path"] as? String else { return }
+                MainActor.assumeIsolated {
+                    Task {
+                        _ = try? await self?.client?.call("library.saved", LibrarySavedParams(callId: callId, path: path), as: Empty.self)
+                        await self?.loadLibrary()
+                    }
+                }
             }
         }
         status = .starting
@@ -878,10 +894,24 @@ final class EngineController {
     // MARK: Library (docs/spec/35 §4)
 
     func loadLibrary() async {
-        guard let list = try? await client?.call("library.list", Empty(), as: LibraryList.self) else { return }
-        library = list.items
-        libraryPins = list.pins
-        libraryLoaded = true
+        guard let client else { return }
+        do {
+            let list = try await client.call("library.list", Empty(), as: LibraryList.self)
+            library = list.items
+            libraryPins = list.pins
+            libraryRemoved = list.removed ?? []
+            libraryLoaded = true
+            libraryFailed = false
+        } catch {
+            libraryFailed = !libraryLoaded
+        }
+    }
+
+    /// Put back an item you removed.
+    func restoreLibraryItem(_ id: String) async throws {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        _ = try await client.call("library.restore", LibraryIdParams(id: id), as: Empty.self)
+        await loadLibrary()
     }
 
     /// The pinned items, in their order: the shelf, and under Library in the sidebar.

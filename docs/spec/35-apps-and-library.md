@@ -400,3 +400,49 @@ handover from a real agent; a Library of several hundred items.
 
 **Not checked:** dragging pins, Show in Library from each place, opening a visual large or at its card, and notes
 from a real utility model, all by hand; dark mode.
+
+**Third pass (2026-11-22): fixes from a review.** Another agent reviewed L1 and reproduced the first three bugs
+below; the rest it found in the code. All were real.
+- **Locate… held.** A file's earlier paths are kept as aliases. When the conversation hands over the old path
+  again, re-reading it or restarting finds the same item with its pin, not a second one marked missing.
+- **Visuals stay current.** A visual's copy is compared by content, not size. Each visual carries a `version` (a
+  hash of its HTML) that its picture is cached by.
+- **Notes follow the agent's choice.** A file from an agent gets its note the way the agent would choose
+  (`models.utility` on its default model's provider). With `off` there is no call at all. A conversation's note
+  uses that conversation's model.
+- **Hidden folders stay out.** What a chat writes under any hidden folder (`.cache/`, `.piopio/`) isn't listed.
+  `present_files` and Add to Library still list anything.
+- **Save… is linked.** Saving a visual from its card reports an error if the write fails. On success it tells the
+  Library (`library.saved`), so the visual keeps its conversation and pin and now has a file. A later handover of
+  that file finds the same item. If the file goes, the visual is listed as unsaved again; it never leaves for being
+  missing.
+- **Opening says what it does.** From the Library, a visual's buttons fill in its conversation's composer (after
+  anything already there) and don't send. The sheet says which conversation. Open the Conversation reaches the
+  exact place: a chat's or a Build session's card, or an agent's run or person's conversation.
+- **Rows tell files apart.** Two lines, the name and then the note (or the kind), with "by <agent>" when the place
+  doesn't say it. The By column is gone. Markdown and text files show their heading and first lines, and CSV and
+  TSV files their first rows, in tiles and the preview, instead of a glyph.
+- **Add vs Show.** File cards, both viewers and Build's file tree say "Add to Library" when the file isn't in it
+  and "Show in Library" when it is. The page has **Add File…**, in the header and the empty state.
+- **Filters and loading.**
+  - The preview shows only what the list shows.
+  - An active kind keeps its chip even when nothing of that kind is left.
+  - **Clear Filters** appears when nothing matches.
+  - A first load that fails offers **Retry**.
+  - The page reads the Library again when it appears and when the app comes back to the front, so files moved
+    in Finder show as they are.
+- **Removing can be undone.** "Removed … · Undo" shows for six seconds. **Removed · N** at the end of the list
+  keeps everything you removed, each with **Put Back** (`library.restore`; `library.list` returns `removed`). A
+  removed visual can come back now.
+
+**Checked (third pass).**
+- **Engine tests:** 22 in `library.test.ts`. They add the review's cases: Locate… then re-reading and a restart;
+  two HTMLs of the same size; `.cache/metadata.json`; `noteRequest` returning no request for an agent with its
+  utility off; Put Back and the removed list; a saved visual linked, a later handover of its file, and the file
+  deleted.
+- **In a copy of the app:** two-line rows with notes, a CSV's rows and a Markdown heading in tiles and the
+  preview, and Add File….
+
+**Still not checked by hand:** dragging pins, Add/Show in Library from each place, Save… from a card, a visual's
+buttons from the Library, Undo and Put Back, refreshing after a move in Finder, dark mode. That's the review's
+proposed task: find last week's rate comparison and open the exact conversation that made it.
