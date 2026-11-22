@@ -25,8 +25,9 @@ export function goalFrom(entries: readonly { type: string; customType?: string; 
 	return undefined;
 }
 
+/** In the system prompt for as long as the goal is active: only what stays the same from round to round, so the model's prompt cache holds. */
 export function goalPrompt(goal: Goal): string {
-	return `You're working toward a goal the user set: ${goal.objective}\nWork through it step by step on your own; you'll get more turns until it's done (round ${goal.rounds} of ${goal.maxRounds} so far). Check your work (run the tests, open the result). When the goal is met, call update_goal with status "done" and one line on what you did. If you can't go on without the user (a decision, an access, the same failure again and again), call update_goal with status "blocked" and say what you need. Don't stop to ask whether to continue.`;
+	return `You're working toward a goal the user set: ${goal.objective}\nWork through it step by step on your own; you'll get more turns until it's done (each continuation message says which round it is). Check your work (run the tests, open the result). When the goal is met, call update_goal with status "done" and one line on what you did. If you can't go on without the user (a decision, an access, the same failure again and again), call update_goal with status "blocked" and say what you need. Don't stop to ask whether to continue.`;
 }
 
 const continuation = (goal: Goal) => `Keep going toward the goal: ${goal.objective}\n(Round ${goal.rounds} of ${goal.maxRounds}. When it's met, call update_goal with status "done"; if you're stuck, status "blocked".)`;

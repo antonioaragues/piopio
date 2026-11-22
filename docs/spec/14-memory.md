@@ -136,7 +136,9 @@ notebook. The places keep their own switches (an agent's Setup › Memory, a not
 settings) with a link here.
 
 1. **What Piopio remembers:** counts per area (About me facts, past chats indexed, notebooks, agents, projects),
-   disk use, and **Browse…**, one view over every bank with search, source, edit, forget and history.
+   disk use, and **Browse…**, one view over every bank with search, source, edit, forget and history. **Forget** here (and in
+   an agent's memory) means gone: the record, its vectors and its history entries, overwritten on disk. About me's own
+   remove keeps the text in its history so Undo can bring it back.
 2. **About me** (moved from Chat): the fact list, Share with, Learn from conversations.
 3. **Past chats:** Search past chats, Include notebooks.
 4. **Engine:** Basic / Standard / Hindsight / other MCP memory, with a status line ("Standard · 4,210 records ·

@@ -27,7 +27,7 @@ export type AutomationsHost = {
 	/** Piopio: a new conversation (in the project's folder, or loose) with this first message. Its session id. */
 	runPiopio(automation: Automation, text: string): Promise<string>;
 	/** A Piopio run's conversation now: running, waiting on you, and its cost. */
-	session?(id: string): Promise<{ running: boolean; waiting: boolean; costUsd: number } | undefined>;
+	session?(id: string): Promise<{ running: boolean; waiting: boolean; costUsd: number; error?: string } | undefined>;
 	/** Stops a Piopio run's conversation (its budget, or a skip). */
 	stopSession?(id: string): Promise<void>;
 	/** How many mailboxes are connected (an email automation needs one to see anything). */
@@ -309,10 +309,12 @@ export class Automations {
 		if (r.agent || !r.conversation || !this.host.session) return;
 		const s = await this.host.session(r.conversation);
 		if (!s) return;
-		const status: RunStatus = s.running ? "running" : s.waiting ? "waiting" : "done";
+		// A turn that ended in an error (the model failed, the run threw) is a failed run, not a done one.
+		const status: RunStatus = s.running ? "running" : s.waiting ? "waiting" : s.error ? "failed" : "done";
 		if (status !== r.status || s.costUsd !== r.costUsd) {
 			r.status = status;
 			r.costUsd = s.costUsd;
+			if (status === "failed") r.summary = s.error;
 			this.saveRuns();
 			if (status !== "running") this.host.changed();
 		}

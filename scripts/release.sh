@@ -36,7 +36,8 @@ overrides=(MARKETING_VERSION="$version" CURRENT_PROJECT_VERSION="$build")
 [[ -f "$app_dir/Signing.local.xcconfig" ]] && overrides+=(-allowProvisioningUpdates)
 (cd "$app_dir" && xcodegen generate --quiet)
 xcodebuild -project "$app_dir/Piopio.xcodeproj" -scheme Piopio -configuration Release -derivedDataPath "$app_dir/build" \
-	-destination "generic/platform=macOS" -quiet -skipPackagePluginValidation build "${overrides[@]}" 2>&1 | grep -v -e DVTPlugIn -e CoreSimulator -e CoreDevice -e '^Details:' || true
+	-destination "generic/platform=macOS" -quiet -skipPackagePluginValidation build "${overrides[@]}" 2>&1 | { grep -v -e DVTPlugIn -e CoreSimulator -e CoreDevice -e '^Details:' || true; }
+# pipefail: a failed build stops here rather than packaging whatever an earlier build left behind.
 built="$app_dir/build/Build/Products/Release/Piopio.app"
 [[ -x "$built/Contents/Helpers/node" ]] || { echo "release: the build has no bundled engine" >&2; exit 1; }
 

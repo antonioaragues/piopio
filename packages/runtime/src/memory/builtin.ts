@@ -254,11 +254,13 @@ export class BuiltinMemory implements MemoryProvider {
 		return { records: rows.slice(0, limit).map(toRecord), ...(rows.length > limit ? { cursor: String(offset + limit) } : {}) };
 	}
 
-	async forget(bank: string, id: string, by: MemoryRecord["createdBy"] = "user"): Promise<void> {
+	async forget(bank: string, id: string, by: MemoryRecord["createdBy"] = "user", options: { purge?: boolean } = {}): Promise<void> {
 		const row = this.get(bank, id);
 		this.sql.run("DELETE FROM memory_records WHERE id = ? AND bank = ?", id, bank);
 		this.invalidate(bank);
-		this.event(bank, "removed", id, row.text, by, row.tags ? (JSON.parse(row.tags) as string[]) : undefined);
+		// Purged: every event that holds its text goes as well (its vectors and search entry go with the row, by trigger).
+		if (options.purge) this.sql.run("DELETE FROM memory_events WHERE record_id = ? AND bank = ?", id, bank);
+		else this.event(bank, "removed", id, row.text, by, row.tags ? (JSON.parse(row.tags) as string[]) : undefined);
 	}
 
 	async end(bank: string, id: string, at: string, by: MemoryRecord["createdBy"] = "extraction"): Promise<void> {

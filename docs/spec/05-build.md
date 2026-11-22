@@ -119,7 +119,7 @@ Three modes, set per session (default per project; global default = **Auto-edit*
 
 - **CK1** Before the first file-modifying tool in each agent turn, snapshot the working tree into a **shadow git dir** (`checkpoints/<projectId>.git`, `--work-tree=<project>`), respecting .gitignore plus a size cap. Untracked files are included. The user's repo is never touched.
 - **CK2** A `checkpoint` timeline item marks each one. "Restore to here" → shows the files to be changed, confirms, restores, and posts a `system` item to the session telling the agent what happened.
-- **CK3** Retention: last 50 checkpoints per project or 14 days, whichever is larger. Configurable.
+- **CK3** Retention: last 50 checkpoints per project or 14 days, whichever is larger. Configurable. Each checkpoint is a commit of its own, with no parent, so one dropped past the window is collected at once (chained, every old one stayed reachable from the newest and the shadow repo only grew).
 
 ## 8. Git & GitHub (B3)
 

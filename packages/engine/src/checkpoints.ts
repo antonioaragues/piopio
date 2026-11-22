@@ -23,7 +23,10 @@ export class CheckpointStore {
 	private queues = new Map<string, Promise<unknown>>();
 	private snapshots = 0;
 
-	constructor(private readonly root: string) {}
+	constructor(
+		private readonly root: string,
+		private readonly keep: { count: number; ms: number } = { count: KEEP_COUNT, ms: KEEP_MS },
+	) {}
 
 	/** Records the folder as it is now. `files`: how many differ from the previous checkpoint. */
 	snapshot(cwd: string, message: string): Promise<Checkpoint> {
@@ -33,7 +36,9 @@ export class CheckpointStore {
 			await git(["add", "-A", "."]);
 			const tree = (await git(["write-tree"])).trim();
 			const parent = (await git(["rev-parse", "-q", "--verify", "refs/piopio/latest"]).catch(() => "")).trim();
-			const commit = (await git(["commit-tree", tree, ...(parent ? ["-p", parent] : []), "-m", message])).trim();
+			// No parent: each checkpoint stands alone. Chained to the one before, every old checkpoint stayed reachable from
+			// refs/piopio/latest, so dropping its own ref in prune() freed nothing and the shadow repo only ever grew.
+			const commit = (await git(["commit-tree", tree, "-m", message])).trim();
 			await git(["update-ref", "refs/piopio/latest", commit]);
 			await git(["update-ref", `refs/piopio/cp/${Date.now()}-${commit.slice(0, 12)}`, commit]);
 			const files = parent ? (await git(["diff", "--no-renames", "--name-only", "-z", parent, commit])).split("\0").filter(Boolean).length : 0;
@@ -84,9 +89,10 @@ export class CheckpointStore {
 			const git = await this.repo(cwd);
 			const refs = (await git(["for-each-ref", "--format=%(refname)", "refs/piopio/cp/"])).split("\n").filter(Boolean).sort().reverse();
 			const now = Date.now();
-			const old = refs.slice(KEEP_COUNT).filter((ref) => now - Number(ref.split("/").at(-1)!.split("-")[0]) > KEEP_MS);
+			const old = refs.slice(this.keep.count).filter((ref) => now - Number(ref.split("/").at(-1)!.split("-")[0]) > this.keep.ms);
 			for (const ref of old) await git(["update-ref", "-d", ref]);
-			if (old.length) await git(["gc", "--auto", "--quiet"]).catch(() => undefined);
+			// Collected now, not after git's two-week grace: these are unreachable on purpose, and this queue is the only writer.
+			if (old.length) await git(["-c", "gc.pruneExpire=now", "gc", "--quiet"]).catch(() => undefined);
 			return old.length;
 		});
 	}

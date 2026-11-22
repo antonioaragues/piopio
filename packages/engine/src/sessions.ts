@@ -61,7 +61,7 @@ import type { Watchdog, WatchdogRule } from "./watchdog.js";
 import type { GitHub, PrStatus } from "./github.js";
 import type { ConsultBridge } from "./consult.js";
 import { agentBridge, automationsExtension } from "./automations/tools.js";
-import { PIOPIO, type Automation } from "./automations/model.js";
+import { PIOPIO, turnError, type Automation } from "./automations/model.js";
 import type { Automations } from "./automations/service.js";
 import { TimelineBuilder, type PiMessage } from "./timeline/builder.js";
 import { sdkMessages, SdkEventMapper } from "./timeline/pi-sdk.js";
@@ -1249,11 +1249,13 @@ export class Sessions {
 	}
 
 	/** A conversation now, for an automation's run: running, waiting on you, and what it has cost. */
-	async sessionState(id: string): Promise<{ running: boolean; waiting: boolean; costUsd: number } | undefined> {
+	async sessionState(id: string): Promise<{ running: boolean; waiting: boolean; costUsd: number; error?: string } | undefined> {
 		const entry = this.entries.get(id);
 		if (!entry) return undefined;
-		const state = (await this.runtime(entry.ref)).snapshot().state;
-		return { running: state.status === "running", waiting: (state.prompts?.length ?? 0) > 0, costUsd: state.usage?.costUsd ?? 0 };
+		const { state, items } = (await this.runtime(entry.ref)).snapshot();
+		const running = state.status === "running";
+		const error = running ? undefined : turnError(items);
+		return { running, waiting: (state.prompts?.length ?? 0) > 0, costUsd: state.usage?.costUsd ?? 0, ...(error ? { error } : {}) };
 	}
 
 	/** Stops a conversation's turn (an automation's budget or skip). */

@@ -4,6 +4,7 @@
  * works in one, where the result goes, what it may do while you're away, and its runs. These are the plain types and
  * the words for them; `service.ts` keeps, fires and watches them.
  */
+import type { TimelineItem } from "@piopio/protocol";
 import { nextFire, parseLocal, passedText } from "@piopio/runtime";
 
 export type Trigger = "time" | "folder" | "email" | "webhook";
@@ -154,4 +155,19 @@ export function resultLabel(result: ResultTo, runner: { piopio: boolean; name: s
 	if (result === "telegram") return "Telegram";
 	if (runner.piopio) return project ? `A conversation in ${project}` : "A new conversation";
 	return `${runner.name}’s chat`;
+}
+
+/**
+ * Why the conversation's latest turn failed, or undefined when it didn't: its last answer ended in an error, or the run
+ * itself did (an error line after it). Read back from the newest item to the last message sent; a later answer that
+ * worked (a retry) wins.
+ */
+export function turnError(items: readonly TimelineItem[]): string | undefined {
+	for (let i = items.length - 1; i >= 0; i--) {
+		const item = items[i]!;
+		if (item.kind === "user") return undefined;
+		if (item.kind === "system" && item.level === "error") return item.text;
+		if (item.kind === "assistant") return item.status === "error" ? item.error || "The model's answer failed." : undefined;
+	}
+	return undefined;
 }

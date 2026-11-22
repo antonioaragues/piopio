@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "vitest";
@@ -59,4 +59,20 @@ test("snapshots include untracked files, skip ignored ones, and restore puts eve
 	expect(execFileSync("git", ["rev-list", "--all", "--count"], { cwd: dir, encoding: "utf8" }).trim()).toBe("0");
 	expect(userHead).toContain("?? a.txt");
 	await expect(store.restore(dir, "deadbeef")).rejects.toMatchObject({ code: "NOT_FOUND" });
+});
+
+test("pruned checkpoints are really gone: each stands alone, so dropping its ref frees it", async () => {
+	const dir = folder();
+	const root = mkdtempSync(join(tmpdir(), "piopio-cp-store-"));
+	const store = new CheckpointStore(root, { count: 1, ms: -1 });
+	const first = await store.snapshot(dir, "one");
+	writeFileSync(join(dir, "a.txt"), "changed\n");
+	const second = await store.snapshot(dir, "two");
+	expect(second.files).toBe(1);
+	const gitDir = join(root, readdirSync(root).find((f) => f.endsWith(".git"))!);
+	expect(execFileSync("git", ["--git-dir", gitDir, "cat-file", "-p", second.id], { encoding: "utf8" })).not.toContain("parent ");
+
+	expect(await store.prune(dir)).toBe(1);
+	await expect(store.changes(dir, first.id)).rejects.toMatchObject({ code: "NOT_FOUND" });
+	expect(await store.changes(dir, second.id)).toEqual([]);
 });

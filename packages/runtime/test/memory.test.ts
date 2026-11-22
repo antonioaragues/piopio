@@ -54,4 +54,15 @@ describe("built-in memory", () => {
 		expect(first.cursor).toBe("1");
 		expect((await m.list("me", { limit: 1, cursor: first.cursor })).records.map((r) => r.text)).toEqual(["Lives in Madrid"]);
 	});
+
+	test("forgetting with purge leaves nothing of the record: not in the list, recall or history", async () => {
+		const m = memory();
+		const [secret] = await m.retain("me", { content: "Sees Dr. Ortega about the knee", kind: "fact", createdBy: "user" });
+		await m.update("me", secret!.id, { text: "Sees Dr. Ortega about the knee on Tuesdays" });
+		await m.retain("me", { content: "Likes coffee", kind: "fact", createdBy: "user" });
+		await m.forget("me", secret!.id, "user", { purge: true });
+		expect((await m.list("me")).records.map((r) => r.text)).toEqual(["Likes coffee"]);
+		expect(await m.recall(["me"], "Ortega knee")).toEqual([]);
+		expect((await m.history("me")).map((e) => e.text)).toEqual(["Likes coffee"]);
+	});
 });

@@ -1497,7 +1497,8 @@ export class Engine {
 				const p = params as Params<"memory.forget">;
 				const provider = this.memory.get(p.provider);
 				if (!provider.forget) throw new EngineError("INVALID", "This memory provider can't forget from here.");
-				await provider.forget(p.bank, p.id, "user");
+				// Forget in Settings › Memory or an agent's memory: gone, history included (About me keeps its own Undo).
+				await provider.forget(p.bank, p.id, "user", { purge: true });
 				return {};
 			}
 			case "memory.update": {

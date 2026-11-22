@@ -70,7 +70,11 @@ export interface MemoryProvider {
 	reflect?(bank: string, question: string): Promise<{ answer: string; used: MemoryHit[] }>;
 	/** Every record, newest first: the memory view. */
 	list?(bank: string, options?: { cursor?: string; limit?: number; kinds?: MemoryKind[]; tag?: string }): Promise<{ records: MemoryRecord[]; cursor?: string }>;
-	forget?(bank: string, id: string, by?: MemoryRecord["createdBy"]): Promise<void>;
+	/**
+	 * Removes a record. Kept in the history (so Undo can bring it back) unless `purge`: the user asked to forget it, so its
+	 * text goes from the history too and nothing of it stays.
+	 */
+	forget?(bank: string, id: string, by?: MemoryRecord["createdBy"], options?: { purge?: boolean }): Promise<void>;
 	/** A fact stopped being true (kept for the history, no longer recalled). */
 	end?(bank: string, id: string, at: string, by?: MemoryRecord["createdBy"]): Promise<void>;
 	/** Undoes `end`, or a replacement: the fact is current again. */

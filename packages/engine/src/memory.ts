@@ -43,6 +43,9 @@ export class MemoryProviders {
 		private readonly keyFor: (provider: string) => Promise<string | undefined> = async () => undefined,
 	) {
 		const db = new DatabaseSync(file);
+		// What's deleted is overwritten on disk, not left in free pages: forgetting has to mean it. (Here, not in
+		// BuiltinMemory: a Durable Object's SQLite refuses pragmas.)
+		db.exec("PRAGMA secure_delete = ON");
 		const sql: Sql = { exec: (s) => db.exec(s), run: (s, ...p) => void db.prepare(s).run(...(p as never[])), all: (s, ...p) => db.prepare(s).all(...(p as never[])) as never };
 		this.builtin = new BuiltinMemory(sql, () => randomUUID(), undefined, () => this.currentEmbedder());
 		this.embedder = this.makeEmbedder();

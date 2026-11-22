@@ -27,8 +27,9 @@ jobs:
   # The Swift side needs Xcode 27 on macOS 27, so it runs on the author's own Mac (docs/ci.md).
   # Off by default: without a runner registered with these labels the job would queue forever.
   # `workflow_dispatch` runs it anyway, to try the setup without enabling it for every push.
+  # Never on a pull request: that's unreviewed code, and this runner is a personal Mac. Only pushes to main.
   swift:
-    if: ${{ vars.PIOPIO_SWIFT_CI == 'true' || github.event_name == 'workflow_dispatch' }}
+    if: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.PIOPIO_SWIFT_CI == 'true') || github.event_name == 'workflow_dispatch' }}
     runs-on: [self-hosted, macOS, ARM64, piopio-macos-27]
     timeout-minutes: 25
     steps:
@@ -43,7 +44,7 @@ jobs:
   app:
     # The whole app: engine bundle, generated Xcode project and Piopio.app. Same runner; the .app is
     # left in apps/mac/App/build/Build/Products/Debug/ on that Mac, ready to open.
-    if: ${{ vars.PIOPIO_SWIFT_CI == 'true' || github.event_name == 'workflow_dispatch' }}
+    if: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.PIOPIO_SWIFT_CI == 'true') || github.event_name == 'workflow_dispatch' }}
     runs-on: [self-hosted, macOS, ARM64, piopio-macos-27]
     timeout-minutes: 30
     steps:
