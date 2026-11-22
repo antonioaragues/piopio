@@ -20,6 +20,10 @@ final class EngineController {
     /// `automationsGeneration` on every change, so open pages read their runs again.
     private(set) var automations: [Automation] = []
     private(set) var automationsGeneration = 0
+    /// The Library (docs/spec/35 §4): what Piopio and your agents made, newest first, and the pins in their order.
+    private(set) var library: [LibraryEntry] = []
+    private(set) var libraryPins: [String] = []
+    private(set) var libraryLoaded = false
     /// Which migration report is showing ("work" or "automations").
     @ObservationIgnored private var reportFrom = "work"
     /// The Watchdog's notes about your conversations (docs/spec/17 §4): in Needs you.
@@ -335,7 +339,7 @@ final class EngineController {
             }
         }
         Task { [weak self] in await self?.loadInbox() }
-        Task { [weak self] in await self?.loadWork(); await self?.loadWatchdog(); await self?.loadAutomations() }
+        Task { [weak self] in await self?.loadWork(); await self?.loadWatchdog(); await self?.loadAutomations(); await self?.loadLibrary() }
         Task { [weak self] in
             for await note in client.providerEvents {
                 guard let self else { return }
@@ -353,6 +357,8 @@ final class EngineController {
                     await self.loadWatchdog()
                 case .automationsChanged:
                     await self.loadAutomations()
+                case .libraryChanged:
+                    await self.loadLibrary()
                 case .connectorAuth(let auth):
                     if self.connectorLogin?.loginId == auth.loginId { self.connectorLogin?.apply(auth.event) }
                     if auth.event.type == "done" { await self.loadConnectors() }
@@ -856,6 +862,56 @@ final class EngineController {
         let changed = try await client.call("automations.update", change, as: AutomationResult.self).automation
         await loadAutomations()
         return changed
+    }
+
+    // MARK: Library (docs/spec/35 §4)
+
+    func loadLibrary() async {
+        guard let list = try? await client?.call("library.list", Empty(), as: LibraryList.self) else { return }
+        library = list.items
+        libraryPins = list.pins
+        libraryLoaded = true
+    }
+
+    /// The pinned items, in their order: the shelf, and under Library in the sidebar.
+    var pinnedLibrary: [LibraryEntry] {
+        let byId = Dictionary(library.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        return libraryPins.compactMap { byId[$0] }
+    }
+
+    func pinLibrary(_ id: String, _ pinned: Bool) async throws {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        _ = try await client.call("library.pin", LibraryPinParams(id: id, pinned: pinned), as: Empty.self)
+        await loadLibrary()
+    }
+
+    func reorderLibraryPins(_ ids: [String]) async throws {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        libraryPins = ids
+        _ = try await client.call("library.reorder", LibraryIdsParams(ids: ids), as: Empty.self)
+        await loadLibrary()
+    }
+
+    /// Remove from Library: hidden; the file stays where it is.
+    func removeFromLibrary(_ id: String) async throws {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        _ = try await client.call("library.remove", LibraryIdParams(id: id), as: Empty.self)
+        await loadLibrary()
+    }
+
+    @discardableResult
+    func addToLibrary(_ path: String) async throws -> LibraryEntry {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        let item = try await client.call("library.add", LibraryPathParams(path: path), as: LibraryEntryResult.self).item
+        await loadLibrary()
+        return item
+    }
+
+    /// Locate…: where a missing file is now.
+    func relocateLibraryItem(_ id: String, to path: String) async throws {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        _ = try await client.call("library.relocate", LibraryRelocateParams(id: id, path: path), as: LibraryEntryResult.self)
+        await loadLibrary()
     }
 
     func removeAutomation(_ id: String) async throws {

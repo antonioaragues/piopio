@@ -270,7 +270,7 @@ extension AreaSet {
     /// Whether the sidebar, Home and the palette show an item.
     @MainActor func shows(_ item: SidebarItem, engine: EngineController) -> Bool {
         switch item {
-        case .home, .automations, .automation: true
+        case .home, .automations, .automation, .library: true
         case .index(let section): shows(section)
         case .project, .board: showsProjects
         case .session(let id): engine.buildSessions.first { $0.ref.id == id }.map { showsSession(chatProfile: $0.profile == .chat) } ?? showsProjects

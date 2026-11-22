@@ -51,6 +51,7 @@ import { BrowserSites } from "./tools/browser-tools.js";
 import { TelegramChannels } from "./channels/manager.js";
 import { AgentWatchers } from "./watchers.js";
 import { Automations } from "./automations/service.js";
+import { Library } from "./library.js";
 import { PIOPIO, systemZone, type Automation } from "./automations/model.js";
 import { fromProjects, REPORT_FILE as AUTOMATIONS_REPORT, reportOf as automationsReport, type LegacyPlace } from "./automations/migrate.js";
 import type { Automation as AutomationView } from "@piopio/protocol";
@@ -255,6 +256,15 @@ export class Engine {
 		// Your cloud (docs/spec/30 K1): agents that keep going with the Mac off.
 		this.cloud = new CloudLink({ file: join(options.paths.home, "cloud.json"), secrets: this.secrets, log: this.log, ...(options.cloud ?? {}) });
 		this.sessions.cloud = this.cloud;
+		// The Library (docs/spec/35 §4): it fills from what search reads, so it's set before the backfill below.
+		let libraryNote: NodeJS.Timeout | undefined;
+		this.sessions.library = new Library(join(options.paths.home, "library.json"), () => {
+			clearTimeout(libraryNote);
+			libraryNote = setTimeout(() => {
+				for (const conn of this.authed) conn.notify("library.changed", {});
+			}, 300);
+			libraryNote.unref?.();
+		});
 		this.sessions.secrets = this.secrets;
 		// Automations (docs/spec/27): one list of what starts on its own, run as Piopio or as one of your agents.
 		this.automations = new Automations({
@@ -577,6 +587,19 @@ export class Engine {
 	}
 
 	/** An automation as the app sees it: the record, and its words. */
+	private get library(): Library {
+		return this.sessions.library!;
+	}
+
+	/** A Library change that can fail for a reason you should read (no file there). */
+	private libraryCall<T>(f: () => T): T {
+		try {
+			return f();
+		} catch (error) {
+			throw new EngineError("INVALID", (error as Error).message);
+		}
+	}
+
 	private automationView(a: Automation): AutomationView {
 		const s = this.automations.summary(a);
 		const last = this.automations.lastRun(a.id);
@@ -1201,6 +1224,29 @@ export class Engine {
 			case "automations.update": {
 				const { id, ...change } = params as Params<"automations.update">;
 				return { automation: this.automationView(this.automations.update(id, change)) } satisfies Result<"automations.update">;
+			}
+			case "library.list":
+				return this.library.list() satisfies Result<"library.list">;
+			case "library.pin": {
+				const p = params as Params<"library.pin">;
+				this.libraryCall(() => this.library.pin(p.id, p.pinned));
+				return {} satisfies Result<"library.pin">;
+			}
+			case "library.reorder": {
+				this.library.reorder((params as Params<"library.reorder">).ids);
+				return {} satisfies Result<"library.reorder">;
+			}
+			case "library.remove": {
+				this.libraryCall(() => this.library.remove((params as Params<"library.remove">).id));
+				return {} satisfies Result<"library.remove">;
+			}
+			case "library.add": {
+				const p = params as Params<"library.add">;
+				return { item: this.libraryCall(() => this.library.add(p.path)) } satisfies Result<"library.add">;
+			}
+			case "library.relocate": {
+				const p = params as Params<"library.relocate">;
+				return { item: this.libraryCall(() => this.library.relocate(p.id, p.path)) } satisfies Result<"library.relocate">;
 			}
 			case "automations.remove": {
 				const p = params as Params<"automations.remove">;

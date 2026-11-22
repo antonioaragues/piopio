@@ -47,6 +47,7 @@ import type { Extension } from "@earendil-works/pi-durable";
 import type { WebOptions } from "./tools/web.js";
 import { exportTranscript, type ExportFormat } from "./export.js";
 import { SearchIndex } from "./search.js";
+import { type Library, LibrarySearch, type LibraryOrigin } from "./library.js";
 import type { HistoryBridge } from "./tools/history.js";
 import { AGENT_NAMES, findAgent, installedAgents, runExternalAgent, type ExternalAgent } from "./external-agents.js";
 import type { TelegramChannels } from "./channels/manager.js";
@@ -192,6 +193,8 @@ export class Sessions {
 	log: (line: string) => void = () => {};
 	/** Your cloud (docs/spec/30 K1) and the Keychain, set by the engine. */
 	cloud?: CloudLink;
+	/** The Library (docs/spec/35 §4), set by the engine: it reads what search reads. */
+	library?: Library;
 	secrets?: SecretBroker;
 	/** A cloud agent's open conversations, by `<agent>|<conversation>`. */
 	private cloudViews = new Map<string, Promise<CloudAgentView>>();
@@ -202,7 +205,17 @@ export class Sessions {
 		private readonly piOverrides: { piSessionDir?: string; piAgentDir?: string; trashDir?: string } = {},
 		private readonly webOptions: WebOptions = {},
 	) {
-		this.search = new SearchIndex(join(paths.home, "search.db"));
+		this.search = new LibrarySearch(join(paths.home, "search.db"), {
+			replaced: (key, items) => {
+				const origin = this.libraryOrigin(key);
+				if (origin) this.library?.observe(origin, items);
+			},
+			item: (key, item) => {
+				const origin = this.libraryOrigin(key);
+				if (origin) this.library?.observeItem(origin, item);
+			},
+			deleted: (id) => this.library?.forget(id),
+		});
 		this.checkpoints = new CheckpointStore(join(paths.home, "checkpoints"));
 		if (existsSync(paths.catalogIndex)) {
 			for (const e of JSON.parse(readFileSync(paths.catalogIndex, "utf8")) as CatalogEntry[]) {
@@ -477,6 +490,27 @@ export class Sessions {
 		this.open.delete(entry.ref.id);
 		await runtime.close();
 		return items;
+	}
+
+	/**
+	 * Where a Library item came from (docs/spec/35 §4.2), from search's key: a conversation's id, or an agent's id and
+	 * one of its conversations ("<agent>/person:<contact>", "<agent>/run:<id>"). Who made it is Piopio, or the agent.
+	 */
+	private libraryOrigin(key: string): LibraryOrigin | undefined {
+		const slash = key.indexOf("/");
+		const id = slash < 0 ? key : key.slice(0, slash);
+		const entry = this.entries.get(id);
+		if (!entry) return undefined;
+		const ref: ContainerRef = slash < 0 ? entry.ref : { ...entry.ref, conversationId: key.slice(slash + 1) };
+		const scratch = resolve(this.paths.scratchDir);
+		const chatFolder = entry.ref.kind === "thread" && entry.cwd && resolve(entry.cwd).startsWith(`${scratch}/`) ? entry.cwd : undefined;
+		return {
+			ref,
+			title: this.search.destination(key)?.title ?? entry.title,
+			by: entry.ref.kind === "agent" ? entry.title : "Piopio",
+			...(entry.ref.kind === "build" ? { project: entry.projectPath ?? entry.cwd } : {}),
+			...(chatFolder ? { chatFolder } : {}),
+		};
 	}
 
 	/** Index all active branches, including agent conversations. */

@@ -48,6 +48,8 @@ struct MainSidebar: View {
                     navRow(.home, "Home", symbol: "house", count: engine.needsYouCount)
                     // Automations (docs/spec/27 AU10): what starts on its own, for Piopio and every agent.
                     automationsRow
+                    // The Library (docs/spec/35 §4.4): what Piopio made, with your pins under it.
+                    libraryRows
                     pinnedSection
                     if areas.showsAgents { agentsSection }
                     if areas.showsProjects { projectsSection }
@@ -494,6 +496,47 @@ struct MainSidebar: View {
             .rowChrome(selected: selected)
         }
         .buttonStyle(.plain)
+    }
+
+    // MARK: Library
+
+    /// The Library (docs/spec/35 §4.4): its row, and the five most recent pins under it. A pin opens the item itself.
+    @ViewBuilder private var libraryRows: some View {
+        Button { item = .library } label: {
+            HStack(spacing: 10) {
+                RowGlyph(symbol: "books.vertical")
+                Text("Library").font(.system(size: 13)).foregroundStyle(Color.dsFg)
+                Spacer()
+            }
+            .rowChrome(selected: item == .library)
+        }
+        .buttonStyle(.plain)
+        ForEach(engine.pinnedLibrary.prefix(5)) { pin in
+            Button {
+                LibraryOpen.open(pin, engine: engine) { item = $0 } missing: {
+                    item = .library
+                    DispatchQueue.main.async { NotificationCenter.default.post(name: .showLibraryItem, object: pin.id) }
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: LibraryKind.symbol(pin.kind)).font(.system(size: 11)).foregroundStyle(Color.dsFg3).frame(width: 14)
+                    Text(pin.name).font(.system(size: 13)).foregroundStyle(pin.missing == true ? Color.dsFg3 : Color.dsFg).lineLimit(1).truncationMode(.middle)
+                    Spacer(minLength: 4)
+                }
+                .rowChrome(selected: false, leading: 30, height: 28)
+            }
+            .buttonStyle(.plain)
+            .help(pin.missing == true ? "\(pin.name): the file isn't where it was" : pin.name)
+            .contextMenu {
+                Button("Open") { LibraryOpen.open(pin, engine: engine) { item = $0 } missing: { item = .library } }
+                Button("Show in Library") {
+                    item = .library
+                    DispatchQueue.main.async { NotificationCenter.default.post(name: .showLibraryItem, object: pin.id) }
+                }
+                Divider()
+                Button("Unpin") { Task { try? await engine.pinLibrary(pin.id, false) } }
+            }
+        }
     }
 
     // MARK: Agents

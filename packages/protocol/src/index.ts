@@ -1011,6 +1011,37 @@ export const AutomationRun = Type.Object({
 	agentRun: Type.Optional(Type.String()),
 });
 export type AutomationRun = Static<typeof AutomationRun>;
+/** What a Library item is (docs/spec/35 §4.2): by its file's extension, or a visual in a conversation. */
+export const LibraryKind = literals("app", "document", "page", "visual", "image", "data", "slides", "file");
+export type LibraryKind = Static<typeof LibraryKind>;
+/**
+ * One thing Piopio or an agent made (docs/spec/35 §4): a file where it lives, or a visual still in its conversation.
+ * The Library lists them; it never moves or copies a file.
+ */
+export const LibraryItem = Type.Object({
+	id: Type.String(),
+	kind: LibraryKind,
+	name: Type.String(),
+	/** The file; absent for a visual that was never saved. */
+	path: Type.Optional(Type.String()),
+	/** What it is, in a line: the note it was handed over with. */
+	note: Type.Optional(Type.String()),
+	/** When it was made (handed over, written, shown or added). */
+	at: Type.String(),
+	/** "Piopio", an agent's name, or "You" for a file added by hand. */
+	by: Type.String(),
+	how: literals("presented", "written", "visual", "added"),
+	/** The conversation that made it: open it from the Library. `project` is the project's folder. */
+	origin: Type.Optional(Type.Object({ ref: ContainerRef, title: Type.String(), project: Type.Optional(Type.String()) })),
+	/** A visual: its tool call in that conversation. */
+	visual: Type.Optional(Type.Object({ callId: Type.String() })),
+	/** The file isn't where it was: Locate… or Remove. */
+	missing: Type.Optional(Type.Boolean()),
+	size: Type.Optional(Type.Number()),
+	changedAt: Type.Optional(Type.String()),
+	pinned: Type.Optional(Type.Boolean()),
+});
+export type LibraryItem = Static<typeof LibraryItem>;
 /** What `automations.add` and `automations.update` take: the trigger in words (`when`), the rest as the record. */
 export const AutomationChange = Type.Object({
 	name: Type.Optional(Type.String()),
@@ -1821,6 +1852,18 @@ export const methods = {
 	/** What changed when schedules, watches and routines became automations (docs/spec/27 §6): shown until dismissed. */
 	"automations.migrationReport": { params: Type.Object({}), result: Type.Object({ report: Type.Optional(Type.String({ description: "Markdown" })) }) },
 	"automations.dismissMigrationReport": { params: Type.Object({}), result: Type.Object({}) },
+	/** The Library (docs/spec/35 §4): everything not removed, newest first, and the pins in their order. */
+	"library.list": { params: Type.Object({}), result: Type.Object({ items: Type.Array(LibraryItem), pins: Type.Array(Type.String()) }) },
+	/** Pin puts it on the shelf and under Library in the sidebar (first); unpin takes it off. */
+	"library.pin": { params: Type.Object({ id: Type.String(), pinned: Type.Boolean() }), result: Type.Object({}) },
+	/** The pins in a new order. */
+	"library.reorder": { params: Type.Object({ ids: Type.Array(Type.String()) }), result: Type.Object({}) },
+	/** Remove from Library: hidden from then on; the file isn't touched. */
+	"library.remove": { params: Type.Object({ id: Type.String() }), result: Type.Object({}) },
+	/** Add to Library: any file, by hand. */
+	"library.add": { params: Type.Object({ path: Type.String() }), result: Type.Object({ item: LibraryItem }) },
+	/** Locate…: where a missing file is now. */
+	"library.relocate": { params: Type.Object({ id: Type.String(), path: Type.String() }), result: Type.Object({ item: LibraryItem }) },
 	/** Runs: schedules, heartbeat, reminders, triggers and manual runs, newest first (06 §6, Runs tab). Open one with `conversationId: "run:<id>"`. */
 	"agents.runs": {
 		params: Type.Object({ ref: ContainerRef }),
@@ -2085,6 +2128,8 @@ export const notifications = {
 	"work.changed": Type.Object({ project: Type.String() }),
 	/** An automation or one of its runs changed (docs/spec/27): list them again. */
 	"automations.changed": Type.Object({}),
+	/** The Library changed (docs/spec/35): list it again. */
+	"library.changed": Type.Object({}),
 	"inbox.changed": Type.Object({ count: Type.Number(), approval: Type.Optional(Type.Object({ agent: ContainerRef, agentName: Type.String(), approvalId: Type.String(), title: Type.String() })) }),
 } satisfies Record<string, TSchema>;
 

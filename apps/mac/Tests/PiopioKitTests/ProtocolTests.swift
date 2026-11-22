@@ -104,3 +104,21 @@ private let idleState = #"{"status":"idle","queue":[],"usage":{"inputTokens":0,"
     #expect(ISODate.parse("") == nil)
     #expect(ISODate.parse("yesterday") == nil)
 }
+
+@Test func decodesTheLibrary() throws {
+    let list: LibraryList = try decode("""
+    {"items":[
+      {"id":"a1","kind":"data","name":"gas.csv","path":"/x/gas.csv","note":"Gas offers compared","at":"2026-11-22T10:44:00.000Z","by":"Piopio","how":"presented",
+       "origin":{"ref":{"kind":"build","id":"s1"},"title":"Gas contract","project":"/x"},"size":8,"changedAt":"2026-11-22T10:45:00.000Z","pinned":true},
+      {"id":"b2","kind":"visual","name":"Spending","at":"2026-11-22T09:12:00.000Z","by":"Rita","how":"visual",
+       "origin":{"ref":{"kind":"agent","id":"a1","conversationId":"person:c1"},"title":"Rita"},"visual":{"callId":"c9"}},
+      {"id":"c3","kind":"document","name":"gone.md","path":"/x/gone.md","at":"2026-11-20T09:00:00.000Z","by":"You","how":"added","missing":true}
+    ],"pins":["a1"]}
+    """)
+    #expect(list.pins == ["a1"])
+    #expect(list.items.map(\.id) == ["a1", "b2", "c3"])
+    #expect(list.items[0].origin?.project == "/x" && list.items[0].pinned == true && list.items[0].size == 8)
+    #expect(list.items[1].origin?.ref == ContainerRef(kind: .agent, id: "a1", conversationId: "person:c1"))
+    #expect(list.items[1].visual?.callId == "c9" && list.items[1].path == nil)
+    #expect(list.items[2].missing == true && list.items[2].origin == nil)
+}

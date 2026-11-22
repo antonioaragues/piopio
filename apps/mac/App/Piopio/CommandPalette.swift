@@ -167,6 +167,16 @@ struct CommandPalette: View {
                 for s in engine.threads { add("t:\(s.ref.id)", s.title, "Conversation", "bubble.left", .thread) { openThread(s.ref.id, nil) } }
             }
             if areas.contains(.agents) { for s in engine.agents { add("a:\(s.ref.id)", s.title, "Agent", "bird", .agent) { NotificationCenter.default.post(name: .selectItem, object: SidebarItem.agent(s.ref.id).raw) } } }
+            // What Piopio made (docs/spec/35 §4.3): an item by its name, when you've typed some of it.
+            if q.count >= 2, searchScope.kind == nil {
+                for i in engine.library where matches(i.name) {
+                    destinations.append(Row(id: "l:\(i.id)", icon: LibraryKind.symbol(i.kind), title: i.name, trailing: "Library · \(LibraryKind.label(i.kind))") {
+                        close()
+                        NotificationCenter.default.post(name: .selectItem, object: SidebarItem.library.raw)
+                        DispatchQueue.main.async { NotificationCenter.default.post(name: .showLibraryItem, object: i.id) }
+                    })
+                }
+            }
             let goTo = Array(destinations.prefix(q.isEmpty ? 10 : 25))
             return [Group(id: "Results", rows: goTo + (q.count >= 2 ? messageRows : [])), Group(id: "Actions", rows: searchScope == .all ? actions : [])].filter { !$0.rows.isEmpty }
 
@@ -207,6 +217,7 @@ struct CommandPalette: View {
             rows.append(Row(id: "c:agent", icon: "bird", title: "New Agent", trailing: nil) { close(); NotificationCenter.default.post(name: .newAgent, object: "form") })
         }
         rows += [
+            Row(id: "c:library", icon: "books.vertical", title: "Library", trailing: nil) { close(); NotificationCenter.default.post(name: .selectItem, object: SidebarItem.library.raw) },
             Row(id: "c:search", icon: "text.magnifyingglass", title: "Search Messages", trailing: "⇧⌘F") { mode = .messages; query = "" },
             Row(id: "c:settings", icon: "gearshape", title: "Settings", trailing: "⌘,") { ThreadModel.openSettings(); close() },
         ]

@@ -278,6 +278,16 @@ enum DebugAutomation {
         if let screen = env["PIOPIO_DEMO_AUTOMATIONS"], engine.status == .ready {
             Task { await seedAutomations(engine, screen: screen) }
         }
+        // PIOPIO_DEMO_LIBRARY=page|preview|<an item's name>: the Library (docs/spec/35 §4), with that item's preview open.
+        if let screen = env["PIOPIO_DEMO_LIBRARY"], engine.status == .ready {
+            Task {
+                NotificationCenter.default.post(name: .selectItem, object: SidebarItem.library.raw)
+                await engine.loadLibrary()
+                try? await Task.sleep(for: .seconds(1))
+                let hit = engine.library.first { $0.name == screen } ?? (screen == "preview" ? engine.library.first : nil)
+                if let hit { NotificationCenter.default.post(name: .showLibraryItem, object: hit.id) }
+            }
+        }
         // PIOPIO_DEMO_AGENT=<template>: a new agent "Coach"; PIOPIO_DEMO_AGENT_MESSAGES: messages to it ("||");
         // PIOPIO_DEMO_AGENT_CONTACT=<name>: add that contact and write as them once; PIOPIO_DEMO_AGENT_TAB: the tab to show.
         if let template = env["PIOPIO_DEMO_AGENT"], engine.status == .ready {

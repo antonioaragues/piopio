@@ -2,7 +2,7 @@
 
 Status: draft 2026-11-22, from a conversation with the user. The user asked for the Library as a section of its own,
 with pins kept there instead of the sidebar's Pinned (AL1, AL9). The other decisions are proposed and still need
-confirming (§12). Nothing is built. Mockup: [docs/design/apps](../design/apps/Apps.html), which includes a clickable
+confirming (§12). **L1 (the Library) built 2026-11-22 (§13)**; apps are not built. Mockup: [docs/design/apps](../design/apps/Apps.html), which includes a clickable
 prototype. This spec continues [25](25-visuals.md): VS3 (saved visuals are files), VS4 (the engine records and the
 app draws), VS5 (no network) and VS7 (a visual talks back only on your click) all still hold.
 
@@ -313,3 +313,63 @@ sidebar.
 | AL10 | The timed refresh: shortest interval, and only while pinned | 15 min, only while pinned |
 | AL11 | Does the app's conversation open by default? | The first time, then remembered |
 | AL12 | Does Overview become an app? | No, it stays native; it's the first `piopio` source |
+
+## 13. L1 as built (2026-11-22)
+
+**Engine.** `library.ts`:
+- **The index** is `library.json` in the engine's home. Each item is stored with a key (`file:<path>`, or
+  `visual:<kind>:<id>:<conversation>:<call>`), its kind, name, path, note, when, how it came in (presented ·
+  written · visual · added), where it came from and who made it. The file also holds the pins in order and what you
+  removed.
+- **How it fills:** `LibrarySearch` is search with the Library listening. It reads the same items search indexes:
+  a whole conversation when it's opened, re-read or backfilled at start, and one item as it changes. So the engine's
+  start-up search backfill (which covers agents' conversations and runs too) also fills the Library from history,
+  with no pass of its own. The session manager turns search's key into where an item came from (`libraryOrigin`):
+  the conversation, its title, Piopio or the agent, the project's folder, and a chat's own folder.
+- **What comes in:**
+  - every file of a `present_files` call that was found;
+  - files a chat writes in its own folder (pages, documents, data, images, slides; not code, not hidden files);
+  - every `show_visual` that wasn't replaced. A fix replaces its draft by title within a turn, whether the whole
+    conversation is read at once (`replacedVisuals`) or one item at a time (the turn starts at your message).
+- **Where it came from:** the first conversation to bring a file in keeps it. A later handover only adds a note it
+  lacked, and the conversation's title follows renames.
+- **What leaves:** re-reading a conversation drops visuals it no longer shows, and deleting one drops its visuals.
+  Its files stay listed.
+- **Protocol:** `library.list`, `library.pin`, `library.reorder`, `library.remove`, `library.add` and
+  `library.relocate`, plus the `library.changed` event, which is sent at most every 300 ms.
+
+**App.**
+- `LibraryPage.swift`: the page (title, search, kind chips for the kinds present, the place menu, the Pinned
+  shelf, groups Today / Yesterday / Earlier this week / by month), rows with hover actions (Open, Pin, ⋯), the
+  preview, the context menu, Move to Trash with a confirmation, and Locate… with an open panel.
+- `MainSidebar.swift`: the Library row after Automations, with the five latest pins under it. A pin opens its item.
+- ⌘K: "Library", and items by name once you've typed two characters.
+- `PIOPIO_DEMO_LIBRARY=page|preview|<name>` for captures.
+- The Swift type is `LibraryEntry`, because SwiftUI already has a `LibraryItem`.
+
+**Different from §4:**
+- **Thumbnails:** Quick Look only for images, pages, PDFs and slides. Text, data and Word files came out as blank
+  pages at these sizes, so they show their kind's glyph, as visuals do. There's no snapshot from 25 yet.
+- **Opening a visual** opens its conversation but doesn't scroll to the card. An agent's opens the agent.
+- **The title** is 28 pt like Automations', not 20 pt as in the mockup.
+- **Not built:**
+  - reordering pins by dragging (the engine has `library.reorder`);
+  - Add to Library in file cards, the file viewer and Build's file tree (the engine has `library.add`);
+  - notes written by the utility model when a file has none;
+  - dropping missing items after 30 days. They stay, marked, until you remove them.
+- **The place menu** also has "Added by you".
+
+**Checked.**
+- **Engine tests** (`library.test.ts`, 13): handovers with their note and origin, the first origin kept, missing
+  files skipped, a chat's writes but not code or hidden files, drafts replaced within a turn and not across turns,
+  re-reading, pins and removals across a restart, Add bringing a removed file back, Locate… keeping the pin,
+  forgetting a deleted conversation, kinds, renamed conversations, and filling through search. The whole engine
+  suite passes (296).
+- **Swift test:** decoding the list.
+- **In a copy of the app**, with a seeded `library.json`: the page, the preview, and a missing file (red path,
+  Locate…, Remove), with pins in the sidebar.
+- **Fed live by the scripted model**, in a chat that wrote `lisbon.md`, drew a visual twice with the same title and
+  then handed the file over: one document noted "The Lisbon plan", and one visual.
+
+**Not checked:** clicking Open, Show in Finder, Move to Trash and Locate… for real; ⌘K; dark mode; an agent's
+handover from a real agent; a Library of several hundred items.

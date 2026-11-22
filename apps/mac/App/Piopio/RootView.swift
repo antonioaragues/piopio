@@ -235,6 +235,8 @@ struct RootView: View {
         case .automation(let id):
             AutomationPage(engine: engine, id: id, item: itemBinding)
                 .id(id)
+        case .library:
+            LibraryPage(engine: engine, item: itemBinding)
         case .index(.agents) where engine.agents.isEmpty:
             AgentsFirstRun(engine: engine, item: itemBinding)
         case .index(.chats) where engine.threads.isEmpty:

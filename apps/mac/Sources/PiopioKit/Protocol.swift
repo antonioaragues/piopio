@@ -874,6 +874,48 @@ public struct AutomationChange: Encodable, Sendable {
         self.project = project; self.prompt = prompt; self.result = result; self.approval = approval; self.budgetPerRunUsd = budgetPerRunUsd; self.enabled = enabled
     }
 }
+// MARK: Library (docs/spec/35 §4)
+
+/// One thing Piopio or an agent made: a file where it lives, or a visual still in its conversation. The engine calls it
+/// `LibraryItem`; SwiftUI already has a type by that name.
+public struct LibraryEntry: Codable, Sendable, Hashable, Identifiable {
+    public struct Origin: Codable, Sendable, Hashable {
+        public var ref: ContainerRef
+        public var title: String
+        /// The project's folder.
+        public var project: String?
+    }
+    public struct Visual: Codable, Sendable, Hashable { public var callId: String }
+    public var id: String
+    /// app · document · page · visual · image · data · slides · file
+    public var kind: String
+    public var name: String
+    public var path: String?
+    public var note: String?
+    public var at: String
+    /// "Piopio", an agent's name, or "You".
+    public var by: String
+    /// presented · written · visual · added
+    public var how: String
+    public var origin: Origin?
+    public var visual: Visual?
+    public var missing: Bool?
+    public var size: Int?
+    public var changedAt: String?
+    public var pinned: Bool?
+    public init(id: String, kind: String, name: String, path: String? = nil, note: String? = nil, at: String, by: String, how: String, origin: Origin? = nil, visual: Visual? = nil, missing: Bool? = nil, size: Int? = nil, changedAt: String? = nil, pinned: Bool? = nil) {
+        self.id = id; self.kind = kind; self.name = name; self.path = path; self.note = note; self.at = at; self.by = by; self.how = how
+        self.origin = origin; self.visual = visual; self.missing = missing; self.size = size; self.changedAt = changedAt; self.pinned = pinned
+    }
+}
+public struct LibraryList: Decodable, Sendable { public var items: [LibraryEntry]; public var pins: [String] }
+public struct LibraryEntryResult: Decodable, Sendable { public var item: LibraryEntry }
+public struct LibraryPinParams: Encodable, Sendable { public var id: String; public var pinned: Bool; public init(id: String, pinned: Bool) { self.id = id; self.pinned = pinned } }
+public struct LibraryIdsParams: Encodable, Sendable { public var ids: [String]; public init(ids: [String]) { self.ids = ids } }
+public struct LibraryIdParams: Encodable, Sendable { public var id: String; public init(id: String) { self.id = id } }
+public struct LibraryPathParams: Encodable, Sendable { public var path: String; public init(path: String) { self.path = path } }
+public struct LibraryRelocateParams: Encodable, Sendable { public var id, path: String; public init(id: String, path: String) { self.id = id; self.path = path } }
+
 public struct AutomationsParams: Encodable, Sendable {
     public var runsAs, project: String?
     public init(runsAs: String? = nil, project: String? = nil) { self.runsAs = runsAs; self.project = project }
@@ -1694,7 +1736,7 @@ public struct ProviderAuthEvent: Decodable, Sendable, Hashable {
     public init(type: String, message: String? = nil) { self.type = type; self.message = message }
 }
 public struct ProviderAuthNotification: Decodable, Sendable { public var loginId, provider: String; public var event: ProviderAuthEvent }
-public enum ProviderNotification: Sendable { case auth(ProviderAuthNotification), changed, connectorAuth(ConnectorAuthNotification), connectorsChanged, workChanged, watchdogChanged, automationsChanged }
+public enum ProviderNotification: Sendable { case auth(ProviderAuthNotification), changed, connectorAuth(ConnectorAuthNotification), connectorsChanged, workChanged, watchdogChanged, automationsChanged, libraryChanged }
 
 // MARK: Connected apps (docs/spec/12-connectors)
 

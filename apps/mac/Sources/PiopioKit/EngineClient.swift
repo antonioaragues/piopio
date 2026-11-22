@@ -158,6 +158,8 @@ public actor EngineClient {
                     providersContinuation.yield(.workChanged)
                 } else if method == "automations.changed" {
                     providersContinuation.yield(.automationsChanged)
+                } else if method == "library.changed" {
+                    providersContinuation.yield(.libraryChanged)
                 } else if method == "watchdog.changed" {
                     providersContinuation.yield(.watchdogChanged)
                 } else if method == "projects.changed" {
