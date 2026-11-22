@@ -308,6 +308,8 @@ export type MakePlan = {
 	copies: { from: string; to: string }[];
 	/** In words, for the approval card. */
 	summary: string;
+	/** The approval card's parts (§17): what it reads, when it refreshes, where it's saved. */
+	card: { title: string; reads: string[]; refresh: string; where: string };
 };
 
 const slug = (title: string) =>
@@ -405,7 +407,8 @@ export class Apps {
 		}
 		const final = { title, sources };
 		const where = project ? relative(project, path) : path.replace(/^.*?\/Piopio\/Apps\//, "Piopio/Apps/");
-		return { path, title, manifest: final, html: withManifest(html, final), copies, summary: `Make the app “${title}” in ${where}, reading ${lines.join(", ")}` };
+		const refresh = Object.values(sources).some((s) => !isFileSource(s)) ? "When you open it, and with Refresh · no model" : "When its files change · no model";
+		return { path, title, manifest: final, html: withManifest(html, final), copies, summary: `Make the app “${title}” in ${where}, reading ${lines.join(", ")}`, card: { title, reads: lines, refresh, where: dirname(where) === "." ? where : dirname(where) } };
 	}
 
 	/** Writes a planned app (after you allowed it): the copies, the page, its sources allowed and read once. */

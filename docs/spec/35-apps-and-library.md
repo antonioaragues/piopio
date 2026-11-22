@@ -671,3 +671,37 @@ events) and with Refresh. Each read costs no model tokens.
 - **Swift:** an app with a calendar source decodes, with its accounts.
 
 **Not checked:** with your real Google Calendar in the app; the notices and the Sources menu on screen; dark mode.
+
+## 17. Making an app in the conversation: its card, then the app (2026-11-23)
+
+Trying L4 with a real model showed two problems. The app it made didn't appear in the chat at all: `make_app`
+folded into "Thought for 24s, 1 step", and you had to find it in the Library. And the question was one long
+sentence, with nothing to show for it afterwards but a grey line. Of three designs, the user chose A for the
+question and C for the result.
+
+**A · The question as a card**
+- **New app: *Spending*** with three lines: **Reads** (each file, or each calendar account and span), **Refreshes**
+  ("When its files change · no model", or "When you open it, and with Refresh · no model" for a calendar) and
+  **Saved in** (the app's folder).
+- **Not now** and **Make app** (whose tooltip is "Nothing is written or read before this").
+- The engine sends these parts with the approval (`args.card`), and the app draws them. No "Make app running" line
+  sits above it while it waits.
+- **Not made:** one line, "Not made · *Spending*". **Made:** the card leaves nothing, because the app follows.
+
+**C · The app, live, in the conversation**
+- **The app the call made appears as a card,** the way a visual does: its page drawn with its data. The header has
+  the title, "App · Updated 0:22" (or "Data from …" when a source failed), **Pin** (in the Library) and **Open** (its
+  page, with its conversation beside it).
+- **It follows its data:** the app's page and data come from the engine (`AppCardSource`). While Piopio runs, an app
+  shown in a card stays watched, and its card redraws when its files change or its calendars are read again.
+- **`make_app` keeps its own item when steps fold,** as files handed over and visuals do.
+
+**In Build sessions** the question still goes through Build's own approval prompt, with the sentence. Only chats
+draw card A.
+
+**Checked:** in a copy of the app with the scripted model:
+- card A while it waits, with no line above it;
+- after Make app (`PIOPIO_DEMO_ALLOW`), card C with the app drawn from its CSV ("9 expenses · 3287 € in total"),
+  "App · Updated 0:22", Pin and Open.
+
+**Not checked:** Pin and Open clicked by hand; a calendar app's card; dark mode.

@@ -305,6 +305,11 @@ final class ThreadModel {
             NotificationCenter.default.post(name: .showVisual, object: visual)
         case .prefill(let text):
             draft = text
+        case .openApp(let path):
+            // Its page, with its conversation beside it (docs/spec/35 §15).
+            NotificationCenter.default.post(name: .viewFile, object: URL(fileURLWithPath: path))
+        case .pinApp(let path):
+            Task { do { try await engine?.pinApp(path) } catch { report(error) } }
         case .offer(let kind, let callId):
             // Piopio's offers (docs/spec/26 CL9): the conversation's page acts on them (parallel work).
             NotificationCenter.default.post(name: .transcriptOffer, object: ref.id, userInfo: ["kind": kind, "call": callId])

@@ -159,6 +159,15 @@ nonisolated struct ItemRenderer: Sendable {
             return sideProposal(t)
         case .tool(let t) where t.tool == "propose_plan":
             return attachmentParagraph(DisclosureAttachment(card: DisclosureCard(plan: Self.planContent(t))))
+        case .tool(let t) where t.tool == "make_app" && t.status == .running:
+            // Its card asks (docs/spec/35 §17); a "Make app running" line above it would only repeat it.
+            return NSAttributedString()
+        case .tool(let t) where t.tool == "make_app" && t.status == .done && !compact:
+            // The app it made, live, as a visual is (docs/spec/35 §17): its page with its data, Open and Pin.
+            guard case .files(let files)? = t.typedDetails, let file = files.first else { return attachmentParagraph(DisclosureAttachment(card: Self.toolCard(t, root: root))) }
+            let title = t.args?["title"]?.stringValue ?? file.name
+            let model = VisualCardModel(itemId: t.id, key: "app:\(file.path)", title: title, html: "", root: root, appPath: file.path)
+            return attachmentParagraph(VisualAttachment(model: model), spacing: 14)
         case .tool(let t) where (t.tool == "present_files" || t.tool == "make_app") && t.status == .done:
             // Files the agent handed over: a card per file that opens it (piopio-present).
             guard case .files(let files)? = t.typedDetails, !files.isEmpty else { return attachmentParagraph(DisclosureAttachment(card: Self.toolCard(t, root: root))) }
@@ -228,6 +237,7 @@ nonisolated struct ItemRenderer: Sendable {
         case .expired: "No answer in 24 hours, not done"
         case .cancelled: "Cancelled"
         }
+        if a.tool == "make_app", case .object(let args) = a.args, case .object(let card)? = args["card"] { return makeAppCard(a, card) }
         if a.status != .pending { return note("\(state) · \(a.title)") }
         let title = a.title.hasSuffix("?") ? a.title : a.title + "?"
         let allow = CardButton(title: "Allow", action: .decideApproval(approvalId: a.approvalId, approve: true))
@@ -239,6 +249,24 @@ nonisolated struct ItemRenderer: Sendable {
             return actionCard(title: title, secondary: [deny] + always, primary: allow)
         }
         return actionCard(title: title, meta: a.tool, secondary: [deny, CardButton(title: "Edit…", action: .editApproval(approvalId: a.approvalId))], primary: allow)
+    }
+
+    /// Making an app (docs/spec/35 §17, option A): what it reads, when it refreshes and where it's saved, then Not now /
+    /// Make app. Once made, the app's own live card follows, so this leaves nothing; not made, one line says so.
+    private func makeAppCard(_ a: ApprovalItem, _ card: [String: JSONValue]) -> NSAttributedString {
+        let title = card["title"]?.stringValue ?? "App"
+        switch a.status {
+        case .approved: return NSAttributedString()
+        case .pending: break
+        default: return note("Not made · \(title)")
+        }
+        let reads: [String] = if case .array(let r)? = card["reads"] { r.compactMap(\.stringValue) } else { [] }
+        let row = { (label: String, value: String) in (text: "\(label)  \(value)", color: DS.fg2) }
+        let lines = [row("Reads", reads.joined(separator: ", ")), row("Refreshes", card["refresh"]?.stringValue ?? ""), row("Saved in", card["where"]?.stringValue ?? "")]
+        if compact { return actionCard(title: "New app: \(title)") }
+        return actionCard(title: "New app: \(title)", lines: lines,
+                          secondary: [CardButton(title: "Not now", action: .decideApproval(approvalId: a.approvalId, approve: false))],
+                          primary: CardButton(title: "Make app", action: .decideApproval(approvalId: a.approvalId, approve: true), help: "Nothing is written or read before this"))
     }
 
     /// "From **Daily price check** · 08:00": a soft capsule above a message an automation sent; it opens the automation.

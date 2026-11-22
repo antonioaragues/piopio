@@ -53,7 +53,7 @@ export function codingAppsExtension(apps: Apps, where: () => MakeContext, confir
 					} catch (error) {
 						return text(`Not made: ${(error as Error).message}`, true);
 					}
-					const answer = await confirmFor(callId, signal)({ tool: MAKE_APP, title: plan.summary, args: { title: params.title, sources: params.sources } });
+					const answer = await confirmFor(callId, signal)({ tool: MAKE_APP, title: plan.summary, args: { title: params.title, sources: params.sources, card: plan.card } });
 					if (!answer.approved) return text(`The user didn't make the app${answer.reason ? `: ${answer.reason}` : "."} Nothing was written.`);
 					try {
 						const view = await apps.write(plan);

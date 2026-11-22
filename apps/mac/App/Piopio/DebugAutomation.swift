@@ -175,6 +175,14 @@ enum DebugAutomation {
                 // PIOPIO_DEMO_ATTACH: colon-separated file paths attached to the first message.
                 let files = (env["PIOPIO_DEMO_ATTACH"] ?? "").split(separator: ":").compactMap { try? AttachmentLoader.load(URL(fileURLWithPath: String($0))).attachment }
                 await thread.send(prompt, attachments: files)
+                // PIOPIO_DEMO_ALLOW=<seconds>: allow the chat's first card that asks, after that long (a card's after).
+                if let wait = env["PIOPIO_DEMO_ALLOW"].flatMap(Double.init) {
+                    try? await Task.sleep(for: .seconds(wait))
+                    let pending = thread.document.items.compactMap { item -> String? in
+                        if case .approval(let a) = item, a.status == .pending { return a.approvalId } else { return nil }
+                    }.first
+                    if let pending { thread.handle(.decideApproval(approvalId: pending, approve: true)) }
+                }
                 // PIOPIO_DEMO_OPEN_ATTACHMENT=1: then open the first file sent, in the viewer.
                 if env["PIOPIO_DEMO_OPEN_ATTACHMENT"] == "1" {
                     await waitIdle(thread)

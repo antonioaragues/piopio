@@ -45,6 +45,9 @@ public enum TranscriptAction: Equatable, Sendable {
     case openVisual(itemId: String)
     /// A visual's `piopio.prefill`: this text in the composer, for you to finish.
     case prefill(text: String)
+    /// An app made in the conversation (docs/spec/35 §17): open its page, or pin it in the Library.
+    case openApp(path: String)
+    case pinApp(path: String)
     /// One of Piopio's offers taken: "parallel" (work in parallel).
     case offer(kind: String, callId: String)
     /// An automation's card (docs/spec/27 §4): open it in Automations, or take it out again (Undo, where the card has
@@ -88,6 +91,8 @@ public enum TranscriptAction: Equatable, Sendable {
         case .openAttachment(let stored): c.host = "attachment"; c.queryItems = [URLQueryItem(name: "stored", value: stored)]
         case .reply(let text): c.host = "reply"; c.queryItems = [URLQueryItem(name: "text", value: text)]
         case .openVisual(let id): c.host = "visual"; c.queryItems = [URLQueryItem(name: "item", value: id)]
+        case .openApp(let path): c.host = "app"; c.queryItems = [URLQueryItem(name: "path", value: path)]
+        case .pinApp(let path): c.host = "pin-app"; c.queryItems = [URLQueryItem(name: "path", value: path)]
         case .prefill(let text): c.host = "prefill"; c.queryItems = [URLQueryItem(name: "text", value: text)]
         case .offer(let kind, let id): c.host = "offer"; c.queryItems = [URLQueryItem(name: "kind", value: kind), URLQueryItem(name: "call", value: id)]
         case .openAutomation(let id): c.host = "automation"; c.queryItems = [URLQueryItem(name: "id", value: id)]
@@ -127,6 +132,8 @@ public enum TranscriptAction: Equatable, Sendable {
         case "attachment": guard let stored = q("stored") else { return nil }; self = .openAttachment(stored: stored)
         case "reply": guard let text = q("text") else { return nil }; self = .reply(text: text)
         case "visual": guard let id = q("item") else { return nil }; self = .openVisual(itemId: id)
+        case "app": guard let path = q("path") else { return nil }; self = .openApp(path: path)
+        case "pin-app": guard let path = q("path") else { return nil }; self = .pinApp(path: path)
         case "prefill": guard let text = q("text") else { return nil }; self = .prefill(text: text)
         case "offer": guard let kind = q("kind"), let id = q("call") else { return nil }; self = .offer(kind: kind, callId: id)
         case "automation": guard let id = q("id") else { return nil }; self = .openAutomation(id: id)

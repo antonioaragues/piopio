@@ -311,7 +311,28 @@ final class EngineController {
     }
 
     /// Connects to a running engine. Returns nil when nothing is listening.
+    /// Apps' cards in conversations (docs/spec/35 §17) get their page and data here. An app shown in a card stays
+    /// watched while Piopio runs, so its card follows its data.
+    private func serveAppCards() {
+        AppCardSource.load = { [weak self] path in
+            guard let self, let app = try? await self.openApp(path) else { return nil }
+            if !self.appCardsOpen.contains(app.path) { self.appCardsOpen.insert(app.path) } else { await self.closeApp(app.path) }
+            return AppCardContent(path: app.path, html: app.html, title: app.title, payload: AppPage.payload(app), subtitle: AppPage.updated(app))
+        }
+    }
+
+    @ObservationIgnored private var appCardsOpen: Set<String> = []
+
+    /// Pin an app in the Library (from its card): listed if it wasn't, then pinned.
+    func pinApp(_ path: String) async throws {
+        if library.first(where: { $0.path == path }) == nil { await loadLibrary() }
+        let id: String
+        if let listed = library.first(where: { $0.path == path }) { id = listed.id } else { id = try await addToLibrary(path).id }
+        try await pinLibrary(id, true)
+    }
+
     private func connect() async throws -> HelloResult? {
+        serveAppCards()
         guard FileManager.default.fileExists(atPath: socket.path) else { return nil }
         let client = EngineClient(socketPath: socket.path)
         let scripted = faux, temporarySecrets = scriptedSecrets
@@ -393,6 +414,7 @@ final class EngineController {
                     await self.loadLibrary()
                 case .appData(let app):
                     self.appUpdates[app.path] = app
+                    NotificationCenter.default.post(name: AppCardSource.changed, object: AppCardContent(path: app.path, html: app.html, title: app.title, payload: AppPage.payload(app), subtitle: AppPage.updated(app)))
                 case .connectorAuth(let auth):
                     if self.connectorLogin?.loginId == auth.loginId { self.connectorLogin?.apply(auth.event) }
                     if auth.event.type == "done" { await self.loadConnectors() }

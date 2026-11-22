@@ -316,6 +316,8 @@ public final class VisualWebView: WKWebView, ClickThroughArea {
     var loaded = false
     /// When false (the sheet), the page scrolls itself.
     var forwardsScroll = true
+    /// An app card's data, pushed into the page once it has loaded (docs/spec/35 §17).
+    var appPayload: String?
     /// An app's page (no card): where `send` and `prefill` go, and what runs once it has loaded.
     var answer: (@MainActor (String, Bool) -> Void)?
     var onLoaded: (@MainActor () -> Void)?
@@ -452,6 +454,27 @@ final class VisualNavigation: NSObject, WKNavigationDelegate, WKUIDelegate {
 
 // MARK: Apps
 
+/// An app's page and data for its card in a conversation (docs/spec/35 §17).
+public struct AppCardContent: Sendable {
+    public let path: String
+    public let html: String
+    public let title: String
+    /// `[data, meta]` as JSON, for `piopio.onData`.
+    public let payload: String
+    /// "updated 9:42", or why its data is old.
+    public let subtitle: String
+    public init(path: String, html: String, title: String, payload: String, subtitle: String) {
+        self.path = path; self.html = html; self.title = title; self.payload = payload; self.subtitle = subtitle
+    }
+}
+
+/// Where app cards get their content: the app sets `load` (it asks the engine), and posts `changed` with an
+/// `AppCardContent` when an app's data or page changes.
+@MainActor public enum AppCardSource {
+    public static var load: ((String) async -> AppCardContent?)?
+    public nonisolated static let changed = Notification.Name("piopio.appCardChanged")
+}
+
 /// An app's page (docs/spec/35 §14): a visual's sandbox at full size, scrolling, with its data handed in through
 /// `piopio.onData`. The page reloads only when its HTML changes; new data goes straight to the page.
 public struct AppCanvas: NSViewRepresentable {
@@ -573,11 +596,14 @@ public final class VisualCardModel: @unchecked Sendable {
     let root: String?
     /// Make app is offered (chats and Build sessions, which have make_app; docs/spec/35 §14).
     let makesApps: Bool
+    /// An app made in the conversation (docs/spec/35 §17): its file. The card draws the app live, with its data.
+    let appPath: String?
     var onAction: (@MainActor (TranscriptAction) -> Void)?
     var onResize: (@MainActor (VisualCardModel) -> Void)?
 
-    init(itemId: String, key: String, title: String, html: String, root: String?, makesApps: Bool = false) {
+    init(itemId: String, key: String, title: String, html: String, root: String?, makesApps: Bool = false, appPath: String? = nil) {
         self.makesApps = makesApps
+        self.appPath = appPath
         self.itemId = itemId
         self.key = key
         self.title = title.isEmpty ? "Visual" : title
@@ -656,17 +682,51 @@ public final class VisualCardView: NSView, ArrowCursorArea {
         layer?.borderWidth = 1
         layer?.masksToBounds = true
         layer?.borderColor = DS.line.cgColor
-        header = ArrowHostingView(rootView: VisualHeader(title: model.title, clipped: model.clipped, makesApps: model.makesApps) { [weak self] command in self?.run(command) })
+        header = ArrowHostingView(rootView: headerView())
         addSubview(header)
+        if let path = model.appPath {
+            // The app's new data or page, as the engine reads it (its files change, its calendars are read again).
+            appObserver = NotificationCenter.default.addObserver(forName: AppCardSource.changed, object: nil, queue: .main) { [weak self] note in
+                guard let content = note.object as? AppCardContent, content.path == path else { return }
+                MainActor.assumeIsolated { self?.showApp(content) }
+            }
+        }
         content.wantsLayer = true
         addSubview(content)
         // A group VoiceOver reads by its title, with the visual's own contents inside it.
         setAccessibilityRole(.group)
-        setAccessibilityLabel("Visual: \(model.title)")
+        setAccessibilityLabel(model.appPath == nil ? "Visual: \(model.title)" : "App: \(model.title)")
         if let image = VisualStore.shared.pictures[model.key] { showPicture(image) } else { showPlaceholder("Drawing…") }
     }
 
     required init?(coder: NSCoder) { fatalError("not used") }
+
+    deinit { if let appObserver { NotificationCenter.default.removeObserver(appObserver) } }
+
+    nonisolated(unsafe) private var appObserver: NSObjectProtocol?
+    /// An app card's line under its title ("App · updated 9:42"), and its page and data as last shown.
+    private var appSubtitle: String?
+    private var appContent: AppCardContent?
+
+    private func headerView() -> VisualHeader {
+        VisualHeader(title: model.title, clipped: model.clipped, makesApps: model.makesApps, app: model.appPath != nil, subtitle: appSubtitle) { [weak self] command in self?.run(command) }
+    }
+
+    /// An app's page or data: a new page loads; new data goes straight into the page.
+    private func showApp(_ content: AppCardContent) {
+        let reload = appContent?.html != content.html
+        appContent = content
+        appSubtitle = content.subtitle
+        (header as? ArrowHostingView<VisualHeader>)?.rootView = headerView()
+        guard let view = webView else { return }
+        view.appPayload = content.payload
+        if reload || !view.loaded { view.show(content.html, title: content.title, scrolls: false) } else { pushData(view) }
+    }
+
+    private func pushData(_ view: VisualWebView) {
+        guard let payload = view.appPayload else { return }
+        view.evaluateJavaScript("window.__piopioData && window.__piopioData.apply(null, \(payload))", completionHandler: nil)
+    }
 
     public override var isFlipped: Bool { true }
 
@@ -707,11 +767,28 @@ public final class VisualCardView: NSView, ArrowCursorArea {
         view.autoresizingMask = [.width, .height]
         // Under the picture until it has drawn, so a visual coming back doesn't flash empty.
         content.addSubview(view, positioned: .below, relativeTo: picture ?? placeholder)
+        if let path = model.appPath {
+            // An app: its page and data come from the engine (the app sets AppCardSource.load).
+            if fresh || !view.loaded {
+                Task { @MainActor [weak self] in
+                    guard let load = AppCardSource.load, let content = await load(path) else {
+                        self?.showPlaceholder("This app isn't there any more.")
+                        return
+                    }
+                    self?.appContent = nil
+                    self?.showApp(content)
+                }
+            } else {
+                pageLoaded(view)
+            }
+            return
+        }
         if fresh { view.show(model.html, title: model.title, scrolls: false) } else if view.loaded { pageLoaded(view) }
     }
 
     func pageLoaded(_ view: VisualWebView) {
         guard view === webView else { return }
+        pushData(view)
         // The first height usually arrives before this; let the page draw, then show it.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
             guard let self, self.webView === view else { return }
@@ -726,7 +803,7 @@ public final class VisualCardView: NSView, ArrowCursorArea {
         let before = model.contentHeight
         VisualStore.shared.noteHeight(height, key: model.key)
         if abs(model.contentHeight - before) >= 1 {
-            (header as? ArrowHostingView<VisualHeader>)?.rootView = VisualHeader(title: model.title, clipped: model.clipped, makesApps: model.makesApps) { [weak self] command in self?.run(command) }
+            (header as? ArrowHostingView<VisualHeader>)?.rootView = headerView()
             model.onResize?(model)
         }
         scheduleSettle()
@@ -780,12 +857,14 @@ public final class VisualCardView: NSView, ArrowCursorArea {
         needsLayout = true
     }
 
-    enum Command { case open, save, copy, reload, makeApp }
+    enum Command { case open, save, copy, reload, makeApp, pin }
 
     private func run(_ command: Command) {
         switch command {
         case .open:
-            model.onAction?(.openVisual(itemId: model.itemId))
+            if let path = model.appPath { model.onAction?(.openApp(path: path)) } else { model.onAction?(.openVisual(itemId: model.itemId)) }
+        case .pin:
+            if let path = model.appPath { model.onAction?(.pinApp(path: path)) }
         case .makeApp:
             // The model calls make_app; its card names the files the app will read before anything is written.
             model.onAction?(.reply(text: "Make the “\(model.title)” visual into an app"))
@@ -833,13 +912,30 @@ struct VisualHeader: View {
     let title: String
     let clipped: Bool
     var makesApps = false
+    /// An app's card (docs/spec/35 §17): "App · updated 9:42", Open and Pin instead of a visual's buttons.
+    var app = false
+    var subtitle: String? = nil
     let act: (VisualCardView.Command) -> Void
 
     var body: some View {
         HStack(spacing: 6) {
-            Image(systemName: "rectangle.3.group").font(.system(size: 11)).foregroundStyle(Color(nsColor: DS.fg3))
+            Image(systemName: app ? "square.grid.2x2" : "rectangle.3.group").font(.system(size: 11)).foregroundStyle(Color(nsColor: DS.fg3))
             Text(title).font(.system(size: 12.5, weight: .medium)).foregroundStyle(Color(nsColor: DS.fg2)).lineLimit(1).truncationMode(.tail)
+            if app { Text("App\(subtitle.map { " · \($0)" } ?? "")").font(.system(size: 12)).foregroundStyle(Color(nsColor: DS.fg3)).lineLimit(1) }
             Spacer(minLength: 8)
+            if app {
+                textButton("Pin", help: "Pin it in the Library", .pin)
+                textButton("Open", help: "Open the app, with its conversation beside it", .open)
+            } else {
+                visualButtons
+            }
+        }
+        .padding(.leading, 12).padding(.trailing, 6)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    @ViewBuilder private var visualButtons: some View {
+        HStack(spacing: 6) {
             if clipped {
                 Button("Show all") { act(.open) }.buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Color(nsColor: DS.fg2))
                     .help("It's taller than the conversation shows; open it whole")
@@ -854,8 +950,12 @@ struct VisualHeader: View {
             button("doc.on.doc", "Copy HTML", .copy)
             button("arrow.clockwise", "Reload", .reload)
         }
-        .padding(.leading, 12).padding(.trailing, 6)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func textButton(_ label: String, help: String, _ command: VisualCardView.Command) -> some View {
+        Button { act(command) } label: { Text(label).font(.system(size: 12)).foregroundStyle(Color(nsColor: DS.fg2)).padding(.horizontal, 6).frame(height: 24).contentShape(Rectangle()) }
+            .buttonStyle(.plain)
+            .help(help)
     }
 
     private func button(_ symbol: String, _ label: String, _ command: VisualCardView.Command) -> some View {
