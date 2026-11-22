@@ -167,3 +167,30 @@ TC2 asks for:
 
 R1 and R3 need no decision about providers. R2 needs one real request on a working key. The prefix test needs a
 second mode for R1 (recorded with `resolveTranscript(…, true)`, the in-place form) so it shows the gain.
+
+### R1 as built (2026-11-22)
+
+- **Nothing forces the prompt any more.** Every Build and Chat hook writes a named section
+  (`engine/src/tools/prompt-sections.ts`): `piopio`, `web`, `project-notes`, `linked-folders`, `mcp-off`, `browser`,
+  `visuals`, `connected-apps`, `your-agents`, `side-conversations`, `board`, `offers`, `automations`, `about-me`,
+  `knowledge`, `app`, `goal`, `plan`. Piopio's preamble is pi's `customPrompt`. pi leaves its tools list and rules out of
+  a custom prompt, so `promptToolsExtension`, the last extension, renders them from pi's own options; a test checks they
+  match pi's renderer byte for byte. The coding agents' harvest (`collectTools`) reads the sections too.
+- **A second cause T0 hadn't seen:** a `context` handler that changes the conversation makes pi fold every system
+  message back into one leading prompt (`restoreSystemMessages`). The guards (the clock, the repeat reminder) did that on
+  every request. They now use `context_with_system`, which keeps system messages where they are.
+- **Order.** pi puts custom sections after its own (AGENTS.md, skills, the folder), so the tools list, rules and
+  Piopio's guidelines now come after the project's instructions instead of before them.
+- **Result**, from the prefix test, collapsed | in place:
+
+| Scripted conversation | Collapsed (OpenRouter's Claude today) | In place (models that take it) |
+|---|---|---|
+| Build, 5 plain turns | 100% | 100% |
+| Build, one `@mention` | 50% | 99% |
+| Build, `NOTES.md` edited | 50% | 99% |
+| Chat, About me changed | 0% | 99% |
+| Agent, 7 messages with memory | 36% | 98% |
+
+  The in-place tests now pass; the collapsed ones stay `test.fails` until R2.
+- **For pi upstream:** a way to replace only the preamble (a custom prompt that keeps pi's tools list and rules) would
+  let `promptToolsExtension` go.

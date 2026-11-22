@@ -14,7 +14,8 @@ import { enginePaths } from "../src/paths.js";
 import { Engine } from "../src/server.js";
 import { TestClient } from "./client.js";
 
-type Ctx = { home: string; engine: Engine; client: TestClient; requests: Map<string, string[][]> };
+/** `requests`: as a provider without mid-conversation system messages gets them; `inPlace`: as one that takes them. */
+type Ctx = { home: string; engine: Engine; client: TestClient; requests: Map<string, string[][]>; inPlace: Map<string, string[][]> };
 const open: Ctx[] = [];
 
 afterEach(async () => {
@@ -24,9 +25,9 @@ afterEach(async () => {
 	}
 });
 
-/** A request as blocks: the (collapsed) system message with its tools, then one block per message. */
-function blocks(context: TranscriptContext): string[] {
-	return resolveTranscript(context, false).messages.map((m) => {
+/** A request as blocks: the system message(s) with their tools, then one block per message. */
+function blocks(context: TranscriptContext, inPlace = false): string[] {
+	return resolveTranscript(context, inPlace).messages.map((m) => {
 		if (m.role === "system") return JSON.stringify({ content: m.content, sections: m.sections, tools: (m.toolsAdded ?? []).map((t) => toToolDeclaration(t as Tool)) });
 		if (m.role === "toolResult") return JSON.stringify({ role: m.role, toolCallId: m.toolCallId, content: m.content, isError: m.isError });
 		return JSON.stringify({ role: m.role, content: m.content });
@@ -40,7 +41,7 @@ const textOf = (content: unknown) => (typeof content === "string" ? content : Ar
  * user message and its tools) are recorded under that name; the rest (titles, follow-ups) just get an answer.
  * A user message containing `READ <file>` gets a read call first.
  */
-function reply(requests: Map<string, string[][]>): FauxResponseStep {
+function reply(requests: Map<string, string[][]>, inPlace: Map<string, string[][]>): FauxResponseStep {
 	return (context) => {
 		const messages = context.messages as { role: string; content?: unknown }[];
 		const marker = messages.map((m) => (m.role === "user" ? /TEST:(\w+)/.exec(textOf(m.content))?.[1] : undefined)).find(Boolean);
@@ -49,6 +50,7 @@ function reply(requests: Map<string, string[][]>): FauxResponseStep {
 			const list = requests.get(marker) ?? [];
 			list.push(blocks(context));
 			requests.set(marker, list);
+			inPlace.set(marker, [...(inPlace.get(marker) ?? []), blocks(context, true)]);
 		}
 		const last = messages.at(-1);
 		const read = last?.role === "user" ? /READ (\S+)/.exec(textOf(last.content))?.[1] : undefined;
@@ -67,8 +69,9 @@ async function start(): Promise<Ctx> {
 	const client = await TestClient.connect(paths.socket);
 	await client.call("engine.hello", { token: readFileSync(paths.tokenFile, "utf8").trim(), client: "test", protocolVersion: "1.0" });
 	const requests = new Map<string, string[][]>();
-	engine.hub.faux!.setResponses(Array.from({ length: 400 }, () => reply(requests)));
-	const ctx = { home, engine, client, requests };
+	const inPlace = new Map<string, string[][]>();
+	engine.hub.faux!.setResponses(Array.from({ length: 400 }, () => reply(requests, inPlace)));
+	const ctx = { home, engine, client, requests, inPlace };
 	open.push(ctx);
 	return ctx;
 }
@@ -140,6 +143,40 @@ function diff(a: string, b: string): string {
 	return `  was: …${a.slice(Math.max(0, i - 60), i + 80)}…\n  now: …${b.slice(Math.max(0, i - 60), i + 80)}…`;
 }
 
+/** The cases that change the prompt between turns: each returns its marker. */
+const SCENARIOS: Record<string, (a: Ctx) => Promise<void>> = {
+	notes: async (a) => {
+		const folder = realpathSync(mkdtempSync(join(tmpdir(), "piopio-prefix-notes-")));
+		writeFileSync(join(folder, "NOTES.md"), "- The sink moves 40 cm left.\n");
+		const { ref } = await a.client.call("sessions.create", { kind: "build", cwd: folder });
+		await turn(a, ref, "TEST:notes Hello");
+		writeFileSync(join(folder, "NOTES.md"), "- The sink moves 40 cm left.\n- Tiles arrive on Friday.\n");
+		await turn(a, ref, "And now?");
+	},
+	aboutme: async (a) => {
+		await a.client.call("settings.set", { aboutMe: { enabled: true, inThreads: true } });
+		await a.client.call("aboutMe.set", { text: "- Lives in Valencia" });
+		const { ref } = await a.client.call("sessions.create", { kind: "thread", model: { provider: "faux", id: "faux-1" } });
+		await turn(a, ref, "TEST:aboutme Hello");
+		await a.client.call("aboutMe.set", { text: "- Lives in Valencia\n- Has a dog called Kiwi" });
+		await turn(a, ref, "And now?");
+	},
+	mention: async (a) => {
+		await agent(a, "Pinpin");
+		const folder = realpathSync(mkdtempSync(join(tmpdir(), "piopio-prefix-mention-")));
+		const { ref } = await a.client.call("sessions.create", { kind: "build", cwd: folder });
+		await turn(a, ref, "TEST:mention Hello");
+		await turn(a, ref, "@Pinpin what do you think?");
+		await turn(a, ref, "Thanks");
+	},
+	agent: async (a) => {
+		const ref = await agent(a, "Pinpin");
+		await turn(a, ref, "TEST:agent REMEMBER The dog is called Kiwi");
+		await turn(a, ref, "What does Kiwi eat?");
+		await turn(a, ref, "Thanks");
+	},
+};
+
 test("Build: a plain conversation, a tool step included, keeps its prefix", async () => {
 	const a = await start();
 	const folder = realpathSync(mkdtempSync(join(tmpdir(), "piopio-prefix-build-")));
@@ -152,15 +189,16 @@ test("Build: a plain conversation, a tool step included, keeps its prefix", asyn
 	expect(breaks(a.requests.get("build"))).toEqual([]);
 });
 
-test.fails("Build: an edit to NOTES.md between turns changes the system prompt (spec 38 T3)", async () => {
+test.fails("Build: an edit to NOTES.md between turns changes the system prompt (spec 38 T3), for models that collapse it (R2)", async () => {
 	const a = await start();
-	const folder = realpathSync(mkdtempSync(join(tmpdir(), "piopio-prefix-notes-")));
-	writeFileSync(join(folder, "NOTES.md"), "- The sink moves 40 cm left.\n");
-	const { ref } = await a.client.call("sessions.create", { kind: "build", cwd: folder });
-	await turn(a, ref, "TEST:notes Hello");
-	writeFileSync(join(folder, "NOTES.md"), "- The sink moves 40 cm left.\n- Tiles arrive on Friday.\n");
-	await turn(a, ref, "And now?");
+	await SCENARIOS.notes!(a);
 	expect(breaks(a.requests.get("notes"))).toEqual([]);
+});
+
+test("the same, in place, keeps the prefix for models that accept mid-conversation system messages (spec 38 §8 R1): notes", async () => {
+	const a = await start();
+	await SCENARIOS.notes!(a);
+	expect(breaks(a.inPlace.get("notes"))).toEqual([]);
 });
 
 test("Chat: a plain conversation keeps its prefix", async () => {
@@ -172,35 +210,40 @@ test("Chat: a plain conversation keeps its prefix", async () => {
 	expect(breaks(a.requests.get("chat"))).toEqual([]);
 });
 
-test.fails("Chat: About me changing between turns changes the system prompt (spec 38 T3)", async () => {
+test.fails("Chat: About me changing between turns changes the system prompt (spec 38 T3), for models that collapse it (R2)", async () => {
 	const a = await start();
-	await a.client.call("settings.set", { aboutMe: { enabled: true, inThreads: true } });
-	await a.client.call("aboutMe.set", { text: "- Lives in Valencia" });
-	const { ref } = await a.client.call("sessions.create", { kind: "thread", model: { provider: "faux", id: "faux-1" } });
-	await turn(a, ref, "TEST:aboutme Hello");
-	await a.client.call("aboutMe.set", { text: "- Lives in Valencia\n- Has a dog called Kiwi" });
-	await turn(a, ref, "And now?");
+	await SCENARIOS.aboutme!(a);
 	expect(breaks(a.requests.get("aboutme"))).toEqual([]);
 });
 
-test.fails("Agent: what memory recalls for each message changes the system prompt (spec 38 T2)", async () => {
+test("the same, in place, keeps the prefix for models that accept mid-conversation system messages (spec 38 §8 R1): aboutme", async () => {
 	const a = await start();
-	const ref = await agent(a, "Pinpin");
-	await turn(a, ref, "TEST:agent REMEMBER The dog is called Kiwi");
-	await turn(a, ref, "What does Kiwi eat?");
-	await turn(a, ref, "Thanks");
+	await SCENARIOS.aboutme!(a);
+	expect(breaks(a.inPlace.get("aboutme"))).toEqual([]);
+});
+
+test.fails("Agent: what memory recalls for each message changes the system prompt (spec 38 T2), for models that collapse it (R2)", async () => {
+	const a = await start();
+	await SCENARIOS.agent!(a);
 	expect(breaks(a.requests.get("agent"))).toEqual([]);
 });
 
-test.fails("Build: an @mention changes the system prompt for its turn and again after (spec 38 T2)", async () => {
+test("the same, in place, keeps the prefix for models that accept mid-conversation system messages (spec 38 §8 R1): agent", async () => {
 	const a = await start();
-	await agent(a, "Pinpin");
-	const folder = realpathSync(mkdtempSync(join(tmpdir(), "piopio-prefix-mention-")));
-	const { ref } = await a.client.call("sessions.create", { kind: "build", cwd: folder });
-	await turn(a, ref, "TEST:mention Hello");
-	await turn(a, ref, "@Pinpin what do you think?");
-	await turn(a, ref, "Thanks");
+	await SCENARIOS.agent!(a);
+	expect(breaks(a.inPlace.get("agent"))).toEqual([]);
+});
+
+test.fails("Build: an @mention changes the system prompt for its turn and again after (spec 38 T2), for models that collapse it (R2)", async () => {
+	const a = await start();
+	await SCENARIOS.mention!(a);
 	expect(breaks(a.requests.get("mention"))).toEqual([]);
+});
+
+test("the same, in place, keeps the prefix for models that accept mid-conversation system messages (spec 38 §8 R1): mention", async () => {
+	const a = await start();
+	await SCENARIOS.mention!(a);
+	expect(breaks(a.inPlace.get("mention"))).toEqual([]);
 });
 
 test("diagnostics: what breaks today", async () => {
@@ -233,12 +276,16 @@ test("diagnostics: what breaks today", async () => {
 	for (const text of ["What does Kiwi eat?", "And the dog's name?", "Thanks", "Who is Kiwi?"]) await turn(a, pinpin, text);
 	report.push(
 		"",
-		"Reuse an ideal prefix cache gets (higher is better):",
-		`- Build, 5 plain turns: ${reuse(a.requests.get("reportplain"))}`,
-		`- Build, 5 turns with one @mention: ${reuse(a.requests.get("reportmention"))}`,
-		`- Build, NOTES.md edited: ${reuse(a.requests.get("report"))}`,
-		`- Chat, About me changed: ${reuse(a.requests.get("reportchat"))}`,
-		`- Agent, 7 messages with memory: ${reuse(a.requests.get("reportagent"))}`,
+		"Reuse an ideal prefix cache gets (higher is better), collapsed | in place:",
+		...(
+			[
+				["Build, 5 plain turns", "reportplain"],
+				["Build, 5 turns with one @mention", "reportmention"],
+				["Build, NOTES.md edited", "report"],
+				["Chat, About me changed", "reportchat"],
+				["Agent, 7 messages with memory", "reportagent"],
+			] as const
+		).map(([label, key]) => `- ${label}: ${reuse(a.requests.get(key))} | ${reuse(a.inPlace.get(key))}`),
 	);
 	process.stdout.write(`\n${report.join("\n")}\n`);
 });

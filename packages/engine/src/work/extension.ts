@@ -5,6 +5,7 @@
  */
 import { defineTool, type ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { promptSection, type PromptEvent } from "../tools/prompt-sections.js";
 
 export type BoardBridge = {
 	/** Piopio in a project conversation, or a task's reviewer. */
@@ -34,7 +35,8 @@ export function boardExtension(bridge: BoardBridge): ExtensionFactory {
 					else active.delete(name);
 				}
 				pi.setActiveTools([...active]);
-				return brief ? { systemPrompt: `${event.systemPrompt}\n\n<board>\n${brief}\n</board>` } : undefined;
+				promptSection(event as unknown as PromptEvent, "board", brief || undefined);
+				return undefined;
 			});
 			pi.registerTool(
 				defineTool({

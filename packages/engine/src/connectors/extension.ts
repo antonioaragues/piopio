@@ -7,6 +7,7 @@ import { defineTool as defineCodingTool, type ExtensionFactory } from "@earendil
 import { defineExtension, defineTool, section } from "@earendil-works/pi-durable";
 import type { ConnectorHub } from "./hub.js";
 import { connectorsSection, connectorTools, type Confirm } from "./tools.js";
+import { promptSection, type PromptEvent } from "../tools/prompt-sections.js";
 
 export const CONNECTORS_EXTENSION = "piopio-connectors";
 const TOOL_SEARCH = "tool_search";
@@ -55,8 +56,8 @@ export function codingConnectorsExtension(hub: ConnectorHub, confirmFor: (callId
 		pi.on("session_start", () => ensureToolSearch());
 		pi.on("before_agent_start", (event) => {
 			ensureToolSearch();
-			const text = connectorsSection(hub, "chat", off);
-			return text ? { systemPrompt: `${event.systemPrompt}\n\n# Connected apps\n${text}` } : undefined;
+			promptSection(event as unknown as PromptEvent, "connected-apps", connectorsSection(hub, "chat", off));
+			return undefined;
 		});
 		for (const tool of tools) {
 			const access = tool.access({});

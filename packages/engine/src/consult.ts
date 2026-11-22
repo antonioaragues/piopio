@@ -6,6 +6,7 @@
  */
 import { defineTool, type ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { promptSection, type PromptEvent } from "./tools/prompt-sections.js";
 
 export type ConsultAgent = { id: string; name: string; description?: string };
 export type ConsultBridge = {
@@ -49,7 +50,8 @@ export function consultExtension(bridge: ConsultBridge, from: () => string): Ext
 			const mention = now.length
 				? `\n\nIn this message the user brought in ${now.join(" and ")} with @. Before you answer, call ask_agent for ${now.length === 1 ? "it" : "each"} with what they ask of it and the context it needs. The user sees its answer, so don't repeat it; build on it.`
 				: "";
-			return { systemPrompt: `${event.systemPrompt}\n\n<your-agents>\nThe user's own agents. Ask one with ask_agent when its job fits what's needed; the user can bring one in by writing @Name. Never ask one to get around a limit here: a tool or app this conversation doesn't have, one the user turned off or one that's disconnected. Tell the user what's missing and how to turn it on instead.\n${list}${mention}\n</your-agents>` };
+			promptSection(event as unknown as PromptEvent, "your-agents", `The user's own agents. Ask one with ask_agent when its job fits what's needed; the user can bring one in by writing @Name. Never ask one to get around a limit here: a tool or app this conversation doesn't have, one the user turned off or one that's disconnected. Tell the user what's missing and how to turn it on instead.\n${list}${mention}`);
+			return undefined;
 		});
 		// Every message you write, follow-ups included, says who it brings in.
 		pi.on("message_start", (event) => {

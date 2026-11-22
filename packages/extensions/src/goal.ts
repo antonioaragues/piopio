@@ -32,6 +32,13 @@ export function goalPrompt(goal: Goal): string {
 
 const continuation = (goal: Goal) => `Keep going toward the goal: ${goal.objective}\n(Round ${goal.rounds} of ${goal.maxRounds}. When it's met, call update_goal with status "done"; if you're stuck, status "blocked".)`;
 
+/** Sets one of pi's named prompt sections (or removes it): pi sends only what changed (docs/spec/38 §8 R1). */
+function section(event: unknown, name: string, text: string | undefined): void {
+	const sections = (event as { systemPromptOptions: { sections: Record<string, string> } }).systemPromptOptions.sections;
+	if (text?.trim()) sections[name] = text.trim();
+	else delete sections[name];
+}
+
 export function goalExtension(): ExtensionFactory {
 	return (pi: ExtensionAPI) => {
 		let goal: Goal | undefined;
@@ -47,7 +54,10 @@ export function goalExtension(): ExtensionFactory {
 		pi.on("session_start", (_e, ctx) => restore(ctx));
 		pi.on("session_tree", (_e, ctx) => restore(ctx));
 
-		pi.on("before_agent_start", (event) => (goal?.status === "active" ? { systemPrompt: `${event.systemPrompt}\n\n${goalPrompt(goal)}` } : undefined));
+		pi.on("before_agent_start", (event) => {
+			section(event, "goal", goal?.status === "active" ? goalPrompt(goal) : undefined);
+			return undefined;
+		});
 
 		// Each round is a new run, started once the session has fully settled, so it shows like any other message.
 		let outcome: "completed" | "aborted" | "error" = "completed";

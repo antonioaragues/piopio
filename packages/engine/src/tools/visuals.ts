@@ -12,6 +12,7 @@ import { AppUnavailable } from "@piopio/runtime";
 import type { AppServices } from "../app-services.js";
 import { defineTool as defineCodingTool, type ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import { defineExtension, defineTool, section } from "@earendil-works/pi-durable";
+import { promptSection, type PromptEvent } from "./prompt-sections.js";
 
 export const VISUALS_EXTENSION = "piopio-visuals";
 export const SHOW_VISUAL = "show_visual";
@@ -109,7 +110,8 @@ export function codingVisualsExtension(check?: VisualCheck): ExtensionFactory {
 		let shown = new Set<string>();
 		pi.on("before_agent_start", (event) => {
 			shown = new Set();
-			return { systemPrompt: `${event.systemPrompt}\n\n${VISUALS_SECTION}` };
+			promptSection(event as unknown as PromptEvent, "visuals", VISUALS_SECTION);
+			return undefined;
 		});
 		pi.registerTool(
 			defineCodingTool({

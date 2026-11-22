@@ -7,6 +7,7 @@
  */
 import { defineTool, type ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { promptSection, type PromptEvent } from "./tools/prompt-sections.js";
 
 export type OffersBridge = {
 	/** Parallel work could be offered here: it's off in this project. Read on every turn. */
@@ -19,7 +20,8 @@ export function offersExtension(bridge: OffersBridge): ExtensionFactory {
 	return (pi) => {
 		pi.on("before_agent_start", (event) => {
 			if (!bridge.canOfferParallel()) return undefined;
-			return { systemPrompt: `${event.systemPrompt}\n\n<offers>\n- When the user asks for work that splits into three or more independent parts that could be done at the same time (several screens, features or documents), don't start: call offer_parallel with why and the parts, then stop. They choose to do it here, one by one, or to work in parallel, with helpers doing the parts at once. Small or single changes you just do.\n</offers>` };
+			promptSection(event as unknown as PromptEvent, "offers", `- When the user asks for work that splits into three or more independent parts that could be done at the same time (several screens, features or documents), don't start: call offer_parallel with why and the parts, then stop. They choose to do it here, one by one, or to work in parallel, with helpers doing the parts at once. Small or single changes you just do.`);
+			return undefined;
 		});
 		pi.registerTool(
 			defineTool({

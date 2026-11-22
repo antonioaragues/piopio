@@ -13,6 +13,7 @@ import type { BuiltinMemory, MemoryEvent, MemoryProvider, MemoryRecord } from "@
 import type { MemoryProviders } from "./memory.js";
 import { EngineError } from "./models.js";
 import type { Settings } from "./settings.js";
+import { promptSection, type PromptEvent } from "./tools/prompt-sections.js";
 
 export const ABOUT_ME_EXTENSION = "piopio-about-me";
 export const ABOUT_ME_BANK = "about-me";
@@ -251,7 +252,8 @@ export function aboutMeSdkExtension(store: AboutMe, settings: Settings): Extensi
 			if (!applies()) return undefined;
 			const capture = settings.get().aboutMe.capture ? "\nWhen the user tells you something lasting about themselves, save it with remember_about_me." : "";
 			const text = `What the user wants you to know about them (their “About me”):\n${memoryPrompt(await store.promptText().catch(() => ""), "(nothing yet)")}${capture}`;
-			return { systemPrompt: `${event.systemPrompt}\n\n${text}` };
+			promptSection(event as unknown as PromptEvent, "about-me", text);
+			return undefined;
 		});
 		pi.registerTool(
 			defineCodingTool({

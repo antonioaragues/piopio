@@ -8,6 +8,7 @@ import { defineTool, type ExtensionFactory } from "@earendil-works/pi-coding-age
 import { Type } from "typebox";
 import type { ModelHub } from "../models.js";
 import { runWebFetch, runWebSearch, webSection, type WebOptions } from "./web.js";
+import { promptSection, type PromptEvent } from "./prompt-sections.js";
 
 /** What Read only takes away from a Build session, and what it adds. */
 export const READ_ONLY_OFF = ["bash", "powershell", "edit", "write"];
@@ -25,9 +26,9 @@ You're working in a folder of documents rather than a code base: notes, papers, 
 export function chatProfileExtension(hub: ModelHub, options: WebOptions = {}, active: () => boolean = () => true, webPrompt: () => boolean = active): ExtensionFactory {
 	return (pi) => {
 		pi.on("before_agent_start", (event) => {
-			const knowledge = active() ? `\n${KNOWLEDGE_PROMPT}` : "";
-			const web = webPrompt() ? `\n\n${webSection()}` : "";
-			return knowledge || web ? { systemPrompt: `${event.systemPrompt}${knowledge}${web}` } : undefined;
+			promptSection(event as unknown as PromptEvent, "knowledge", active() ? KNOWLEDGE_PROMPT : undefined);
+			if (webPrompt()) promptSection(event as unknown as PromptEvent, "web", webSection());
+			return undefined;
 		});
 		pi.registerTool(
 			defineTool({

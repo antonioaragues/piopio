@@ -11,6 +11,7 @@ import { Type } from "typebox";
 import { EngineError } from "../models.js";
 import { PIOPIO, whenLabel, type Automation, type ResultTo, type Trigger } from "./model.js";
 import type { AgentInfo, AutomationInput, Automations } from "./service.js";
+import { promptSection, type PromptEvent } from "../tools/prompt-sections.js";
 
 /** The tools' names: Piopio's and an agent's are the same words. */
 export const AUTOMATION_TOOLS = ["automate", "list_automations", "change_automation", "cancel_automation"];
@@ -116,9 +117,10 @@ export function automationsExtension(bridge: PiopioAutomationsBridge): Extension
 		budget: Type.Optional(Type.Number({ description: "USD per run; default 0.50 for Piopio, 0.25 for an agent" })),
 	};
 	return (pi) => {
-		pi.on("before_agent_start", (event) => ({
-			systemPrompt: `${event.systemPrompt}\n\n<automations>\nWhen the user asks for something to happen on its own (every morning, each Monday, whenever a file or an email arrives, or once later), make it with automate and say in a line what you set; the user sees a card with Undo. If they say "just this once", do it now instead. A message that starts with [Automation] is one of their automations running: do what it says as you would their request.\n</automations>`,
-		}));
+		pi.on("before_agent_start", (event) => {
+			promptSection(event as unknown as PromptEvent, "automations", `When the user asks for something to happen on its own (every morning, each Monday, whenever a file or an email arrives, or once later), make it with automate and say in a line what you set; the user sees a card with Undo. If they say "just this once", do it now instead. A message that starts with [Automation] is one of their automations running: do what it says as you would their request.`);
+			return undefined;
+		});
 		pi.registerTool(
 			defineTool({
 				name: "automate",

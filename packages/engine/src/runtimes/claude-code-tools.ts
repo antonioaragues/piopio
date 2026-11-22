@@ -7,6 +7,7 @@
  */
 import type { ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { PromptOptions } from "../tools/prompt-sections.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 
 export const PIOPIO_MCP = "piopio";
@@ -21,7 +22,7 @@ export type CapturedTool = {
 	parameters: unknown;
 	execute: (callId: string, params: unknown, signal: AbortSignal | undefined, onUpdate: (() => void) | undefined, ctx: unknown) => Promise<ToolResult>;
 };
-type PromptHandler = (event: { systemPrompt: string }) => unknown;
+type PromptHandler = (event: { systemPrompt: string; systemPromptOptions: PromptOptions }, ctx: unknown) => unknown;
 
 /** Runs the extensions against a stand-in for pi's API: their tools, and what they add to the system prompt. */
 export function collectTools(factories: readonly ExtensionFactory[]): { tools: CapturedTool[]; prompt: () => Promise<string> } {
@@ -40,13 +41,18 @@ export function collectTools(factories: readonly ExtensionFactory[]): { tools: C
 		{ get: (target, key) => (key in target ? target[key as string] : () => undefined) },
 	);
 	for (const factory of factories) void (factory as unknown as (pi: unknown) => unknown)(api);
+	// The handlers write pi's named prompt sections (prompt-sections.ts): each one's sections, rendered as pi does.
 	const prompt = async () => {
+		const options: PromptOptions = { selectedTools: [], hiddenTools: [], toolSnippets: {}, toolGuidelines: {}, promptGuidelines: [], sections: {} };
 		const parts: string[] = [];
 		for (const handler of prompts) {
-			const result = (await Promise.resolve(handler({ systemPrompt: "" })).catch(() => undefined)) as { systemPrompt?: string } | undefined;
+			const result = (await Promise.resolve()
+				.then(() => handler({ systemPrompt: "", systemPromptOptions: options }, {}))
+				.catch(() => undefined)) as { systemPrompt?: string } | undefined;
 			const text = result?.systemPrompt?.trim();
 			if (text) parts.push(text);
 		}
+		for (const [name, text] of Object.entries(options.sections)) if (text.trim()) parts.push(`<${name}>\n${text}\n</${name}>`);
 		return parts.join("\n\n");
 	};
 	return { tools, prompt };

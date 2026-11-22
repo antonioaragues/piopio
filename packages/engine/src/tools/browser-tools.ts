@@ -18,6 +18,7 @@ import { AppUnavailable } from "@piopio/runtime";
 import type { AppServices } from "../app-services.js";
 import type { CallSite } from "../connectors/extension.js";
 import { isPrivateHost } from "./web.js";
+import { promptSection, type PromptEvent } from "./prompt-sections.js";
 
 type Image = { mimeType: string; data: string };
 export type BrowserResult = { text: string; images: Image[]; isError?: boolean };
@@ -294,7 +295,10 @@ export function browserCaller(app: AppServices, ref: ContainerRef, options: { al
 /** Build sessions (pi-coding-agent). `askFor` asks through Build's approval prompt; `preview` adds the project preview. */
 export function codingBrowserExtension(call: BrowserCall, askFor?: (callId: string, signal: AbortSignal | undefined) => BrowserAsk, preview = false): ExtensionFactory {
 	return (pi) => {
-		pi.on("before_agent_start", (event) => ({ systemPrompt: `${event.systemPrompt}\n\n${SECTION}${preview ? `\n\n${PREVIEW_SECTION}` : ""}` }));
+		pi.on("before_agent_start", (event) => {
+			promptSection(event as unknown as PromptEvent, "browser", `${SECTION}${preview ? `\n\n${PREVIEW_SECTION}` : ""}`);
+			return undefined;
+		});
 		for (const tool of preview ? [...BROWSER_TOOLS, ...PREVIEW_TOOLS] : BROWSER_TOOLS) {
 			pi.registerTool(
 				defineCodingTool({

@@ -40,13 +40,18 @@ test("the project's own folder, one inside it, one that holds it or a missing on
 });
 
 test("every turn tells the model about the linked folders and what it may do there", () => {
-	let handler: ((event: { systemPrompt: string }) => { systemPrompt: string } | undefined) | undefined;
+	type Event = { systemPrompt: string; systemPromptOptions: { sections: Record<string, string> } };
+	let handler: ((event: Event) => unknown) | undefined;
 	let folders = [] as { path: string; edit: boolean }[];
 	linkedFoldersExtension(() => folders)({ on: (name: string, fn: typeof handler) => void (name === "before_agent_start" && (handler = fn)) } as never);
-	expect(handler!({ systemPrompt: "Base" })).toBeUndefined();
+	const section = () => {
+		const event: Event = { systemPrompt: "Base", systemPromptOptions: { sections: {} } };
+		expect(handler!(event)).toBeUndefined(); // a section of pi's prompt, never a forced one (docs/spec/38 §8 R1)
+		return event.systemPromptOptions.sections["linked-folders"];
+	};
+	expect(section()).toBeUndefined();
 	folders = [{ path: "/Users/me/Documents/Bibliografia", edit: false }, { path: "/Users/me/Lab/Datos", edit: true }];
-	const prompt = handler!({ systemPrompt: "Base" })!.systemPrompt;
-	expect(prompt.startsWith("Base\n\n")).toBe(true);
+	const prompt = section()!;
 	expect(prompt).toContain("- /Users/me/Documents/Bibliografia (read only: read and search it, but don't change anything there)");
 	expect(prompt).toContain("- /Users/me/Lab/Datos (part of the project: you may change files here");
 });

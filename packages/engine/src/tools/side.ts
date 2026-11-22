@@ -7,6 +7,7 @@
  */
 import { defineTool, type ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { promptSection, type PromptEvent } from "./prompt-sections.js";
 
 /** One of this conversation's side conversations, as its context lists it. */
 export type SideLine = { id: string; title: string; state: string; branch?: string; line?: string };
@@ -47,19 +48,21 @@ export function sidePrompt(lines: readonly SideLine[], settings: SideSettings = 
 		? `\n- When you notice work outside what the user asked (a fix spotted in passing, the follow-up your own answer recommends), leave it as a card with side_propose: a title, a brief, and why in one line. At most three per turn, none twice, never for what you're about to do anyway. Work that only acts on what this conversation just found (the fix for what you just diagnosed) isn't proposed away: ask about it here instead. side_dismiss withdraws a proposal that went stale.`
 		: "";
 	const elsewhere = projects.length ? `\n- A task plainly about one of the user's projects (${projects.join(", ")}) can go there: give its name as project, and the side conversation works in that project's folder.` : "";
-	const rules = `<side-conversations>
-- A side conversation is a conversation of its own, linked to this one, for a task of its own. It works beside this one and reports back.
+	const rules = `- A side conversation is a conversation of its own, linked to this one, for a task of its own. It works beside this one and reports back.
 - Start one with side_start when the user asks for separate work in their message ("do that in its own conversation", "in the background", "in parallel", "separately"), or by /side. Give a short title and a brief: what to do, which files or area, and what done looks like, in your own words. The new conversation knows nothing of this one; don't write "as discussed". It can read this conversation with read_conversation if it needs the background.${unrelated}${newTask}${propose}${elsewhere}
 - A piece of the task at hand is never a side conversation, however large: searching widely, the independent parts of one change, testing or reviewing what was just built. Do those here (a wide search can go to task, which only reads).
 - Messages that start with [Side] are reports from your side conversations, not the user. A report isn't proof: before telling the user something is done, check it with side_read (or the diff on its branch). When a report unblocks a step of what the user asked you here, carry on with it and say so in a line; otherwise report in a line or two. Start nothing the user didn't ask for.
 - side_send writes to one that has the context instead of starting another; side_stop stops its running turn. Its branch isn't in this checkout until the user merges it; merge only on their word.
-${lines.length ? `Side conversations now:\n${lines.map((l) => `- ${l.id}: ${l.title} · ${l.state}${l.branch ? ` · ${l.branch}` : ""}${l.line ? ` · ${l.line}` : ""}`).join("\n")}\n` : ""}</side-conversations>`;
+${lines.length ? `Side conversations now:\n${lines.map((l) => `- ${l.id}: ${l.title} · ${l.state}${l.branch ? ` · ${l.branch}` : ""}${l.line ? ` · ${l.line}` : ""}`).join("\n")}` : ""}`;
 	return rules;
 }
 
 export function sideExtension(bridge: SideBridge): ExtensionFactory {
 	return (pi) => {
-		pi.on("before_agent_start", (event) => ({ systemPrompt: `${event.systemPrompt}\n\n${sidePrompt(bridge.list(), bridge.settings(), bridge.projects())}` }));
+		pi.on("before_agent_start", (event) => {
+			promptSection(event as unknown as PromptEvent, "side-conversations", sidePrompt(bridge.list(), bridge.settings(), bridge.projects()));
+			return undefined;
+		});
 		const run = async (work: () => Promise<string>) => {
 			try {
 				return text(await work());

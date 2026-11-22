@@ -48,6 +48,7 @@ import { PromptBroker, uiBridge } from "./prompts.js";
 import { ContextBreakdown } from "./context-breakdown.js";
 import { recorder } from "./recorder.js";
 import { Emitter, type Runtime, type SubmitOptions } from "./runtime.js";
+import { promptSection, promptToolsExtension, type PromptEvent } from "../tools/prompt-sections.js";
 
 type Input = SdkInput;
 
@@ -192,7 +193,7 @@ export class BuildRuntime implements Runtime {
 				...piBuiltins(),
 				// First, so the snapshot is taken before anything else can change files.
 				checkpointsExtension({ snapshot: async (callId) => void (await runtime?.takeCheckpoint(callId)) }),
-				// Piopio's prompt in place of pi's preamble and docs, before the extensions that add to the prompt.
+				// Piopio's preamble and guidelines in place of pi's (pi's named sections), before the others' sections.
 				buildPromptExtension(),
 				// Before approvals: a server turned off here is refused without asking.
 				...(o.toolsOff ? [mcpOffExtension(o.toolsOff)] : []),
@@ -311,6 +312,8 @@ export class BuildRuntime implements Runtime {
 				}),
 				subagentsExtension(o.runTask ? { run: o.runTask, ...(o.tasks ?? {}), ...(o.externalAgents?.length ? { agents: o.externalAgents } : {}) } : undefined),
 				notifyExtension(notifyBridge(o, broker, () => runtime)),
+				// Last: pi's tools list and rules for Piopio's preamble, from the tools the others turned on.
+				promptToolsExtension(),
 			],
 		});
 		// Project trust, as the pi CLI decides it: the closest saved decision (~/.pi/agent/trust.json) for the
@@ -1086,9 +1089,8 @@ export function notesExtension(cwd: string): ExtensionFactory {
 				return undefined;
 			}
 			const shown = notes.length > MAX_NOTES ? `${notes.slice(0, MAX_NOTES)}\n\n[… the rest is in ${NOTES_FILE}]` : notes;
-			return {
-				systemPrompt: `${event.systemPrompt}\n\nThis project keeps shared notes in ${NOTES_FILE}, read by every conversation here. When something comes up that later conversations will need (a decision, a number, a date, a preference), add it to ${NOTES_FILE} as one short line, if you can edit files. The notes now:\n\n${shown}`,
-			};
+			promptSection(event as unknown as PromptEvent, "project-notes", `This project keeps shared notes in ${NOTES_FILE}, read by every conversation here. When something comes up that later conversations will need (a decision, a number, a date, a preference), add it to ${NOTES_FILE} as one short line, if you can edit files. The notes now:\n\n${shown}`);
+			return undefined;
 		});
 	};
 }
@@ -1103,9 +1105,8 @@ export function linkedFoldersExtension(folders: () => readonly { path: string; e
 			const list = folders();
 			if (!list.length) return undefined;
 			const lines = list.map((f) => `- ${f.path} (${f.edit ? "part of the project: you may change files here, under the same permissions" : "read only: read and search it, but don't change anything there"})`);
-			return {
-				systemPrompt: `${event.systemPrompt}\n\nBesides its own folder, this project uses these folders on the Mac. Use their absolute paths; look in them when the task concerns what they hold:\n${lines.join("\n")}`,
-			};
+			promptSection(event as unknown as PromptEvent, "linked-folders", `Besides its own folder, this project uses these folders on the Mac. Use their absolute paths; look in them when the task concerns what they hold:\n${lines.join("\n")}`);
+			return undefined;
 		});
 	};
 }
@@ -1186,6 +1187,8 @@ function chatFactories(o: BuildOpenOptions, broker: PromptBroker, runtime: () =>
 		...(o.side ? [sideExtension(o.side)] : []),
 		...(o.automations ? [automationsExtension(o.automations)] : []),
 		...(o.chat!.extensions ?? []),
+		// Last: pi's tools list and rules for the chat's preamble, from the tools the others turned on.
+		promptToolsExtension(),
 	];
 }
 
@@ -1250,7 +1253,8 @@ function mcpOffExtension(toolsOff: () => string[]): ExtensionFactory {
 	return (pi) => {
 		pi.on("before_agent_start", (event) => {
 			const off = servers();
-			return off.length ? { systemPrompt: `${event.systemPrompt}\n\nThese MCP servers are turned off in this conversation, so don't use their tools: ${off.join(", ")}.` } : undefined;
+			promptSection(event as unknown as PromptEvent, "mcp-off", off.length ? `These MCP servers are turned off in this conversation, so don't use their tools: ${off.join(", ")}.` : undefined);
+			return undefined;
 		});
 		pi.on("tool_call", (event) => {
 			const hit = servers().find((s) => event.toolName.startsWith(`mcp__${s}__`) || event.toolName.startsWith(`mcp__${s.replace(/[^A-Za-z0-9_]/g, "_")}__`));

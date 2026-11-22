@@ -27,6 +27,13 @@ The user turned on plan mode: explore and plan, don't change anything yet.
 - Only the user's answer to propose_plan approves it. Agreeing in chat ("sounds good", an answer to your question) approves nothing: fold what they said into the plan and propose it again.
 - The user approves the plan, edits it first, or asks for changes. When they edited it, build their version.`;
 
+/** Sets one of pi's named prompt sections (or removes it): pi sends only what changed (docs/spec/38 §8 R1). */
+function section(event: unknown, name: string, text: string | undefined): void {
+	const sections = (event as { systemPromptOptions: { sections: Record<string, string> } }).systemPromptOptions.sections;
+	if (text?.trim()) sections[name] = text.trim();
+	else delete sections[name];
+}
+
 export function planExtension(bridge?: PlanBridge): ExtensionFactory {
 	let cliActive = process.env.PIOPIO_PLAN === "1";
 	const active = () => bridge?.active() ?? cliActive;
@@ -39,7 +46,10 @@ export function planExtension(bridge?: PlanBridge): ExtensionFactory {
 				if (ctx.hasUI) ctx.ui.notify(active() ? "Plan mode is on" : "Plan mode is off", "info");
 			},
 		});
-		pi.on("before_agent_start", (event) => (active() ? { systemPrompt: `${event.systemPrompt}\n${PLAN_PROMPT}` } : undefined));
+		pi.on("before_agent_start", (event) => {
+			section(event, "plan", active() ? PLAN_PROMPT : undefined);
+			return undefined;
+		});
 		pi.on("tool_call", (event) => {
 			if (!active()) return undefined;
 			if (event.toolName === "edit" || event.toolName === "write") {

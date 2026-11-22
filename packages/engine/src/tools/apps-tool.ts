@@ -6,6 +6,7 @@
 import { Type } from "typebox";
 import { defineTool as defineCodingTool, type ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import type { Apps, MakeContext } from "../apps.js";
+import { promptSection, type PromptEvent } from "./prompt-sections.js";
 
 export const MAKE_APP = "make_app";
 
@@ -71,6 +72,9 @@ export function codingAppsExtension(apps: Apps, where: () => MakeContext, confir
 /** An app's conversation (docs/spec/35 §15): what it's about, read fresh each turn (the page may have changed). */
 export function appConversationExtension(apps: Apps, path: string): ExtensionFactory {
 	return (pi) => {
-		pi.on("before_agent_start", (event) => ({ systemPrompt: `${event.systemPrompt}\n\n${apps.describe(path)}` }));
+		pi.on("before_agent_start", (event) => {
+			promptSection(event as unknown as PromptEvent, "app", apps.describe(path));
+			return undefined;
+		});
 	};
 }
