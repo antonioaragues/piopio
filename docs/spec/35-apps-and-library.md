@@ -2,7 +2,7 @@
 
 Status: draft 2026-11-22, from a conversation with the user. The user asked for the Library as a section of its own,
 with pins kept there instead of the sidebar's Pinned (AL1, AL9). The other decisions are proposed and still need
-confirming (§12). **L1 (the Library) built 2026-11-22 (§13); L2 (apps on files, §14) and L3 (changing an app, §15) built the same day**. Mockup: [docs/design/apps](../design/apps/Apps.html), which includes a clickable
+confirming (§12). **L1 (the Library) built 2026-11-22 (§13); L2 (apps on files, §14), L3 (changing an app, §15) and L4's first part (the calendar as a source, §16) built the same day**. Mockup: [docs/design/apps](../design/apps/Apps.html), which includes a clickable
 prototype. This spec continues [25](25-visuals.md): VS3 (saved visuals are files), VS4 (the engine records and the
 app draws), VS5 (no network) and VS7 (a visual talks back only on your click) all still hold.
 
@@ -611,3 +611,63 @@ A session summary carries `app`.
 
 **Not checked:** a real model telling questions from changes; Undo, Undo Anyway and a broken page's notice clicked
 by hand; an app in a project with a real project chat; dark mode.
+
+## 16. L4, part 1: your calendar as a source (2026-11-22)
+
+The review split L4 into three: Piopio's numbers (which wait for Overview's ledger, OV0), a connector, and scripts
+(which wait for spec 36's runner). This part is the connector, Calendar first: the sign-in works, it only reads, and
+it has the hard cases (several accounts, one failing while another answers, time zones, "this week" against "the
+next 7 days"). The model in §3.2 had a generic `tool` source; reading a connector's text output wasn't enough for an
+app, so calendar sources are their own kind.
+
+**The source**
+- **In the manifest:** `"week": { "calendar": "this_week", "accounts": ["google-calendar:…", "outlook:…"] }`.
+- **Spans:** `today`, `tomorrow`, `this_week` (Monday to Sunday), `next_7_days` and `this_month`, from local
+  midnight in this Mac's time zone.
+- **What the page gets:** a list of `{ title, start, end, allDay, location, calendar, account }`, sorted by start.
+- **Accounts are named one by one.** `make_app` with no accounts takes every connected calendar whose reading isn't
+  Off, and its card lists them: "reading Google Calendar (me@gmail.com) and Outlook (me@work.com) for this week".
+  An account connected later isn't read: naming it changes the sources, which waits for Allow.
+- **No model:** the engine reads the connectors directly (`ConnectorHub.calendars`), not through the model's
+  `calendar_events` tool and its text.
+
+**When it goes wrong**
+- **Each account is read on its own,** with 10 s each. One that fails keeps its last good events, dated. The source
+  is stale, and Piopio's notice names the account: "Google Calendar (me@gmail.com): The server said 503. Its other
+  events are from 10:42", with Try Again.
+- **Settings › Connectors is checked on every read.** An app reads only what runs on its own. With reading Off or
+  "Asks first", that account isn't read, keeps nothing, and the notice says why.
+- **A disconnected account takes its events with it** at once, not at the next read. Reconnecting it doesn't bring
+  the old events back before a new read. Open apps redraw when connectors change.
+- **Stop Reading Its Sources** (in the Sources menu) withdraws the Allow and forgets what the app read from
+  calendars. It reads nothing until you allow it again. The Allow notice names the accounts.
+
+**Refresh:** an app reads its calendars when you open it (if the last read is over a minute old, behind the cached
+events) and with Refresh. Each read costs no model tokens.
+
+**Protocol:** `apps.revoke { path }`. A source's status has `kind` (file · calendar), and a calendar source has
+`accounts` (each with its label, state ok · failed · gone, error, and when it was read and when it failed).
+
+**Not in this part (next):**
+- **Refreshing on a timer** as an automation with no model ($0), shown in Automations and kept apart from Pin (the
+  review's point).
+- **The same contract for mail.**
+- **Piopio's numbers and scripts.**
+
+**Checked**
+- **Engine tests:** `apps.test.ts` has 8 new tests:
+  - the card's wording and the accounts filled in;
+  - events in order from both accounts, read over one Monday-to-Monday span;
+  - one account failing, with its last events kept and dated;
+  - a disconnected account dropping its events;
+  - reading Off and "Asks first";
+  - a new account not read until it's named and allowed;
+  - Stop Reading;
+  - refusals (no calendar, an unknown account, an unknown span), and the spans themselves.
+
+  An `engine.test.ts` case goes through the real connector code against the fake Google and Outlook servers:
+  making the app, both accounts' events with no model, `apps.open`, then disconnecting Google, after which only
+  Outlook's event remains and Google's account reads as gone.
+- **Swift:** an app with a calendar source decodes, with its accounts.
+
+**Not checked:** with your real Google Calendar in the app; the notices and the Sources menu on screen; dark mode.

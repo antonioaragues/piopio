@@ -933,11 +933,25 @@ public struct LibraryRelocateParams: Encodable, Sendable { public var id, path: 
 
 /// One source of an app: a file, its last read, and why it failed.
 public struct AppSourceStatus: Codable, Sendable, Hashable {
+    public struct Account: Codable, Sendable, Hashable {
+        public var id: String
+        public var label: String
+        /// ok · failed (its last good events are shown) · gone (disconnected: nothing of it is shown)
+        public var state: String
+        public var error: String?
+        public var readAt: String?
+        public var failedAt: String?
+    }
     public var name: String
-    /// As the manifest says it: relative to the app's file, or absolute.
+    /// file · calendar (docs/spec/35 §16)
+    public var kind: String?
+    /// As the manifest says it: relative to the app's file, or absolute; a calendar source in words.
     public var file: String
+    /// A file source's path ("" for a calendar).
     public var path: String
     public var columns: [String]?
+    /// A calendar source: each account and how its last read went.
+    public var accounts: [Account]?
     /// ok · failed (the page has the last good data) · waiting (not allowed yet)
     public var state: String
     public var error: String?

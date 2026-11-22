@@ -3,9 +3,11 @@
  * manifest (`<script type="application/json" id="piopio-app">`) lists its sources; the engine reads them and the app
  * hands the result to the page through `piopio.onData`, so the page never reaches out.
  *
- * L2 reads files only: CSV, TSV, JSON, Markdown and text. A source can list the columns it needs; a file that's gone,
- * empty, too big, unparseable or missing a column fails, and the app keeps that source's last good data, dated. What's
- * allowed is the manifest's list of sources (§3.4): a page edit asks nothing, a new or changed source waits for Allow.
+ * Sources are files (CSV, TSV, JSON, Markdown, text; L2) and your calendar (L4, §16). A file source can list the columns
+ * it needs; a file that's gone, empty, too big, unparseable or missing a column fails, and the app keeps that source's
+ * last good data, dated. A calendar source names its accounts: each is read on its own, checked against Settings ›
+ * Connectors every time, and keeps its last good events when it fails; an account that's gone takes its events with it.
+ * What's allowed is the manifest's list of sources (§3.4): a page edit asks nothing, a new or changed source waits.
  */
 import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, statSync, watch, writeFileSync, type FSWatcher } from "node:fs";
@@ -19,16 +21,40 @@ export const MAX_SOURCE_BYTES = 2 * 1024 * 1024;
 /** Larger than any reasonable app page (as visuals, 25). */
 export const MAX_APP_BYTES = 300 * 1024;
 
-export type AppSource = { file: string; columns?: string[] };
+/** The calendar spans a source can read, in this Mac's time zone (§16). */
+export const CALENDAR_RANGES = ["today", "tomorrow", "this_week", "next_7_days", "this_month"] as const;
+export type CalendarRange = (typeof CALENDAR_RANGES)[number];
+const RANGE_WORDS: Record<CalendarRange, string> = { today: "today", tomorrow: "tomorrow", this_week: "this week (Monday to Sunday)", next_7_days: "the next 7 days", this_month: "this month" };
+
+export type FileSource = { file: string; columns?: string[] };
+/** Events from these calendar accounts (Settings › Connectors), named one by one so a new account isn't read unasked. */
+export type CalendarSource = { calendar: CalendarRange; accounts: string[] };
+export type AppSource = FileSource | CalendarSource;
 export type AppManifest = { title: string; sources: Record<string, AppSource> };
+export const isFileSource = (s: AppSource): s is FileSource => "file" in s;
+
+/** One event as a page gets it. */
+export type AppEvent = { title: string; start: string; end: string; allDay: boolean; location?: string; calendar: string; account: string };
+/** How Apps reach your calendars: the engine's connectors, or a fake in tests. */
+export type CalendarAccess = {
+	accounts(): { id: string; label: string; app: string }[];
+	/** Settings › Connectors for reading this account's calendar: only "runs" is read by an app. */
+	permission(accountId: string): "runs" | "ask" | "off";
+	events(accountId: string, range: { from: string; to: string }): Promise<{ title: string; start: string; end: string; allDay: boolean; location?: string; calendar: string }[]>;
+};
+
+export type AccountStatus = { id: string; label: string; state: "ok" | "failed" | "gone"; error?: string; readAt?: string; failedAt?: string };
 
 export type SourceStatus = {
 	name: string;
-	/** As the manifest says it (relative to the app's file, or absolute). */
+	kind: "file" | "calendar";
+	/** As the manifest says it (relative to the app's file, or absolute); a calendar source in words. */
 	file: string;
-	/** Where it is. */
+	/** Where it is (a file source). */
 	path: string;
 	columns?: string[];
+	/** A calendar source: each account and how its last read went. */
+	accounts?: AccountStatus[];
 	/** ok: read now; failed: this read failed (the data is the last good one, if any); waiting: not allowed yet. */
 	state: "ok" | "failed" | "waiting";
 	error?: string;
@@ -63,7 +89,10 @@ type History = { current?: string; revisions: Revision[] };
 /** How many changes Undo can go back. */
 const MAX_REVISIONS = 30;
 
-type Cached = { data?: unknown; readAt?: string; error?: string; failedAt?: string };
+type AccountCache = { events?: AppEvent[]; readAt?: string; error?: string; failedAt?: string };
+type Cached = { data?: unknown; readAt?: string; error?: string; failedAt?: string; accounts?: Record<string, AccountCache> };
+/** An account's read gives up after this long (§3.2). */
+const READ_TIMEOUT_MS = 10_000;
 type CacheFile = { sources: Record<string, Cached> };
 type State = { allowed: Record<string, string>; conversations: Record<string, string> };
 
@@ -103,8 +132,15 @@ function checkManifest(raw: unknown): AppManifest {
 	const sources: Record<string, AppSource> = {};
 	for (const [name, value] of Object.entries(o.sources as Record<string, unknown>)) {
 		if (!NAME_RE.test(name)) throw new Error(`“${name}” can't name a source: letters, digits and _ only.`);
-		const v = (value ?? {}) as { file?: unknown; columns?: unknown; tool?: unknown; script?: unknown; piopio?: unknown };
-		if (v.tool || v.script || v.piopio) throw new Error(`The source “${name}” isn't a file. Apps read files for now: write what it needs to a CSV or JSON file, and read that.`);
+		const v = (value ?? {}) as { file?: unknown; columns?: unknown; tool?: unknown; script?: unknown; piopio?: unknown; calendar?: unknown; accounts?: unknown };
+		if (v.calendar !== undefined) {
+			if (!CALENDAR_RANGES.includes(v.calendar as CalendarRange)) throw new Error(`The source “${name}”: calendar is one of ${CALENDAR_RANGES.join(", ")}.`);
+			const accounts = Array.isArray(v.accounts) ? [...new Set(v.accounts.filter((a): a is string => typeof a === "string" && a.trim() !== "").map((a) => a.trim()))] : [];
+			if (!accounts.length) throw new Error(`The source “${name}” needs the calendar accounts it reads.`);
+			sources[name] = { calendar: v.calendar as CalendarRange, accounts };
+			continue;
+		}
+		if (v.tool || v.script || v.piopio) throw new Error(`The source “${name}” isn't a file or a calendar. Apps read files and your calendar for now: write what it needs to a CSV or JSON file, and read that.`);
 		if (typeof v.file !== "string" || !v.file.trim()) throw new Error(`The source “${name}” needs a file.`);
 		const columns = Array.isArray(v.columns) ? v.columns.filter((c): c is string => typeof c === "string" && c.trim() !== "").map((c) => c.trim()) : undefined;
 		sources[name] = { file: v.file.trim(), ...(columns?.length ? { columns } : {}) };
@@ -129,7 +165,11 @@ function legacySourcesHash(m: AppManifest): string {
 function sortedSources(m: AppManifest): string {
 	const sorted = Object.keys(m.sources)
 		.sort()
-		.map((k) => [k, m.sources[k]!.file, m.sources[k]!.columns ?? []]);
+		.map((k) => {
+			const s = m.sources[k]!;
+			// Files hash as they did in L2, so apps allowed then stay allowed.
+			return isFileSource(s) ? [k, s.file, s.columns ?? []] : [k, { calendar: s.calendar, accounts: [...s.accounts].sort() }];
+		});
 	return JSON.stringify(sorted);
 }
 
@@ -306,6 +346,8 @@ export class Apps {
 			changed?: (view: AppView) => void;
 			/** A new app was written (the Library lists it). */
 			made?: (path: string) => void;
+			/** Your calendars (Settings › Connectors), for calendar sources. */
+			calendar?: CalendarAccess;
 			settleMs?: number;
 		},
 	) {
@@ -329,7 +371,7 @@ export class Apps {
 		if (!html.trim()) throw new Error("The app's html is empty.");
 		if (Buffer.byteLength(html, "utf8") > MAX_APP_BYTES) throw new Error("The page is over 300 KB: keep data out of it (it comes from the sources) and libraries bundled.");
 		if (!/piopio\s*\.\s*onData\s*\(/.test(html)) throw new Error("The page must draw from piopio.onData((data, meta) => …): that's how its data arrives, now and whenever a file changes.");
-		const manifest = checkManifest({ title, sources: input.sources });
+		const manifest = checkManifest({ title, sources: this.withAccounts(input.sources) });
 		const project = ctx.chatFolder ? undefined : ctx.cwd;
 		const path = unique(project ? join(project, "apps", `${slug(title)}.html`) : join(this.opts.appsDir, slug(title), `${slug(title)}.html`), existsSync);
 		const appDir = dirname(path);
@@ -338,6 +380,14 @@ export class Apps {
 		const lines: string[] = [];
 		const sources: Record<string, AppSource> = {};
 		for (const [name, src] of Object.entries(manifest.sources)) {
+			if (!isFileSource(src)) {
+				const known = new Map((this.opts.calendar?.accounts() ?? []).map((a) => [a.id, a]));
+				const missing = src.accounts.filter((a) => !known.has(a));
+				if (missing.length) throw new Error(`The source “${name}”: ${missing.join(", ")} isn't a connected calendar account.`);
+				sources[name] = src;
+				lines.push(`${src.accounts.map((a) => `${known.get(a)!.app} (${known.get(a)!.label})`).join(" and ")} for ${RANGE_WORDS[src.calendar]}`);
+				continue;
+			}
 			const from = isAbsolute(src.file) ? src.file : resolve(ctx.cwd, src.file);
 			const read = readSource(from, src.columns);
 			if ("error" in read) throw new Error(`The source “${name}”: ${read.error}`);
@@ -359,21 +409,28 @@ export class Apps {
 	}
 
 	/** Writes a planned app (after you allowed it): the copies, the page, its sources allowed and read once. */
-	write(plan: MakePlan): AppView {
+	async write(plan: MakePlan): Promise<AppView> {
 		mkdirSync(dirname(plan.path), { recursive: true });
 		for (const c of plan.copies) copyFileSync(c.from, c.to);
 		writeFileSync(plan.path, plan.html);
 		this.state.allowed[plan.path] = sourcesHash(plan.manifest);
 		this.saveState();
-		const view = this.refresh(plan.path);
+		const view = await this.refresh(plan.path);
 		this.opts.made?.(plan.path);
 		return view;
 	}
 
-	/** An app as it is now, its files read again (they're local and small). Watches it until closed. */
+	/**
+	 * An app as it is now, its files read again (they're local and small) and its calendars as last read. Those are
+	 * read again behind it when the last read is over a minute old, and the app gets them as `changed`. Watched until
+	 * closed.
+	 */
 	openApp(path: string): AppView {
-		const view = this.view(path, { readAll: true });
+		const view = this.view(path, { readFiles: true });
 		this.watch(path);
+		const calendars = view.sources.filter((s) => s.kind === "calendar");
+		const old = calendars.some((s) => !s.readAt || Date.now() - Date.parse(s.readAt) > 60_000 || s.state === "failed");
+		if (view.allowed && calendars.length && old) void this.refresh(path).then((v) => this.opts.changed?.(v), () => {});
 		return view;
 	}
 
@@ -386,18 +443,59 @@ export class Apps {
 		this.open.delete(resolve(path));
 	}
 
-	/** Reads every source now (when allowed). */
-	refresh(path: string): AppView {
-		return this.view(path, { readAll: true });
+	/** Reads every source now (when allowed): files, then each calendar account. */
+	async refresh(path: string): Promise<AppView> {
+		path = resolve(path);
+		const view = this.view(path, { readFiles: true });
+		if (!view.allowed) return view;
+		const manifest = parseManifest(this.page(path));
+		const cache = this.readCache(path);
+		let read = false;
+		for (const [name, src] of Object.entries(manifest.sources)) {
+			if (isFileSource(src)) continue;
+			cache.sources[name] = await this.readCalendar(src, cache.sources[name] ?? {});
+			read = true;
+		}
+		if (!read) return view;
+		// The cache again: a file may have been read meanwhile (a watch).
+		const now = this.readCache(path);
+		for (const [name, src] of Object.entries(manifest.sources)) if (!isFileSource(src)) now.sources[name] = cache.sources[name]!;
+		this.writeCache(path, now);
+		return this.view(path, {});
 	}
 
 	/** Allow: the sources the manifest lists now. */
-	allow(path: string): AppView {
+	async allow(path: string): Promise<AppView> {
 		const manifest = parseManifest(this.page(path));
 		this.state.allowed[resolve(path)] = sourcesHash(manifest);
 		this.saveState();
 		this.rewatch(path);
 		return this.refresh(path);
+	}
+
+	/**
+	 * Stop reading: the app's sources aren't allowed any more, and what it read from your calendars is forgotten.
+	 * It asks for Allow again before it reads anything.
+	 */
+	revoke(path: string): AppView {
+		path = resolve(path);
+		delete this.state.allowed[path];
+		this.saveState();
+		const cache = this.readCache(path);
+		for (const [name, c] of Object.entries(cache.sources)) if (c.accounts) delete cache.sources[name];
+		this.writeCache(path, cache);
+		return this.view(path, {});
+	}
+
+	/** A calendar account was connected, disconnected or changed: open apps show what they may show now. */
+	connectionsChanged(): void {
+		for (const path of this.open.keys()) {
+			try {
+				this.opts.changed?.(this.view(path, {}));
+			} catch {
+				// A broken app: its next open says so.
+			}
+		}
 	}
 
 	// ── The app's conversation and Undo (docs/spec/35 §15) ─────────────────
@@ -433,7 +531,15 @@ export class Apps {
 		} catch {
 			// A broken page: the conversation is still about it, and can fix it.
 		}
-		const sources = manifest ? Object.entries(manifest.sources).map(([name, s]) => `- ${name}: ${sourcePath(path, s.file)}${s.columns ? ` (columns ${s.columns.join(", ")})` : ""}`).join("\n") : "- (the manifest can't be read: fix it)";
+		const sources = manifest
+			? Object.entries(manifest.sources)
+					.map(([name, s]) =>
+						isFileSource(s)
+							? `- ${name}: ${sourcePath(path, s.file)}${s.columns ? ` (columns ${s.columns.join(", ")})` : ""}`
+							: `- ${name}: calendar events for ${RANGE_WORDS[s.calendar]} from ${s.accounts.join(", ")}, as a list of { title, start, end, allDay, location, calendar, account } sorted by start`,
+					)
+					.join("\n")
+			: "- (the manifest can't be read: fix it)";
 		return `# This conversation is about an app
 The app${manifest ? ` “${manifest.title}”` : ""} is the page ${path}. Piopio shows it beside this conversation. It reads its data from files and gets it through piopio.onData; it redraws when they change, with no model. Its sources:
 ${sources}
@@ -459,7 +565,7 @@ ${sources}
 		history.current = target.before;
 		this.writeHistory(path, history);
 		this.rewatch(path);
-		return this.refresh(path);
+		return this.view(path, { readFiles: true });
 	}
 
 	/** Stops every watch (the engine is stopping). */
@@ -478,7 +584,7 @@ ${sources}
 		return readFileSync(path, "utf8");
 	}
 
-	private view(path: string, how: { readAll?: boolean }): AppView {
+	private view(path: string, how: { readFiles?: boolean }): AppView {
 		path = resolve(path);
 		const html = this.page(path);
 		const history = this.track(path, html);
@@ -494,9 +600,18 @@ ${sources}
 		let dirty = false;
 		const sources: SourceStatus[] = [];
 		for (const [name, src] of Object.entries(manifest.sources)) {
+			if (!isFileSource(src)) {
+				const { status, cached, changed } = this.calendarStatus(name, src, cache.sources[name], allowed);
+				if (changed) {
+					cache.sources[name] = cached;
+					dirty = true;
+				}
+				sources.push(status);
+				continue;
+			}
 			const full = sourcePath(path, src.file);
 			const had = cache.sources[name] ?? {};
-			if (allowed && how.readAll) {
+			if (allowed && how.readFiles) {
 				const r = readSource(full, src.columns);
 				cache.sources[name] = "error" in r ? { ...had, error: r.error, failedAt: now } : { data: r.data, readAt: now };
 				dirty = true;
@@ -504,6 +619,7 @@ ${sources}
 			const c = cache.sources[name] ?? {};
 			sources.push({
 				name,
+				kind: "file",
 				file: src.file,
 				path: full,
 				...(src.columns ? { columns: src.columns } : {}),
@@ -515,11 +631,99 @@ ${sources}
 		}
 		if (dirty) this.writeCache(path, cache);
 		const data: Record<string, unknown> = {};
-		for (const s of sources) if (cache.sources[s.name]?.readAt) data[s.name] = cache.sources[s.name]!.data;
+		for (const s of sources) {
+			const c = cache.sources[s.name];
+			if (s.kind === "calendar") {
+				// Every account still connected that was read once: its events, the last good ones if this read failed.
+				const shown = (s.accounts ?? []).filter((a) => a.state !== "gone" && c?.accounts?.[a.id]?.readAt);
+				if (shown.length) data[s.name] = shown.flatMap((a) => c!.accounts![a.id]!.events ?? []).sort((x, y) => (x.start < y.start ? -1 : x.start > y.start ? 1 : 0));
+			} else if (c?.readAt) data[s.name] = c.data;
+		}
 		const stale = sources.filter((s) => s.state !== "ok" || !s.readAt).map((s) => s.name);
 		const reads = sources.map((s) => s.readAt).filter((r): r is string => Boolean(r)).sort();
 		const last = undoable(history);
 		return { path, title: manifest.title, html, sources, data, stale, allowed, ...(reads[0] ? { updatedAt: reads[0] } : {}), ...(last ? { undo: { label: last.label, at: last.at } } : {}), ...(this.state.conversations[path] ? { conversation: this.state.conversations[path] } : {}) };
+	}
+
+	/** make_app's calendar sources without accounts read every connected calendar whose reading isn't off. */
+	private withAccounts(sources: Record<string, unknown>): Record<string, unknown> {
+		const out: Record<string, unknown> = {};
+		for (const [name, value] of Object.entries(sources ?? {})) {
+			const v = (value ?? {}) as { calendar?: unknown; accounts?: unknown };
+			if (v.calendar === undefined || (Array.isArray(v.accounts) && v.accounts.length)) {
+				out[name] = value;
+				continue;
+			}
+			const access = this.opts.calendar;
+			const accounts = (access?.accounts() ?? []).filter((a) => access!.permission(a.id) !== "off").map((a) => a.id);
+			if (!accounts.length) throw new Error(`The source “${name}”: no calendar is connected (or reading it is off). The user connects one in Settings › Connectors.`);
+			out[name] = { ...v, accounts };
+		}
+		return out;
+	}
+
+	/** Each account of a calendar source read now, apart: one that fails keeps its last good events, dated. */
+	private async readCalendar(src: CalendarSource, had: Cached): Promise<Cached> {
+		const access = this.opts.calendar;
+		const known = new Map((access?.accounts() ?? []).map((a) => [a.id, a]));
+		const { from, to } = calendarSpan(src.calendar);
+		const accounts: Record<string, AccountCache> = {};
+		await Promise.all(
+			src.accounts.map(async (id) => {
+				const a = known.get(id);
+				if (!access || !a) return; // Gone: nothing kept (§16).
+				const prev = had.accounts?.[id] ?? {};
+				const now = new Date().toISOString();
+				const permission = access.permission(id);
+				if (permission !== "runs") {
+					// Off or Ask in Settings: an app reads only what runs on its own, and keeps nothing it can't read now.
+					accounts[id] = { error: `Reading ${a.app} (${a.label}) ${permission === "off" ? "is off" : "asks first"} in Settings › Connectors, so apps don't read it.`, failedAt: now };
+					return;
+				}
+				try {
+					const events = await withTimeout(access.events(id, { from, to }), READ_TIMEOUT_MS, `${a.app} (${a.label}) didn't answer in ${READ_TIMEOUT_MS / 1000} s.`);
+					accounts[id] = { events: events.map((e) => ({ title: e.title, start: e.start, end: e.end, allDay: e.allDay, ...(e.location ? { location: e.location } : {}), calendar: e.calendar, account: a.label })), readAt: now };
+				} catch (error) {
+					const message = (error as Error).message || "it didn't answer";
+					accounts[id] = { ...prev, error: message.startsWith(a.app) ? message : `${a.app} (${a.label}): ${message}`, failedAt: now };
+				}
+			}),
+		);
+		return { accounts };
+	}
+
+	/** A calendar source as it stands: its accounts' states, and its cache without accounts that are gone. */
+	private calendarStatus(name: string, src: CalendarSource, cached: Cached | undefined, allowed: boolean): { status: SourceStatus; cached: Cached; changed: boolean } {
+		const known = new Map((this.opts.calendar?.accounts() ?? []).map((a) => [a.id, a]));
+		const accounts: Record<string, AccountCache> = { ...(cached?.accounts ?? {}) };
+		let changed = false;
+		const states: AccountStatus[] = src.accounts.map((id) => {
+			const a = known.get(id);
+			const c = accounts[id];
+			if (!a) {
+				// Disconnected: what it read goes too, not just the next read.
+				if (c) {
+					delete accounts[id];
+					changed = true;
+				}
+				return { id, label: id, state: "gone", error: `${id} isn't connected any more.` };
+			}
+			return { id, label: `${a.app} (${a.label})`, state: c?.error ? "failed" : "ok", ...(c?.error ? { error: c.error } : {}), ...(c?.readAt ? { readAt: c.readAt } : {}), ...(c?.failedAt ? { failedAt: c.failedAt } : {}) };
+		});
+		const problems = states.filter((s) => s.state !== "ok");
+		const reads = states.filter((s) => s.state !== "gone" && s.readAt).map((s) => s.readAt!).sort();
+		const status: SourceStatus = {
+			name,
+			kind: "calendar",
+			file: `Calendar · ${RANGE_WORDS[src.calendar].replace(/ \(.*\)$/, "")}`,
+			path: "",
+			accounts: states,
+			state: !allowed ? "waiting" : problems.length ? "failed" : "ok",
+			...(problems.length ? { error: problems.map((p) => p.error).join(" ") } : {}),
+			...(reads[0] ? { readAt: reads[0] } : {}),
+			...(problems.find((p) => p.failedAt)?.failedAt ? { failedAt: problems.find((p) => p.failedAt)!.failedAt! } : {}),
+		};
+		return { status, cached: { accounts }, changed };
 	}
 
 	/**
@@ -624,7 +828,7 @@ ${sources}
 		let files: string[] = [path];
 		try {
 			const manifest = parseManifest(this.page(path));
-			files = [path, ...Object.values(manifest.sources).map((s) => sourcePath(path, s.file))];
+			files = [path, ...Object.values(manifest.sources).flatMap((s) => (isFileSource(s) ? [sourcePath(path, s.file)] : []))];
 		} catch {
 			// A broken manifest: only the page is watched, so fixing it is seen.
 		}
@@ -657,7 +861,7 @@ ${sources}
 			try {
 				// The page may have changed its sources: watch what it lists now.
 				this.rewatch(path);
-				this.opts.changed?.(this.refresh(path));
+				this.opts.changed?.(this.view(path, { readFiles: true }));
 			} catch {
 				// The app was deleted or broken while open: the next open says so.
 			}
@@ -673,3 +877,32 @@ function undoable(history: History): Revision | undefined {
 
 /** Undo would overwrite a change made outside Piopio. */
 export class AppConflict extends Error {}
+
+/** The span a calendar source reads, from local midnight (this Mac's time zone); weeks start on Monday. */
+export function calendarSpan(range: CalendarRange, now = new Date()): { from: string; to: string } {
+	const day = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+	const plus = (d: Date, days: number) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + days);
+	switch (range) {
+		case "today":
+			return { from: day.toISOString(), to: plus(day, 1).toISOString() };
+		case "tomorrow":
+			return { from: plus(day, 1).toISOString(), to: plus(day, 2).toISOString() };
+		case "this_week": {
+			const monday = plus(day, -((day.getDay() + 6) % 7));
+			return { from: monday.toISOString(), to: plus(monday, 7).toISOString() };
+		}
+		case "next_7_days":
+			return { from: now.toISOString(), to: new Date(now.getTime() + 7 * 86_400_000).toISOString() };
+		case "this_month":
+			return { from: new Date(now.getFullYear(), now.getMonth(), 1).toISOString(), to: new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString() };
+	}
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+	let timer: NodeJS.Timeout | undefined;
+	const timeout = new Promise<never>((_, reject) => {
+		timer = setTimeout(() => reject(new Error(message)), ms);
+		timer.unref?.();
+	});
+	return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}

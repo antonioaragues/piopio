@@ -167,6 +167,8 @@ export class Engine {
 		});
 		this.connectors.onChange = () => {
 			for (const conn of this.authed) conn.notify("connectors.changed", {});
+			// An account gone or a permission changed: open apps show only what they may show now (docs/spec/35 §16).
+			this.apps?.connectionsChanged();
 		};
 		this.hub.onProvidersChanged = () => {
 			for (const conn of this.authed) conn.notify("providers.changed", {});
@@ -276,6 +278,20 @@ export class Engine {
 			appsDir: join(options.paths.projectsRoot, "Apps"),
 			changed: (app) => {
 				for (const conn of this.authed) conn.notify("apps.data", { app });
+			},
+			// Calendar sources (docs/spec/35 §16): every connected account, apart from what chats may use, and the
+			// permission Settings › Connectors gives reading it.
+			calendar: {
+				accounts: () => this.connectors.calendars("agent").map((c) => ({ id: c.account.id, label: c.account.label, app: c.name })),
+				permission: (id) => {
+					const c = this.connectors.calendars("agent").find((x) => x.account.id === id);
+					return c ? this.connectors.permission(c.account.connector, "calendar_events") : "off";
+				},
+				events: async (id, range) => {
+					const c = this.connectors.calendars("agent").find((x) => x.account.id === id);
+					if (!c) throw new Error("It isn't connected any more.");
+					return c.calendar.events(range);
+				},
 			},
 		});
 		this.sessions.apps = this.apps;
@@ -601,6 +617,14 @@ export class Engine {
 	}
 
 	/** An automation as the app sees it: the record, and its words. */
+	private async appCallAsync<T>(f: () => Promise<T>): Promise<T> {
+		try {
+			return await f();
+		} catch (error) {
+			throw new EngineError("INVALID", (error as Error).message);
+		}
+	}
+
 	/** An app's errors as the client's to show (a missing file, a broken manifest). */
 	private appCall<T>(f: () => T): T {
 		try {
@@ -1263,14 +1287,16 @@ export class Engine {
 				return { app } satisfies Result<"apps.open">;
 			}
 			case "apps.refresh":
-				return { app: this.appCall(() => this.apps.refresh((params as Params<"apps.refresh">).path)) } satisfies Result<"apps.refresh">;
+				return { app: await this.appCallAsync(() => this.apps.refresh((params as Params<"apps.refresh">).path)) } satisfies Result<"apps.refresh">;
 			case "apps.allow":
-				return { app: this.appCall(() => this.apps.allow((params as Params<"apps.allow">).path)) } satisfies Result<"apps.allow">;
+				return { app: await this.appCallAsync(() => this.apps.allow((params as Params<"apps.allow">).path)) } satisfies Result<"apps.allow">;
+			case "apps.revoke":
+				return { app: this.appCall(() => this.apps.revoke((params as Params<"apps.revoke">).path)) } satisfies Result<"apps.revoke">;
 			case "apps.conversation": {
 				const path = resolve((params as Params<"apps.conversation">).path);
 				const known = this.apps.conversationOf(path);
 				if (known && this.sessions.list().some((s) => s.ref.id === known)) return { ref: { kind: "thread", id: known } } satisfies Result<"apps.conversation">;
-				const app = this.appCall(() => this.apps.refresh(path));
+				const app = await this.appCallAsync(() => this.apps.refresh(path));
 				// In its project when it's in one (it reads the project's files); otherwise in its own folder.
 				const cwd = this.projects.projectFor(path)?.path ?? dirname(path);
 				const ref = await this.sessions.create({ kind: "thread", app: path, cwd, title: `${app.title} (app)` });

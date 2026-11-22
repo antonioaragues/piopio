@@ -112,9 +112,24 @@ struct AppPage: View {
                 .buttonStyle(IconButtonStyle()).help("Read its files again").accessibilityLabel("Refresh").disabled(busy || app == nil)
             Menu {
                 ForEach(app?.sources ?? [], id: \.name) { s in
-                    Button("\(s.file)\(s.readAt.map { " · read \(Self.time($0))" } ?? "")") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: s.path)]) }
+                    if let accounts = s.accounts {
+                        // A calendar source: each account and when it was read (docs/spec/35 §16).
+                        Section(s.file) {
+                            ForEach(accounts, id: \.id) { a in
+                                Text("\(a.label) · \(a.state == "gone" ? "not connected" : a.readAt.map { "read \(Self.time($0))" } ?? "not read yet")")
+                            }
+                        }
+                    } else {
+                        Button("\(s.file)\(s.readAt.map { " · read \(Self.time($0))" } ?? "")") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: s.path)]) }
+                    }
                 }
                 Divider()
+                if app?.allowed == true {
+                    Button("Stop Reading Its Sources") {
+                        Task { if let fresh = try? await engine.revokeApp(path) { show(fresh) } }
+                    }
+                    .help("It reads nothing until you allow it again, and forgets what it read from your calendars")
+                }
                 Button("Show the App in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)]) }
             } label: { Image(systemName: "doc.text") }
                 .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().help("Where its data comes from").accessibilityLabel("Sources")
@@ -131,13 +146,22 @@ struct AppPage: View {
             notice("The page has an error: \(first)", action: app.undo == nil ? nil : "Undo") { undo(force: false) }
         }
         if !app.allowed {
-            notice("This app now reads \(app.sources.map(\.file).joined(separator: ", ")). Allow it to read them; until then it shows what it read before.", action: "Allow") {
+            // Calendar sources name their accounts: allowing is for those, not every calendar you connect later.
+            let reads = app.sources.map { s in s.accounts.map { "\(s.file) from \($0.map(\.label).joined(separator: " and "))" } ?? s.file }
+            notice("This app reads \(reads.joined(separator: ", ")). Allow it to read them; until then it shows what it read before, if anything.", action: "Allow") {
                 Task { if let fresh = try? await engine.allowApp(path) { show(fresh) } }
             }
         }
         ForEach(app.sources.filter { $0.state == "failed" }, id: \.name) { s in
-            notice("\(s.error ?? "\(s.file) couldn't be read.") \(s.readAt.map { "Showing what it read \(Self.time($0))." } ?? "Nothing to show from it yet.")", action: "Show File") {
-                NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: s.path)])
+            if s.accounts != nil {
+                // A calendar: the accounts that answered are shown as read now; the others say since when.
+                notice("\(s.error ?? "\(s.file) couldn't be read.") \(s.readAt.map { "Its other events are from \(Self.time($0))." } ?? "")", action: "Try Again") {
+                    Task { if let fresh = try? await engine.refreshApp(path) { show(fresh) } }
+                }
+            } else {
+                notice("\(s.error ?? "\(s.file) couldn't be read.") \(s.readAt.map { "Showing what it read \(Self.time($0))." } ?? "Nothing to show from it yet.")", action: "Show File") {
+                    NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: s.path)])
+                }
             }
         }
     }

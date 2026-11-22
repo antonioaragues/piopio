@@ -2723,6 +2723,28 @@ describe("connected apps (docs/spec/12-connectors C1)", () => {
 		apps.close();
 	}, 30_000);
 
+	test("an app reads the connected calendars (docs/spec/35 §16): each account apart, with no model; disconnecting one drops its events", async () => {
+		const { a, apps } = await withApps();
+		await connect(a, "google-calendar");
+		await connect(a, "outlook");
+		const dir = join(a.home, "p");
+		mkdirSync(dir);
+		const plan = a.engine.apps.plan({ title: "Next days", html: "<ul></ul><script>piopio.onData((d) => {})</script>", sources: { days: { calendar: "next_7_days" } as never } }, { cwd: dir });
+		expect(plan.summary).toContain("reading Google Calendar (me@gmail.com) and Outlook");
+		const made = await a.engine.apps.write(plan);
+		expect((made.data.days as { title: string; account: string }[]).map((e) => e.title)).toEqual(["Dentist", "Team sync"]);
+		expect(made.sources[0]!.accounts!.every((x) => x.state === "ok")).toBe(true);
+		const opened = (await a.client.call("apps.open", { path: plan.path })).app;
+		expect(opened.sources[0]).toMatchObject({ kind: "calendar", state: "ok" });
+		const google = (await a.client.call("connectors.list", {})).connectors.find((c: { id: string }) => c.id === "google-calendar")!;
+		await a.client.call("connectors.disconnect", { accountId: google.accounts[0].id });
+		const after = (await a.client.call("apps.refresh", { path: plan.path })).app;
+		expect((after.data.days as { title: string }[]).map((e) => e.title)).toEqual(["Team sync"]);
+		expect(after.sources[0].accounts.find((x: { id: string }) => x.id === google.accounts[0].id)).toMatchObject({ state: "gone" });
+		await a.client.call("apps.close", { path: plan.path });
+		apps.close();
+	}, 30_000);
+
 	test("an expired token is refreshed and written back; disconnecting removes the account and its tokens", async () => {
 		const { a, apps } = await withApps();
 		await connect(a, "google-calendar");
@@ -3070,7 +3092,7 @@ test("an app's conversation (docs/spec/35 §15): one per app, where the app is; 
 	mkdirSync(dir, { recursive: true });
 	writeFileSync(join(dir, "expenses.csv"), "category,amount\nFood,12\n");
 	const plan = a.engine.apps.plan({ title: "Spending", html: '<b id="t">total</b><script>piopio.onData((d) => {})</script>', sources: { expenses: { file: join(dir, "expenses.csv") } } }, { cwd: dir });
-	a.engine.apps.write(plan);
+	await a.engine.apps.write(plan);
 	const { ref } = await a.client.call("apps.conversation", { path: plan.path });
 	expect((await a.client.call("apps.conversation", { path: plan.path })).ref).toEqual(ref);
 	const summary = (await a.client.call("sessions.list", {})).sessions.find((s: { ref: { id: string } }) => s.ref.id === ref.id);

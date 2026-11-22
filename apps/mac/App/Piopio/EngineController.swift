@@ -1015,6 +1015,12 @@ final class EngineController {
         return try await client.call("apps.undo", AppUndoParams(path: path, force: force), as: AppResult.self).app
     }
 
+    /// Stop reading: the app's sources aren't allowed any more and what it read from calendars is forgotten.
+    func revokeApp(_ path: String) async throws -> AppView {
+        guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
+        return try await client.call("apps.revoke", LibraryPathParams(path: path), as: AppResult.self).app
+    }
+
     func closeApp(_ path: String) async {
         _ = try? await client?.call("apps.close", LibraryPathParams(path: path), as: Empty.self)
         appUpdates[path] = nil

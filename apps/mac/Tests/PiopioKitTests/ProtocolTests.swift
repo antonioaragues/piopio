@@ -122,3 +122,26 @@ private let idleState = #"{"status":"idle","queue":[],"usage":{"inputTokens":0,"
     #expect(list.items[1].visual?.callId == "c9" && list.items[1].path == nil)
     #expect(list.items[2].missing == true && list.items[2].origin == nil)
 }
+
+@Test func decodesAnAppWithACalendarSource() throws {
+    // As the engine sends it (docs/spec/35 §16): one account answered, one failed and keeps its last events, dated.
+    let result: AppResult = try decode("""
+    {"app":{"path":"/p/apps/week.html","title":"This week","html":"<ul></ul>","allowed":true,"stale":["week"],
+      "updatedAt":"2026-11-23T08:00:00.000Z","undo":{"label":"Green rows","at":"2026-11-23T08:05:00.000Z"},"conversation":"thr_1",
+      "sources":[{"name":"week","kind":"calendar","file":"Calendar · this week","path":"","state":"failed",
+        "error":"Google Calendar (me@gmail.com): The server said 503.","readAt":"2026-11-23T08:00:00.000Z",
+        "accounts":[{"id":"google-calendar:me","label":"Google Calendar (me@gmail.com)","state":"failed","error":"The server said 503.","readAt":"2026-11-23T08:00:00.000Z","failedAt":"2026-11-23T09:00:00.000Z"},
+                    {"id":"outlook:work","label":"Outlook (me@work.com)","state":"ok","readAt":"2026-11-23T09:00:00.000Z"}]},
+        {"name":"expenses","kind":"file","file":"../data/expenses.csv","path":"/p/data/expenses.csv","state":"ok","columns":["amount"]}],
+      "data":{"week":[{"title":"Dentist","start":"2026-11-24T09:00:00+01:00","end":"2026-11-24T10:00:00+01:00","allDay":false,"calendar":"Personal","account":"me@gmail.com"}],
+              "expenses":[{"amount":12.5}]}}}
+    """)
+    let app = result.app
+    #expect(app.sources.map(\.kind) == ["calendar", "file"])
+    #expect(app.sources[0].accounts?.map(\.state) == ["failed", "ok"])
+    #expect(app.sources[0].accounts?[0].failedAt == "2026-11-23T09:00:00.000Z")
+    #expect(app.sources[1].accounts == nil && app.sources[1].columns == ["amount"])
+    #expect(app.undo?.label == "Green rows" && app.conversation == "thr_1")
+    guard case .array(let week)? = app.data["week"], case .object(let event)? = week.first else { Issue.record("no events"); return }
+    #expect(event["title"] == .string("Dentist") && event["allDay"] == .bool(false))
+}

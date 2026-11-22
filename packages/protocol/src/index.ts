@@ -1047,10 +1047,25 @@ export type LibraryItem = Static<typeof LibraryItem>;
 /** One source of an app (docs/spec/35 §14): a file, its last read, and why it failed. */
 export const AppSourceStatus = Type.Object({
 	name: Type.String(),
-	/** As the manifest says it: relative to the app's file, or absolute. */
+	kind: literals("file", "calendar"),
+	/** As the manifest says it: relative to the app's file, or absolute; a calendar source in words. */
 	file: Type.String(),
+	/** A file source's path ("" for a calendar). */
 	path: Type.String(),
 	columns: Type.Optional(Type.Array(Type.String())),
+	/** A calendar source (docs/spec/35 §16): each account and how its last read went; "gone" when it's disconnected. */
+	accounts: Type.Optional(
+		Type.Array(
+			Type.Object({
+				id: Type.String(),
+				label: Type.String(),
+				state: literals("ok", "failed", "gone"),
+				error: Type.Optional(Type.String()),
+				readAt: Type.Optional(Type.String()),
+				failedAt: Type.Optional(Type.String()),
+			}),
+		),
+	),
 	/** ok: read now; failed: the latest read failed (the page has the last good data); waiting: not allowed yet. */
 	state: literals("ok", "failed", "waiting"),
 	error: Type.Optional(Type.String()),
@@ -1908,6 +1923,8 @@ export const methods = {
 	"apps.close": { params: Type.Object({ path: Type.String() }), result: Type.Object({}) },
 	/** Allows the sources the manifest lists now. */
 	"apps.allow": { params: Type.Object({ path: Type.String() }), result: Type.Object({ app: AppView }) },
+	/** Stop reading: the app's sources aren't allowed any more, and what it read from calendars is forgotten (docs/spec/35 §16). */
+	"apps.revoke": { params: Type.Object({ path: Type.String() }), result: Type.Object({ app: AppView }) },
 	/** The conversation about an app (docs/spec/35 §15), made the first time. */
 	"apps.conversation": { params: Type.Object({ path: Type.String() }), result: Type.Object({ ref: ContainerRef }) },
 	/** Undo the conversation's latest change to the page; its data files stay as they are. CONFLICT when the page changed outside Piopio since, unless `force`. */
