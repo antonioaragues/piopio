@@ -111,8 +111,22 @@ exec ${tool} "$@"
 
 let shims: string | undefined | null = null;
 
+/** Piopio's data folder, as the engine has it (`PIOPIO_HOME`, set by the app). */
+function piopioHome(home = homedir()): string {
+	return process.env.PIOPIO_HOME ?? join(home, "Library", "Application Support", "Piopio");
+}
+
+/**
+ * Where the wrappers live: in Piopio's data folder, which confined commands can't write to (they come first on PATH, so
+ * a folder they could write, like the temporary one, would let one command plant a fake `git` for every later one).
+ * The profile lets commands read this one folder.
+ */
+export function sandboxShimsDir(): string {
+	return join(piopioHome(), "sandbox-bin");
+}
+
 /** The wrappers' folder (written once per process), or undefined when it can't be written. */
-export function sandboxShims(dir = join(tmpdir(), "piopio-sandbox-bin")): string | undefined {
+export function sandboxShims(dir = sandboxShimsDir()): string | undefined {
 	if (shims !== null) return shims;
 	try {
 		mkdirSync(dir, { recursive: true });
@@ -147,22 +161,29 @@ function sbpl(value: string): string {
  */
 export function sandboxHidden(options: { home?: string; piopioHome?: string } = {}): string[] {
 	const home = options.home ?? homedir();
-	const piopio = options.piopioHome ?? process.env.PIOPIO_HOME ?? join(home, "Library", "Application Support", "Piopio");
+	const piopio = options.piopioHome ?? piopioHome(home);
 	return [piopio, join(home, ".pi", "agent", "auth.json"), join(home, ".codex", "auth.json"), join(home, ".aws")].map(real);
 }
 
 /**
- * The profile: everything allowed except writing outside `roots` (and devices such as /dev/null), and reading or
- * connecting to sockets in `hidden`. A root inside a hidden folder (a chat's scratch folder, a worktree in Piopio's data)
- * stays readable. Later rules win in Seatbelt, so the order matters.
+ * The profile: everything allowed except writing outside `roots` (and devices such as /dev/null), and reading, writing
+ * or connecting to sockets in `hidden`, wherever it lies (a dev copy of Piopio's data can sit in a temporary folder).
+ * A root inside a hidden folder (a chat's scratch folder, a worktree in Piopio's data) stays readable and writable; the
+ * `readable` folders there (the wrappers) stay readable only.
+ * Reading in `hidden` is refused for contents (`file-read-data`: files and folder listings), not metadata: tools that
+ * resolve their working folder (`realpath`, `git`) stat each folder above it. Later rules win in Seatbelt, but only over
+ * a rule for the same operation, so each allow names the operation its deny does.
  */
-export function seatbeltProfile(roots: readonly string[], hidden: readonly string[] = sandboxHidden()): string {
+export function seatbeltProfile(roots: readonly string[], hidden: readonly string[] = sandboxHidden(), readable: readonly string[] = [real(sandboxShimsDir())]): string {
 	const subpaths = (paths: readonly string[]) => paths.map((p) => `(subpath ${sbpl(p)})`).join(" ");
 	const lines = ["(version 1)", "(allow default)", "(deny file-write*)", '(allow file-write* (subpath "/dev"))', `(allow file-write* ${subpaths(roots)})`];
 	if (hidden.length) {
-		lines.push(`(deny file-read* ${subpaths(hidden)})`, `(deny network-outbound ${hidden.map((p) => `(remote unix-socket (subpath ${sbpl(p)}))`).join(" ")})`);
-		const inside = roots.filter((r) => hidden.some((h) => r.startsWith(`${h}/`)));
-		if (inside.length) lines.push(`(allow file-read* ${subpaths(inside)})`);
+		lines.push(`(deny file-read-data file-write* ${subpaths(hidden)})`, `(deny network-outbound ${hidden.map((p) => `(remote unix-socket (subpath ${sbpl(p)}))`).join(" ")})`);
+		const within = (paths: readonly string[]) => paths.filter((r) => hidden.some((h) => r.startsWith(`${h}/`)));
+		const rootsInside = within(roots);
+		const readInside = within([...roots, ...readable]);
+		if (readInside.length) lines.push(`(allow file-read-data ${subpaths(readInside)})`);
+		if (rootsInside.length) lines.push(`(allow file-write* ${subpaths(rootsInside)})`);
 	}
 	return lines.join("\n");
 }

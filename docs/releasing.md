@@ -19,11 +19,13 @@ Without any setup it still works: you get an **ad hoc** signed DMG that runs on 
 | `Library/LaunchAgents/app.piopio.engine.plist` | Background mode (Settings › Engines › Keep running when Piopio quits) |
 | `Frameworks/Sparkle.framework` | Updates (Sparkle 2.10.0, pinned in `apps/mac/App/project.yml`) |
 
-Release builds get the engine from the **Bundle engine** build phase. Debug builds run the repo's engine with Homebrew's Node; set `PIOPIO_BUNDLE_ENGINE=YES` to bundle there too. To hack on the engine inside an installed app:
+Release builds get the engine from the **Bundle engine** build phase. Debug builds run the repo's engine with Homebrew's Node; set `PIOPIO_BUNDLE_ENGINE=YES` to bundle there too. To run another engine build in a Debug app:
 
 ```bash
 defaults write app.piopio.Piopio customEnginePath /path/to/packages/engine/dist/main.js
 ```
+
+Release builds ignore `customEnginePath`: any program running as you could set it, and the app answers its engine with Keychain secrets and Apple tools.
 
 ## One-time setup
 

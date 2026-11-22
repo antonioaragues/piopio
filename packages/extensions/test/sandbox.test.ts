@@ -1,10 +1,13 @@
 import { spawn, spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { describe, expect, test } from "vitest";
 import { confine, sandboxExtension, sandboxHidden, sandboxRoots, sandboxShims, seatbeltProfile } from "../src/sandbox.js";
+
+// The wrappers go in Piopio's data folder: a scratch one here, never the user's.
+process.env.PIOPIO_HOME = realpathSync(mkdtempSync(join(tmpdir(), "pio-home-")));
 
 test("bash activity descriptions are optional metadata and do not change execution", async () => {
 	let tool: ToolDefinition | undefined;
@@ -43,6 +46,15 @@ describe.skipIf(process.platform !== "darwin")("piopio-sandbox", () => {
 		]);
 	});
 
+	test("the wrappers sit in Piopio's data folder, where confined commands can run them but not plant others", () => {
+		const shims = sandboxShims()!;
+		expect(shims.startsWith(`${process.env.PIOPIO_HOME}/`)).toBe(true);
+		const r = run(`ls ${shims} && echo fake > ${shims}/git`);
+		expect(r.stdout.trim().split("\n")).toEqual(["swift", "xcodebuild"]);
+		expect(r.stderr).toContain("Operation not permitted");
+		expect(existsSync(join(shims, "git"))).toBe(false);
+	});
+
 	test("a sandbox inside the sandbox is refused, which is why the wrappers exist", () => {
 		const r = run("/usr/bin/sandbox-exec -p '(version 1)(allow default)' /usr/bin/true");
 		expect(r.status).not.toBe(0);
@@ -69,6 +81,10 @@ describe.skipIf(process.platform !== "darwin")("piopio-sandbox", () => {
 			expect(sh(`cat ${join(piopio, "engine.token")}`).stderr).toContain("Operation not permitted");
 			expect(sh(`cat ${join(home, ".aws", "credentials")}`).stderr).toContain("Operation not permitted");
 			expect(sh("cat notes.txt && echo more > more.txt && cat more.txt").stdout).toBe("mine\nmore\n");
+			// Tools that resolve the working folder stat the folders above it, in Piopio's data.
+			expect(sh(`${process.execPath} -e 'console.log(require("fs").realpathSync("."))'`).stdout.trim()).toBe(chat);
+			expect(sh(`ls ${piopio}`).stderr).toContain("Operation not permitted");
+			expect(sh(`echo x > ${join(piopio, "engine.token")}`).stderr).toContain("Operation not permitted");
 			const connect = `${process.execPath} -e 'require("net").connect("e.sock").on("data", (d) => console.log(String(d))).on("error", (e) => console.log(e.code))'`;
 			expect(spawnSync("/bin/sh", ["-c", connect], { cwd: piopio, encoding: "utf8" }).stdout.trim()).toBe("hi");
 			expect(sh(connect, piopio).stdout.trim()).toBe("EPERM");

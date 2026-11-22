@@ -409,7 +409,7 @@ final class EngineController {
     private func launchEngine() throws {
         let p = Process()
         if let custom = Self.customEngine {
-            // Dev setting: `defaults write app.piopio.Piopio customEnginePath /path/to/engine/dist/main.js`.
+            // Dev setting, Debug builds only: `defaults write app.piopio.Piopio customEnginePath /path/to/engine/dist/main.js`.
             guard let node = Self.nodeExecutable() else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Node.js ≥ 22.19 not found for the custom engine.") }
             p.executableURL = node
             p.arguments = [custom.path]
@@ -447,9 +447,15 @@ final class EngineController {
         launcher == nil ? nil : Bundle.main.object(forInfoDictionaryKey: "PiopioEngineVersion") as? String
     }
 
+    /// Debug builds only: in a release, any program running as the user could set this and have Piopio run its script
+    /// as the engine, which the app answers with Keychain secrets and Apple tools.
     private static var customEngine: URL? {
+        #if !DEBUG
+        return nil
+        #else
         guard let path = UserDefaults.standard.string(forKey: "customEnginePath"), FileManager.default.fileExists(atPath: path) else { return nil }
         return URL(fileURLWithPath: path)
+        #endif
     }
 
     /// The repo's engine in dev builds.

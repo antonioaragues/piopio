@@ -63,7 +63,10 @@ final class BrowserCenter {
         }()
         let view = WKWebView(frame: NSRect(x: 0, y: 0, width: 1280, height: 900), configuration: config)
         view.allowsBackForwardNavigationGestures = true
+        #if DEBUG
+        // Not in releases: Web Inspector would open the signed-in pages to anything that can drive Safari's tools.
         view.isInspectable = true
+        #endif
         park(view)
         return view
     }
