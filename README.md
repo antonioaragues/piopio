@@ -141,6 +141,7 @@ OpenRouter usage totals cover the API key, may include other apps and exclude ot
 
 - [Product specification](docs/spec/README.md): product, architecture, engine protocol and each area
 - [Current status](docs/status.md): what is implemented and what still needs acceptance
+- [Setting up Piopio](docs/setup.md): building, signing, secrets, OAuth apps, releases, in one place
 - [Releasing](docs/releasing.md), [backup](docs/backup.md) and [continuous integration](docs/ci.md)
 - [Acceptance pass](docs/acceptance.md): the eight real-model scenarios, with steps, pass criteria and evidence
 
