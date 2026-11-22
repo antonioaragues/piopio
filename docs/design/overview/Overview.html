@@ -1,0 +1,626 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Piopio Overview Mockup</title>
+<style>
+:root {
+  --win:#fcfcfb; --side:#f4f4f2; --fg:#1f1f1e; --fg2:#6b6b67; --fg3:#9b9b96; --line:rgba(0,0,0,.09);
+  --bubble:#f0f0ed; --field:#ffffff; --track:rgba(0,0,0,.05); --seg:#fff; --inv:#1f1f1e; --invfg:#fff;
+  --accent:#2f6fde; --sel:rgba(0,0,0,.05); --page:#e9e9e6; --amber:#b7791f;
+  --h0:rgba(0,0,0,.05); --h1:rgba(0,0,0,.14); --h2:rgba(0,0,0,.28); --h3:rgba(0,0,0,.45); --h4:rgba(0,0,0,.66);
+  --bar1:#6b6b67; --bar2:#c4c4bf;
+}
+:root[data-theme="dark"] {
+  --win:#1e1e1d; --side:#191918; --fg:#ececea; --fg2:#a6a6a1; --fg3:#77776f; --line:rgba(255,255,255,.1);
+  --bubble:#2b2b29; --field:#252524; --track:rgba(255,255,255,.06); --seg:#3a3a38; --inv:#ececea; --invfg:#1e1e1d;
+  --accent:#6ea0ff; --sel:rgba(255,255,255,.07); --page:#121211; --amber:#e0a84a;
+  --h0:rgba(255,255,255,.05); --h1:rgba(255,255,255,.14); --h2:rgba(255,255,255,.28); --h3:rgba(255,255,255,.45); --h4:rgba(255,255,255,.7);
+  --bar1:#a6a6a1; --bar2:#55554f;
+}
+* { box-sizing:border-box; }
+body { margin:0; background:var(--page); color:var(--fg); font:13px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif; -webkit-font-smoothing:antialiased; }
+main { max-width:1240px; margin:0 auto; padding:40px 16px 80px; }
+header.doc { display:flex; gap:20px; align-items:flex-start; }
+header.doc h1 { font-size:22px; font-weight:600; margin:0 0 6px; }
+header.doc p { color:var(--fg2); margin:0 0 4px; max-width:780px; }
+header.doc .theme { margin-left:auto; color:var(--fg2); cursor:pointer; padding:3px 8px; border-radius:6px; user-select:none; white-space:nowrap; }
+header.doc .theme:hover { background:var(--sel); color:var(--fg); }
+nav.toc { display:flex; gap:6px; flex-wrap:wrap; margin:18px 0 34px; }
+nav.toc a { color:var(--fg2); text-decoration:none; padding:3px 8px; border-radius:6px; }
+nav.toc a:hover { background:var(--sel); color:var(--fg); }
+section.screen { margin:0 0 60px; }
+.label { display:flex; gap:10px; align-items:baseline; margin:0 0 12px; }
+.label b { font-size:12px; color:var(--fg3); font-weight:600; }
+.label h2 { font-size:15px; margin:0; font-weight:600; }
+.label span { color:var(--fg2); }
+.note { color:var(--fg2); max-width:860px; margin:14px 0 0; padding-left:18px; }
+.note li { margin:3px 0; }
+.mono { font-family:ui-monospace, "SF Mono", Menlo, monospace; font-size:12px; }
+a.lk { color:var(--accent); text-decoration:none; }
+
+/* window */
+.win { background:var(--side); border-radius:12px; box-shadow:0 0 0 .5px var(--line), 0 20px 50px rgba(0,0,0,.12); overflow:hidden; display:flex; min-height:600px; }
+.side { width:236px; flex:none; display:flex; flex-direction:column; }
+.side .top { height:52px; display:flex; align-items:center; padding:0 14px; }
+.dot3 i { display:inline-block; width:12px; height:12px; border-radius:50%; background:var(--line); margin-right:6px; }
+.side .rows { padding:2px 8px; flex:1; }
+.side h4 { font-size:12px; color:var(--fg3); font-weight:500; margin:14px 8px 4px; display:flex; justify-content:space-between; }
+.row { display:flex; align-items:center; gap:9px; padding:5px 8px; border-radius:7px; color:var(--fg); white-space:nowrap; overflow:hidden; }
+.row.on { background:var(--sel); }
+.row .g { width:16px; text-align:center; color:var(--fg2); flex:none; }
+.row .r { margin-left:auto; color:var(--fg3); font-size:12px; }
+.side .foot { height:52px; display:flex; align-items:center; gap:9px; padding:0 8px; margin:0 6px; color:var(--fg2); font-size:12px; }
+.side .foot .cost { padding:4px 6px; border-radius:6px; }
+.side .foot .cost.on { background:var(--sel); color:var(--fg); }
+.av { width:24px; height:24px; border-radius:50%; background:var(--bubble); flex:none; display:grid; place-items:center; font-size:11px; color:var(--fg2); }
+.card { flex:1; margin:8px 8px 8px 0; background:var(--win); border-radius:10px; box-shadow:0 0 0 .5px var(--line); display:flex; flex-direction:column; min-width:0; overflow:hidden; }
+.tb { height:44px; display:flex; align-items:center; padding:0 16px; gap:10px; }
+.tb .t { font-weight:600; font-size:13.5px; }
+.tb .s { color:var(--fg3); font-size:12px; }
+.tb .rt { margin-left:auto; display:flex; gap:14px; color:var(--fg2); }
+.page { flex:1; padding:10px 40px 40px; display:flex; flex-direction:column; align-items:center; }
+.page > * { width:100%; max-width:780px; }
+.page.wide > * { max-width:900px; }
+.ptitle { display:flex; align-items:center; gap:14px; margin:6px 0 18px; }
+.ptitle h3 { font-size:20px; font-weight:700; margin:0; }
+.seg { display:inline-flex; background:var(--track); border-radius:7px; padding:2px; }
+.seg span { padding:3px 12px; border-radius:5px; color:var(--fg2); font-size:12.5px; }
+.seg span.on { background:var(--seg); color:var(--fg); box-shadow:0 0 0 .5px var(--line), 0 1px 2px rgba(0,0,0,.06); }
+.pick { color:var(--fg2); padding:3px 6px; border-radius:6px; font-size:12.5px; }
+.pick.hov { background:var(--sel); color:var(--fg); }
+.ptitle .pick { margin-left:auto; }
+.sect { border-top:.5px solid var(--line); padding:16px 0 4px; margin-top:14px; }
+.sect h5 { font-size:12px; color:var(--fg3); font-weight:500; margin:0 0 10px; display:flex; gap:10px; align-items:baseline; }
+.sect h5 .r { margin-left:auto; color:var(--fg2); font-weight:400; }
+
+/* spend */
+.head4 { display:grid; grid-template-columns:repeat(4, 1fr); gap:18px; margin:4px 0 6px; }
+.head4 b { display:block; font-size:21px; font-weight:600; letter-spacing:-.2px; }
+.head4 span { color:var(--fg3); font-size:12px; }
+.head4 .sub { color:var(--fg2); font-size:12px; margin-top:2px; }
+.why { color:var(--fg3); font-size:12px; margin:8px 0 0; }
+.chart { position:relative; height:150px; margin-top:76px; display:flex; align-items:flex-end; gap:5px; padding:0 0 18px; border-bottom:.5px solid var(--line); }
+.chart .b { flex:1; display:flex; flex-direction:column-reverse; position:relative; border-radius:3px 3px 0 0; overflow:hidden; }
+.chart .b i { display:block; }
+.chart .b i.m { background:var(--bar1); }
+.chart .b i.c { background:var(--bar2); }
+.chart .b.today { background:transparent; box-shadow:inset 0 0 0 1px var(--fg2); overflow:visible; }
+.chart .b.today i { opacity:.35; }
+.chart .b.future { background:var(--track); }
+.chart .x { position:absolute; bottom:0; left:0; right:0; display:flex; justify-content:space-between; color:var(--fg3); font-size:11px; }
+.chart .grid { position:absolute; left:0; right:0; border-top:.5px dashed var(--line); color:var(--fg3); font-size:10.5px; }
+.chart .grid span { position:absolute; right:0; top:-14px; }
+.tip { position:absolute; background:var(--field); border:.5px solid var(--line); border-radius:10px; box-shadow:0 10px 30px rgba(0,0,0,.12); padding:8px 10px; font-size:12px; width:210px; z-index:3; pointer-events:none; }
+.tip b { display:block; margin-bottom:3px; }
+.tip div { display:flex; justify-content:space-between; color:var(--fg2); }
+.legend { display:flex; gap:16px; color:var(--fg3); font-size:12px; margin:8px 0 0; }
+.legend i { display:inline-block; width:8px; height:8px; border-radius:2px; margin-right:6px; vertical-align:0; }
+.lrow { display:grid; grid-template-columns:18px 260px 1fr 70px 40px; gap:10px; align-items:center; padding:6px 0; border-bottom:.5px solid var(--line); }
+.lrow:last-child { border-bottom:0; }
+.lrow .g { color:var(--fg2); text-align:center; }
+.lrow .n { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.lrow .n small { color:var(--fg3); font-size:12px; margin-left:6px; }
+.lrow .bar { height:3px; background:var(--track); border-radius:2px; overflow:hidden; }
+.lrow .bar i { display:block; height:100%; background:var(--fg2); }
+.lrow .v { text-align:right; font-variant-numeric:tabular-nums; }
+.lrow .p { text-align:right; color:var(--fg3); font-size:12px; font-variant-numeric:tabular-nums; }
+.more { color:var(--fg2); padding:6px 0 0 28px; font-size:12.5px; }
+.brow { display:grid; grid-template-columns:1fr 160px 200px; gap:14px; align-items:center; padding:7px 0; border-bottom:.5px solid var(--line); }
+.brow:last-child { border-bottom:0; }
+.brow .n small { color:var(--fg3); font-size:12px; margin-left:6px; }
+.brow .bar { height:3px; background:var(--track); border-radius:2px; overflow:hidden; }
+.brow .bar i { display:block; height:100%; background:var(--fg2); }
+.brow.warn .bar i { background:var(--amber); }
+.brow.warn .w { color:var(--amber); }
+.brow .w { color:var(--fg2); font-size:12.5px; text-align:right; font-variant-numeric:tabular-nums; }
+.sug { display:flex; gap:12px; padding:7px 0; align-items:baseline; }
+.sug .g { color:var(--fg3); width:16px; text-align:center; flex:none; }
+.sug .t { color:var(--fg); }
+.sug .t span { color:var(--fg3); }
+.sug .a { margin-left:auto; color:var(--fg2); white-space:nowrap; }
+
+/* setup map */
+.map { position:relative; border:.5px solid var(--line); border-radius:12px; background:var(--field); padding:6px 0 2px; }
+.map svg { display:block; width:100%; height:auto; }
+.map .node rect.box { fill:var(--field); stroke:var(--line); stroke-width:1; }
+.map .node.grp > rect.box { fill:var(--win); }
+.map .node.off rect.box { stroke-dasharray:3 3; }
+.map .node.off text { opacity:.6; }
+.map .node text.n { font-size:12.5px; font-weight:500; fill:var(--fg); }
+.map .node text.d { font-size:11.5px; fill:var(--fg3); }
+.map .node text.gl { font-size:13px; fill:var(--fg2); }
+.map .node text.cap { font-size:11.5px; fill:var(--fg3); font-weight:500; }
+.map .node circle.dot { fill:var(--accent); }
+.map .node text.why { font-size:11.5px; fill:var(--accent); }
+.map .colh { font-size:12px; fill:var(--fg3); font-weight:500; }
+.map path.e { fill:none; stroke:var(--fg3); stroke-opacity:.45; stroke-width:1; transition:stroke-opacity .12s, stroke .12s; }
+.map path.e.dash { stroke-dasharray:3 3; }
+.map .node { cursor:pointer; transition:opacity .12s; }
+.map .node:not(.grp):hover rect.box { stroke:var(--fg2); }
+.map.focus .node.dim { opacity:.28; }
+.map.focus path.e { stroke-opacity:.12; }
+.map.focus path.e.hot { stroke:var(--fg2); stroke-opacity:1; stroke-width:1.4; }
+.map path.e.stub { display:none; }
+.map.focus path.e.stub.hot { display:inline; }
+.map text.el { font-size:11px; fill:var(--fg3); }
+.maphint { color:var(--fg3); font-size:12px; margin:8px 0 0; display:flex; gap:16px; }
+.maphint span i { display:inline-block; width:14px; height:9px; border:1px solid var(--fg3); border-radius:3px; margin-right:6px; vertical-align:-1px; opacity:.7; }
+.maphint span i.dash { border-style:dashed; }
+.maphint span i.dt { width:6px; height:6px; border:0; border-radius:50%; background:var(--accent); opacity:1; vertical-align:1px; }
+table.where { width:100%; border-collapse:collapse; }
+table.where th { text-align:left; font-weight:500; color:var(--fg3); font-size:12px; padding:4px 10px 6px 0; }
+table.where td { padding:7px 10px 7px 0; border-top:.5px solid var(--line); vertical-align:top; white-space:nowrap; }
+table.where td.m { color:var(--fg2); }
+table.where td.r { text-align:right; font-variant-numeric:tabular-nums; }
+table.where th.r { text-align:right; }
+.bd { display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--accent); margin-right:6px; vertical-align:1px; }
+
+/* activity */
+.year { display:grid; grid-auto-flow:column; grid-template-rows:repeat(7, 10px); gap:3px; }
+.year i { width:10px; height:10px; border-radius:2px; background:var(--h0); }
+.year i.l1 { background:var(--h1); } .year i.l2 { background:var(--h2); } .year i.l3 { background:var(--h3); } .year i.l4 { background:var(--h4); }
+.year i.today { box-shadow:0 0 0 1px var(--fg); }
+.months { display:flex; justify-content:space-between; color:var(--fg3); font-size:11px; margin:6px 0 0; padding-right:4px; }
+.yearcap { display:flex; color:var(--fg3); font-size:12px; margin:8px 0 0; gap:6px; align-items:center; }
+.yearcap .scale { margin-left:auto; display:flex; gap:3px; align-items:center; }
+.yearcap .scale i { width:10px; height:10px; border-radius:2px; display:inline-block; }
+.groups { display:grid; grid-template-columns:1fr 1fr; gap:0 40px; }
+.grp { padding:14px 0 6px; border-top:.5px solid var(--line); }
+.grp h6 { font-size:12px; color:var(--fg3); font-weight:500; margin:0 0 6px; }
+.st { display:flex; gap:10px; align-items:baseline; padding:4px 0; }
+.st b { font-weight:600; font-variant-numeric:tabular-nums; min-width:54px; }
+.st .c { margin-left:auto; color:var(--fg3); font-size:12px; white-space:nowrap; }
+.st .c.up::before { content:"↑ "; } .st .c.dn::before { content:"↓ "; }
+.disk { display:grid; grid-template-columns:18px 1fr 80px 200px; gap:10px; align-items:center; padding:6px 0; border-bottom:.5px solid var(--line); }
+.disk:last-child { border-bottom:0; }
+.disk .g { color:var(--fg2); text-align:center; }
+.disk .v { text-align:right; font-variant-numeric:tabular-nums; }
+.disk .a { text-align:right; color:var(--fg2); font-size:12.5px; }
+.stack { display:flex; height:6px; border-radius:3px; overflow:hidden; background:var(--track); margin:2px 0 12px; }
+.stack i { display:block; height:100%; border-right:1px solid var(--win); }
+
+/* popover (E) */
+.pair { display:flex; gap:26px; align-items:flex-start; flex-wrap:wrap; }
+.mini { width:236px; margin-right:100px; background:var(--side); border-radius:12px; box-shadow:0 0 0 .5px var(--line), 0 20px 50px rgba(0,0,0,.12); position:relative; height:250px; overflow:visible; }
+.mini .foot { position:absolute; bottom:0; left:0; right:0; height:52px; display:flex; align-items:center; gap:9px; padding:0 14px; color:var(--fg2); font-size:12px; }
+.mini .foot .cost { white-space:nowrap; padding:4px 6px; border-radius:6px; background:var(--sel); color:var(--fg); }
+.pop { position:absolute; left:20px; bottom:58px; width:300px; background:var(--field); border:.5px solid var(--line); border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,.12); padding:12px 14px; z-index:2; }
+.pop .kv { display:flex; justify-content:space-between; padding:3px 0; color:var(--fg2); }
+.pop .kv b { color:var(--fg); font-weight:500; font-variant-numeric:tabular-nums; }
+.pop .sep { height:.5px; background:var(--line); margin:7px 0; }
+.pop .open { display:flex; justify-content:space-between; gap:10px; white-space:nowrap; color:var(--fg2); font-size:12.5px; margin-top:6px; }
+.side-notes { flex:1; min-width:300px; max-width:620px; }
+
+@media (max-width: 960px) {
+  .side { display:none; } .card { margin:8px; }
+  .page { padding:10px 16px 30px; }
+  .head4 { grid-template-columns:repeat(2, 1fr); }
+  .groups { grid-template-columns:1fr; }
+  .lrow { grid-template-columns:18px 1fr 70px 40px; } .lrow .bar { display:none; }
+  .brow { grid-template-columns:1fr 120px; } .brow .bar { display:none; }
+}
+</style>
+</head>
+<body>
+<main>
+<header class="doc">
+  <div>
+    <h1>Overview: spend, setup, activity</h1>
+    <p>Review mockup for <a class="lk" href="../../spec/34-overview.md">spec 34</a>, drawn in the grey style (docs/design/grey tokens) in the card layout. A reference, not a handoff: nothing here is built. Numbers are made up but add up.</p>
+    <p>Opened from the sidebar footer's cost line and ⌘K. Three tabs on one page; every number links to what it counts.</p>
+  </div>
+  <span class="theme" id="theme">◐ Dark</span>
+</header>
+<nav class="toc">
+  <a href="#a">A · Spend</a><a href="#b">B · Setup</a><a href="#c">C · Activity</a><a href="#e">D · The way in</a>
+</nav>
+
+<!-- ───────────────────────── A · SPEND ───────────────────────── -->
+<section class="screen" id="a">
+  <div class="label"><b>A</b><h2>Spend</h2><span>This month: Piopio's estimate beside the provider's bill, by day, by what, budgets</span></div>
+  <div class="win">
+    <aside class="side" data-sidebar></aside>
+    <div class="card">
+      <div class="tb"><span class="t">Overview</span><span class="s">This Mac and Cloudflare · up to 14:02</span><span class="rt"><span>Export CSV</span></span></div>
+      <div class="page">
+        <div class="ptitle">
+          <h3>Overview</h3>
+          <div class="seg"><span class="on">Spend</span><span>Setup</span><span>Activity</span></div>
+          <span class="pick hov">This month</span>
+        </div>
+
+        <div class="head4">
+          <div><b>$18.42</b><span>Piopio's estimate · 1–22 Nov</span><div class="sub">$0.91 today</div></div>
+          <div><b>about $25</b><span>on track for November</span><div class="sub">October was $11.30</div></div>
+          <div><b>$21.06</b><span>OpenRouter billed this month</span><div class="sub">key sk-or-v1-755…a30</div></div>
+          <div><b>38%</b><span>Claude Code plan · this window</span><div class="sub">resets 18:00</div></div>
+        </div>
+        <p class="why">The bill is $2.64 more than the estimate: it includes other apps that use this key, and 3 requests had no price. The two are never added.</p>
+
+        <div class="sect">
+          <h5>By day <span class="r">Where it ran</span></h5>
+          <div class="chart" id="chart"></div>
+          <div class="legend"><span><i style="background:var(--bar1)"></i>This Mac $13.71</span><span><i style="background:var(--bar2)"></i>Cloud $4.71</span><span style="margin-left:auto">Today is outlined until the day ends</span></div>
+        </div>
+
+        <div class="sect">
+          <h5>By <span class="pick hov" style="margin:-3px 0 -3px -6px">What</span><span class="r">Model · Provider · Project · Where</span></h5>
+          <div id="bywhat"></div>
+          <div class="more">2 more · $0.00 known, 3 without a price</div>
+        </div>
+
+        <div class="sect">
+          <h5>Budgets <span class="r">Set a budget for Piopio this month</span></h5>
+          <div class="brow warn"><div class="n">Morning briefing <small>agent · this month</small></div><div class="bar"><i style="width:87%"></i></div><div class="w">$2.18 of $2.50 · resets 1 Dec</div></div>
+          <div class="brow"><div class="n">Rita <small>agent · this month</small></div><div class="bar"><i style="width:54%"></i></div><div class="w">$2.71 of $5.00 · resets 1 Dec</div></div>
+          <div class="brow"><div class="n">Inbox triage <small>automation · per run</small></div><div class="bar"><i style="width:40%"></i></div><div class="w">most $0.04 of $0.10</div></div>
+          <div class="brow"><div class="n">piopio <small>project · per job</small></div><div class="bar"><i style="width:75%"></i></div><div class="w">most $1.12 of $1.50</div></div>
+        </div>
+
+        <div class="sect">
+          <h5>Cheaper next time</h5>
+          <div class="sug"><span class="g">◇</span><span class="t">Morning briefing spent $2.18 on Opus 5.5. <span>Haiku 5.5 would have been about $0.40 for the same 22 runs.</span></span><span class="a">Change model</span></div>
+          <div class="sug"><span class="g">◇</span><span class="t">Titles, memory and the organizer cost $0.83 on Sonnet 5.5. <span>The on-device model would make them free.</span></span><span class="a">Use on-device</span></div>
+          <div class="sug"><span class="g">◇</span><span class="t">Cache reads saved about $6.20 this month. <span>Mostly Build sessions in piopio.</span></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <ul class="note">
+    <li><b>Four numbers, no boxes.</b> The estimate and the bill sit side by side and are never summed; a line under them says why they differ. Plans show a share of the window, never dollars.</li>
+    <li><b>By day</b> uses two greys (This Mac, Cloud), the only second tone grey ink allows; hover a bar for its total and top three (shown on 18 Nov).</li>
+    <li><b>By what</b> regroups by Model (with the route: <span class="mono">Opus 5.5 · Claude Code plan</span>), Provider, Project or Where. A row opens what it counts, by cost.</li>
+    <li><b>Budgets</b> collects every budget Piopio has. Amber past 80% is the page's only colour.</li>
+    <li><b>Cheaper next time:</b> at most three, each with the number it's based on, each with one action.</li>
+  </ul>
+</section>
+
+<!-- ───────────────────────── B · SETUP ───────────────────────── -->
+<section class="screen" id="b">
+  <div class="label"><b>B</b><h2>Setup</h2><span>Everything you have and where it runs; hover a node to see what it touches</span></div>
+  <div class="win">
+    <aside class="side" data-sidebar></aside>
+    <div class="card">
+      <div class="tb"><span class="t">Overview</span><span class="s">2 things need you</span></div>
+      <div class="page wide">
+        <div class="ptitle">
+          <h3>Overview</h3>
+          <div class="seg"><span>Spend</span><span class="on">Setup</span><span>Activity</span></div>
+        </div>
+        <div class="map" id="map"></div>
+        <div class="maphint"><span><i></i>in use</span><span><i class="dash"></i>connected, nothing uses it</span><span><i class="dt"></i>needs you</span><span style="margin-left:auto">Click a node to open it</span></div>
+
+        <div class="sect">
+          <h5>What runs where <span class="r">7 agents, automations and cloud conversations</span></h5>
+          <table class="where">
+            <tr><th>Name</th><th>Runs on</th><th>Model</th><th>Reaches you in</th><th>Next run</th><th class="r">This month</th></tr>
+            <tr><td>Rita <span class="m" style="color:var(--fg3)">agent</span></td><td>☁︎ Cloud</td><td class="m">Sonnet 5.5 · OpenRouter</td><td class="m">Piopio, Telegram</td><td class="m">—</td><td class="r">$2.71</td></tr>
+            <tr><td>Morning briefing <span style="color:var(--fg3)">agent</span></td><td>☁︎ Cloud</td><td class="m">Opus 5.5 · OpenRouter</td><td class="m">Piopio, Telegram</td><td class="m">tomorrow 8:00</td><td class="r">$2.18</td></tr>
+            <tr><td>Bookkeeper <span style="color:var(--fg3)">agent</span></td><td>▭ This Mac</td><td class="m">Haiku 5.5 · OpenRouter</td><td class="m">Piopio</td><td class="m">1 Dec 9:00</td><td class="r">$0.32</td></tr>
+            <tr><td>Inbox triage <span style="color:var(--fg3)">automation · Rita</span></td><td>☁︎ Cloud</td><td class="m">Haiku 5.5 · OpenRouter</td><td class="m">Needs you</td><td class="m">15:00</td><td class="r">$1.12</td></tr>
+            <tr><td>Nightly checks <span style="color:var(--fg3)">automation · piopio</span></td><td>▭ This Mac</td><td class="m"><span class="bd"></span>Opus 5.5 · Claude Code plan</td><td class="m">Piopio</td><td class="m">today 23:00 · waits for the plan</td><td class="r">on plan</td></tr>
+            <tr><td>Weekly review <span style="color:var(--fg3)">automation · Piopio</span></td><td>▭ This Mac</td><td class="m">Sonnet 5.5 · OpenRouter</td><td class="m">Piopio</td><td class="m">Mon 9:00</td><td class="r">$0.24</td></tr>
+            <tr><td>Trip to Lisbon <span style="color:var(--fg3)">conversation</span></td><td>☁︎ Cloud</td><td class="m">Sonnet 5.5 · OpenRouter</td><td class="m">Piopio, iPhone</td><td class="m">—</td><td class="r">$0.41</td></tr>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  <ul class="note">
+    <li><b>Three columns:</b> you and your devices and channels, where Piopio runs (This Mac, the cloud, the Mac Bridge between them), what it uses (providers in your order, connectors, tools, memory).</li>
+    <li><b>Hover</b> a node: its lines go dark, the rest fade. "What does Rita touch?" in one look. <b>Click</b> opens its page or its Settings pane.</li>
+    <li><b>The blue dot</b> is grey's needs-you dot with its reason on the line: the Claude Code plan's limit, WhatsApp not finished. <b>Dashed</b> means connected and unused, so the map is also a cleanup list.</li>
+    <li><b>What runs where</b> is the table Settings › Cloud planned (30 §7); Settings links here instead.</li>
+  </ul>
+</section>
+
+<!-- ───────────────────────── C · ACTIVITY ───────────────────────── -->
+<section class="screen" id="c">
+  <div class="label"><b>C</b><h2>Activity</h2><span>What Piopio did: counts with a comparison, a year of days, and the disk it takes</span></div>
+  <div class="win">
+    <aside class="side" data-sidebar></aside>
+    <div class="card">
+      <div class="tb"><span class="t">Overview</span><span class="s">This month, against October</span></div>
+      <div class="page">
+        <div class="ptitle">
+          <h3>Overview</h3>
+          <div class="seg"><span>Spend</span><span>Setup</span><span class="on">Activity</span></div>
+          <span class="pick">This month</span>
+        </div>
+
+        <div>
+          <div class="year" id="year"></div>
+          <div class="months" id="months"></div>
+          <div class="yearcap"><span>36 days with something done since 18 Oct · busiest: Thu 19 Nov, 64 turns</span><span class="scale">Less <i style="background:var(--h0)"></i><i style="background:var(--h1)"></i><i style="background:var(--h2)"></i><i style="background:var(--h3)"></i><i style="background:var(--h4)"></i> More</span></div>
+        </div>
+
+        <div class="groups" style="margin-top:18px">
+          <div class="grp"><h6>Conversations</h6>
+            <div class="st"><b>86</b>started<span class="c up">31</span></div>
+            <div class="st"><b>1,204</b>messages you sent<span class="c up">410</span></div>
+            <div class="st"><b>9</b>side conversations<span class="c up">9</span></div>
+            <div class="st"><b>14</b>in the cloud<span class="c">new</span></div>
+          </div>
+          <div class="grp"><h6>Build</h6>
+            <div class="st"><b>52</b>sessions in 2 projects<span class="c up">18</span></div>
+            <div class="st"><b>418</b>files changed · <span style="color:var(--fg2)">+21,340 −6,912</span><span class="c up">120</span></div>
+            <div class="st"><b>137</b>commits · 11 PRs opened, 9 merged<span class="c up">4</span></div>
+            <div class="st"><b>304</b>checks run, 21 failed<span class="c dn">6</span></div>
+          </div>
+          <div class="grp"><h6>Agents</h6>
+            <div class="st"><b>148</b>runs · Rita 96, Morning briefing 22, Bookkeeper 30<span class="c up">60</span></div>
+            <div class="st"><b>233</b>messages · Telegram 181, Piopio 52<span class="c up">90</span></div>
+            <div class="st"><b>41</b>things remembered · 2 undone<span class="c up">12</span></div>
+          </div>
+          <div class="grp"><h6>Automations</h6>
+            <div class="st"><b>196</b>runs · 184 finished<span class="c up">70</span></div>
+            <div class="st"><b>7</b>skipped · Mac asleep<span class="c dn">5</span></div>
+            <div class="st"><b>5</b>failed · most: Nightly checks (3)<span class="c">same</span></div>
+          </div>
+          <div class="grp"><h6>You and Piopio</h6>
+            <div class="st"><b>312</b>approvals · 291 allowed, 21 denied<span class="c up">80</span></div>
+            <div class="st"><b>6</b>"Always allow" rules added<span class="c">same</span></div>
+            <div class="st"><b>31 h</b>of work run · 8 h while you were away<span class="c up">9 h</span></div>
+            <div class="st"><b>read, bash, edit</b>most-used tools · Linear most-used MCP</div>
+          </div>
+          <div class="grp"><h6>Reliability</h6>
+            <div class="st"><b>14</b>provider errors · 11 retried fine<span class="c dn">9</span></div>
+            <div class="st"><b>6</b>times another route answered<span class="c">new</span></div>
+            <div class="st"><b>23</b>compactions<span class="c up">5</span></div>
+          </div>
+        </div>
+
+        <div class="sect">
+          <h5>Disk <span class="r">8.4 GB in Piopio's folder</span></h5>
+          <div class="stack"><i style="width:58%;background:var(--h4)"></i><i style="width:18%;background:var(--h3)"></i><i style="width:12%;background:var(--h2)"></i><i style="width:7%;background:var(--h1)"></i><i style="width:5%;background:var(--h0)"></i></div>
+          <div class="disk"><span class="g">⑂</span><span>Worktrees · piopio 4.1 GB, atlas 0.8 GB · 6 merged</span><span class="v">4.9 GB</span><span class="a">Clean up merged worktrees</span></div>
+          <div class="disk"><span class="g">◎</span><span>Browser data</span><span class="v">1.5 GB</span><span class="a">Clear browser cache</span></div>
+          <div class="disk"><span class="g">▢</span><span>Conversations and sessions</span><span class="v">1.0 GB</span><span class="a"></span></div>
+          <div class="disk"><span class="g">⎘</span><span>Attachments and agents' files</span><span class="v">0.6 GB</span><span class="a">Show in Finder</span></div>
+          <div class="disk"><span class="g">◌</span><span>Memory · 214 facts and their vectors</span><span class="v">0.4 GB</span><span class="a"></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <ul class="note">
+    <li><b>A year of days</b> (OV5) shows rhythm; it starts the day Piopio did, so most of it is empty for now. No streaks, scores or badges.</li>
+    <li><b>Groups of plain rows:</b> the number, what it counts, the change against the range before in <span style="color:var(--fg3)">fg3</span>. A click opens the list behind it (the 5 failed runs, the 9 merged PRs).</li>
+    <li>Only what Piopio can count. No "time saved".</li>
+    <li><b>Disk</b> ends the page, because worktrees and browser data grow quietly; one cleanup action where one makes sense.</li>
+  </ul>
+</section>
+
+<!-- ───────────────────────── D · THE WAY IN ───────────────────────── -->
+<section class="screen" id="e">
+  <div class="label"><b>D</b><h2>The way in</h2><span>The sidebar footer keeps its text; hovering shows the short version, clicking opens Spend</span></div>
+  <div class="pair">
+    <div class="mini">
+      <div class="pop">
+        <div class="kv"><span>Today</span><b>$0.91</b></div>
+        <div class="kv"><span>This month, Piopio's estimate</span><b>$18.42</b></div>
+        <div class="kv"><span>OpenRouter billed this month</span><b>$21.06</b></div>
+        <div class="sep"></div>
+        <div class="kv"><span>Morning briefing</span><b style="color:var(--amber)">87% of budget</b></div>
+        <div class="kv"><span>Claude Code plan</span><b>38% · resets 18:00</b></div>
+        <div class="open"><span>Estimates and bills are never added</span><span style="color:var(--fg)">Overview ›</span></div>
+      </div>
+      <div class="foot"><span class="av">T</span><span>Toño</span><span class="cost">This Mac · $0.91 today</span><span style="margin-left:auto">⚙︎</span></div>
+    </div>
+    <div class="side-notes">
+      <ul class="note" style="margin-top:0">
+        <li>Today the footer opens the CostDetails popover. It becomes this short version (hover), and a click opens Overview › Spend.</li>
+        <li>The conversation's own estimate stays where it is, in the inspector footer.</li>
+        <li>Other ways in: ⌘K "Overview", "Spend", "Setup", "Activity"; an agent's "$2.18 this month" opens Spend filtered to it; Settings › Cloud's usage opens Spend filtered to the cloud.</li>
+        <li>Not a sidebar row by default (OV1): it's a page you look at a few times a week, not a place you work.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+</main>
+
+<script>
+// Theme
+const themeBtn = document.getElementById('theme');
+function setTheme(t) { document.documentElement.dataset.theme = t; themeBtn.textContent = t === 'dark' ? '◑ Light' : '◐ Dark'; }
+setTheme(matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+themeBtn.onclick = () => setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+
+// Sidebar (shared)
+const sidebar = `
+  <div class="top"><span class="dot3"><i></i><i></i><i></i></span><span style="margin-left:auto;color:var(--fg2)">▯</span></div>
+  <div class="rows">
+    <div class="row"><span class="g">⌕</span>Search<span class="r">⌘K</span></div>
+    <div class="row"><span class="g">⌂</span>Home</div>
+    <div class="row"><span class="g">◷</span>Automations</div>
+    <h4>Agents <span>+</span></h4>
+    <div class="row"><span class="g">☺</span>Rita<span class="r">☁︎</span></div>
+    <div class="row"><span class="g">☺</span>Morning briefing<span class="r">☁︎</span></div>
+    <div class="row"><span class="g">☺</span>Bookkeeper</div>
+    <h4>Projects <span>+</span></h4>
+    <div class="row"><span class="g">▤</span>piopio</div>
+    <div class="row" style="padding-left:34px">Telegram approvals</div>
+    <div class="row" style="padding-left:34px">Overview page</div>
+    <div class="row"><span class="g">▤</span>atlas</div>
+    <h4>Conversations <span>+</span></h4>
+    <div class="row"><span class="g">▢</span>Trip to Lisbon<span class="r">☁︎</span></div>
+    <div class="row"><span class="g">▢</span>Kitchen budget</div>
+  </div>
+  <div class="foot"><span class="av">T</span><span class="cost on">This Mac · $0.91 today</span><span style="margin-left:auto">⚙︎</span></div>`;
+document.querySelectorAll('[data-sidebar]').forEach(el => el.innerHTML = sidebar);
+
+// A · By day (22 days of 30, numbers sum to 18.42: Mac 13.71, Cloud 4.71)
+const mac = [0.31,0.22,0.48,0.62,0.55,0.18,0.12,0.71,0.66,1.29,0.58,0.74,0.21,0.15,0.84,0.97,1.12,1.31,0.88,0.71,0.65,0.41];
+const cloud = [0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,1.40,1.54,1.27,0.50];
+// cloud started 19 Nov (K1): keep totals honest
+const chart = document.getElementById('chart');
+const max = 2.4, H = 132;
+[1,2].forEach(v => { const g = document.createElement('div'); g.className = 'grid'; g.style.bottom = (18 + v / max * H) + 'px'; g.innerHTML = `<span>$${v.toFixed(2)}</span>`; chart.appendChild(g); });
+for (let d = 0; d < 30; d++) {
+  const b = document.createElement('div'); b.className = 'b';
+  if (d < 22) {
+    const m = mac[d], c = cloud[d];
+    b.style.height = ((m + c) / max * H) + 'px';
+    b.innerHTML = `<i class="m" style="height:${m/(m+c)*100}%"></i><i class="c" style="height:${c/(m+c)*100}%"></i>`;
+    if (d === 21) b.classList.add('today');
+    b.title = `${d+1} Nov · $${(m+c).toFixed(2)}`;
+  } else { b.classList.add('future'); b.style.height = '3px'; }
+  chart.appendChild(b);
+}
+const x = document.createElement('div'); x.className = 'x';
+x.innerHTML = '<span>1 Nov</span><span>8</span><span>15</span><span>22</span><span>30</span>';
+chart.appendChild(x);
+const bars = chart.querySelectorAll('.b');
+const tip = document.createElement('div'); tip.className = 'tip';
+tip.innerHTML = '<b>Wed 18 Nov · $1.31</b><div><span>Build · Overview page</span><span>$0.62</span></div><div><span>Rita</span><span>$0.29</span></div><div><span>Kitchen budget</span><span>$0.17</span></div>';
+chart.appendChild(tip);
+requestAnimationFrame(() => {
+  const bb = bars[17].getBoundingClientRect(), cb = chart.getBoundingClientRect();
+  tip.style.left = (bb.left - cb.left + bb.width + 8) + 'px'; tip.style.top = '-74px';
+  bars[17].querySelector('i.m').style.background = 'var(--fg)';
+});
+
+// A · By what
+const rows = [
+  ['⑂', 'Build sessions', '52 sessions', 6.90],
+  ['▢', 'Conversations', '86', 4.36],
+  ['☺', 'Rita', 'agent · cloud', 2.71],
+  ['☺', 'Morning briefing', 'agent · cloud', 2.18],
+  ['◷', 'Inbox triage', 'automation · hourly', 1.12],
+  ['✦', "Piopio's own work", 'titles, memory, organizer', 0.83],
+  ['☺', 'Bookkeeper', 'agent · This Mac', 0.32],
+];
+document.getElementById('bywhat').innerHTML = rows.map(([g, n, s, v]) =>
+  `<div class="lrow"><span class="g">${g}</span><span class="n">${n}<small>${s}</small></span><span class="bar"><i style="width:${v/6.90*100}%"></i></span><span class="v">$${v.toFixed(2)}</span><span class="p">${Math.round(v/18.42*100)}%</span></div>`).join('');
+
+// B · Setup map
+const W = 900, Hm = 520;
+const nodes = [];
+const edges = [];
+function node(id, x, y, w, h, glyph, name, desc, opts = {}) { nodes.push({ id, x, y, w, h, glyph, name, desc, ...opts }); }
+// You
+node('mac', 16, 40, 200, 48, '▭', 'This Mac', 'MacBook Pro · awake');
+node('phone', 16, 100, 200, 48, '▯', 'iPhone', 'Piopio app · paired');
+node('tg1', 16, 190, 200, 48, '✈︎', 'Telegram', '@rita_piopio_bot');
+node('tg2', 16, 250, 200, 48, '✈︎', 'Telegram', '@briefing_piopio_bot');
+node('wa', 16, 310, 200, 48, '✆', 'WhatsApp', 'number not verified', { need: 'finish setup' });
+// Piopio groups
+node('gmac', 290, 32, 320, 218, '', 'THIS MAC', 'engine 0.34 · up 3 days', { grp: true });
+node('proj', 306, 74, 288, 44, '▤', 'Projects', 'piopio, atlas · 2 sessions running');
+node('book', 306, 128, 140, 44, '☺', 'Bookkeeper', 'agent · 1 automation');
+node('auto', 454, 128, 140, 44, '◷', 'Automations', '2 here · next 23:00');
+node('chats', 306, 182, 288, 44, '▢', 'Conversations', '72 here · Kitchen budget open');
+node('gcl', 290, 290, 320, 218, '', 'CLOUD · CLOUDFLARE', 'Worker piopio-toño · $5 plan', { grp: true });
+node('rita', 306, 332, 140, 44, '☺', 'Rita', 'agent · 96 runs');
+node('brief', 454, 332, 140, 44, '☺', 'Morning briefing', 'agent · 8:00 daily');
+node('inbox', 306, 386, 140, 44, '◷', 'Inbox triage', 'automation · hourly');
+node('lisbon', 454, 386, 140, 44, '▢', 'Trip to Lisbon', 'conversation');
+node('ccache', 306, 440, 288, 44, '⎘', 'Cloud browser · files', '1 sign-in kept · 120 MB');
+// Uses
+node('or', 684, 40, 200, 48, '①', 'OpenRouter', 'first · Sonnet 5.5 default');
+node('cc', 684, 100, 200, 48, '②', 'Claude Code plan', 'Opus 5.5 · 38% used', { need: 'limit until 18:00' });
+node('an', 684, 160, 200, 48, '③', 'Anthropic', 'connected · nothing uses it', { off: true });
+node('gcal', 684, 238, 200, 44, '◫', 'Google Calendar', 'connector · signed in');
+node('gh', 684, 290, 200, 44, '⑂', 'GitHub', 'gh · antonioaragues');
+node('mcp', 684, 342, 200, 44, '⧉', 'MCP · Linear', '3 servers · 1 unused');
+node('mem', 684, 394, 200, 44, '◌', 'Memory', 'built-in · 214 facts');
+node('browser', 684, 446, 200, 44, '◎', 'Browser', 'built-in · 4 sites allowed');
+// edges [a, b, dashed?, label]
+edges.push(['mac','gmac'], ['phone','gcl'], ['phone','gmac', true], ['tg1','rita'], ['tg2','brief'], ['wa','rita', true],
+  ['gmac','gcl', false, 'Mac Bridge · on'],
+  ['proj','or'], ['proj','cc'], ['proj','gh'], ['proj','browser'], ['book','or'], ['book','mcp'], ['auto','cc'], ['chats','or'], ['chats','mem'],
+  ['rita','or'], ['rita','gcal'], ['rita','mem'], ['brief','or'], ['brief','gcal'], ['inbox','or'], ['lisbon','or'], ['ccache','browser', true]);
+const byId = Object.fromEntries(nodes.map(n => [n.id, n]));
+const parentOf = id => { const n = byId[id]; if (n.grp) return null;
+  if (n.x > 290 && n.x < 610) return n.y < 270 ? 'gmac' : 'gcl'; return null; };
+function anchor(n, side) { return side === 'r' ? [n.x + n.w, n.y + (n.grp ? 22 : n.h / 2)] : [n.x, n.y + (n.grp ? 22 : n.h / 2)]; }
+// Lines stop at the group's border, level with the inner node; the stub inside the group shows only on hover.
+function lineEnd(id, side) {
+  const n = byId[id], g = parentOf(id) && byId[parentOf(id)];
+  if (!g) return { pt: anchor(n, side) };
+  const y = n.y + n.h / 2, gx = side === 'r' ? g.x + g.w : g.x, nx = side === 'r' ? n.x + n.w : n.x;
+  return { pt: [gx, y], stub: `M${gx},${y} L${nx},${y}` };
+}
+function pathFor(a, b) {
+  const A = byId[a], B = byId[b];
+  if (A.grp && B.grp) { const x = A.x + A.w / 2; return { d: `M${x},${A.y + A.h} L${x},${B.y}`, mid: [x + 8, (A.y + A.h + B.y) / 2 + 4] }; }
+  const oa = byId[parentOf(a) || a], ob = byId[parentOf(b) || b];
+  const aLeft = oa.x + oa.w <= ob.x;
+  const ea = lineEnd(a, aLeft ? 'r' : 'l'), eb = lineEnd(b, aLeft ? 'l' : 'r');
+  const p = ea.pt, q = eb.pt, dx = (q[0] - p[0]) * 0.5;
+  return { d: `M${p[0]},${p[1]} C${p[0] + dx},${p[1]} ${q[0] - dx},${q[1]} ${q[0]},${q[1]}`, stubs: [ea.stub, eb.stub].filter(Boolean) };
+}
+let svg = `<svg viewBox="0 0 ${W} ${Hm}" xmlns="http://www.w3.org/2000/svg">`;
+svg += `<text class="colh" x="16" y="22">YOU</text><text class="colh" x="290" y="22">PIOPIO</text><text class="colh" x="684" y="22">USES</text>`;
+svg += `<text class="colh" x="684" y="228" style="font-size:11px">CONNECTORS AND TOOLS</text>`;
+// group boxes first
+nodes.filter(n => n.grp).forEach(n => {
+  svg += `<g class="node grp" data-id="${n.id}"><rect class="box" x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" rx="12"/>
+    <text class="cap" x="${n.x + 16}" y="${n.y + 26}">${n.name}</text><text class="d" x="${n.x + n.w - 16}" y="${n.y + 26}" text-anchor="end">${n.desc}</text></g>`;
+});
+let stubSvg = '';
+edges.forEach(([a, b, dash, label], i) => {
+  const { d, mid, stubs = [] } = pathFor(a, b);
+  svg += `<path class="e${dash ? ' dash' : ''}" data-a="${a}" data-b="${b}" d="${d}"/>`;
+  stubs.forEach(st => { stubSvg += `<path class="e stub" data-a="${a}" data-b="${b}" d="${st}"/>`; });
+  if (label && mid) svg += `<text class="el" x="${mid[0]}" y="${mid[1]}">${label}</text>`;
+});
+nodes.filter(n => !n.grp).forEach(n => {
+  const cy = n.y + n.h / 2;
+  svg += `<g class="node${n.off ? ' off' : ''}" data-id="${n.id}"><rect class="box" x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" rx="10"/>
+    <text class="gl" x="${n.x + 14}" y="${cy + 4}">${n.glyph}</text>
+    <text class="n" x="${n.x + 36}" y="${cy - 3}">${n.name}</text>`;
+  if (n.need) {
+    svg += `<circle class="dot" cx="${n.x + n.w - 14}" cy="${n.y + 14}" r="3"/><text class="why" x="${n.x + 36}" y="${cy + 12}">${n.need}</text>`;
+  } else {
+    svg += `<text class="d" x="${n.x + 36}" y="${cy + 12}">${n.desc}</text>`;
+  }
+  svg += `</g>`;
+});
+svg += stubSvg + `</svg>`;
+const map = document.getElementById('map');
+map.innerHTML = svg;
+// hover: what does this touch?
+const neighbors = id => {
+  const s = new Set([id]);
+  edges.forEach(([a, b]) => { if (a === id) s.add(b); if (b === id) s.add(a); });
+  // inner nodes belong to their group
+  const parent = n => parentOf(n.id);
+  [...s].forEach(k => { const n = byId[k]; if (!n.grp) { const p = parent(n); if (p) s.add(p); } });
+  if (byId[id].grp) nodes.forEach(n => { if (!n.grp && parent(n) === id) s.add(n.id); });
+  return s;
+};
+map.querySelectorAll('.node:not(.grp)').forEach(g => {
+  g.addEventListener('mouseenter', () => {
+    const id = g.dataset.id, s = neighbors(id);
+    map.classList.add('focus');
+    map.querySelectorAll('.node').forEach(n => n.classList.toggle('dim', !s.has(n.dataset.id)));
+    map.querySelectorAll('path.e').forEach(p => p.classList.toggle('hot', p.dataset.a === id || p.dataset.b === id));
+  });
+  g.addEventListener('mouseleave', () => { map.classList.remove('focus'); map.querySelectorAll('.dim,.hot').forEach(n => n.classList.remove('dim', 'hot')); });
+});
+
+// C · Year of days: 53 weeks ending this week (Sun 22 Nov 2026); Piopio started 18 Oct
+const year = document.getElementById('year');
+const end = new Date(2026, 10, 22), start = new Date(end); start.setDate(end.getDate() - 52 * 7 - end.getDay());
+const born = new Date(2026, 9, 18);
+let seed = 7; const rnd = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
+let cells = '', months = [], lastM = -1;
+for (let w = 0; w < 53; w++) {
+  for (let d = 0; d < 7; d++) {
+    const day = new Date(start); day.setDate(start.getDate() + w * 7 + d);
+    if (day > end) { cells += '<i style="visibility:hidden"></i>'; continue; }
+    let lvl = 0;
+    if (day >= born) { const r = rnd(); const ramp = (day - born) / (end - born); lvl = r < 0.12 ? 0 : Math.min(4, 1 + Math.floor((r + ramp) * 2.2)); if (day.getDay() === 0 && r < 0.5) lvl = 1; }
+    cells += `<i class="l${lvl}${+day === +end ? ' today' : ''}"></i>`;
+  }
+  const first = new Date(start); first.setDate(start.getDate() + w * 7);
+  if (first.getMonth() !== lastM) { months.push(first.toLocaleString('en', { month: 'short' })); lastM = first.getMonth(); }
+}
+year.innerHTML = cells;
+document.getElementById('months').innerHTML = months.slice(0, 12).map(m => `<span>${m}</span>`).join('') + '<span>Nov</span>';
+document.querySelector('.yearcap span').textContent = '36 days with something done since 18 Oct · busiest: Thu 19 Nov, 64 turns';
+</script>
+</body>
+</html>
