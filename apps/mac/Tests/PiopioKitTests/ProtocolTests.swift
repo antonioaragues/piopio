@@ -145,3 +145,17 @@ private let idleState = #"{"status":"idle","queue":[],"usage":{"inputTokens":0,"
     guard case .array(let week)? = app.data["week"], case .object(let event)? = week.first else { Issue.record("no events"); return }
     #expect(event["title"] == .string("Dentist") && event["allDay"] == .bool(false))
 }
+
+/// docs/spec/39: a project's filtered network and its "host" rules, and the prompt that offers one.
+@Test func decodesAFilteredProjectAndItsSiteRules() throws {
+    let project: ProjectInfo = try decode("""
+    {"id":"prj_1","path":"/p","name":"p","addedAt":"2026-11-23T10:00:00Z","piConfig":false,"approvalMode":"auto_edit","rules":[{"id":"rule_1","kind":"host","pattern":"api.example.com","createdAt":"2026-11-23T10:00:00Z"}],"trust":"undecided","needsTrust":false,"network":"filtered","lenses":["build"]}
+    """)
+    #expect(project.network == .filtered)
+    #expect(project.rules.first?.kind == .host)
+    let prompt: PendingPrompt = try decode(#"{"id":"prm_1","kind":"approval","title":"Let this project's commands reach example.com","tool":"network","detail":"example.com","rule":{"kind":"host","pattern":"example.com"},"at":"2026-11-23T10:00:00Z"}"#)
+    #expect(prompt.rule?.kind == .host)
+    // From before: no field, open.
+    let older: ProjectInfo = try decode(#"{"id":"prj_2","path":"/q","name":"q","addedAt":"x","piConfig":false,"approvalMode":"ask","rules":[],"trust":"trusted","needsTrust":false,"lenses":["build"]}"#)
+    #expect(older.network == nil)
+}

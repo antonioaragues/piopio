@@ -292,6 +292,13 @@ private struct ProjectApprovalsPage: View {
                             .fixedSize()
                         }
                     }
+                    // docs/spec/39: on for a project you added or cloned until you trust it.
+                    SettingRow(title: "Filter commands' network", subtitle: project.network == .filtered ? "Only package registries, GitHub and the sites you allow; others ask" : "Commands reach any site") {
+                        Toggle("", isOn: Binding(get: { project.network == .filtered }, set: { on in Task { await engine.setNetwork(filtered: on, for: project) } }))
+                            .labelsHidden()
+                            .toggleStyle(.switch)
+                            .accessibilityLabel("Filter commands' network")
+                    }
                     SettingRow(title: "New sessions start in", subtitle: ApprovalModeMenu.summary(project.approvalMode), last: true) {
                         Picker("", selection: Binding(get: { project.approvalMode }, set: { mode in Task { await engine.setApprovalMode(mode, for: project) } })) {
                             ForEach(ApprovalMode.allCases) { Text(ApprovalModeMenu.title($0)).tag($0) }
@@ -308,7 +315,7 @@ private struct ProjectApprovalsPage: View {
                 } else {
                     ListCard {
                         ForEach(project.rules) { rule in
-                            SettingRow(title: rule.pattern, subtitle: rule.kind == .command ? "Command, with any arguments" : rule.kind == .tool ? "Tool" : "Path", last: rule.id == project.rules.last?.id) {
+                            SettingRow(title: rule.pattern, subtitle: rule.kind == .command ? "Command, with any arguments" : rule.kind == .tool ? "Tool" : rule.kind == .host ? "Site its commands may reach" : "Path", last: rule.id == project.rules.last?.id) {
                                 Button { Task { await engine.removeRule(rule, from: project) } } label: {
                                     Image(systemName: "minus.circle.fill").foregroundStyle(Color.dsFg3)
                                 }

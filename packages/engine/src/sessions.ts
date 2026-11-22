@@ -135,6 +135,8 @@ export type ApprovalPolicy = {
 	addRule(cwd: string, rule: { kind: ApprovalRule["kind"]; pattern: string }): void;
 	/** Folders linked to the project (docs/spec/18 §18). */
 	foldersFor?(cwd: string): { path: string; edit: boolean }[];
+	/** Its commands' network is filtered (docs/spec/39). */
+	networkFiltered?(cwd: string): boolean;
 	/** What a conversation hears about its pull request (docs/spec/17 §5). */
 	prEventsFor?(cwd: string): "off" | "tell" | "act";
 	/** The check after the agent's edits (05-build "Diagnostics"). */
@@ -2915,6 +2917,13 @@ export class Sessions {
 					return [...this.policy.rulesFor(place), ...linked.map((f) => ({ id: `linked:${f.path}`, kind: "path" as const, pattern: `${f.path}/**`, createdAt: "" }))];
 				},
 				addRule: (rule) => this.policy.addRule(entry.projectPath ?? entry.cwd!, rule),
+			},
+			// A project you haven't trusted yet: its commands reach only the sites allowed (docs/spec/39). A chat's own
+			// folder isn't a project, so its network stays open.
+			network: {
+				filtered: () => this.policy.networkFiltered?.(entry.projectPath ?? entry.cwd!) ?? false,
+				rules: () => this.policy.rulesFor(entry.projectPath ?? entry.cwd!).filter((r) => r.kind === "host").map((r) => r.pattern),
+				addRule: (pattern: string) => this.policy.addRule(entry.projectPath ?? entry.cwd!, { kind: "host", pattern }),
 			},
 			folders: () => this.policy.foldersFor?.(entry.projectPath ?? entry.cwd!) ?? [],
 			// The project's check after the agent's edits (05-build "Diagnostics"); not for a review or a chat lens.

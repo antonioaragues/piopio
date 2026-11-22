@@ -323,7 +323,8 @@ export const ApprovalMode = literals("read_only", "ask", "auto_edit", "full_auto
 export type ApprovalMode = Static<typeof ApprovalMode>;
 
 /** "Always allow" rules, per project (AP2): a bash command prefix, a tool name, or a path glob. */
-export const ApprovalRule = Type.Object({ id: Type.String(), kind: literals("command", "tool", "path"), pattern: Type.String(), createdAt: Type.String() });
+/** "host": a site a filtered project's commands may reach (docs/spec/39), "example.com" or "*.example.com". */
+export const ApprovalRule = Type.Object({ id: Type.String(), kind: literals("command", "tool", "path", "host"), pattern: Type.String(), createdAt: Type.String() });
 export type ApprovalRule = Static<typeof ApprovalRule>;
 
 /**
@@ -343,7 +344,7 @@ export const PendingPrompt = Type.Object({
 	/** Why it asks even though the mode would allow it (deny-list, outside the project). */
 	reason: Type.Optional(Type.String()),
 	/** Approvals: the rule "Always allow" would add; absent when it can't be made a rule (deny-list). */
-	rule: Type.Optional(Type.Object({ kind: literals("command", "tool", "path"), pattern: Type.String() })),
+	rule: Type.Optional(Type.Object({ kind: literals("command", "tool", "path", "host"), pattern: Type.String() })),
 	/** Questions and selects: the choices offered. */
 	options: Type.Optional(Type.Array(Type.String())),
 	placeholder: Type.Optional(Type.String()),
@@ -834,6 +835,11 @@ export const ProjectInfo = Type.Object({
 	check: Type.Optional(Type.Object({ command: Type.Optional(Type.String()), source: literals("auto", "set", "off") })),
 	trust: literals("trusted", "untrusted", "undecided"),
 	needsTrust: Type.Boolean(),
+	/**
+	 * Its commands' network (docs/spec/39): open, or filtered (only package registries, GitHub and the sites allowed;
+	 * others ask). Projects added or cloned start filtered until they're trusted.
+	 */
+	network: Type.Optional(literals("open", "filtered")),
 	/** Where the project shows (04-chat P1): Build, Chat, or both. Detected when added; "Show in…" changes it. */
 	lenses: Type.Array(literals("build", "chat")),
 	/** The folder no longer exists. */
@@ -1464,6 +1470,8 @@ export const methods = {
 			prEvents: Type.Optional(literals("off", "tell", "act")),
 			/** The check after the agent's edits (05-build "Diagnostics"): a command, "" for off, null for automatic. */
 			check: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+			/** Its commands' network (docs/spec/39). Trusting the project also opens it. */
+			network: Type.Optional(literals("open", "filtered")),
 		}),
 		result: Type.Object({ project: ProjectInfo }),
 	},

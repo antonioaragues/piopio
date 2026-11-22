@@ -1366,6 +1366,11 @@ final class EngineController {
         _ = try? await client?.call("projects.configure", ProjectsConfigureParams(id: project.id, trust: trusted), as: ProjectsAddResult.self)
     }
 
+    /// Whether the project's commands reach only the sites allowed (docs/spec/39).
+    func setNetwork(filtered: Bool, for project: ProjectInfo) async {
+        _ = try? await client?.call("projects.configure", ProjectsConfigureParams(id: project.id, network: filtered ? .filtered : .open), as: ProjectsAddResult.self)
+    }
+
     func removeRule(_ rule: ApprovalRule, from project: ProjectInfo) async {
         _ = try? await client?.call("projects.configure", ProjectsConfigureParams(id: project.id, removeRule: rule.id), as: ProjectsAddResult.self)
     }

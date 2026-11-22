@@ -150,7 +150,7 @@ struct BuildSessionView: View {
                         .padding(.horizontal, 24).padding(.bottom, 8)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                if let project, project.needsTrust, project.trust == .undecided {
+                if let project, project.trust == .undecided, project.needsTrust || project.network == .filtered {
                     TrustBanner(engine: engine, project: project)
                         .padding(.horizontal, 24).padding(.bottom, 8)
                 }
@@ -785,6 +785,7 @@ struct PromptCard: View {
         case .command: "Always allow \(rule.pattern)"
         case .tool: "Always allow \(rule.pattern)"
         case .path: "Allow edits in \(URL(fileURLWithPath: String(rule.pattern.dropLast(3))).lastPathComponent)"
+        case .host: "Always allow \(rule.pattern)"
         }
     }
 }
@@ -992,8 +993,9 @@ extension Notification.Name {
     static let showCommit = Notification.Name("piopio.showCommit")
 }
 
-/// The project has its own setup that runs code (pi's .pi extensions, MCP servers, settings, prompts or skills; Claude
-/// Code's hooks and MCP servers in .claude or .mcp.json) and no trust decision yet: it doesn't load until you trust it.
+/// The project has no trust decision yet, and something waits for one: its own setup that runs code (pi's .pi
+/// extensions, MCP servers, settings, prompts or skills; Claude Code's hooks and MCP servers in .claude or .mcp.json),
+/// which doesn't load until you trust it, or its commands' filtered network (docs/spec/39), which trusting opens.
 /// The decision is pi's, so the pi CLI uses it too.
 struct TrustBanner: View {
     let engine: EngineController
@@ -1002,7 +1004,7 @@ struct TrustBanner: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "checkmark.shield").foregroundStyle(Color.dsAmber)
-            Text("**\(project.name)** has its own setup (in .pi, .claude or .mcp.json: extensions, hooks, MCP servers, prompts or skills). It loads only if you trust the project; it can run code on your Mac.")
+            Text(Self.text(project))
                 .font(.system(size: 12.5))
                 .foregroundStyle(Color.dsFg)
                 .fixedSize(horizontal: false, vertical: true)
@@ -1015,6 +1017,18 @@ struct TrustBanner: View {
         .background(Color.dsAmber.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
         .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.dsAmber.opacity(0.35), lineWidth: 0.5))
         .help("Applies to sessions you start or reopen from now on.")
+    }
+
+    /// What waits for trust: the project's own setup, its commands' network (docs/spec/39), or both.
+    static func text(_ project: ProjectInfo) -> LocalizedStringKey {
+        let filtered = project.network == .filtered
+        if project.needsTrust && filtered {
+            return "**\(project.name)** has its own setup (in .pi, .claude or .mcp.json), which can run code on your Mac, and its commands reach only package registries, GitHub and the sites you allow. Trusting the project loads the setup and opens the network."
+        }
+        if filtered {
+            return "Commands in **\(project.name)** reach only package registries, GitHub and the sites you allow; Piopio asks about others. Trust the project once you know it, and they reach any site."
+        }
+        return "**\(project.name)** has its own setup (in .pi, .claude or .mcp.json: extensions, hooks, MCP servers, prompts or skills). It loads only if you trust the project; it can run code on your Mac."
     }
 }
 

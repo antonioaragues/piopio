@@ -1,10 +1,11 @@
 import { spawn, spawnSync } from "node:child_process";
+import { createServer } from "node:http";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { describe, expect, test } from "vitest";
-import { confine, sandboxExtension, sandboxHidden, sandboxHint, sandboxRoots, sandboxShims, seatbeltProfile } from "../src/sandbox.js";
+import { confine, networkHint, proxyEnv, sandboxExtension, sandboxHidden, sandboxHint, sandboxRoots, sandboxShims, seatbeltProfile } from "../src/sandbox.js";
 
 // The wrappers go in Piopio's data folder: a scratch one here, never the user's.
 process.env.PIOPIO_HOME = realpathSync(mkdtempSync(join(tmpdir(), "pio-home-")));
@@ -122,4 +123,35 @@ test("a confined command's failure says what stopped it: signed out of GitHub, a
 	expect(sandboxHint("touch: /etc/x: Operation not permitted")).toMatch(/stopped a write outside the project/);
 	expect(sandboxHint("sandbox_apply: Operation not permitted")).toMatch(/its own macOS sandbox/);
 	expect(sandboxHint("Error: tests failed")).toBeUndefined();
+});
+
+describe.skipIf(process.platform !== "darwin")("a filtered network (docs/spec/39)", () => {
+	test("nothing outside this Mac answers, a server on it does, and tools are pointed at the proxy", async () => {
+		const server = createServer((_req, res) => res.end("local"));
+		await new Promise<void>((r) => server.listen(0, "127.0.0.1", () => r()));
+		const port = (server.address() as { port: number }).port;
+		try {
+			const project = realpathSync(mkdtempSync(join(tmpdir(), "pio-net-")));
+			const profile = seatbeltProfile(sandboxRoots(project), undefined, undefined, true);
+			const sh = (command: string) =>
+				new Promise<string>((resolve) => {
+					const child = spawn("/bin/sh", ["-c", confine(command, profile, "/bin/sh", undefined, proxyEnv(4321))], { cwd: project });
+					let out = "";
+					child.stdout.on("data", (d) => (out += d));
+					child.stderr.on("data", (d) => (out += d));
+					child.on("close", () => resolve(out.trim()));
+				});
+			expect(await sh(`curl -s --noproxy '*' http://127.0.0.1:${port}/`)).toBe("local");
+			expect(await sh("curl -sS --noproxy '*' --max-time 5 -o /dev/null http://1.1.1.1/; echo exit=$?")).toMatch(/exit=7/);
+			expect(await sh("echo $HTTPS_PROXY $NO_PROXY $NODE_USE_ENV_PROXY")).toBe("http://127.0.0.1:4321 localhost,127.0.0.1,::1 1");
+			// Not filtered: the profile has no network rule.
+			expect(seatbeltProfile(sandboxRoots(project))).not.toContain("network-outbound (remote ip");
+		} finally {
+			server.close();
+		}
+	});
+
+	test("the note after a refused site names it and says not to look for another way", () => {
+		expect(networkHint(["evil.example", "x.example:22"])).toMatch(/kept this command from reaching evil\.example, x\.example:22\..*Don't look for another way/s);
+	});
 });

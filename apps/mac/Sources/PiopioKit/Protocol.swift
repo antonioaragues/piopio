@@ -1877,7 +1877,8 @@ public enum ApprovalMode: String, Codable, Sendable, CaseIterable, Identifiable 
 }
 
 public struct ApprovalRule: Codable, Sendable, Hashable, Identifiable {
-    public enum Kind: String, Codable, Sendable { case command, tool, path }
+    /// `host`: a site a filtered project's commands may reach (docs/spec/39).
+    public enum Kind: String, Codable, Sendable { case command, tool, path, host }
     public var id: String
     public var kind: Kind
     public var pattern: String
@@ -1935,9 +1936,11 @@ public struct ProjectsConfigureParams: Encodable, Sendable {
     public var linkFolder: LinkFolder?
     public var unlinkFolder: String?
     public var prEvents: String?
-    public init(id: String, approvalMode: ApprovalMode? = nil, removeRule: String? = nil, trust: Bool? = nil, linkFolder: LinkFolder? = nil, unlinkFolder: String? = nil, prEvents: String? = nil) {
+    /// Its commands' network (docs/spec/39).
+    public var network: ProjectInfo.Network?
+    public init(id: String, approvalMode: ApprovalMode? = nil, removeRule: String? = nil, trust: Bool? = nil, linkFolder: LinkFolder? = nil, unlinkFolder: String? = nil, prEvents: String? = nil, network: ProjectInfo.Network? = nil) {
         self.id = id; self.approvalMode = approvalMode; self.removeRule = removeRule; self.trust = trust
-        self.linkFolder = linkFolder; self.unlinkFolder = unlinkFolder; self.prEvents = prEvents
+        self.linkFolder = linkFolder; self.unlinkFolder = unlinkFolder; self.prEvents = prEvents; self.network = network
     }
 }
 
@@ -1986,6 +1989,9 @@ public struct ProjectInfo: Codable, Sendable, Hashable, Identifiable {
     public enum Trust: String, Codable, Sendable { case trusted, untrusted, undecided }
     public var trust: Trust
     public var needsTrust: Bool
+    /// Its commands' network (docs/spec/39): open, or filtered until the project is trusted.
+    public enum Network: String, Codable, Sendable { case open, filtered }
+    public var network: Network?
     /// Where the project shows: Build, Chat, or both (04-chat P1).
     public enum Lens: String, Codable, Sendable { case build, chat }
     public var lenses: [Lens]

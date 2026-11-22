@@ -8,7 +8,7 @@ export { notifyExtension, type NotifyBridge, type Question } from "./notify.js";
 export { commandSegments, readOnlyCommand, decide, deniedCommand, physical, sensitivePath, suggestCommandRule, type ApprovalMode, type Decision, type Rule, type RuleKind } from "./policy.js";
 export { detectCheck, diagnosticsExtension, DIAGNOSTICS_ENTRY, MAX_CHECK_ROUNDS, problemsIn, runCheck, type DiagnosticsBridge } from "./diagnostics.js";
 export { backgroundExtension, MAX_RUNNING, ProcessManager, startedText, type BackgroundProcess } from "./background.js";
-export { confine, OUTSIDE_PROJECT, sandboxExtension, sandboxRoots, sandboxUnavailable, seatbeltProfile, shellQuote, type SandboxBridge } from "./sandbox.js";
+export { confine, networkHint, OUTSIDE_PROJECT, proxyEnv, sandboxExtension, sandboxRoots, sandboxUnavailable, seatbeltProfile, shellQuote, type FilteredNetwork, type SandboxBridge } from "./sandbox.js";
 export { presentExtension, presentedFiles, MAX_PRESENTED, type PresentedFile } from "./present.js";
 export { goalExtension, goalFrom, goalPrompt, GOAL_ENTRY, MAX_ROUNDS, type Goal, type GoalStatus } from "./goal.js";
 export { parseVerdict, REVIEW_SYSTEM, reviewPrompt, type Verdict } from "./review.js";

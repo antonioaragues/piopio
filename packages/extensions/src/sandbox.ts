@@ -31,6 +31,23 @@ export interface SandboxBridge {
 	enabled(): boolean;
 	/** More folders commands may write to. */
 	extraRoots?(): string[];
+	/**
+	 * The project's network is filtered (docs/spec/39): commands reach the internet only through this proxy, which lets
+	 * through the hosts allowed and asks about others. Undefined: the network is open. Read on every command.
+	 */
+	network?(): Promise<FilteredNetwork | undefined>;
+}
+
+/**
+ * A filtered network: the proxy's port (none when it couldn't start: then nothing outside this Mac is reachable), and
+ * the hosts it refused since a moment, to tell the agent what stopped a command.
+ */
+export type FilteredNetwork = { port?: number; refusedSince(at: number): string[] };
+
+/** The variables tools read their proxy from; Node's fetch reads them only with NODE_USE_ENV_PROXY. */
+export function proxyEnv(port: number): Record<string, string> {
+	const url = `http://127.0.0.1:${port}`;
+	return { HTTP_PROXY: url, HTTPS_PROXY: url, http_proxy: url, https_proxy: url, ALL_PROXY: url, all_proxy: url, NO_PROXY: "localhost,127.0.0.1,::1", no_proxy: "localhost,127.0.0.1,::1", NODE_USE_ENV_PROXY: "1" };
 }
 
 /** Caches and build folders under the home folder that installs and builds write to. */
@@ -216,7 +233,7 @@ export const KEYCHAIN_TOOL = "/usr/bin/security";
  * resolve their working folder (`realpath`, `git`) stat each folder above it. Later rules win in Seatbelt, but only over
  * a rule for the same operation, so each allow names the operation its deny does.
  */
-export function seatbeltProfile(roots: readonly string[], hidden: readonly string[] = sandboxHidden(), readable: readonly string[] = [real(sandboxShimsDir())]): string {
+export function seatbeltProfile(roots: readonly string[], hidden: readonly string[] = sandboxHidden(), readable: readonly string[] = [real(sandboxShimsDir())], filtered = false): string {
 	const subpaths = (paths: readonly string[]) => paths.map((p) => `(subpath ${sbpl(p)})`).join(" ");
 	const lines = ["(version 1)", "(allow default)", "(deny file-write*)", '(allow file-write* (subpath "/dev"))', `(allow file-write* ${subpaths(roots)})`, `(deny process-exec (literal ${sbpl(KEYCHAIN_TOOL)}))`];
 	if (hidden.length) {
@@ -227,6 +244,9 @@ export function seatbeltProfile(roots: readonly string[], hidden: readonly strin
 		if (readInside.length) lines.push(`(allow file-read-data ${subpaths(readInside)})`);
 		if (rootsInside.length) lines.push(`(allow file-write* ${subpaths(rootsInside)})`);
 	}
+	// A filtered network (docs/spec/39): no address but this Mac's, where dev servers, tests and the filter's proxy are.
+	// Unix sockets (DNS, ssh-agent) aren't addresses; the hidden ones stay refused above.
+	if (filtered) lines.push('(deny network-outbound (remote ip "*:*"))', '(allow network-outbound (remote ip "localhost:*"))');
 	return lines.join("\n");
 }
 
@@ -235,9 +255,13 @@ export function shellQuote(value: string): string {
 	return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
-/** The command line that runs `command` with `shell` inside the profile, with the wrappers in `shimDir` first on PATH. */
-export function confine(command: string, profile: string, shell: string, shimDir?: string): string {
-	const inner = shimDir ? `PATH=${shellQuote(shimDir)}:"$PATH"; export PATH\n${command}` : command;
+/**
+ * The command line that runs `command` with `shell` inside the profile, with the wrappers in `shimDir` first on PATH and
+ * `env` set (a filtered network's proxy).
+ */
+export function confine(command: string, profile: string, shell: string, shimDir?: string, env: Record<string, string> = {}): string {
+	const exports = Object.entries(env).map(([k, v]) => `${k}=${shellQuote(v)}; export ${k}\n`).join("");
+	const inner = exports + (shimDir ? `PATH=${shellQuote(shimDir)}:"$PATH"; export PATH\n${command}` : command);
 	return `exec ${SANDBOX_EXEC} -p ${shellQuote(profile)} ${shellQuote(shell)} -c ${shellQuote(inner)}`;
 }
 
@@ -254,7 +278,7 @@ export function sandboxUnavailable(): string | undefined {
 	return probed;
 }
 
-export const SANDBOX_GUIDELINE = `Commands run in a sandbox: they can read almost anything (not Piopio's own data, sign-ins and credentials: gh and git over HTTPS are signed out there) and use the network, but write only inside the project folder, temporary folders and package/build caches. If a command must write elsewhere (a global install, a file in the home folder), run it again with ${OUTSIDE_PROJECT}: true; the user is asked first.`;
+export const SANDBOX_GUIDELINE = `Commands run in a sandbox: they can read almost anything (not Piopio's own data, sign-ins and credentials: gh and git over HTTPS are signed out there) and use the network (in a project that isn't trusted yet, only package registries, GitHub and the sites the user allows: Piopio asks them about others), but write only inside the project folder, temporary folders and package/build caches. If a command must write elsewhere (a global install, a file in the home folder), run it again with ${OUTSIDE_PROJECT}: true; the user is asked first.`;
 
 const NESTED_HINT = `\n\n[A tool tried to start its own macOS sandbox, which can't run inside Piopio's ("sandbox_apply: Operation not permitted"). Piopio already turns it off for swift and xcodebuild. For another tool, look for its flag that disables its own sandbox and run it again; Piopio's sandbox still keeps writes inside the project.]`;
 
@@ -270,6 +294,11 @@ export function sandboxHint(output: string): string | undefined {
 	return undefined;
 }
 
+/** What stopped a command in a filtered project: the hosts the filter didn't let through. */
+export function networkHint(hosts: readonly string[]): string {
+	return `\n\n[Piopio's network filter kept this command from reaching ${hosts.join(", ")}. This project isn't trusted yet, so its commands reach only package registries, GitHub and the sites the user allowed; the user was asked about these and said no, or the run stopped. Don't look for another way to reach them: tell the user if the work needs them (they can allow the site, or trust the project in Settings › Approvals).]`;
+}
+
 type Content = { type: string; text?: string }[];
 
 export function sandboxExtension(bridge: SandboxBridge, options: { shellPath?: () => string | undefined; processes?: () => ProcessManager } = {}): ExtensionFactory {
@@ -277,11 +306,16 @@ export function sandboxExtension(bridge: SandboxBridge, options: { shellPath?: (
 		let cwd = process.cwd();
 		const shell = () => getShellConfig(options.shellPath?.()).shell;
 		const plain = createBashToolDefinition(cwd);
+		// The network as the next command gets it, read just before it starts (the spawn hook can't wait).
+		let network: FilteredNetwork | undefined;
+		const line = (command: string, at: string) => {
+			const profile = seatbeltProfile(sandboxRoots(at, { extra: bridge.extraRoots?.() ?? [] }), undefined, undefined, network !== undefined);
+			return confine(command, profile, shell(), sandboxShims(), network?.port ? proxyEnv(network.port) : {});
+		};
+		// A proxy that can't start still filters: nothing outside this Mac, rather than everything.
+		const readNetwork = async () => (network = bridge.network ? await bridge.network().catch((): FilteredNetwork => ({ refusedSince: () => [] })) : undefined);
 		const confined = createBashToolDefinition(cwd, {
-			spawnHook: (context) => {
-				const profile = seatbeltProfile(sandboxRoots(context.cwd, { extra: bridge.extraRoots?.() ?? [] }));
-				return { ...context, command: confine(context.command, profile, shell(), sandboxShims()) };
-			},
+			spawnHook: (context) => ({ ...context, command: line(context.command, context.cwd) }),
 		});
 		const parameters = Type.Object({
 			...(plain.parameters as unknown as { properties: Record<string, never> }).properties,
@@ -304,10 +338,11 @@ export function sandboxExtension(bridge: SandboxBridge, options: { shellPath?: (
 				if (background && options.processes) {
 					const confineIt = !outside && bridge.enabled() && !(process.platform !== "darwin" && sandboxUnavailable());
 					if (confineIt && sandboxUnavailable()) return { content: [{ type: "text", text: `Nothing ran: Piopio's sandbox can't start on this Mac (${sandboxUnavailable()}).` }], details: {}, isError: true } as never;
-					const line = confineIt ? confine(input.command, seatbeltProfile(sandboxRoots(cwd, { extra: bridge.extraRoots?.() ?? [] })), shell(), sandboxShims()) : input.command;
+					if (confineIt) await readNetwork();
+					const commandLine = confineIt ? line(input.command, cwd) : input.command;
 					try {
 						const manager = options.processes();
-						const started = manager.start(input.command, line, cwd, { shell: shell(), ...(description ? { description } : {}) });
+						const started = manager.start(input.command, commandLine, cwd, { shell: shell(), ...(description ? { description } : {}) });
 						await manager.settle(started.id, 2500);
 						const first = manager.output(started.id);
 						return { content: [{ type: "text", text: startedText(first.process, first.text) }], details: { background: first.process } } as never;
@@ -324,10 +359,13 @@ export function sandboxExtension(bridge: SandboxBridge, options: { shellPath?: (
 					if (process.platform !== "darwin") return plain.execute(toolCallId, input as never, signal, onUpdate, ctx);
 					return { content: [{ type: "text", text: `Nothing ran: Piopio's sandbox can't start on this Mac (${unavailable}). Tell the user; they can turn the sandbox off in Settings › Approvals, or you can ask to run this with ${OUTSIDE_PROJECT}: true.` }], details: {}, isError: true } as never;
 				}
+				const net = await readNetwork();
+				const startedAt = Date.now();
 				const result = await confined.execute(toolCallId, input as never, signal, onUpdate, ctx);
 				const content = (result as { content?: Content }).content;
 				const text = content?.map((c) => c.text ?? "").join("") ?? "";
-				const hint = (result as { isError?: boolean }).isError ? sandboxHint(text) : undefined;
+				const refused = net?.refusedSince(startedAt) ?? [];
+				const hint = refused.length ? networkHint(refused) : (result as { isError?: boolean }).isError ? sandboxHint(text) : undefined;
 				if (hint) return { ...result, content: [...(content ?? []), { type: "text", text: hint }] } as never;
 				return result;
 			},

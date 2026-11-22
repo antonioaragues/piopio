@@ -19,7 +19,8 @@ import {
 	type AgentSession,
 	type ExtensionFactory,
 } from "@earendil-works/pi-coding-agent";
-import { backgroundExtension, confine, diagnosticsExtension, ProcessManager, sandboxRoots, seatbeltProfile, sandboxUnavailable, type BackgroundProcess } from "@piopio/pi-extensions";
+import { backgroundExtension, confine, diagnosticsExtension, ProcessManager, proxyEnv, sandboxRoots, seatbeltProfile, sandboxUnavailable, type BackgroundProcess, type FilteredNetwork } from "@piopio/pi-extensions";
+import { NetworkFilter } from "../network-filter.js";
 import { codeReviewExtension, type ReviewBridge } from "../code-review.js";
 import { approvalsExtension, checkpointsExtension, goalExtension, notifyExtension, planExtension, presentExtension, sandboxExtension, subagentsExtension, todosExtension, type ApprovalMode, type Question, type Rule, type SubagentBridge, type Verdict } from "@piopio/pi-extensions";
 import type { ApprovalItem, ApprovalRule, BranchInfo, CheckpointItem, ContainerRef, FileChange, ModelRef, PromptResponse, SessionState, Snapshot } from "@piopio/protocol";
@@ -103,6 +104,11 @@ export type BuildOpenOptions = {
 	piAgentDir?: string;
 	/** Approval mode and the project's rules, read on every tool call (they can change mid-session). */
 	approvals: { mode(): ApprovalMode; rules(): readonly ApprovalRule[]; addRule(rule: Rule): void };
+	/**
+	 * The project's network (docs/spec/39): filtered until it's trusted, read on every command; the sites it may reach
+	 * besides the built-in ones, and how one becomes such a site (Always).
+	 */
+	network?: { filtered(): boolean; rules(): readonly string[]; addRule(pattern: string): void };
 	/** Folders linked to the project (docs/spec/18 §18), read on every turn. */
 	folders?: () => readonly { path: string; edit: boolean }[];
 	/** Shadow-git snapshots of the working tree (docs/spec/05-build §7). */
@@ -181,6 +187,32 @@ export class BuildRuntime implements Runtime {
 		let runtime: BuildRuntime | undefined;
 		const agentDir = o.piAgentDir ?? getAgentDir();
 		const settingsManager = SettingsManager.create(o.cwd, agentDir);
+		// A filtered network's proxy (docs/spec/39), the session's own, started the first time a command needs it.
+		let filter: NetworkFilter | undefined;
+		let filterPort: number | undefined;
+		const network = async (): Promise<FilteredNetwork | undefined> => {
+			if (!o.network?.filtered()) return undefined;
+			const net = o.network;
+			filter ??= new NetworkFilter({
+				rules: () => net.rules(),
+				addRule: (pattern) => net.addRule(pattern),
+				ask: async (host) => {
+					const r = await broker.ask({
+						kind: "approval",
+						title: `Let this project's commands reach ${host}`,
+						tool: "network",
+						detail: host,
+						reason: "This project isn't trusted yet, so its commands reach only package registries, GitHub and the sites you allow.",
+						rule: { kind: "host", pattern: host },
+					});
+					return r?.decision === "always" ? "always" : r?.decision === "allow" ? "once" : r ? "deny" : undefined;
+				},
+			});
+			filterPort = await filter.start();
+			return { port: filterPort, refusedSince: (at) => filter!.refusedSince(at) };
+		};
+		// Started now when it's filtered, so the check after edits (which can't wait) finds it running.
+		if (o.network?.filtered()) await network().catch(() => undefined);
 		const resourceLoader = new DefaultResourceLoader({
 			cwd: o.cwd,
 			agentDir,
@@ -218,6 +250,7 @@ export class BuildRuntime implements Runtime {
 						enabled: () => (o.sandbox?.() ?? true) && o.approvals.mode() !== "full_auto",
 						// Linked folders that can be edited are writable like the project's own (18 §18).
 						extraRoots: () => (o.folders?.() ?? []).filter((f) => f.edit).map((f) => f.path),
+						network,
 					},
 					{ shellPath: () => settingsManager.getShellPath(), processes: () => processes },
 				),
@@ -230,14 +263,17 @@ export class BuildRuntime implements Runtime {
 								shell: () => settingsManager.getShellPath() ?? process.env.SHELL ?? "/bin/sh",
 								wrap: (command, cwd) => {
 									const confined = (o.sandbox?.() ?? true) && o.approvals.mode() !== "full_auto" && process.platform === "darwin" && !sandboxUnavailable();
-									return confined ? confine(command, seatbeltProfile(sandboxRoots(cwd)), settingsManager.getShellPath() ?? process.env.SHELL ?? "/bin/sh") : command;
+									// Filtered like the session's commands: through its proxy, or nowhere outside this Mac.
+									const filtered = o.network?.filtered() ?? false;
+									return confined ? confine(command, seatbeltProfile(sandboxRoots(cwd), undefined, undefined, filtered), settingsManager.getShellPath() ?? process.env.SHELL ?? "/bin/sh", undefined, filtered && filterPort ? proxyEnv(filterPort) : {}) : command;
 								},
 							}),
 						]
 					: []),
 				approvalsExtension({
 					mode: o.approvals.mode,
-					rules: () => o.approvals.rules().map(({ kind, pattern }) => ({ kind, pattern })),
+					// Host rules are the network filter's (docs/spec/39), not a tool's.
+					rules: () => o.approvals.rules().flatMap(({ kind, pattern }) => (kind === "host" ? [] : [{ kind, pattern }])),
 					addRule: o.approvals.addRule,
 					// Connectors' read capabilities (Read only lets them run; their own permissions still apply).
 					readOnlyTool: (tool) => groupOf(tool)?.access === "read",
@@ -341,6 +377,7 @@ export class BuildRuntime implements Runtime {
 			...(o.thinking ? { thinkingLevel: o.thinking as never } : {}),
 		});
 		runtime = new BuildRuntime(o.ref, o.hub, session, o.model, broker, o.approvals.mode, o.cwd, o.checkpoints, o.plan, o.chat);
+		runtime.closeNetwork = () => filter?.close();
 		if (!o.chat) runtime.useProcesses(processes);
 		if (o.keepImages) runtime.builder.keepImages = o.keepImages;
 		runtime.connectors = o.connectors;
@@ -1061,7 +1098,11 @@ export class BuildRuntime implements Runtime {
 		}
 	}
 
+	/** Stops the filtered network's proxy, if it started. */
+	closeNetwork?: () => void;
+
 	async close(): Promise<void> {
+		this.closeNetwork?.();
 		this.broker.cancelAll();
 		this.unsubscribe?.();
 		await this.processes?.stopAll();

@@ -7,7 +7,7 @@ import { detectCheck } from "@piopio/pi-extensions";
 import { cpSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { hasTrustRequiringProjectResources, ProjectTrustStore } from "@earendil-works/pi-coding-agent";
-import { claudeCodeTrusted, hasClaudeCodeSetup } from "./project-trust.js";
+import { claudeCodeTrusted, hasClaudeCodeSetup, piTrust } from "./project-trust.js";
 import type { ApprovalMode, ApprovalRule, ProjectInfo } from "@piopio/protocol";
 import { EngineError } from "./models.js";
 import { NOTES_FILE } from "./runtimes/build.js";
@@ -19,7 +19,8 @@ type Lens = "build" | "chat";
  * `lenses`: before docs/spec/18, whether the folder showed in Build, Chat or both. `folder: false` and `instructions`:
  * a project without a folder, before CF4. Both are read once to migrate, then dropped.
  */
-type StoredProject = { id: string; path: string; name: string; addedAt: string; approvalMode?: ApprovalMode; rules?: ApprovalRule[]; lenses?: Lens[]; folder?: false; instructions?: string; folders?: LinkedFolder[]; prEvents?: PrEvents; check?: string };
+/** `network: "filtered"`: its commands reach only the hosts allowed (docs/spec/39); absent, open. */
+type StoredProject = { id: string; path: string; name: string; addedAt: string; approvalMode?: ApprovalMode; rules?: ApprovalRule[]; lenses?: Lens[]; folder?: false; instructions?: string; folders?: LinkedFolder[]; prEvents?: PrEvents; check?: string; network?: "filtered" };
 /** What a conversation hears about its pull request (docs/spec/17 §5): nothing, a notification, or a follow-up it works on. */
 export type PrEvents = "off" | "tell" | "act";
 
@@ -47,7 +48,7 @@ export class Projects {
 
 	constructor(
 		private readonly file: string,
-		agentDir: string,
+		private readonly agentDir: string,
 		/** Where New project makes its folders (~/Piopio). */
 		private readonly root?: string,
 		/** Where projects without a folder kept their files before CF4 (`<home>/projects`), to move them out. */
@@ -125,7 +126,27 @@ export class Projects {
 		const decision = exists ? this.trust.get(p.path) : null;
 		// Its own pi setup, or Claude Code hooks and MCP servers that Claude Code itself wasn't told to trust.
 		const needsTrust = exists && (hasTrustRequiringProjectResources(p.path) || (hasClaudeCodeSetup(p.path) && !claudeCodeTrusted(p.path)));
-		return { ...describe(p), trust: decision === true ? "trusted" : decision === false ? "untrusted" : "undecided", needsTrust };
+		return { ...describe(p), trust: decision === true ? "trusted" : decision === false ? "untrusted" : "undecided", needsTrust, network: p.network ?? "open" };
+	}
+
+	/**
+	 * Whether the commands of the project at `path` (or containing it) have a filtered network (docs/spec/39). Read for
+	 * each command, so trusting the project opens it at once.
+	 */
+	networkFiltered(path: string): boolean {
+		const entry = this.entries.find((p) => path === p.path || path.startsWith(`${p.path}/`));
+		return entry?.network === "filtered";
+	}
+
+	/** The sites a project's commands may reach, besides the built-in ones: its "host" rules. */
+	hostRules(path: string): string[] {
+		const entry = this.entries.find((p) => path === p.path || path.startsWith(`${p.path}/`));
+		return (entry?.rules ?? []).filter((r) => r.kind === "host").map((r) => r.pattern);
+	}
+
+	/** Trusted already, in pi (the folder or one above it) or in Claude Code. */
+	private trustedElsewhere(path: string): boolean {
+		return piTrust(path, this.agentDir) === true || claudeCodeTrusted(path);
 	}
 
 	get(id: string): ProjectInfo {
@@ -156,7 +177,9 @@ export class Projects {
 		const existing = this.entries.find((p) => p.path === real);
 		if (existing) return this.describe(existing);
 		const readOnly = lens === "chat" || detectLens(real) === "chat";
-		const entry: StoredProject = { id: newId("prj"), path: real, name: basename(real), addedAt: new Date().toISOString(), ...(readOnly ? { approvalMode: "read_only" as const } : {}) };
+		// A folder from elsewhere (one you open, a clone) has a filtered network until you trust it (docs/spec/39).
+		const filtered = !this.trustedElsewhere(real);
+		const entry: StoredProject = { id: newId("prj"), path: real, name: basename(real), addedAt: new Date().toISOString(), ...(readOnly ? { approvalMode: "read_only" as const } : {}), ...(filtered ? { network: "filtered" as const } : {}) };
 		this.entries.push(entry);
 		this.save();
 		return this.describe(entry);
@@ -187,7 +210,7 @@ export class Projects {
 	}
 
 	/** Default approval mode, or rule removal (Settings / project menu). */
-	configure(id: string, change: { approvalMode?: ApprovalMode; removeRule?: string; trust?: boolean | null; linkFolder?: LinkedFolder; unlinkFolder?: string; prEvents?: PrEvents; check?: string | null }): ProjectInfo {
+	configure(id: string, change: { approvalMode?: ApprovalMode; removeRule?: string; trust?: boolean | null; linkFolder?: LinkedFolder; unlinkFolder?: string; prEvents?: PrEvents; check?: string | null; network?: "open" | "filtered" }): ProjectInfo {
 		const entry = this.entries.find((p) => p.id === id);
 		if (!entry) throw new EngineError("NOT_FOUND", `No project ${id}`);
 		if (change.linkFolder) this.link(entry, change.linkFolder);
@@ -202,6 +225,10 @@ export class Projects {
 		if (change.removeRule) entry.rules = (entry.rules ?? []).filter((r) => r.id !== change.removeRule);
 		// Saved where the pi CLI reads it too. Sessions opened afterwards load (or skip) the project's resources.
 		if (change.trust !== undefined) this.trust.set(entry.path, change.trust);
+		// Trusting a project opens its network too; the switch in Settings sets it either way (docs/spec/39).
+		if (change.trust === true) delete entry.network;
+		if (change.network === "filtered") entry.network = "filtered";
+		else if (change.network === "open") delete entry.network;
 		this.save();
 		return this.describe(entry);
 	}
