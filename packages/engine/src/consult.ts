@@ -37,6 +37,9 @@ function resolve(ref: string, agents: ConsultAgent[]): ConsultAgent | undefined 
 	return agents.find((a) => a.id.toLowerCase() === r) ?? agents.find((a) => a.name.toLowerCase() === r);
 }
 
+/** The note that a message brought agents in with @. */
+export const MENTION_ENTRY = "piopio.mention";
+
 export function consultExtension(bridge: ConsultBridge, from: () => string): ExtensionFactory {
 	return (pi) => {
 		/** Who this message brought in: their calls say "joined for this message". */
@@ -46,12 +49,18 @@ export function consultExtension(bridge: ConsultBridge, from: () => string): Ext
 			if (!agents.length) return undefined;
 			if (event.messageType === "user") joined = new Set(mentioned(event.prompt, agents).map((a) => a.id));
 			const list = agents.map((a) => `- ${a.name}${a.description ? `: ${a.description}` : ""}`).join("\n");
-			const now = agents.filter((a) => joined.has(a.id)).map((a) => a.name);
-			const mention = now.length
-				? `\n\nIn this message the user brought in ${now.join(" and ")} with @. Before you answer, call ask_agent for ${now.length === 1 ? "it" : "each"} with what they ask of it and the context it needs. The user sees its answer, so don't repeat it; build on it.`
-				: "";
-			promptSection(event as unknown as PromptEvent, "your-agents", `The user's own agents. Ask one with ask_agent when its job fits what's needed; the user can bring one in by writing @Name. Never ask one to get around a limit here: a tool or app this conversation doesn't have, one the user turned off or one that's disconnected. Tell the user what's missing and how to turn it on instead.\n${list}${mention}`);
-			return undefined;
+			promptSection(event as unknown as PromptEvent, "your-agents", `The user's own agents. Ask one with ask_agent when its job fits what's needed; the user can bring one in by writing @Name. Never ask one to get around a limit here: a tool or app this conversation doesn't have, one the user turned off or one that's disconnected. Tell the user what's missing and how to turn it on instead.\n${list}`);
+			// Who this message brought in belongs to the message, not the system prompt: there it changed the prompt for one
+			// turn and again on the next (docs/spec/38 R3). A message pi keeps with it, which the transcript doesn't show.
+			const now = event.messageType === "user" ? agents.filter((a) => joined.has(a.id)).map((a) => a.name) : [];
+			if (!now.length) return undefined;
+			return {
+				message: {
+					customType: MENTION_ENTRY,
+					display: false,
+					content: `[Piopio] In the message above, the user brought in ${now.join(" and ")} with @. Before you answer, call ask_agent for ${now.length === 1 ? "it" : "each"} with what they ask of it and the context it needs. The user sees its answer, so don't repeat it; build on it.`,
+				},
+			};
 		});
 		// Every message you write, follow-ups included, says who it brings in.
 		pi.on("message_start", (event) => {

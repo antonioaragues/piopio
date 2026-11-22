@@ -333,16 +333,19 @@ test("an agent keeps its reminders and facts true: it sees its automations each 
 	});
 	const { DatabaseSync } = await import("node:sqlite");
 	const db = new DatabaseSync(join(home, "agents", `${ref.id}.sqlite`), { readOnly: true });
-	const sections = (db.prepare("SELECT record FROM entries ORDER BY id").all() as { record: string }[])
-		.map((r) => JSON.parse(r.record) as { model?: { role: string; sections?: Record<string, string> }[] })
-		.flatMap((r) => r.model ?? [])
+	const models = (db.prepare("SELECT record FROM entries ORDER BY id").all() as { record: string }[])
+		.map((r) => JSON.parse(r.record) as { model?: { role: string; content?: unknown; sections?: Record<string, string> }[] })
+		.flatMap((r) => r.model ?? []);
+	const sections = models
 		.filter((m) => m.role === "system" && m.sections)
 		// Each entry holds the sections that changed: the latest of each.
 		.reduce<Record<string, string>>((all, m) => ({ ...all, ...m.sections }), {});
 	db.close();
 	expect(sections["agent-automations"]).toContain("“ITV reminder”: Once, Wed 4 Dec 2030, 09:00");
 	expect(sections["agent-automations"]).toContain("cancel_automation it in the same turn");
-	expect(sections["agent-memory"]).toContain(`(${old!.id}) `);
+	// Its facts with their ids come just before the message they're recalled for (docs/spec/38 R3).
+	const said = models.findIndex((m) => m.role === "user" && JSON.stringify(m.content).includes("When does the ITV expire?"));
+	expect(JSON.stringify(models[said - 1]?.content)).toContain(`(${old!.id}) `);
 
 	// A new fact replaces the old one: only the new one is current, the card says what it was, and Undo puts it back.
 	await client.call("sessions.submit", { ref, input: { text: call("remember", { fact: "The ITV passed on 21 November 2026; it next expires on 21 November 2028", replaces: [old!.id, "mem_nope"] }) } });

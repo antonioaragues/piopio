@@ -212,3 +212,30 @@ second mode for R1 (recorded with `resolveTranscript(…, true)`, the in-place f
 - **What's left:** models that take no mid-conversation system message at all still collapse (the prefix test's four
   `test.fails`). R4 waits for numbers on those, and R3's hygiene (send state when it changes, recall each record once,
   no dates) still applies everywhere.
+
+### R3 as built (2026-11-22)
+
+What belongs to one message now travels with it, through pi's own channels, so it never touches the system prompt:
+
+- **Recall (agents).** `AgentCore` writes what a message recalls as an entry of its own just before it
+  (`piopio.recall`, pi-durable's `write` with a `model` part): a `<memory>` block that says Piopio adds it. Records
+  already in the model's view (pinned ones, or an earlier recall still in `conversation.context()`) are left out, so a
+  record comes once; after a compaction or a fork, what fell out of view can come again (TC7). The `agent-memory`
+  section keeps only how to use memory and the pinned records. The transcript doesn't show the entry.
+- **`@mentions` (Build and Chat).** "In this message the user brought in …" is a hidden custom message pi keeps right
+  after the message (`before_agent_start` → `message`); the `your-agents` section keeps only the list.
+- **Dates (TC6).** "Today is …" is gone from the web, agent and connected-apps sections. The clock's `[Sent …]` line on
+  each day's first message has it; the agent's section keeps its time zone.
+- **Result**, collapsed | in place, from the prefix test:
+
+| Scripted conversation | Collapsed | In place |
+|---|---|---|
+| Build, one `@mention` | 100% (was 50%) | 100% |
+| Agent, 7 messages with memory | 99% (was 36%) | 99% |
+| Build, `NOTES.md` edited | 50% | 99% |
+| Chat, About me changed | 0% | 99% |
+
+  The `@mention` and recall cases are ordinary tests now, with checks that the note and the `<memory>` block sit next
+  to their message and that a record isn't repeated. What still changes the prompt is state that really changed
+  (`NOTES.md`, About me, the board, an agent's automations and files): one in-place update for models that take it, one
+  miss for those that don't (R4).

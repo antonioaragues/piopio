@@ -523,9 +523,12 @@ function toInfo(m: Model<Api>, providerName: string, billing: string | undefined
 function installEcho(faux: FauxHandle): void {
 	const step = (context: { messages: readonly { role: string; content: unknown }[] }) => {
 		faux.appendResponses([step]);
-		const lastUser = context.messages.map((m) => m.role).lastIndexOf("user");
+		const textOf = (m: { content: unknown } | undefined) => (typeof m?.content === "string" ? m.content : Array.isArray(m?.content) ? (m.content as { type: string; text?: string }[]).map((b) => b.text ?? "").join("") : "");
+		// The person's last message, not a note Piopio put beside it (an @mention's, recalled memory: docs/spec/38 R3).
+		const own = (m: { role: string; content: unknown }) => m.role === "user" && !/^(\[Piopio\] |<memory>)/.test(textOf(m));
+		const lastUser = context.messages.findLastIndex(own);
 		const last = context.messages[lastUser];
-		const raw = typeof last?.content === "string" ? last.content : Array.isArray(last?.content) ? (last.content as { type: string; text?: string }[]).map((b) => b.text ?? "").join("") : "";
+		const raw = textOf(last);
 		// What the user typed, without the clock line the context guards add (@piopio/runtime context/clock).
 		const text = raw.replace(/^\[Sent [^\]\n]*\](\n\n)?/, "").replace(/^(<attachment [^>\n]*\/>\n)+/, "");
 		const script = scriptedTools(text);

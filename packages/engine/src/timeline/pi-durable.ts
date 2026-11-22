@@ -5,6 +5,7 @@
  * the last one to make the builder calls the events used to drive.
  */
 import type { AttachmentInfo } from "@piopio/protocol";
+import { RECALL_ENTRY } from "@piopio/runtime";
 import { contentText, type PiContentBlock, type PiMessage, type TimelineBuilder } from "./builder.js";
 import type { PiToolResult } from "./tool-details.js";
 
@@ -13,12 +14,15 @@ type UserData = { text: string; attachments?: AttachmentInfo[] };
 
 export type Entry = { id: string | number; kind: string; model?: PiMessage[]; data?: unknown };
 
+/** Entries the model reads that the transcript doesn't show: what memory recalled for a message (docs/spec/38 R3). */
+const UNSEEN = new Set([RECALL_ENTRY]);
+
 /** Flattens committed entries into messages, keeping the entry id for each. */
 export function messagesFromEntries(entries: readonly Entry[]): { messages: PiMessage[]; ids: string[] } {
 	const messages: PiMessage[] = [];
 	const ids: string[] = [];
 	for (const e of entries) {
-		if (e.kind === "pi.compaction") continue;
+		if (e.kind === "pi.compaction" || UNSEEN.has(e.kind)) continue;
 		for (const [i, m] of (e.model ?? []).entries()) {
 			if (m.role !== "user" && m.role !== "assistant" && m.role !== "toolResult") continue;
 			if ((e.kind === USER_ENTRY || (e.kind === "piopio.imported" && typeof (e.data as { text?: unknown })?.text === "string")) && m.role === "user") {
@@ -201,7 +205,7 @@ export class DurableViewMapper {
 			return;
 		}
 		const message = entry.model?.[0];
-		if (!message) return;
+		if (!message || UNSEEN.has(entry.kind)) return;
 		if (message.role === "user" && entry.kind === USER_ENTRY) {
 			const data = entry.data as UserData;
 			b.user(String(entry.id), data.text, message.timestamp as number | undefined, data.attachments);

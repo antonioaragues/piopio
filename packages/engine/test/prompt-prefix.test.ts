@@ -222,10 +222,21 @@ test("the same, in place, keeps the prefix for models that accept mid-conversati
 	expect(breaks(a.inPlace.get("aboutme"))).toEqual([]);
 });
 
-test.fails("Agent: what memory recalls for each message changes the system prompt (spec 38 T2), for models that collapse it: those without the flag (R4)", async () => {
+test("Agent: what memory recalls goes just before its message, once, so even a model that collapses keeps its prefix (spec 38 R3)", async () => {
 	const a = await start();
 	await SCENARIOS.agent!(a);
-	expect(breaks(a.requests.get("agent"))).toEqual([]);
+	const requests = a.requests.get("agent")!;
+	expect(breaks(requests)).toEqual([]);
+	// The fact the agent remembered comes back in a <memory> block before the question about it, and only once.
+	const last = requests.at(-1)!.join("\n");
+	expect(last.split("The dog is called Kiwi").length - 1).toBeGreaterThanOrEqual(1);
+	// Messages only (block 0, the system prompt, says where memory comes).
+	const blocks = requests.at(-1)!.slice(1).filter((b) => b.includes("<memory>"));
+	expect(blocks.length).toBe(1);
+	expect(blocks[0]).toContain("The dog is called Kiwi");
+	const at = requests.at(-1)!.findIndex((b, i) => i > 0 && b.includes("<memory>"));
+	expect(requests.at(-1)![at + 1]).toContain("What does Kiwi eat?");
+	expect(requests.at(-1)![0]).not.toContain("The dog is called Kiwi");
 });
 
 test("the same, in place, keeps the prefix for models that accept mid-conversation system messages (spec 38 §8 R1): agent", async () => {
@@ -234,10 +245,16 @@ test("the same, in place, keeps the prefix for models that accept mid-conversati
 	expect(breaks(a.inPlace.get("agent"))).toEqual([]);
 });
 
-test.fails("Build: an @mention changes the system prompt for its turn and again after (spec 38 T2), for models that collapse it: those without the flag (R4)", async () => {
+test("Build: an @mention's note goes with its message, so even a model that collapses keeps its prefix (spec 38 R3)", async () => {
 	const a = await start();
 	await SCENARIOS.mention!(a);
-	expect(breaks(a.requests.get("mention"))).toEqual([]);
+	const requests = a.requests.get("mention")!;
+	expect(breaks(requests)).toEqual([]);
+	const last = requests.at(-1)!;
+	const note = last.findIndex((b) => b.includes("the user brought in Pinpin with @"));
+	expect(note).toBeGreaterThan(0);
+	expect(last[note - 1]).toContain("@Pinpin what do you think?");
+	expect(last[0]).not.toContain("brought in");
 });
 
 test("the same, in place, keeps the prefix for models that accept mid-conversation system messages (spec 38 §8 R1): mention", async () => {

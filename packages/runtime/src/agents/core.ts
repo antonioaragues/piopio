@@ -15,7 +15,6 @@ import { Safety, type Approval, type ResultCard, type SafetyState, type UndoReco
 import { describeChange, learnFacts, unlearn, type Complete, type LearnedChange } from "../memory/learn.js";
 import { APPLE_TOOLS, AppUnavailable, appleTools, type AppToolResult } from "./apple.js";
 import { Peers, type Directory, type Envelope, type PeerState } from "./peers.js";
-import { localDate } from "../context/clock.js";
 import { dropEarlierReasoning, guardMessages, trimResult } from "../context/extension.js";
 import { FailureGuard } from "../context/failures.js";
 import { filesSection, fileTools, type AgentFilesBridge } from "./files.js";
@@ -23,9 +22,16 @@ import { filesSection, fileTools, type AgentFilesBridge } from "./files.js";
 type AgentState = ProactiveState & SafetyState & PeerState & {
 	/** contact id → conversation id. */
 	people: Record<string, string>;
-	/** conversation id → the memory recalled for its current turn (the system section shows it). */
+	/** conversation id → its pinned ("standing") memory, which the system section shows. What a message recalls goes in
+	 * the conversation, just before it (`RECALL_ENTRY`). */
 	recalled: Record<string, string>;
 };
+
+/**
+ * The memory recalled for the message that follows, as an entry of its own: the model sees it, the transcript doesn't.
+ * Recalled into the system prompt instead, it changed the prompt on nearly every message (docs/spec/38 R3).
+ */
+export const RECALL_ENTRY = "piopio.recall";
 
 export const AgentStateDoc = defineDoc<AgentState>({ kind: "piopio.agent-state", version: 1, scope: "session", initial: () => ({ people: {}, recalled: {} }), checkpointWhen: () => false });
 
@@ -518,11 +524,27 @@ export class AgentCore {
 			provider.recall(banks, text, { budgetTokens: 1200 }).catch(() => []),
 			Promise.all(banks.map((b) => provider.standing?.(b).catch(() => []) ?? Promise.resolve([] as MemoryRecord[]))).then((r) => r.flat()),
 		]);
-		const seen = new Set<string>();
-		const found = [...standing, ...hits].filter((r) => !(here && r.kind === "message" && r.source?.ref === here) && !seen.has(r.id) && seen.add(r.id));
-		await this.options.harness.commit(async (tx) => {
-			(await tx.doc(AgentStateDoc)).recalled[String(conversationId)] = memoryText(found);
-		}, this.options.context);
+		const fromHere = (r: MemoryRecord) => Boolean(here && r.kind === "message" && r.source?.ref === here);
+		const pinned = standing.filter((r) => !fromHere(r));
+		// The system section keeps the pinned records: they change only when the owner pins or unpins one.
+		const pinnedText = memoryText(pinned);
+		const state = await this.options.harness.snapshot(AgentStateDoc, this.options.context);
+		if (state?.recalled[String(conversationId)] !== pinnedText) {
+			await this.options.harness.commit(async (tx) => {
+				(await tx.doc(AgentStateDoc)).recalled[String(conversationId)] = pinnedText;
+			}, this.options.context);
+		}
+		// What this message recalls goes just before it, leaving out what the model already sees: pinned records, and
+		// records an earlier recall in its context brought (after a compaction or a fork, those may be gone, and come back).
+		const conversation = await this.options.harness.conversation(conversationId, this.options.context);
+		if (!conversation) return;
+		const view = await conversation.context(this.options.context).catch(() => undefined);
+		const shown = new Set([...pinned.map((r) => r.id), ...(view?.entries ?? []).flatMap((e) => (e.kind === RECALL_ENTRY ? ((e.data as { ids?: string[] } | undefined)?.ids ?? []) : []))]);
+		const fresh: MemoryRecord[] = [];
+		for (const r of hits) if (!fromHere(r) && !shown.has(r.id)) (shown.add(r.id), fresh.push(r));
+		if (!fresh.length) return;
+		const content = `<memory>\nFrom your memory, for the message that follows (Piopio adds this; the person didn't write it):\n${memoryText(fresh)}\n</memory>`;
+		await conversation.submit({ type: "write", entry: { kind: RECALL_ENTRY, data: { ids: fresh.map((r) => r.id) }, model: [{ role: "user", content, timestamp: Date.now() }] } } as never, this.options.context);
 	}
 
 	/** Banks other agents share with this one (AA6), read-only. */
@@ -823,7 +845,7 @@ export class AgentCore {
 							? "\n\nYou make automations yourself, with automate: when the owner asks for something at a time, regularly or later (\"remind me every day at 3pm…\", \"every Monday…\", \"when an email arrives…\"), call automate and say in a line what you set; they see a card with Undo. A reminder is one too: its prompt says what to tell them then. Don't hand them text to paste somewhere else. Automations you make run as you, with only your own tools, outside any project. Only when the owner wants Piopio or another agent to do the work, or a project's files read or changed, make nothing and tell them to ask Piopio, from Home or in that project."
 							: "";
 					const switchedOff = contact?.role === "owner" ? offSwitchesNote(core.def, { mac: Boolean(core.options.appTool) }) : "";
-					return `${core.options.instructions().trim()}${who}${shortcuts}${telegram}${people}${automating}${switchedOff}${interview}\n\nToday is ${localDate((core.options.now?.() ?? new Date()).getTime(), core.proactive.tz)} (${core.proactive.tz}).`;
+					return `${core.options.instructions().trim()}${who}${shortcuts}${telegram}${people}${automating}${switchedOff}${interview}\n\nYour time zone is ${core.proactive.tz}; each message's [Sent …] line says when it was sent.`;
 				}),
 				// Its own automations, so what it learns keeps them right (docs/spec/27 §13: told the ITV was booked, then
 				// passed, it added reminders but left "book it now" ones that would have fired anyway).
@@ -848,8 +870,8 @@ export class AgentCore {
 				section("agent-memory", async (input, context) => {
 					if (!core.usesMemory) return undefined;
 					const state = await input.read.snapshot(AgentStateDoc, context);
-					const recalled = state?.recalled[String(input.conversationId)];
-					return `From your memory (use remember to keep new facts, with replaces for the ids of any it makes out of date; recall to search for more):\n${recalled || "(nothing relevant yet)"}`;
+					const pinned = state?.recalled[String(input.conversationId)];
+					return `Your memory: use remember to keep new facts, with replaces for the ids of any it makes out of date, and recall to search for more. What's relevant to a message comes in a <memory> block just before it.${pinned ? `\nAlways in mind (pinned):\n${pinned}` : ""}`;
 				}),
 			],
 		}) as unknown as Extension;

@@ -11,7 +11,6 @@ import { Readable } from "node:stream";
 import { Type } from "typebox";
 import { defineExtension, defineTool, section } from "@earendil-works/pi-durable";
 import type { ModelHub } from "../models.js";
-import { localDate, localZone } from "@piopio/runtime";
 import { htmlToMarkdown } from "./html.js";
 
 export const WEB_EXTENSION = "piopio-web";
@@ -58,9 +57,12 @@ export function createWebExtension(hub: ModelHub, options: WebOptions = {}) {
 	});
 }
 
-/** System prompt note for the web tools. */
+/**
+ * System prompt note for the web tools. No date here: the system prompt changed with it every day (docs/spec/38 TC6);
+ * the clock's [Sent …] line on the day's first message has it.
+ */
 export const webSection = () =>
-	`You can search the web with web_search and read pages with web_fetch. Use them when the answer depends on current or specific information, and link the sources you used. Today is ${localDate(Date.now(), localZone())}.`;
+	"You can search the web with web_search and read pages with web_fetch. Use them when the answer depends on current or specific information, and link the sources you used. Today's date is on the latest [Sent …] line.";
 
 export type WebResult = { text: string; isError?: boolean; details?: Record<string, unknown> };
 
