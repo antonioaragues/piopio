@@ -36,6 +36,8 @@ export type TelegramHost = {
 	notice(text: string): Promise<void>;
 	/** Keeps the object alive for work that outlives the request. */
 	waitUntil(work: Promise<unknown>): void;
+	/** Tells the Worker the webhook's secret (or that there's none), which it checks before waking the agent. */
+	webhook(secret: string | undefined): Promise<void>;
 	/** Telegram's API base (tests point it at a fake). */
 	api?: string;
 };
@@ -81,13 +83,16 @@ export class CloudTelegram {
 		const origin = await this.host.origin();
 		if (!origin) return "I don't know this Worker's address yet. Connect to it once, then paste the token again.";
 		const secret = randomHex(32);
+		const before = await this.state();
+		// The Worker knows the secret before Telegram sends anything with it.
+		await this.host.webhook(secret);
 		try {
 			await bot.setWebhook(`${origin}/v1/channels/telegram/${this.host.agentId}`, secret);
 		} catch (error) {
+			await this.host.webhook(before?.secret);
 			return `Telegram didn't take the webhook (${(error as Error).message}).`;
 		}
 		const code = randomHex(6);
-		const before = await this.state();
 		await this.host.storage.put(KEY, { token, secret, ...(me.username ? { username: me.username } : {}), pairing: { code, until: Date.now() + PAIRING_MS }, seen: before?.seen ?? [], owed: [] } satisfies State);
 		await this.host.save((def) => void (def.channels = { ...def.channels, telegram: { bot: "secret:TELEGRAM_BOT" } }));
 		const link = me.username ? `https://t.me/${me.username}?start=${code}` : undefined;
@@ -107,6 +112,7 @@ export class CloudTelegram {
 		if (!s) return;
 		await this.bot(s.token).deleteWebhook().catch(() => undefined);
 		await this.host.storage.delete(KEY);
+		await this.host.webhook(undefined);
 	}
 
 	/** Telegram's POST. Checked by its secret header, answered at once; the turn goes on after. */
@@ -158,7 +164,10 @@ export class CloudTelegram {
 	resume(): void {
 		this.host.waitUntil(
 			(async () => {
-				for (const owed of (await this.state())?.owed ?? []) await this.deliver(owed).catch((error: unknown) => console.error(`Telegram: ${(error as Error).message}`));
+				const state = await this.state();
+				// A bot connected before the Worker checked secrets: it learns this one.
+				if (state) await this.host.webhook(state.secret).catch((error: unknown) => console.error(`Telegram: ${(error as Error).message}`));
+				for (const owed of state?.owed ?? []) await this.deliver(owed).catch((error: unknown) => console.error(`Telegram: ${(error as Error).message}`));
 			})(),
 		);
 	}

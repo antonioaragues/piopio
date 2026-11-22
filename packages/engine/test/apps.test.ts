@@ -1,4 +1,5 @@
-import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -247,5 +248,39 @@ describe("the app's conversation and Undo (docs/spec/35 §15)", () => {
 		expect(text).toContain(`- expenses: ${csv} (columns date, category, amount)`);
 		expect(text).toContain("answer it here, and don't change the app");
 		expect(text).toContain("don't read the data for it");
+	});
+});
+
+describe("what an app may read (audit M1)", () => {
+	it("never keys or credentials, even through a symlink in the project", () => {
+		const { root, apps } = setup();
+		const realHome = process.env.HOME;
+		const home = join(root, "user");
+		mkdirSync(join(home, ".aws"), { recursive: true });
+		writeFileSync(join(home, ".aws", "keys.json"), '{"key":"secret"}');
+		const project = join(root, "proj");
+		mkdirSync(project);
+		symlinkSync(join(home, ".aws", "keys.json"), join(project, "data.json"));
+		process.env.HOME = home;
+		try {
+			for (const file of [join(home, ".aws", "keys.json"), "data.json"]) {
+				expect(() => apps.plan({ title: "Keys", html: PAGE, sources: { k: { file } } }, { cwd: project })).toThrow(/key or credentials file \(in ~\/\.aws\)/);
+			}
+		} finally {
+			process.env.HOME = realHome;
+		}
+	});
+
+	it("an app allowed with the old short hash stays allowed, and keeps the full one from then on", () => {
+		const { home, apps, plan } = projectApp();
+		const state = JSON.parse(readFileSync(join(home, "apps.json"), "utf8")) as { allowed: Record<string, string> };
+		expect(state.allowed[plan.path]).toMatch(/^[0-9a-f]{64}$/);
+		const sorted = JSON.stringify(Object.keys(plan.manifest.sources).sort().map((k) => [k, plan.manifest.sources[k]!.file, plan.manifest.sources[k]!.columns ?? []]));
+		state.allowed[plan.path] = createHash("sha1").update(sorted).digest("hex").slice(0, 16);
+		writeFileSync(join(home, "apps.json"), JSON.stringify(state));
+		const again = new Apps({ home, appsDir: join(dirname(home), "Piopio", "Apps") });
+		expect(again.refresh(plan.path).allowed).toBe(true);
+		expect((JSON.parse(readFileSync(join(home, "apps.json"), "utf8")) as typeof state).allowed[plan.path]).toMatch(/^[0-9a-f]{64}$/);
+		apps.closeApp(plan.path);
 	});
 });

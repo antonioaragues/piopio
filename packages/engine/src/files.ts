@@ -6,6 +6,7 @@ import { readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { git } from "./git.js";
 import { EngineError } from "./models.js";
+import { physical } from "@piopio/pi-extensions";
 
 const SKIP = new Set([".git", "node_modules", ".build", "DerivedData", "dist", "build", ".next", ".venv", "venv", "__pycache__", ".turbo", ".cache"]);
 const MAX_FILES = 50_000;
@@ -99,9 +100,15 @@ export async function readProjectFile(cwd: string, path: string): Promise<{ cont
 	return { content: buffer.subarray(0, MAX_READ).toString("utf8"), size: info.size, truncated, binary: false };
 }
 
-/** Saves a quick edit from the viewer (BR4). */
+/**
+ * Saves a quick edit from the viewer (BR4). Where the file really is counts: a repository can ship `notes.md` as a
+ * symlink to ~/.zshrc, and the edit would land there.
+ */
 export async function writeProjectFile(cwd: string, path: string, content: string): Promise<void> {
 	const full = inside(cwd, path);
+	const real = physical(full);
+	const root = physical(cwd);
+	if (real !== root && !real.startsWith(`${root}/`)) throw new EngineError("INVALID", "That file is a link to somewhere outside the project; edit it there.");
 	const { writeFile } = await import("node:fs/promises");
 	await writeFile(full, content);
 }

@@ -19,10 +19,12 @@ export default {
 		const url = new URL(request.url);
 		if (url.pathname === "/v1/health") return Response.json({ ok: true, version: CLOUD_VERSION });
 
-		// Telegram's webhook: no owner token (Telegram can't send one); the agent checks Telegram's secret header.
+		// Telegram's webhook: no owner token (Telegram can't send one), so Telegram's secret header, checked here against
+		// the one the agent set: any name would otherwise start a new agent object, pi and all, before the agent said no.
 		const telegram = /^\/v1\/channels\/telegram\/([A-Za-z0-9_-]{1,64})$/.exec(url.pathname);
 		if (telegram) {
-			if (request.method !== "POST" || !request.headers.get(SECRET_HEADER)) return new Response("Unauthorized", { status: 401 });
+			const given = request.headers.get(SECRET_HEADER);
+			if (request.method !== "POST" || !given || !(await env.REGISTRY.getByName(REGISTRY_NAME).webhookAllowed(telegram[1]!, given))) return new Response("Unauthorized", { status: 401 });
 			return env.AGENT.getByName(telegram[1]!).fetch(request);
 		}
 

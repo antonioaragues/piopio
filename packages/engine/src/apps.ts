@@ -9,7 +9,9 @@
  */
 import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, statSync, watch, writeFileSync, type FSWatcher } from "node:fs";
+import { homedir } from "node:os";
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { physical, sensitivePath } from "@piopio/pi-extensions";
 
 export const MANIFEST_ID = "piopio-app";
 /** The most a source may hand the page (§3.2). */
@@ -113,10 +115,22 @@ function checkManifest(raw: unknown): AppManifest {
 
 /** What allowing covers: the sources, not the page (§3.4). */
 export function sourcesHash(m: AppManifest): string {
+	return createHash("sha256").update(sortedSources(m)).digest("hex");
+}
+
+/**
+ * The hash apps were allowed with before 2026-11-22: 64 bits of SHA-1, short enough that two manifests sharing one could
+ * be made ahead of time. Still taken for those apps, and replaced by `sourcesHash` the next time one opens.
+ */
+function legacySourcesHash(m: AppManifest): string {
+	return createHash("sha1").update(sortedSources(m)).digest("hex").slice(0, 16);
+}
+
+function sortedSources(m: AppManifest): string {
 	const sorted = Object.keys(m.sources)
 		.sort()
 		.map((k) => [k, m.sources[k]!.file, m.sources[k]!.columns ?? []]);
-	return createHash("sha1").update(JSON.stringify(sorted)).digest("hex").slice(0, 16);
+	return JSON.stringify(sorted);
 }
 
 /** The page with this manifest at the top (replacing any it had), and a stand-in `piopio` for other browsers. */
@@ -145,6 +159,10 @@ export function readSource(path: string, columns?: string[]): { data: unknown } 
 	const name = basename(path);
 	const ext = extname(path).slice(1).toLowerCase();
 	if (!READABLE.has(ext)) return { error: `${name} isn't a file an app can read (CSV, TSV, JSON, Markdown or text).` };
+	// Keys and credentials, wherever a symlink makes them look like they are: never an app's data.
+	const home = homedir();
+	const secret = sensitivePath(resolve(path), home) ?? sensitivePath(physical(path), physical(home));
+	if (secret) return { error: `${name} is a key or credentials file (${secret.replace(/^Touches /, "in ")}), which apps don't read.` };
 	let size: number;
 	try {
 		const s = statSync(path);
@@ -465,7 +483,12 @@ ${sources}
 		const html = this.page(path);
 		const history = this.track(path, html);
 		const manifest = parseManifest(html);
-		const allowed = this.state.allowed[path] === sourcesHash(manifest);
+		let allowed = this.state.allowed[path] === sourcesHash(manifest);
+		if (!allowed && this.state.allowed[path] === legacySourcesHash(manifest)) {
+			allowed = true;
+			this.state.allowed[path] = sourcesHash(manifest);
+			this.saveState();
+		}
 		const cache = this.readCache(path);
 		const now = new Date().toISOString();
 		let dirty = false;

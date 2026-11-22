@@ -33,6 +33,43 @@ final class BrowserCenter {
         return window
     }()
 
+    // MARK: Local addresses
+
+    /// Hosts of this Mac and private networks, as WebKit's URL filters write them (no "|": one rule each).
+    static let localHosts = [
+        #"localhost[:/]"#, #"[^/]*\.localhost[:/]"#, #"[^/]*\.local[:/]"#, #"0\."#, #"127\."#, #"10\."#, #"192\.168\."#, #"169\.254\."#,
+        #"172\.1[6-9]\."#, #"172\.2[0-9]\."#, #"172\.3[01]\."#,
+        #"100\.6[4-9]\."#, #"100\.[7-9][0-9]\."#, #"100\.1[01][0-9]\."#, #"100\.12[0-7]\."#,
+        #"\[::1\]"#, #"\[::ffff:"#, #"\[f[cd]"#, #"\[fe80"#,
+    ]
+
+    /// Every load to those hosts blocked, whatever asks for it: an iframe, a page's fetch or WebSocket, an image, a redirect.
+    static var noLocalRules: String {
+        let rules = localHosts.map { ["trigger": ["url-filter": "^[a-z]+://([^/@]*@)?\($0)"], "action": ["type": "block"]] }
+        // Encoded, not spliced: the filters' backslashes have to be escaped in JSON.
+        let data = (try? JSONSerialization.data(withJSONObject: rules)) ?? Data("[]".utf8)
+        return String(decoding: data, as: UTF8.self)
+    }
+
+    @ObservationIgnored private var noLocal: WKContentRuleList?
+    @ObservationIgnored private var guarded: Set<ObjectIdentifier> = []
+
+    /**
+     * Keeps a browser tab's pages off this Mac and private networks (audit H5): a page the model opens could otherwise
+     * reach a project's dev server or the router's admin page from an iframe or a script, which the check on the page's
+     * own address doesn't see. The project preview, whose job is a local address, has its own profile and none of this.
+     * False when WebKit didn't take the rules: the tab then loads nothing.
+     */
+    func keepOffLocal(_ view: WKWebView) async -> Bool {
+        if noLocal == nil {
+            noLocal = try? await WKContentRuleListStore.default().compileContentRuleList(forIdentifier: "piopio.browser.no-local", encodedContentRuleList: Self.noLocalRules)
+        }
+        guard let noLocal else { return false }
+        let controller = view.configuration.userContentController
+        if guarded.insert(ObjectIdentifier(controller)).inserted { controller.add(noLocal) }
+        return true
+    }
+
     func session(_ id: String) -> BrowserSession {
         if let s = sessions[id] { return s }
         let s = BrowserSession(id: id, center: self)
@@ -169,7 +206,11 @@ final class BrowserSession {
         guard !trimmed.isEmpty else { return }
         let url = trimmed.contains("://") ? URL(string: trimmed) : trimmed.contains(".") && !trimmed.contains(" ") ? URL(string: "https://\(trimmed)") : URL(string: "https://duckduckgo.com/?q=\(trimmed.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? trimmed)")
         guard let url else { return }
-        (current ?? newTab()).view.load(URLRequest(url: url))
+        let tab = current ?? newTab()
+        Task {
+            if tab.preview == nil { guard await center.keepOffLocal(tab.view) else { return } }
+            tab.view.load(URLRequest(url: url))
+        }
     }
 
     // MARK: Tools
@@ -326,6 +367,9 @@ final class BrowserTab: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownload
     @ObservationIgnored private var loadingNow = false
 
     func load(_ url: URL) async throws {
+        if preview == nil, await !session.center.keepOffLocal(view) {
+            throw BrowserError(message: "The browser can't open pages right now: Piopio couldn't keep them off local addresses. Quitting and reopening Piopio usually fixes it.")
+        }
         try await navigate { $0.load(URLRequest(url: url)) }
     }
 

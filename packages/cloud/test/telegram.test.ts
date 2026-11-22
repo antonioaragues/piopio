@@ -93,6 +93,9 @@ test("pasting a bot token connects Telegram from the cloud; the owner pairs, wri
 	// Without the secret, or with a wrong one, nothing happens.
 	expect((await post(undefined, from(4242, "hi"))).status).toBe(401);
 	expect((await post("nope", from(4242, "hi"))).status).toBe(401);
+	// Nor for an agent with no webhook: the Worker turns it away without starting that agent (any name would start one).
+	const stranger = await mf.dispatchFetch(`${base.href}v1/channels/telegram/nobody-here`, { method: "POST", headers: { "content-type": "application/json", "X-Telegram-Bot-Api-Secret-Token": secret }, body: "{}" });
+	expect(stranger.status).toBe(401);
 
 	// A stranger gets nothing but the canned line on /start; the owner pairs with the link's code.
 	expect((await post(secret, from(999, "/start"))).status).toBe(200);

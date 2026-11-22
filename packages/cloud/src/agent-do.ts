@@ -124,6 +124,7 @@ export class AgentDO extends DurableObject<Env> {
 			answer: async (owed) => (await self.harness.wait(owed.operationId, { session: owed.session })).text,
 			notice: async (text) => (await self.agent()).core.proactive.notice(text),
 			waitUntil: (work) => self.ctx.waitUntil(work),
+			webhook: (secret) => self.env.REGISTRY.getByName(REGISTRY_NAME).setWebhook(self.agentId, secret),
 			...(this.env.PIOPIO_TEST_TELEGRAM_API ? { api: this.env.PIOPIO_TEST_TELEGRAM_API } : {}),
 		});
 	})();

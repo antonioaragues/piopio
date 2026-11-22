@@ -139,7 +139,8 @@ export function commandSegments(command: string): string[] {
 		.filter(Boolean);
 }
 
-function sensitivePath(path: string, home: string): string | undefined {
+/** Why `path` is sensitive (keys and credentials in the home folder), or undefined. */
+export function sensitivePath(path: string, home: string): string | undefined {
 	for (const dir of [".ssh", ".aws", ".gnupg", "Library/Keychains"]) {
 		if (inside(path, `${home}/${dir}`)) return `Touches ~/${dir}`;
 	}
