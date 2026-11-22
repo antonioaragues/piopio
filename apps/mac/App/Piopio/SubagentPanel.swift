@@ -21,7 +21,7 @@ struct SubagentPanel: View {
         VStack(spacing: 0) {
             tabs(children)
             if let child = children.first(where: { $0.ref.id == selected }) {
-                SubagentConversation(engine: engine, thread: engine.thread(child.ref))
+                SubagentConversation(engine: engine, thread: engine.thread(child.ref), queuedBrief: child.parent?.state == "queued" ? child.parent?.brief ?? "" : nil)
                     .id(child.ref.id)
             } else {
                 Text("This subagent is gone.").font(.system(size: 13)).foregroundStyle(Color.dsFg3)
@@ -103,10 +103,13 @@ struct SubagentPanel: View {
 private struct SubagentConversation: View {
     let engine: EngineController
     let thread: ThreadModel
+    /// Still waiting its turn: its brief so far (what you write joins it), shown where its transcript will be.
+    let queuedBrief: String?
 
     var body: some View {
         ZStack(alignment: .bottom) {
             TranscriptView(document: thread.document)
+            if let queuedBrief { queued(queuedBrief) }
             LinearGradient(colors: [Color.dsWin.opacity(0), Color.dsWin], startPoint: .top, endPoint: .bottom)
                 .frame(height: 80)
                 .allowsHitTesting(false)
@@ -121,5 +124,29 @@ private struct SubagentConversation: View {
             }
         }
         .task { await thread.open() }
+    }
+
+    private func queued(_ brief: String) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 7) {
+                SubagentGlyph(state: "queued")
+                Text("Queued · starts when one finishes").font(.system(size: 13)).foregroundStyle(Color.dsFg3)
+            }
+            if !brief.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("From Piopio · the brief").font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.dsFg2)
+                    let text = Text(brief).font(.system(size: 13)).foregroundStyle(Color.dsFg).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+                    // Its own height when short; a long brief scrolls inside 320pt.
+                    if brief.count > 700 { ScrollView { text }.frame(height: 320) } else { text.fixedSize(horizontal: false, vertical: true) }
+                }
+                .padding(.horizontal, 12).padding(.vertical, 10)
+                .background(Color.dsChip, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                Text("What you write below joins it.").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 16).padding(.top, 16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(Color.dsWin)
     }
 }

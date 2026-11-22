@@ -122,3 +122,25 @@ test("a follow-up to a finished subagent is a new turn: working again, then a se
 	const notes = await until(() => items(client, ref), (x) => x.filter((i) => i.kind === "user" && i.text?.startsWith("[Task] “Look around”")).length === 2);
 	expect(notes.filter((i) => i.kind === "user" && i.text?.startsWith("[Task]")).at(-1)!.text).toContain("Echo: And the README?");
 }, 60_000);
+
+/** A message to a queued subagent joins its brief; it still starts in its turn, told both (docs/spec/37). */
+test("writing to a queued subagent adds to its brief and doesn't start it out of turn", async () => {
+	const { client, ref } = await start();
+	// Started in one message, as a model does: the limit holds for parallel calls too.
+	const four = [1, 2, 3].map((n) => task(`Busy ${n}`, "$ sleep 3")).concat(task("Waiting", "read: README.md")).map((t, i) => (i ? `& ${t}` : t)).join("\n");
+	await client.call("sessions.submit", { ref, input: { text: four } });
+	type Queued = Child & { parent?: { id: string; state?: string; brief?: string } };
+	const kids = async () => (await children(client, ref)) as Queued[];
+	const waiting = (await until(kids, (c) => c.some((x) => x.title === "Waiting" && x.parent?.state === "queued"))).find((x) => x.title === "Waiting")!;
+	expect(waiting.parent!.brief).toBe("read: README.md");
+
+	const answer = (await client.call("sessions.submit", { ref: waiting.ref, input: { text: "Also the LICENSE." } })) as { disposition: string };
+	expect(answer.disposition).toBe("queued");
+	const still = (await kids()).find((x) => x.title === "Waiting")!;
+	expect(still.parent).toMatchObject({ state: "queued", brief: "read: README.md\n\nAlso the LICENSE." });
+
+	// It starts when a slot frees, with the brief and what you added, as its first message.
+	await until(kids, (c) => c.find((x) => x.title === "Waiting")?.parent?.state === "done", 60_000);
+	const first = (await items(client, waiting.ref)).find((i) => i.kind === "user")!;
+	expect(first.text).toBe("read: README.md\n\nAlso the LICENSE.");
+}, 90_000);

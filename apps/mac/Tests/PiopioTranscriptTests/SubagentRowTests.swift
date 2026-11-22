@@ -52,7 +52,29 @@ private func task(_ status: ToolItem.Status, session: String?, state: String?, a
     let renderer = ItemRenderer()
     let finished = renderer.render(.user(UserItem(id: "u1", at: "", text: "[Task] “Security of the engine” (ses_1) finished. It cost $0.03.\n\n> 5 findings")))
     #expect(finished.length == 0)
-    // A Watchdog note still shows.
+    // The Watchdog's note is on the row instead, in amber while it lasts.
     let stuck = renderer.render(.user(UserItem(id: "u2", at: "", text: "[Task] “Security of the engine” (ses_1) looks stuck: nothing new for 10 minutes.")))
-    #expect(stuck.string.contains("Result from Security of the engine · looks stuck"))
+    #expect(stuck.length == 0)
+    let alerting = SubagentInfo(id: "ses_1", title: "Security", state: "working", line: "Reading a.ts", alert: "looks stuck: nothing new for 10 minutes")
+    #expect(alerting.alerting && alerting.status == "looks stuck: nothing new for 10 minutes")
+    #expect(!SubagentInfo(id: "ses_1", title: "Security", state: "done", alert: "looks stuck").alerting)
+}
+
+/// A subagent's first message is Piopio's brief, not a bubble of yours.
+@Test @MainActor func aSubagentsBriefSaysItsFromPiopio() {
+    var renderer = ItemRenderer()
+    renderer.briefFrom = "Piopio"
+    renderer.briefId = "u1"
+    let brief = renderer.render(.user(UserItem(id: "u1", at: "", text: "Read the engine for security issues.")))
+    #expect(brief.string.contains("From Piopio · the brief") || disclosureTitle(brief) == "From Piopio · the brief")
+    let later = renderer.render(.user(UserItem(id: "u2", at: "", text: "And the README?")))
+    #expect(disclosureTitle(later) == nil)
+}
+
+private func disclosureTitle(_ text: NSAttributedString) -> String? {
+    var found: String?
+    text.enumerateAttribute(.attachment, in: NSRange(location: 0, length: text.length)) { value, _, stop in
+        if let a = value as? DisclosureAttachment { found = a.card.title; stop.pointee = true }
+    }
+    return found
 }

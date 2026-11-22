@@ -19,7 +19,17 @@ public final class TranscriptDocument {
     private let pageSize: Int
 
     /// Every item of the session, oldest first; `items[windowStart...]` are in the document.
-    public private(set) var items: [TimelineItem] = []
+    public private(set) var items: [TimelineItem] = [] {
+        didSet {
+            // A subagent's transcript: its first message is Piopio's brief (docs/spec/37).
+            if renderer.briefFrom != nil { renderer.briefId = items.first { if case .user = $0 { true } else { false } }?.id }
+        }
+    }
+    /// Who wrote this conversation's first message, when it isn't you: a subagent's is Piopio's brief.
+    public var briefFrom: String? {
+        get { renderer.briefFrom }
+        set { renderer.briefFrom = newValue }
+    }
     private var windowStart = 0
     /// Document order and rendered length of each item in the window.
     private(set) var documentIDs: [String] = []

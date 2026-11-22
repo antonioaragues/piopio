@@ -417,6 +417,8 @@ struct Composer: View {
         if thread.editing != nil { return "Edit your message" }
         if let prompt = shownPrompt, prompt.takesReply { return prompt.replyPlaceholder }
         if let chip { return chip.hint }
+        // A subagent still waiting its turn: what you write joins its brief (docs/spec/37).
+        if engine.buildSessions.first(where: { $0.ref.id == thread.ref.id })?.parent?.state == "queued" { return "Add to its brief before it starts…" }
         if thread.isRunning { return "Add to the queue, or ⌥↩ to steer now…" }
         if isBuild && thread.planMode { return "Plan only: describe what you want; the agent proposes a plan first" }
         // An agent is set up by talking (docs/spec/21 D3): its chat says so.

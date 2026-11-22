@@ -663,7 +663,7 @@ export const SessionSummary = Type.Object({
 	 * A subagent's session: the parent session and the `task` call that started it; its state (queued while 3 others
 	 * of its parent run, docs/spec/17 §3) and, while it works, a line on what it's doing.
 	 */
-	parent: Type.Optional(Type.Object({ id: Type.String(), callId: Type.String(), state: Type.Optional(literals("queued", "working", "done", "failed", "stopped")), line: Type.Optional(Type.String()), startedAt: Type.Optional(Type.String({ description: "When its latest turn started (docs/spec/37)" })), endedAt: Type.Optional(Type.String({ description: "When its latest turn ended" })), costUsd: Type.Optional(Type.Number({ description: "What the subagent has cost so far" })) })),
+	parent: Type.Optional(Type.Object({ id: Type.String(), callId: Type.String(), state: Type.Optional(literals("queued", "working", "done", "failed", "stopped")), line: Type.Optional(Type.String()), startedAt: Type.Optional(Type.String({ description: "When its latest turn started (docs/spec/37)" })), endedAt: Type.Optional(Type.String({ description: "When its latest turn ended" })), costUsd: Type.Optional(Type.Number({ description: "What the subagent has cost so far" })), brief: Type.Optional(Type.String({ description: "While queued: what it will be told when it starts" })), alert: Type.Optional(Type.String({ description: "The Watchdog's note while it looks stuck or repeats itself" })) })),
 	/** A helper's session (docs/spec/26 CL4): made by Piopio for a task on a project's board; not listed with yours. */
 	helper: Type.Optional(Type.Object({ project: Type.String(), kind: literals("build", "review"), taskId: Type.String() })),
 	/**

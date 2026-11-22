@@ -28,7 +28,7 @@ parent's row. Steering a subagent means leaving the conversation that started it
 | SB2 | **One row per subagent, and it's live.** The row Piopio's `task` call draws is the subagent: a ring while it works, a check when it's done, red when it failed, dashed while queued. Its grey line is what it's doing; when it ends, how long it took and what it cost. |
 | SB3 | **Plain-language activity.** The engine writes the line from the tool call: "Reading SessionView.swift", "Searching for Keychain", a command's own description, "Running the tests". Never the raw command. |
 | SB4 | **It opens beside.** A click opens the subagent in the right column of the Build session, where Summary, Files and the Browser go: tabs for this conversation's subagents, its transcript as it happens, and its own composer (steer it while it works, ask a follow-up after; its approvals show there). Open in full moves to its session. When the window is too narrow for the column, the click opens the session, as before. |
-| SB5 | **One place.** The "Subagents" block above the composer goes. The `[Task] … finished / failed / was stopped` result rows aren't drawn: the row says it, and the column has the answer. The parent still gets the message; only its drawing goes. Watchdog notes ("looks stuck") stay as lines. |
+| SB5 | **One place.** The "Subagents" block above the composer goes. The `[Task] … finished / failed / was stopped` result rows aren't drawn: the row says it, and the column has the answer. The parent still gets the message; only its drawing goes. Watchdog notes ("looks stuck") show on the row, in amber, until it moves again (2026-11-22). |
 | SB6 | **A follow-up after it finished** is a new turn of the subagent: its row works again and its new answer reaches Piopio as another `[Task]` message, as any turn does (17 §9). |
 | SB7 | **Claude Code, Codex and Antigravity tasks** keep their card: they run on your account, report no steps, and always wait. |
 
@@ -94,4 +94,15 @@ shows all of them. Not started.
 - **Checked:** a follow-up to a finished subagent (SB6) in `tasks.test.ts` with the scripted model: its row works
   again, `startedAt` moves, and a second `[Task]` result reaches the parent with the new answer. The narrow-window
   fallback in a capture (`PIOPIO_DEMO_RESIZE=700`): the click opens the subagent's session.
+- **A queued subagent** (2026-11-22): its column shows "Queued · starts when one finishes" and its brief, and the box
+  reads "Add to its brief before it starts…". A message to it joins its brief (`addToQueuedBrief`) and doesn't start
+  it: before, it started out of turn and its brief was never sent. The parent link carries `brief` while queued.
+- **The limit held only one message at a time:** tasks the model starts in one message run in parallel, and each
+  counted the running ones before creating its session, so four parallel tasks all ran. The count is now taken right
+  before the child takes its place. `tasks.test.ts` starts them in one message (and fails without the fix).
+- **The brief says it's from Piopio:** a subagent's first message is "From Piopio · the brief" (open while it's
+  under 600 characters), not a bubble of yours (`briefFrom` on the document).
+- **The Watchdog's note is on the row:** "looks stuck: nothing new for 10 minutes…" in amber in place of the line,
+  until the subagent does something again (`parent.alert`); its `[Task]` note isn't drawn, and the parent still gets
+  it. Not seen in a capture (it takes ten quiet minutes); the row's part is in `SubagentRowTests`.
 - **Not verified:** the follow-up with a real model.

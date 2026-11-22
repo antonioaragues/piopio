@@ -27,6 +27,9 @@ nonisolated struct ItemRenderer: Sendable {
     /// This conversation's subagents now, and the one open beside (docs/spec/37): their rows say where each stands.
     var subagents: [SubagentInfo] = []
     var openSubagent: String?
+    /// In a subagent's transcript: who wrote its first message (Piopio), and that message's id.
+    var briefFrom: String?
+    var briefId: String?
     /// Open proposals (side_propose call ids) and when each expires.
     var openProposals: [String: Date] = [:]
     /// Offers (side_offer call ids) you answered with Do it here: the question and your answer instead of the card.
@@ -55,6 +58,11 @@ nonisolated struct ItemRenderer: Sendable {
 
     func render(_ item: TimelineItem) -> NSAttributedString {
         switch item {
+        case .user(let u) where u.id == briefId && briefFrom != nil && !compact:
+            // A subagent's brief (docs/spec/37): Piopio wrote it, not you. Open while it's short.
+            let card = DisclosureCard(kind: .thinking, title: "From \(briefFrom!) · the brief", body: u.text)
+            card.expanded = u.text.count <= 600
+            return thinkingCard(card)
         case .user(let u) where u.text.hasPrefix("[Side] "):
             // A side conversation's report (docs/spec/24 §5): a card only while it needs you, else a grey line.
             return compact ? NSAttributedString() : sideReports(u.text)

@@ -94,6 +94,8 @@ final class ThreadModel {
         }
         document.askNext.onDismiss = { [weak self] in self?.dismissAskNext() }
         document.rememberDestination = compact ? nil : Self.rememberDestination(ref, engine: engine)
+        // A subagent's first message is Piopio's brief (docs/spec/37).
+        if ref.kind == .build, engine.buildSessions.first(where: { $0.ref.id == ref.id })?.parent != nil { document.briefFrom = "Piopio" }
     }
 
     var isRunning: Bool { state?.status == .running }

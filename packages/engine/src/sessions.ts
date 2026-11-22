@@ -917,11 +917,13 @@ export class Sessions {
 	 */
 	async startTask(parentRef: ContainerRef, task: { callId: string; description: string; prompt: string }): Promise<{ sessionId: string; queued: boolean }> {
 		const parent = this.entry(parentRef);
-		const working = this.childrenOf(parent.ref.id).filter((c) => c.parent && c.parent.state === "working").length;
 		// A child never gets more than its parent: the same profile (a Chat-lens parent has no bash) and the same tools
 		// turned off (see `toolsOff` in build(), which also follows later changes to the parent).
 		const ref = await this.create({ kind: "build", cwd: parent.cwd!, ...(parent.model ? { model: parent.model } : {}), approvalMode: parent.approvalMode ?? this.policy.modeFor(parent.projectPath ?? parent.cwd!), title: task.description });
 		const child = this.entry(ref);
+		// Counted here, after the await and right before the child takes its place: tasks the model starts in one
+		// message run in parallel, and counting before `create` let all of them past the limit.
+		const working = this.childrenOf(parent.ref.id).filter((c) => c !== child && c.parent && c.parent.state === "working").length;
 		child.parent = { id: parent.ref.id, callId: task.callId, state: working >= MAX_SUBAGENTS ? "queued" : "working", ...(working >= MAX_SUBAGENTS ? {} : { startedAt: new Date().toISOString() }) };
 		if (parent.toolsOff?.length) child.toolsOff = [...parent.toolsOff];
 		if (parent.projectPath) child.projectPath = parent.projectPath;
@@ -2218,6 +2220,7 @@ export class Sessions {
 				lineAt = Date.now();
 				if ((child.side ?? child.parent)?.state !== "working") return;
 				link.line = line;
+				if (child.parent) delete child.parent.alert;
 				this.changed(child);
 			};
 			if (wait <= 0) apply();
@@ -2260,6 +2263,7 @@ export class Sessions {
 				delete child.parent.endedAt;
 			} else if (state !== "queued") child.parent.endedAt = new Date().toISOString();
 			if (state !== "working") delete child.parent.line;
+			delete child.parent.alert;
 		} else return;
 		this.save();
 		this.changed(child);
@@ -2324,6 +2328,11 @@ export class Sessions {
 		if (!e) return "you";
 		if (e.side || e.parent) {
 			const kind = e.side ? "Side" : "Task";
+			// On the subagent's row too, until it does something again (docs/spec/37).
+			if (e.parent) {
+				e.parent.alert = text.replace(/\.\s*$/, "");
+				this.changed(e);
+			}
 			void this.reportToParent(e, `[${kind}] “${e.title}” (${e.ref.id}) ${text}`, `${e.side ? "Message" : "Result"} from ${e.title} · ${rule === "silent" ? "looks stuck" : "repeating itself"}`).catch(() => undefined);
 			return "elsewhere";
 		}
@@ -2339,6 +2348,19 @@ export class Sessions {
 	}
 
 	/** You wrote in a conversation yourself: its side conversations may wake it again, and a side conversation you drive doesn't wake its parent. */
+	/**
+	 * A message to a subagent still queued adds to its brief and doesn't start it: it starts in its turn, with the
+	 * brief and what you added (docs/spec/37). False when it isn't queued.
+	 */
+	addToQueuedBrief(ref: ContainerRef, text: string): boolean {
+		const entry = this.entries.get(ref.id);
+		if (entry?.parent?.state !== "queued" || !text.trim()) return false;
+		entry.sideBrief = `${entry.sideBrief ?? entry.title}\n\n${text.trim()}`;
+		this.save();
+		this.changed(entry);
+		return true;
+	}
+
 	youWrote(ref: ContainerRef): void {
 		const entry = this.entries.get(ref.id);
 		if (!entry) return;
@@ -3170,6 +3192,8 @@ function summary({ file: _f, sessionFile: _s, agentFile: _af, segments: _sg, han
 	}
 	// A chat's folder is the engine's: the app knows a chat by having no project.
 	if (rest.ref.kind === "thread") delete rest.cwd;
+	// A queued subagent's brief, for its column until it starts (docs/spec/37).
+	if (rest.parent?.state === "queued" && _b) rest.parent = { ...rest.parent, brief: _b };
 	return rest;
 }
 

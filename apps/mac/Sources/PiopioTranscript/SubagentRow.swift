@@ -17,11 +17,16 @@ public struct SubagentInfo: Sendable, Hashable {
     public var startedAt: Date?
     public var endedAt: Date?
     public var costUsd: Double?
+    /// The Watchdog's note while it looks stuck or repeats itself ("looks stuck: nothing new for 10 minutes").
+    public var alert: String?
 
-    public init(id: String, title: String, state: String, line: String? = nil, startedAt: Date? = nil, endedAt: Date? = nil, costUsd: Double? = nil) {
+    public init(id: String, title: String, state: String, line: String? = nil, startedAt: Date? = nil, endedAt: Date? = nil, costUsd: Double? = nil, alert: String? = nil) {
         self.id = id; self.title = title; self.state = state; self.line = line
-        self.startedAt = startedAt; self.endedAt = endedAt; self.costUsd = costUsd
+        self.startedAt = startedAt; self.endedAt = endedAt; self.costUsd = costUsd; self.alert = alert
     }
+
+    /// The Watchdog's note shows while it works, in amber, in place of what it's doing.
+    public var alerting: Bool { state == "working" && alert?.isEmpty == false }
 
     /// The grey line: "Reading oauth.ts", "queued · starts when one finishes", "done · 1m 52s · $0.03".
     public var status: String {
@@ -29,6 +34,7 @@ public struct SubagentInfo: Sendable, Hashable {
         let cost = costUsd.flatMap { $0 > 0 ? ($0 < 0.01 ? "<$0.01" : String(format: "$%.2f", $0)) : nil }
         switch state {
         case "queued": return "queued · starts when one finishes"
+        case "working" where alerting: return alert!
         case "working": return line.map { $0.isEmpty ? "working" : $0 } ?? "working"
         case "done": return (["done", took, cost].compactMap { $0 }).joined(separator: " · ")
         case "failed": return (["failed", took].compactMap { $0 }).joined(separator: " · ")
@@ -54,10 +60,12 @@ public final class SubagentRowModel: @unchecked Sendable {
     let state: String
     let status: String
     let open: Bool
+    /// The status is the Watchdog's note: amber.
+    let alert: Bool
     var onAction: (@MainActor (TranscriptAction) -> Void)?
 
-    init(id: String?, title: String, state: String, status: String, open: Bool) {
-        self.id = id; self.title = title; self.state = state; self.status = status; self.open = open
+    init(id: String?, title: String, state: String, status: String, open: Bool, alert: Bool = false) {
+        self.id = id; self.title = title; self.state = state; self.status = status; self.open = open; self.alert = alert
     }
 
     static let height: CGFloat = 28
@@ -106,7 +114,7 @@ struct SubagentRowView: View {
             HStack(spacing: 9) {
                 SubagentGlyph(state: model.state)
                 Text(model.title).font(.system(size: 13.5)).foregroundStyle(Color(nsColor: DS.fg)).lineLimit(1).layoutPriority(1)
-                Text(model.status).font(.system(size: 13)).foregroundStyle(Color(nsColor: DS.fg3)).lineLimit(1).truncationMode(.tail)
+                Text(model.status).font(.system(size: 13)).foregroundStyle(Color(nsColor: model.alert ? DS.amber : DS.fg3)).lineLimit(1).truncationMode(.tail)
                 Spacer(minLength: 6)
                 Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold)).foregroundStyle(Color(nsColor: DS.fg3))
                     .opacity(model.id != nil && (hovering || model.open) ? 1 : 0)
@@ -172,7 +180,7 @@ extension ItemRenderer {
         var status: String?
         if case .task(let id, let s, _)? = t.typedDetails { sessionId = id; status = s }
         if let id = sessionId, let s = subagents.first(where: { $0.id == id }) {
-            let model = SubagentRowModel(id: id, title: s.title.isEmpty ? title : s.title, state: s.state, status: s.status, open: openSubagent == id)
+            let model = SubagentRowModel(id: id, title: s.title.isEmpty ? title : s.title, state: s.state, status: s.status, open: openSubagent == id, alert: s.alerting)
             return attachmentParagraph(SubagentRowAttachment(model: model), spacing: 4)
         }
         // Not in the sessions list (yet, or anymore): what the call itself knows.
@@ -189,8 +197,9 @@ extension ItemRenderer {
         return attachmentParagraph(SubagentRowAttachment(model: model), spacing: 4)
     }
 
-    /// A `[Task]` report that only says how its subagent ended: its row already says it (SB5).
+    /// A `[Task]` report its row already says: how its subagent ended (SB5), or the Watchdog's note, which the row shows
+    /// in amber while it lasts.
     static func endsOnly(_ title: String) -> Bool {
-        title.hasPrefix("Result from ") && (title.hasSuffix(" · finished") || title.hasSuffix(" · failed") || title.hasSuffix(" · was stopped"))
+        title.hasPrefix("Result from ") && [" · finished", " · failed", " · was stopped", " · looks stuck", " · is repeating itself"].contains { title.hasSuffix($0) }
     }
 }

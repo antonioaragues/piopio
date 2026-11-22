@@ -306,8 +306,8 @@ struct BuildSessionView: View {
         // Its subagents' rows say where each stands, and which one is open beside (docs/spec/37).
         .onChange(of: subagents, initial: true) { _, now in
             session.document.setSubagents(now, open: subagentShown)
-            // PIOPIO_DEMO_SUBAGENT=1: captures open the first subagent beside once there is one.
-            if ProcessInfo.processInfo.environment["PIOPIO_DEMO_SUBAGENT"] == "1", subagentOpen == nil, let first = now.first { openSubagent(first.id) }
+            // PIOPIO_DEMO_SUBAGENT=<n>: captures open the nth subagent beside once there is one.
+            if let n = ProcessInfo.processInfo.environment["PIOPIO_DEMO_SUBAGENT"].flatMap(Int.init), n > 0, subagentOpen == nil, now.count >= n { openSubagent(now[n - 1].id) }
         }
         .onChange(of: subagentShown) { _, open in session.document.setSubagents(subagents, open: open) }
         .onReceive(NotificationCenter.default.publisher(for: .createPullRequest)) { note in
@@ -360,7 +360,8 @@ struct BuildSessionView: View {
     private var subagents: [SubagentInfo] {
         engine.buildSessions.filter { $0.parent?.id == summary.ref.id }.sorted { $0.createdAt < $1.createdAt }.map { s in
             SubagentInfo(id: s.ref.id, title: s.title, state: s.parent?.state ?? "working", line: s.parent?.line,
-                         startedAt: s.parent?.startedAt.flatMap(ISODate.parse), endedAt: s.parent?.endedAt.flatMap(ISODate.parse), costUsd: s.parent?.costUsd)
+                         startedAt: s.parent?.startedAt.flatMap(ISODate.parse), endedAt: s.parent?.endedAt.flatMap(ISODate.parse), costUsd: s.parent?.costUsd,
+                         alert: s.parent?.alert)
         }
     }
 
