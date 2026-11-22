@@ -54,6 +54,8 @@ from Later to Now.
    reads pages and, asking per site, clicks and types in a Browser panel; the interim Playwright browser is gone.
 5. **Build parity PAR2–PAR4** (proposed 2026-11-20, below): background processes, the project preview, agent code
    review. PAR1 is Track A.
+6. **Turn context T0–T4** (38, drafted 2026-11-22 from the operational review): what changes per turn leaves the
+   system prompt so the prompt cache holds on the default model. T0 first: the prefix test and the cache numbers.
 
 **Later** (each waits for something)
 - **Cloud K4–K7 and WhatsApp** (30 §10): after K3.
