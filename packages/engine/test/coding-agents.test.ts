@@ -207,6 +207,83 @@ describe("switching between Piopio's agent and Claude Code (docs/spec/31 CA7)", 
 		expect(after.items.some((i) => i.kind === "user" && i.attachments?.length)).toBe(false);
 	});
 
+	/** A chat that started in Claude Code and went on on Piopio's agent, and a branch of it from the last answer. */
+	async function chatAndBranch(a: Ctx) {
+		const { ref } = await a.client.call("sessions.create", { kind: "thread", model: CLAUDE });
+		const sub = (await a.client.call("sessions.subscribe", { ref })).subscriptionId as string;
+		await a.client.call("sessions.submit", { ref, input: { text: "on claude code" } });
+		await stateWhere(a, sub, (s) => s.status === "idle" && s.usage.outputTokens > 0);
+		await a.client.call("sessions.configure", { ref, model: FAUX });
+		await a.client.call("sessions.submit", { ref, input: { text: "on pi" } });
+		await stateWhere(a, sub, (s) => s.status === "idle" && s.model?.provider === "faux" && s.usage.outputTokens > 0);
+		const snap: Snapshot = await a.client.call("sessions.open", { ref });
+		const { ref: branch } = await a.client.call("sessions.fork", { ref, itemId: snap.items.filter((i) => i.kind === "assistant").at(-1)!.id });
+		return { ref, branch: branch as typeof ref, said: said(snap).filter((l) => !l.startsWith("—")) };
+	}
+	const transcript = async (a: Ctx, ref: unknown) => said(await a.client.call("sessions.open", { ref })).filter((l) => !l.startsWith("—"));
+
+	for (const gone of ["branch", "original"] as const) {
+		test(`a branch has its own earlier parts: deleting the ${gone} leaves the other whole, after a restart`, { timeout: 30_000 }, async () => {
+			const a = await start();
+			const { ref, branch, said: before } = await chatAndBranch(a);
+			expect(before).toEqual(["you: on claude code", expect.stringMatching(/^claude-code\/opus: /), "you: on pi", expect.stringMatching(/^faux\/faux-1: /)]);
+			const [deleted, kept] = gone === "branch" ? [branch, ref] : [ref, branch];
+			await a.client.call("sessions.delete", { ref: deleted });
+			await stop(a);
+			const entries = JSON.parse(readFileSync(enginePaths(a.home).catalogIndex, "utf8")) as { ref: { id: string }; segments?: { agentFile?: string }[] }[];
+			const part = entries.find((e) => e.ref.id === kept.id)!.segments![0]!;
+			expect(part.agentFile && existsSync(part.agentFile)).toBe(true);
+			// The branch's copy says what was said, without the original's Claude Code session.
+			if (gone === "original") expect(JSON.parse(readFileSync(part.agentFile!, "utf8")).sessionId).toBeUndefined();
+			const b = await start(a.home);
+			expect(await transcript(b, kept)).toEqual(before);
+		});
+
+		test(`a branch made before 2026-11-22 shares the earlier parts: deleting the ${gone} keeps them for the other`, { timeout: 30_000 }, async () => {
+			const a = await start();
+			const { ref, branch, said: before } = await chatAndBranch(a);
+			await stop(a);
+			// What fork used to write: the branch pointing at the original's files, the old pi-durable one included.
+			const catalog = enginePaths(a.home).catalogIndex;
+			const entries = JSON.parse(readFileSync(catalog, "utf8")) as { ref: { id: string }; segments?: unknown; migratedFrom?: string }[];
+			const original = entries.find((e) => e.ref.id === ref.id)!;
+			const copy = entries.find((e) => e.ref.id === branch.id)!;
+			const old = join(a.home, "old-chat.sqlite");
+			writeFileSync(old, "");
+			original.migratedFrom = copy.migratedFrom = old;
+			copy.segments = original.segments;
+			writeFileSync(catalog, JSON.stringify(entries));
+			const b = await start(a.home);
+			const [deleted, kept] = gone === "branch" ? [branch, ref] : [ref, branch];
+			await b.client.call("sessions.delete", { ref: deleted });
+			expect(existsSync(old)).toBe(true);
+			await stop(b);
+			const c = await start(a.home);
+			expect(await transcript(c, kept)).toEqual(before);
+			// The last one to go takes them.
+			await c.client.call("sessions.delete", { ref: kept });
+			expect(existsSync(old)).toBe(false);
+		});
+	}
+
+	test("back in Claude Code after Piopio's agent: a new part of its own, the first one as it was", { timeout: 30_000 }, async () => {
+		const a = await start();
+		const { ref } = await a.client.call("sessions.create", { kind: "thread", model: CLAUDE });
+		const sub = (await a.client.call("sessions.subscribe", { ref })).subscriptionId as string;
+		for (const [i, [model, text]] of ([[CLAUDE, "one"], [FAUX, "two"], [CLAUDE, "three"]] as const).entries()) {
+			if (i) await a.client.call("sessions.configure", { ref, model });
+			await a.client.call("sessions.submit", { ref, input: { text } });
+			await stateWhere(a, sub, (s) => s.status === "idle" && s.model?.provider === model.provider && s.usage.outputTokens > 0);
+			for (let tries = 0; (await transcript(a, ref)).at(-2) !== `you: ${text}`; tries++) {
+				expect(tries).toBeLessThan(50);
+				await new Promise((r) => setTimeout(r, 100));
+			}
+		}
+		await stop(a);
+		const b = await start(a.home);
+		expect((await transcript(b, ref)).filter((l) => l.startsWith("you:"))).toEqual(["you: one", "you: two", "you: three"]);
+	});
+
 	test("an empty conversation just changes runner", async () => {
 		const a = await start();
 		const { ref } = await a.client.call("sessions.create", { kind: "thread" });

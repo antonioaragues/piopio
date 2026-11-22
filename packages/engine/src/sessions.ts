@@ -634,6 +634,10 @@ export class Sessions {
 		const copy: CatalogEntry = { ...structuredClone(source), ref: { kind: "thread", id: newId("thr") }, title: `${source.title} (branch)`, createdAt: now, updatedAt: now, sessionFile: file };
 		delete copy.file;
 		delete copy.continuedIn;
+		// The old pi-durable file is the original's backup, not the branch's history.
+		delete copy.migratedFrom;
+		// Earlier parts (another runner, docs/spec/31 CA7): the branch's own copies, so deleting either keeps the other's.
+		if (source.segments) copy.segments = source.segments.map((s, i) => copyPart(s, `${copy.ref.id}-part${i}`, join(this.paths.chatsDir, "agents")));
 		copy.cwd = this.scratch(copy.ref.id);
 		// The files the chat made, so the branch's cards open its own copies (BuildRuntime's chatRelocate).
 		if (source.cwd && resolve(source.cwd).startsWith(`${resolve(this.paths.scratchDir)}/`) && existsSync(source.cwd)) cpSync(source.cwd, copy.cwd, { recursive: true });
@@ -676,10 +680,14 @@ export class Sessions {
 		const runtime = this.open.get(ref.id);
 		this.open.delete(ref.id);
 		if (runtime) await (await runtime.catch(() => undefined))?.close();
-		for (const old of [entry.file, entry.migratedFrom]) if (old) for (const suffix of ["", "-wal", "-shm"]) rmSync(old + suffix, { force: true });
+		// A file another conversation still reads stays: branches made before 2026-11-22 share their earlier parts (and a
+		// migrated chat's old file) with the chat they came from.
+		const others = new Set([...this.entries.values()].filter((e) => e !== entry).flatMap(historyFiles));
+		const mine = (file: string | undefined): file is string => Boolean(file) && !others.has(file!);
+		for (const old of [entry.file, entry.migratedFrom]) if (mine(old)) for (const suffix of ["", "-wal", "-shm"]) rmSync(old + suffix, { force: true });
 		// A coding agent's conversation: Piopio's copy of its transcript. A chat's own sessions in the agents go too (a
 		// Build session's stay, as its pi file goes to the Trash: you may carry on in the agent's CLI).
-		const agentParts = [{ model: entry.model, agentFile: entry.agentFile }, ...(entry.segments ?? [])].filter((p) => p.agentFile && p.model && isCodingAgent(p.model.provider));
+		const agentParts = [{ model: entry.model, agentFile: entry.agentFile }, ...(entry.segments ?? [])].filter((p) => mine(p.agentFile) && p.model && isCodingAgent(p.model.provider));
 		if (entry.ref.kind === "thread" && entry.cwd) {
 			for (const part of agentParts) {
 				const sessionId = (() => {
@@ -692,18 +700,18 @@ export class Sessions {
 				if (sessionId) void this.hub.forgetAgentSession(part.model!.provider, sessionId, entry.cwd).catch(() => undefined);
 			}
 		}
-		for (const file of [entry.agentFile, ...(entry.segments ?? []).map((s) => s.agentFile)]) if (file) rmSync(file, { force: true });
+		for (const file of [entry.agentFile, ...(entry.segments ?? []).map((s) => s.agentFile)]) if (mine(file)) rmSync(file, { force: true });
 		// Earlier parts' pi sessions go as the current one does: deleted for a chat, to the Trash for Build.
 		for (const s of entry.segments ?? []) {
-			if (!s.sessionFile || !existsSync(s.sessionFile)) continue;
+			if (!mine(s.sessionFile) || !existsSync(s.sessionFile)) continue;
 			if (entry.ref.kind === "thread") rmSync(s.sessionFile, { force: true });
 			else moveToTrash(s.sessionFile, this.piOverrides.trashDir ?? join(homedir(), ".Trash"));
 		}
 		if (entry.ref.kind === "thread") {
 			// A chat's files are Piopio's own (chatsDir, scratchDir): they go, as a chat's history always did.
-			if (entry.sessionFile) rmSync(entry.sessionFile, { force: true });
+			if (mine(entry.sessionFile)) rmSync(entry.sessionFile, { force: true });
 			if (entry.cwd && resolve(entry.cwd).startsWith(`${resolve(this.paths.scratchDir)}/`)) rmSync(entry.cwd, { recursive: true, force: true });
-		} else if (entry.sessionFile && existsSync(entry.sessionFile)) moveToTrash(entry.sessionFile, this.piOverrides.trashDir ?? join(homedir(), ".Trash"));
+		} else if (mine(entry.sessionFile) && existsSync(entry.sessionFile)) moveToTrash(entry.sessionFile, this.piOverrides.trashDir ?? join(homedir(), ".Trash"));
 		if (entry.ref.kind === "agent") {
 			this.agentHost?.memory.builtin.dropBanks(`${entry.ref.id}/`);
 			if (entry.agentFolder) this.agentHost?.files.trash(entry.agentFolder, this.piOverrides.trashDir);
@@ -3052,7 +3060,11 @@ export class Sessions {
 		const cwd = entry.cwd && existsSync(entry.cwd) ? entry.cwd : this.scratch(entry.ref.id);
 		if (entry.cwd !== cwd) entry.cwd = cwd;
 		if (!entry.agentFile) {
-			entry.agentFile = join(this.paths.chatsDir, "agents", `${entry.ref.id}.json`);
+			// Not an earlier part's (back in Claude Code after Piopio's agent): that one is history, its session done.
+			const taken = new Set(historyFiles(entry));
+			let file = join(this.paths.chatsDir, "agents", `${entry.ref.id}.json`);
+			for (let i = 1; taken.has(file); i++) file = join(this.paths.chatsDir, "agents", `${entry.ref.id}-${i}.json`);
+			entry.agentFile = file;
 			this.save();
 		}
 		// Antigravity CLI and Codex: over ACP (docs/spec/31 A3).
@@ -3118,6 +3130,35 @@ export class Sessions {
 	private save(): void {
 		writeFileAtomic(this.paths.catalogIndex, JSON.stringify([...this.entries.values()], null, "\t"));
 	}
+}
+
+/** Every file a conversation's history reads. */
+function historyFiles(e: CatalogEntry): string[] {
+	return [e.file, e.migratedFrom, e.sessionFile, e.agentFile, ...(e.segments ?? []).flatMap((s) => [s.sessionFile, s.agentFile])].filter((f): f is string => Boolean(f));
+}
+
+/**
+ * A branch's own copy of an earlier part. A coding agent's transcript goes without its session id: that session stays
+ * the original's (deleting the branch doesn't end it), and the branch only shows what was said.
+ */
+function copyPart(segment: Segment, name: string, agentsDir: string): Segment {
+	const part: Segment = { model: segment.model, at: segment.at };
+	if (segment.sessionFile && existsSync(segment.sessionFile)) {
+		part.sessionFile = join(dirname(segment.sessionFile), `${name}.jsonl`);
+		cpSync(segment.sessionFile, part.sessionFile);
+	}
+	if (segment.agentFile && existsSync(segment.agentFile)) {
+		part.agentFile = join(agentsDir, `${name}.json`);
+		const text = readFileSync(segment.agentFile, "utf8");
+		let copy = text;
+		try {
+			const { sessionId: _, ...rest } = JSON.parse(text) as { sessionId?: string };
+			copy = JSON.stringify(rest);
+		} catch {}
+		mkdirSync(agentsDir, { recursive: true });
+		writeFileSync(part.agentFile, copy);
+	}
+	return part;
 }
 
 function summary({ file: _f, sessionFile: _s, agentFile: _af, segments: _sg, handoff: _h, reviewFor: _rf, restoredFromSessionFile: _recovered, onDisk: _d, thinking: _t, migratedFrom: _m, sideBrief: _b, sideBy: _y, sideWoke: _w, sidePending: _p, sideOffers: _o, sideBriefs: _sb, prSeen: _ps, prFailedSha: _pf, ...rest }: CatalogEntry): SessionSummary {
