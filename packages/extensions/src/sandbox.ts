@@ -2,6 +2,8 @@
  * piopio-sandbox: Build's shell commands run inside macOS's sandbox (Seatbelt, through `sandbox-exec`), so a command
  * the user approved, or one a rule allows, can only write inside the project (docs/research/deepseek-harness.md §1.1).
  *
+ * - Reading Piopio's own data folder (the engine's token and socket among it) and AI and cloud sign-in files is refused
+ *   too, so a confined command can't talk to the engine or take keys (`sandboxHidden`).
  * - Everything else works as before: reading, the network, running tools. Writes are allowed in the project folder
  *   (the worktree for a worktree session, plus the repository's git folder), temporary folders and the usual package
  *   and build caches, so installs and builds keep working.
@@ -137,9 +139,32 @@ function sbpl(value: string): string {
 	return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }
 
-/** The profile: everything allowed except writing outside `roots` (and devices such as /dev/null). */
-export function seatbeltProfile(roots: readonly string[]): string {
-	return ["(version 1)", "(allow default)", "(deny file-write*)", '(allow file-write* (subpath "/dev"))', `(allow file-write* ${roots.map((r) => `(subpath ${sbpl(r)})`).join(" ")})`].join("\n");
+/**
+ * What sandboxed commands may not read or connect to: Piopio's own data folder (the engine's token and socket, every
+ * chat, agent and secret it keeps) and the sign-ins of AI tools and cloud CLIs. Without this a confined command could
+ * read the token, talk to the engine and change its own permissions, or take the user's keys.
+ * Left readable on purpose: ~/.ssh and ~/.gnupg (git over SSH and signed commits), the keychains (code signing).
+ */
+export function sandboxHidden(options: { home?: string; piopioHome?: string } = {}): string[] {
+	const home = options.home ?? homedir();
+	const piopio = options.piopioHome ?? process.env.PIOPIO_HOME ?? join(home, "Library", "Application Support", "Piopio");
+	return [piopio, join(home, ".pi", "agent", "auth.json"), join(home, ".codex", "auth.json"), join(home, ".aws")].map(real);
+}
+
+/**
+ * The profile: everything allowed except writing outside `roots` (and devices such as /dev/null), and reading or
+ * connecting to sockets in `hidden`. A root inside a hidden folder (a chat's scratch folder, a worktree in Piopio's data)
+ * stays readable. Later rules win in Seatbelt, so the order matters.
+ */
+export function seatbeltProfile(roots: readonly string[], hidden: readonly string[] = sandboxHidden()): string {
+	const subpaths = (paths: readonly string[]) => paths.map((p) => `(subpath ${sbpl(p)})`).join(" ");
+	const lines = ["(version 1)", "(allow default)", "(deny file-write*)", '(allow file-write* (subpath "/dev"))', `(allow file-write* ${subpaths(roots)})`];
+	if (hidden.length) {
+		lines.push(`(deny file-read* ${subpaths(hidden)})`, `(deny network-outbound ${hidden.map((p) => `(remote unix-socket (subpath ${sbpl(p)}))`).join(" ")})`);
+		const inside = roots.filter((r) => hidden.some((h) => r.startsWith(`${h}/`)));
+		if (inside.length) lines.push(`(allow file-read* ${subpaths(inside)})`);
+	}
+	return lines.join("\n");
 }
 
 /** A POSIX shell word. */
@@ -166,11 +191,11 @@ export function sandboxUnavailable(): string | undefined {
 	return probed;
 }
 
-export const SANDBOX_GUIDELINE = `Commands run in a sandbox: they can read anything and use the network, but write only inside the project folder, temporary folders and package/build caches. If a command must write elsewhere (a global install, a file in the home folder), run it again with ${OUTSIDE_PROJECT}: true; the user is asked first.`;
+export const SANDBOX_GUIDELINE = `Commands run in a sandbox: they can read almost anything (not Piopio's own data or AI and cloud sign-ins) and use the network, but write only inside the project folder, temporary folders and package/build caches. If a command must write elsewhere (a global install, a file in the home folder), run it again with ${OUTSIDE_PROJECT}: true; the user is asked first.`;
 
 const NESTED_HINT = `\n\n[A tool tried to start its own macOS sandbox, which can't run inside Piopio's ("sandbox_apply: Operation not permitted"). Piopio already turns it off for swift and xcodebuild. For another tool, look for its flag that disables its own sandbox and run it again; Piopio's sandbox still keeps writes inside the project.]`;
 
-const DENIED_HINT = `\n\n[Piopio's sandbox stopped a write outside the project ("Operation not permitted"). If this command really has to write there, run it again with ${OUTSIDE_PROJECT}: true and the user will be asked. Otherwise write inside the project or a temporary folder.]`;
+const DENIED_HINT = `\n\n[Piopio's sandbox stopped a write outside the project, or a read of Piopio's own data or a sign-in file ("Operation not permitted"). If this command really has to do that, run it again with ${OUTSIDE_PROJECT}: true and the user will be asked. Otherwise write inside the project or a temporary folder.]`;
 
 type Content = { type: string; text?: string }[];
 

@@ -351,7 +351,8 @@ actor AppleTools {
     private func osascript(_ lines: [String], _ argv: [String] = []) async throws -> String {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-        p.arguments = ["-e", "on run argv"] + lines.flatMap { ["-e", $0] } + ["-e", "end run"] + argv
+        // "--" ends osascript's options: an argument starting with "-e" would otherwise be read as more script.
+        p.arguments = ["-e", "on run argv"] + lines.flatMap { ["-e", $0] } + ["-e", "end run", "--"] + argv
         let out = Pipe(), err = Pipe()
         p.standardOutput = out
         p.standardError = err
