@@ -88,12 +88,33 @@ for the app, 1 for the engine. The review's battery items (the mascot at 30 fps 
 timer, the project page reading its file every second) cost only while those views are on screen, and weren't
 measured: that needs the app in front, on each of them, for a minute.
 
+## 4b. The views on screen
+
+Measured the same day: a copy of the Debug app (its own bundle id and data, the faux model) opened on each view with
+`PIOPIO_DEMO_*`, the window in front, 20 s to settle, then 60 s of `top` for the app, its engine and any new WebKit
+process. A snapshot of each run confirmed the view.
+
+| View | App | Engine | WebKit |
+|---|---|---|---|
+| **Home, with the mascot** (asleep, in the evening) | **9.6%** | 0.0% | — |
+| A chat with one answer | 0.1% | 0.0% | — |
+| The same chat with the browser panel open (no page loaded) | 0.3% | 0.0% | — |
+| A project's memory editor (NOTES.md, read every second) | 0.0–0.2% | 0.0% | — |
+| The file viewer on an HTML page (watched every second) | 0.0–0.1% | 0.0% | 0.0% |
+
+Only Home costs anything: the mascot's `TimelineView(.animation(minimumInterval: 1 / 30))` in `PiopioPerch` redraws
+30 times a second for as long as Home is on screen, whether the app is in front or not and even while the mascot
+sleeps. Ten percent of a core is what a laptop notices over a day with Home left open. The one-second timers the review
+named (the browser panel's clock, the notes editor's and the file viewer's file checks) cost nothing measurable.
+
+Not measured: the browser panel with a real site in it (the cost is the site's), and tabs parked in a hidden window.
+
 ## 5. What to fix, in order
 
 | # | What | Why | Size |
 |---|---|---|---|
 | 1 | ~~Close a coding-agent runtime after it's been idle a while~~ Done: its process ends after 15 minutes idle, the conversation stays open, and the next message resumes the session (`test/idle-agents.test.ts`) | 40 to 300 MB per conversation, for days | Small |
 | 2 | ~~Streaming without copying the conversation~~ Done: `StepsView` follows the events and compares only the items that are new objects (§3) | 10 to 20% of a core during long turns, growing with the square of the turn | Medium |
-| 3 | Measure the visible views (Home's mascot, the browser panel, a project page, a file view) with the app in front | Before touching any of the review's battery items | A minute each |
+| 3 | ~~Measure the visible views~~ Done (§4b): only Home's mascot costs, 9.6% of a core while Home is on screen. Fix: draw it at 30 fps only while something moves (a tap, a look, a hop) or the app is in front, and hold still otherwise | A laptop's battery, with Home left open | Small |
 | 4 | Measure the web views with tabs, visuals and an app open: the review says parked browser tabs keep running at full speed in a hidden window | Each one is a WebKit process | After 3 |
 | 5 | An idle cap on the engine's own runtimes | Only for engines left running for weeks | Later |
