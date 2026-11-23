@@ -1,6 +1,6 @@
 # 41 · Piopio as an MCP server: other agents use Piopio
 
-Status: draft 2026-11-23 from a request by the user; **decided by the user the same day (§11, PM1–PM10, every proposal accepted)**; not built. PM11 (one tool catalog with spec 31, §4.4) proposed later the same day.
+Status: draft 2026-11-23 from a request by the user; **decided by the user the same day (§11, PM1–PM10, every proposal accepted)**; not built. PM11 (one tool catalog with spec 31, §4.4) decided later the same day, as proposed.
 
 **The request (the user, 2026-11-23):** "write the specs for an MCP server, that is, being able to use Piopio from
 outside, like orca.build or T3."
@@ -20,7 +20,7 @@ and a set of projects, and anything that changes something still asks you in Pio
 - **One place to see the work.** Work an outside agent starts in Piopio shows up in Piopio's sidebar, with its
   transcript, approvals, checkpoints and cost, like any other conversation. You don't have to look in another terminal.
 - **It's the other way into the same tools as 31 CA8.** CA8 serves *a conversation's* tools to the coding agent that
-  runs it. This spec serves *Piopio itself* to agents it didn't start. Proposed 2026-11-23 (31 CA11, §4.4 here): one
+  runs it. This spec serves *Piopio itself* to agents it didn't start. Decided 2026-11-23 (31 CA11, §4.4 here): one
   catalog of tool definitions with two ways in, the same SDK and loopback server code (`tool-server.ts`,
   `mcp-bridge.ts`), at a different address and with different auth.
 - **MCP is how Piopio extends itself** (AQ12). Speaking MCP outward too means no Piopio-specific API for others to
@@ -89,7 +89,7 @@ tool takes and returns JSON. IDs are Piopio's own (`prj_`, `ses_`, `agt_`, 03 §
   automation can be asked for in a conversation ("every Monday…"), where it's a card you confirm (27).
 - **Other clients' conversations** with Supervised, and conversations outside the grant's projects at any level.
 
-### 4.4 One catalog with 31 (proposed 2026-11-23, not decided)
+### 4.4 One catalog with 31 (decided 2026-11-23 as proposed)
 
 The tools of §4.1–4.2 and the ones a coding agent gets in a conversation (31 CA8, CA12) are one catalog. Each tool
 says which way in may serve it:
@@ -235,7 +235,7 @@ other.
 
 ## 10. Under the hood
 
-- **The catalog (proposed, 31 CA11):** tool definitions live once; `tool-server.ts` serves a conversation's subset
+- **The catalog (31 CA11):** tool definitions live once; `tool-server.ts` serves a conversation's subset
   at its secret address, as today, and the outside server serves the grant's subset. `outside/tools.ts` only adds the
   outside-only tools of §4.4 and the grant's checks.
 - `packages/engine/src/outside/`: `server.ts` (an `McpServer` with the tools of §4 on a Streamable HTTP transport,
@@ -267,7 +267,7 @@ other.
 | **PM8** | Coding agents Piopio runs can't reach this server (CA8 covers them); depth 3 is refused across Piopios. |
 | **PM9** | Fixed loopback port 47321, falling back to the next free port. |
 | **PM10** | Order: MS0–MS2 on the Mac first, then the server (MS3) after 33's PS0, then the CLI (MS4). |
-| **PM11** | *Proposed 2026-11-23, not decided.* One tool catalog with 31 (§4.4): each tool says which way in serves it, and MS0 is built on the same code as 31's A5. |
+| **PM11** | *Decided 2026-11-23 as proposed.* One tool catalog with 31 (§4.4): each tool says which way in serves it, and MS0 is built on the same code as 31's A5. |
 
 ## 12. Phases
 
