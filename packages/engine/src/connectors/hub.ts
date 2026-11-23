@@ -63,6 +63,9 @@ export class ConnectorHub {
 	private state: State = { accounts: [], settings: {} };
 	private readonly logins = new Map<string, Login>();
 	private readonly problems = new Map<string, string>();
+	/** Each API account's tokens as last read or renewed, and its renewal while one runs (see `authorized`). */
+	private readonly apiTokens = new Map<string, Tokens>();
+	private readonly refreshing = new Map<string, Promise<Tokens>>();
 	private readonly mcp = new Map<string, McpAccount>();
 	/** Tokens Piopio already has, for apps that sign in with one (`signIn: "token"`): set by the server (GitHub's). */
 	readonly tokens: Record<string, { get: () => Promise<string | undefined>; help: string }> = {};
@@ -337,7 +340,7 @@ export class ConnectorHub {
 	private async token(def: ApiConnector, form: Record<string, string>): Promise<Tokens> {
 		const response = await this.fetchImpl(def.oauth.tokenUrl, { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams(form), signal: AbortSignal.timeout(20_000) });
 		const body = (await response.json().catch(() => ({}))) as { access_token?: string; refresh_token?: string; expires_in?: number; error?: string; error_description?: string };
-		if (!response.ok || !body.access_token) throw new Error(`${def.name} didn't complete the sign-in: ${body.error_description ?? body.error ?? response.status}`);
+		if (!response.ok || !body.access_token) throw new TokenRefused(`${def.name} didn't complete the sign-in: ${body.error_description ?? body.error ?? response.status}`, response.status);
 		return { access: body.access_token, ...(body.refresh_token ? { refresh: body.refresh_token } : {}), expires: Date.now() + (body.expires_in ?? 3600) * 1000 };
 	}
 
@@ -352,27 +355,42 @@ export class ConnectorHub {
 	authorized(account: Account): AuthorizedFetch {
 		const def = this.definition(account.connector);
 		if (!def || isMcp(def)) throw new Error(`${account.connector} isn't an app with its own API.`);
-		let cached: Tokens | undefined;
+		// One cache and one refresh at a time per account, for every fetch made for it: a provider that rotates refresh
+		// tokens refuses the old one, so two refreshing at once made the second look signed out.
 		const load = async (): Promise<Tokens> => {
+			const cached = this.apiTokens.get(account.id);
 			if (cached) return cached;
 			const raw = await this.secrets.get(this.secretName(account.id), `Use ${def.name}`);
 			if (!raw) throw new NeedsSignIn(`${def.name} (${account.label}) isn't signed in on this Mac. Reconnect it in Settings › Connectors.`);
-			cached = JSON.parse(raw) as Tokens;
-			return cached;
+			const tokens = JSON.parse(raw) as Tokens;
+			this.apiTokens.set(account.id, tokens);
+			return tokens;
 		};
-		const refresh = async (): Promise<Tokens> => {
+		const renew = async (): Promise<Tokens> => {
 			const current = await load();
 			if (!current.refresh) throw new NeedsSignIn(`${def.name} (${account.label}) needs you to sign in again.`);
 			const clientId = this.clientId(def.id);
 			const secret = def.oauth.needsSecret ? await this.clientSecret(def.id) : undefined;
 			try {
 				const next = await this.token(def, { grant_type: "refresh_token", refresh_token: current.refresh, client_id: clientId ?? "", ...(secret ? { client_secret: secret } : {}) });
-				cached = { ...next, refresh: next.refresh ?? current.refresh };
-				await this.secrets.set(this.secretName(account.id), JSON.stringify(cached));
-				return cached;
-			} catch {
-				throw new NeedsSignIn(`${def.name} (${account.label}) needs you to sign in again.`);
+				const tokens = { ...next, refresh: next.refresh ?? current.refresh };
+				this.apiTokens.set(account.id, tokens);
+				await this.secrets.set(this.secretName(account.id), JSON.stringify(tokens));
+				return tokens;
+			} catch (error) {
+				// Only the provider refusing the refresh token means signing in again. No network (just after a wake), a
+				// timeout or its server failing is for later: the account is still connected.
+				if (error instanceof TokenRefused && error.status >= 400 && error.status < 500) throw new NeedsSignIn(`${def.name} (${account.label}) needs you to sign in again.`);
+				throw new Error(`${def.name} couldn't renew its sign-in just now (${(error as Error).message}). Try again in a moment.`);
 			}
+		};
+		const refresh = (): Promise<Tokens> => {
+			let running = this.refreshing.get(account.id);
+			if (!running) {
+				running = renew().finally(() => this.refreshing.delete(account.id));
+				this.refreshing.set(account.id, running);
+			}
+			return running;
 		};
 		return async (path, init) => {
 			try {
@@ -506,6 +524,16 @@ export class ConnectorHub {
 }
 
 export class NeedsSignIn extends Error {}
+
+/** The token endpoint said no, with its status (a 4xx is the provider refusing; a 5xx, its own failure). */
+class TokenRefused extends Error {
+	constructor(
+		message: string,
+		readonly status: number,
+	) {
+		super(message);
+	}
+}
 
 /** The browser page after a sign-in. */
 function page(title: string, text: string): string {

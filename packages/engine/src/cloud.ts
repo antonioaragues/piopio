@@ -282,7 +282,15 @@ export class CloudLink {
 		for (const socket of this.sockets.values()) socket.close();
 		this.sockets.clear();
 	}
+
+	/** After the Mac slept: every agent's socket starts again (watched ones subscribe again on their own). */
+	woke(): void {
+		for (const socket of this.sockets.values()) socket.woke();
+	}
 }
+
+/** How long a call to the cloud waits for its answer before the socket counts as dead. */
+const CALL_TIMEOUT_MS = 60_000;
 
 /**
  * One agent's socket: JSON-RPC calls, `session.events` routed to their subscriptions, and after a drop a new socket
@@ -292,7 +300,8 @@ export class AgentSocket {
 	private socket?: Socket;
 	private opening?: Promise<Socket>;
 	private nextId = 1;
-	private readonly waiters = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
+	/** Calls waiting for their answer, with the socket they went out on (one that closes ends its own). */
+	private readonly waiters = new Map<number, { ws: Socket; resolve: (v: unknown) => void; reject: (e: Error) => void; timer: NodeJS.Timeout }>();
 	readonly subscriptions = new Map<string, (n: Notification) => void>();
 	private readonly reconnectors = new Set<() => void>();
 	private closed = false;
@@ -314,7 +323,7 @@ export class AgentSocket {
 	}
 
 	private open(): Promise<Socket> {
-		if (this.socket && this.socket.readyState === 1) return Promise.resolve(this.socket);
+		if (this.socket && this.socket.readyState === 1 && !this.opening) return Promise.resolve(this.socket);
 		this.opening ??= (async () => {
 			const token = await this.token();
 			const ws = await new Promise<Socket>((resolve, reject) => {
@@ -325,8 +334,9 @@ export class AgentSocket {
 			});
 			ws.addEventListener("message", (e) => this.onMessage(String((e as MessageEvent).data)));
 			ws.addEventListener("close", () => this.onClose(ws));
-			this.socket = ws;
+			// Current only once the cloud said hello: a call sent before it was refused.
 			this.helloResult = await this.send<Result<"engine.hello">>(ws, "engine.hello", { token, client: "piopio-engine", protocolVersion: "1.0" });
+			this.socket = ws;
 			this.attempt = 0;
 			return ws;
 		})().finally(() => (this.opening = undefined));
@@ -344,12 +354,33 @@ export class AgentSocket {
 		return this.send<T>(await this.open(), method, params);
 	}
 
+	/**
+	 * One call. An answer that doesn't come in `CALL_TIMEOUT_MS` means the socket is dead without having closed (half-open,
+	 * across a sleep): it's closed, so the call fails and the socket comes back.
+	 */
 	private send<T>(ws: Socket, method: string, params: unknown): Promise<T> {
 		const id = this.nextId++;
 		return new Promise<T>((resolve, reject) => {
-			this.waiters.set(id, { resolve: resolve as (v: unknown) => void, reject });
-			ws.send(JSON.stringify({ jsonrpc: "2.0", id, method, params }));
+			const timer = setTimeout(() => {
+				if (!this.waiters.delete(id)) return;
+				reject(new EngineError("ENGINE_UNAVAILABLE", "Your cloud didn't answer in time."));
+				ws.close();
+			}, CALL_TIMEOUT_MS);
+			timer.unref?.();
+			this.waiters.set(id, { ws, resolve: resolve as (v: unknown) => void, reject, timer });
+			try {
+				ws.send(JSON.stringify({ jsonrpc: "2.0", id, method, params }));
+			} catch (error) {
+				clearTimeout(timer);
+				this.waiters.delete(id);
+				reject(new EngineError("ENGINE_UNAVAILABLE", `Couldn't send to your cloud: ${(error as Error).message}`));
+			}
 		});
+	}
+
+	/** After the Mac slept: the socket may be dead without knowing it, so it's closed and, while watched, comes back. */
+	woke(): void {
+		this.socket?.close();
 	}
 
 	private onMessage(raw: string): void {
@@ -367,6 +398,7 @@ export class AgentSocket {
 		const waiter = this.waiters.get(message.id);
 		this.waiters.delete(message.id);
 		if (!waiter) return;
+		clearTimeout(waiter.timer);
 		if (message.error) {
 			const code = message.error.data?.code;
 			waiter.reject(new EngineError(code === "BUSY" || code === "AUTH" || code === "NOT_FOUND" || code === "INVALID" ? code : "INTERNAL", message.error.message));
@@ -374,10 +406,15 @@ export class AgentSocket {
 	}
 
 	private onClose(ws: Socket): void {
+		// Its calls end with it, also engine.hello while it was opening (that one waited forever).
+		for (const [id, w] of this.waiters) {
+			if (w.ws !== ws) continue;
+			clearTimeout(w.timer);
+			this.waiters.delete(id);
+			w.reject(new EngineError("ENGINE_UNAVAILABLE", "The connection to your cloud dropped."));
+		}
 		if (this.socket !== ws) return;
 		this.socket = undefined;
-		for (const w of this.waiters.values()) w.reject(new EngineError("ENGINE_UNAVAILABLE", "The connection to your cloud dropped."));
-		this.waiters.clear();
 		this.subscriptions.clear();
 		this.scheduleReconnect();
 	}

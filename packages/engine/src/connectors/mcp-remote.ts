@@ -242,11 +242,29 @@ export class McpAccount {
 		return error instanceof Error ? error : new Error(String(error));
 	}
 
+	/**
+	 * After a failure the client goes, so the next request connects again: a session the server dropped (a 404 for its
+	 * id), a transport that died across a sleep, or a token that was renewed would otherwise keep failing until a restart.
+	 */
+	private reset(): void {
+		const old = this.client;
+		this.client = undefined;
+		void old?.then((c) => c.close()).catch(() => undefined);
+	}
+
 	async tools(): Promise<Tool[]> {
 		try {
 			return await (await this.connect()).listTools();
-		} catch (error) {
-			throw this.explain(error);
+		} catch (first) {
+			if (this.explain(first) instanceof McpNeedsSignIn) throw this.explain(first);
+			// Listing has no effects: once more, on a new connection.
+			this.reset();
+			try {
+				return await (await this.connect()).listTools();
+			} catch (error) {
+				this.reset();
+				throw this.explain(error);
+			}
 		}
 	}
 
@@ -255,6 +273,8 @@ export class McpAccount {
 		try {
 			result = await (await this.connect()).callTool(tool, args);
 		} catch (error) {
+			// Not again by itself: the tool may have done its work before the answer was lost.
+			this.reset();
 			throw this.explain(error);
 		}
 		const content = await limitMcpContent(toLlmContent(result));

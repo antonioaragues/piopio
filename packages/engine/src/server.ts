@@ -61,6 +61,7 @@ import { WorkRunner, type ProjectWork } from "./work/runner.js";
 import { migrateTeams, needsMigration, REPORT_FILE } from "./work/migrate.js";
 import { buildAgenda } from "./agenda.js";
 import { Watchdog, type WatchdogOptions } from "./watchdog.js";
+import { WakeWatch } from "./wake.js";
 import { GitHub, type GitHubOptions } from "./github.js";
 import { TEMPLATES } from "@piopio/runtime";
 
@@ -136,6 +137,8 @@ export class Engine {
 	/** The apps each client has open, closed with it. */
 	private appOpens = new Map<RpcConnection, string[]>();
 	readonly watchdog: Watchdog;
+	/** Notices the Mac waking from sleep (wake.ts): what runs on timers or open connections catches up. */
+	readonly wake = new WakeWatch();
 	readonly github: GitHub;
 	private prTimer?: NodeJS.Timeout;
 	private readonly teamsDir: string;
@@ -470,6 +473,16 @@ export class Engine {
 		await this.hooks.listen(this.options.hooksPort ?? (Number(process.env.PIOPIO_HOOKS_PORT) || DEFAULT_HOOKS_PORT)).catch((error) => this.log(`Webhook triggers are off: ${(error as Error).message}`));
 		// Automations' clock: what was due while the engine was off runs once (docs/spec/27 AU9).
 		this.automations.start();
+		// After a sleep: automations due meanwhile fire now (not up to an hour later), the time asleep doesn't count as
+		// a conversation being stuck, and Telegram's polls and the cloud's sockets start again (they may be half-dead).
+		this.wake.onWake((sleptMs) => {
+			this.log(`Woke after about ${Math.round(sleptMs / 60_000)} min asleep: catching up.`);
+			this.automations?.woke();
+			this.watchdog.slept(sleptMs);
+			void this.telegram?.woke().catch(() => undefined);
+			this.cloud?.woke();
+		});
+		this.wake.start();
 		void this.sessions.startAgents(this.log);
 		// MCP apps (Linear): their servers' current tools, for conversations started from now on.
 		void this.connectors.refreshMcpTools().catch(() => undefined);
@@ -675,6 +688,7 @@ export class Engine {
 	}
 
 	async stop(): Promise<void> {
+		this.wake.stop();
 		clearInterval(this.cloudTick);
 		this.cloud?.close();
 		this.telegram?.stop();

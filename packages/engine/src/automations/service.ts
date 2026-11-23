@@ -479,6 +479,14 @@ export class Automations {
 		this.watchBudgets();
 	}
 
+	/**
+	 * After the Mac slept: the timer was armed on a clock that stopped meanwhile, so what fell due while it slept would
+	 * have waited up to an hour more. Armed again, it fires what's due now.
+	 */
+	woke(): void {
+		this.arm();
+	}
+
 	stop(): void {
 		this.stopped = true;
 		clearTimeout(this.timer);

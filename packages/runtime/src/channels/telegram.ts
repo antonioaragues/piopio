@@ -28,17 +28,33 @@ export class TelegramBot {
 		private readonly base = "https://api.telegram.org",
 	) {}
 
-	private async call<T>(method: string, body: Record<string, unknown> | FormData, signal?: AbortSignal): Promise<T> {
+	/**
+	 * One request, given up on after `timeoutMs`: without a deadline, a connection that died half-open (across a sleep, a
+	 * network change) left the long poll waiting forever, and the bot silent.
+	 */
+	private async call<T>(method: string, body: Record<string, unknown> | FormData, signal?: AbortSignal, timeoutMs = 30_000): Promise<T> {
 		const form = body instanceof FormData;
-		const response = await this.fetcher(`${this.base}/bot${this.token}/${method}`, {
-			method: "POST",
-			...(form ? {} : { headers: { "content-type": "application/json" } }),
-			body: form ? body : JSON.stringify(body),
-			...(signal ? { signal } : {}),
-		});
-		const json = (await response.json().catch(() => ({}))) as { ok?: boolean; result?: T; description?: string };
-		if (!json.ok) throw new TelegramError(json.description ?? `Telegram answered ${response.status}`, response.status);
-		return json.result as T;
+		const deadline = new AbortController();
+		const timer = setTimeout(() => deadline.abort(new TelegramError(`Telegram didn't answer ${method} in ${Math.round(timeoutMs / 1000)} s`, 0)), timeoutMs);
+		const stop = () => deadline.abort(signal?.reason);
+		signal?.addEventListener("abort", stop, { once: true });
+		try {
+			const response = await this.fetcher(`${this.base}/bot${this.token}/${method}`, {
+				method: "POST",
+				...(form ? {} : { headers: { "content-type": "application/json" } }),
+				body: form ? body : JSON.stringify(body),
+				signal: deadline.signal,
+			});
+			const json = (await response.json().catch(() => ({}))) as { ok?: boolean; result?: T; description?: string };
+			if (!json.ok) throw new TelegramError(json.description ?? `Telegram answered ${response.status}`, response.status);
+			return json.result as T;
+		} catch (error) {
+			if (deadline.signal.aborted && !signal?.aborted && deadline.signal.reason instanceof TelegramError) throw deadline.signal.reason;
+			throw error;
+		} finally {
+			clearTimeout(timer);
+			signal?.removeEventListener("abort", stop);
+		}
 	}
 
 	getMe(): Promise<TelegramUser> {
@@ -59,7 +75,8 @@ export class TelegramBot {
 
 	/** Waits up to `timeout` seconds for messages after `offset` (long polling). */
 	getUpdates(offset: number, timeout: number, signal?: AbortSignal): Promise<TelegramUpdate[]> {
-		return this.call("getUpdates", { offset, timeout, allowed_updates: ["message"] }, signal);
+		// Telegram holds the request up to `timeout` seconds: the deadline is that, and some.
+		return this.call("getUpdates", { offset, timeout, allowed_updates: ["message"] }, signal, (timeout + 15) * 1000);
 	}
 
 	/** Sends Markdown as Telegram's HTML, split to fit; falls back to plain text if Telegram can't parse it. */

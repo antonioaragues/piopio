@@ -88,6 +88,14 @@ export class Watchdog {
 		this.timer.unref?.();
 	}
 
+	/** The Mac slept for `ms`: that time doesn't count as a conversation being silent, or as you keeping it waiting. */
+	slept(ms: number): void {
+		for (const w of this.watched.values()) {
+			w.lastAt += ms;
+			if (w.waitingSince !== undefined) w.waitingSince += ms;
+		}
+	}
+
 	stop(): void {
 		clearInterval(this.timer);
 	}

@@ -83,6 +83,13 @@ export class TelegramChannels {
 		for (const [id, live] of this.live) if (!wanted.has(id)) (live.abort.abort(), this.live.delete(id));
 	}
 
+	/** After the Mac slept: each poll starts again, rather than wait on a request that may have died with the network. */
+	async woke(): Promise<void> {
+		for (const live of this.live.values()) live.abort.abort();
+		this.live.clear();
+		await this.sync();
+	}
+
 	/** An agent that was deleted: its bot stops, and its state file and its token in the Keychain go. */
 	async forget(agentId: string): Promise<void> {
 		this.live.get(agentId)?.abort.abort();
