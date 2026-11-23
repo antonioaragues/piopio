@@ -545,8 +545,7 @@ export class ClaudeCodeRuntime implements Runtime {
 			last.usage = { ...usage, cost: { ...usage.cost, total: ((usage.cost?.total as number | undefined) ?? 0) + added } } as PiUsage;
 			this.save();
 		}
-		const usage = this.builder.snapshot().state.usage;
-		this.builder.setState({ usage: { ...usage, costUsd: usage.costUsd + added } });
+		this.builder.chargeLastAnswer(added);
 	}
 
 	/** Claude Code's permission requests, as Piopio's prompts (CA4). */

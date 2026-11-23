@@ -217,6 +217,9 @@ struct CommandPalette: View {
         }
         rows += [
             Row(id: "c:library", icon: "books.vertical", title: "Library", trailing: nil) { close(); NotificationCenter.default.post(name: .selectItem, object: SidebarItem.library.raw) },
+            // Overview (docs/spec/34 §4): no sidebar row; the footer's cost line and these open it.
+            Row(id: "c:overview", icon: "chart.bar", title: "Overview", trailing: nil) { close(); NotificationCenter.default.post(name: .selectItem, object: SidebarItem.overview(nil).raw) },
+            Row(id: "c:spend", icon: "chart.bar", title: "Spend", trailing: "Overview") { close(); NotificationCenter.default.post(name: .selectItem, object: SidebarItem.overview(nil).raw) },
             Row(id: "c:search", icon: "text.magnifyingglass", title: "Search Messages", trailing: "⇧⌘F") { mode = .messages; query = "" },
             Row(id: "c:settings", icon: "gearshape", title: "Settings", trailing: "⌘,") { ThreadModel.openSettings(); close() },
         ]

@@ -165,6 +165,20 @@ export class TimelineBuilder {
 		this.pending.push({ type: "state", state: structuredClone(this.state) });
 	}
 
+	/**
+	 * A cost reported after the answer it belongs to (Claude Code's turn result): onto the latest answer, so it shows
+	 * where the request was (the usage ledger reads it there), and onto the total.
+	 */
+	chargeLastAnswer(usd: number): void {
+		const item = this.items.findLast((i): i is AssistantItem => i.kind === "assistant");
+		if (item) {
+			const u = item.usage ?? emptyUsage();
+			item.usage = { ...u, costUsd: u.costUsd + usd };
+			this.pending.push({ type: "item.updated", item: structuredClone(item) });
+		}
+		this.setState({ usage: { ...this.state.usage, costUsd: this.state.usage.costUsd + usd } });
+	}
+
 	// ── Incremental ────────────────────────────────────────────────────────
 
 	/** A message of yours shown as you typed it (a `/command` pi expanded before sending). */

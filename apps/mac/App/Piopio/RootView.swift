@@ -239,6 +239,8 @@ struct RootView: View {
             LibraryPage(engine: engine, item: itemBinding)
         case .app(let path):
             AppPage(engine: engine, path: path).id(path)
+        case .overview(let agent):
+            OverviewPage(engine: engine, agent: agent, item: itemBinding).id(agent ?? "")
         case .index(.agents) where engine.agents.isEmpty:
             AgentsFirstRun(engine: engine, item: itemBinding)
         case .index(.chats) where engine.threads.isEmpty:

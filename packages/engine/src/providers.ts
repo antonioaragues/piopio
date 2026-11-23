@@ -48,6 +48,9 @@ const SUBSCRIPTIONS: Record<string, string> = {
 	meta: "Muse subscription",
 };
 
+/** Providers whose sign-in is a subscription plan (requests through it aren't billed per use). */
+export const SUBSCRIPTION_PROVIDERS: ReadonlySet<string> = new Set(Object.keys(SUBSCRIPTIONS));
+
 /** Who bills for requests through a provider connected this way (FR2: the billing route is explicit). */
 export function billingLabel(provider: Provider, type: "api_key" | "oauth"): string {
 	if (type === "oauth") return provider.auth.oauth?.isSubscription ? (SUBSCRIPTIONS[provider.id] ?? `${provider.name} subscription`) : `${provider.name} account`;

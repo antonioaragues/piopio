@@ -28,6 +28,9 @@ enum SidebarItem: Hashable {
     case library
     /// An app (its file, docs/spec/35 §15): the page, and the conversation about it beside it.
     case app(String)
+    /// Overview (docs/spec/34): what Piopio costs; filtered to one agent when given (its "$… this month" opens it).
+    /// Not a sidebar row (OV1): the footer's cost line and ⌘K open it.
+    case overview(String?)
 
     var raw: String {
         switch self {
@@ -36,6 +39,7 @@ enum SidebarItem: Hashable {
         case .automation(let id): "automation:\(id)"
         case .library: "library"
         case .app(let path): "app:\(path)"
+        case .overview(let agent): agent.map { "overview:\($0)" } ?? "overview"
         case .index(let s): "index:\(s.rawValue)"
         case .project(let id): "project:\(id)"
         case .board(let id): "board:\(id)"
@@ -65,6 +69,7 @@ enum SidebarItem: Hashable {
         case "automation": self = .automation(value)
         case "library": self = .library
         case "app": self = value.isEmpty ? .library : .app(value)
+        case "overview": self = .overview(value.isEmpty ? nil : value)
         default: self = .home
         }
     }

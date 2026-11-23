@@ -16,7 +16,6 @@ struct MainSidebar: View {
     @AppStorage("collapsedProjects") private var collapsedProjectsRaw = ""
     @AppStorage("pinnedItems") private var pinnedRaw = ""
     @State private var showingEarlier: Set<String> = []
-    @State private var showingCosts = false
     @State private var renaming: SessionSummary?
     /// Folders on this Mac that aren't projects yet, for the Projects + menu (docs/spec/18 §17).
     @State private var recentFolders: [RecentFolder] = []
@@ -103,13 +102,12 @@ struct MainSidebar: View {
                 .background(Color.dsChip, in: Circle())
             VStack(alignment: .leading, spacing: 1) {
                 Text(HomeView.firstName).font(.system(size: 13)).foregroundStyle(Color.dsFg).lineLimit(1)
-                // What requests cost lives here, not in Settings: today's spend opens the details.
-                Button { showingCosts = true } label: {
-                    Text(footerLine).font(.system(size: 11)).foregroundStyle(Color.dsFg3).lineLimit(1)
+                // What requests cost lives here, not in Settings: today's spend opens Overview › Spend (docs/spec/34 §4).
+                Button { item = .overview(nil) } label: {
+                    Text(footerLine).font(.system(size: 11)).foregroundStyle({ if case .overview = item { return Color.dsFg }; return Color.dsFg3 }()).lineLimit(1)
                 }
                 .buttonStyle(.plain)
-                .help("OpenRouter spending today for this API key, including other apps that share it. Other providers are not included. Click for details.")
-                .popover(isPresented: $showingCosts, arrowEdge: .top) { CostDetails(engine: engine) }
+                .help("OpenRouter spending today for this API key, including other apps that share it. Other providers are not included. Click for Overview.")
             }
             Spacer(minLength: 4)
             Button { WindowOpener.shared.openSettings?() } label: { Image(systemName: "gearshape") }

@@ -9,7 +9,7 @@ import { cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, watch,
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { getAgentDir, SessionManager } from "@earendil-works/pi-coding-agent";
-import type { ApprovalMode, ApprovalRule, ContainerRef, ModelRef, ProjectInfo, PromptResponse, SessionSummary, TimelineItem, WorkOn } from "@piopio/protocol";
+import type { ApprovalMode, ApprovalRule, Budget, ContainerRef, ModelRef, ProjectInfo, PromptResponse, SessionSummary, TimelineItem, WorkOn } from "@piopio/protocol";
 import { EngineError, type ModelHub } from "./models.js";
 import type { EnginePaths } from "./paths.js";
 import { CheckpointStore } from "./checkpoints.js";
@@ -50,6 +50,7 @@ import type { Extension } from "@earendil-works/pi-durable";
 import type { WebOptions } from "./tools/web.js";
 import { exportTranscript, type ExportFormat } from "./export.js";
 import { SearchIndex } from "./search.js";
+import type { LedgerSource } from "./ledger.js";
 import { type Library, LibrarySearch, type LibraryOrigin, NOTE_PROMPT, noteRequest } from "./library.js";
 import type { HistoryBridge } from "./tools/history.js";
 import { AGENT_NAMES, findAgent, installedAgents, runExternalAgent, type ExternalAgent } from "./external-agents.js";
@@ -62,7 +63,7 @@ import type { Watchdog, WatchdogRule } from "./watchdog.js";
 import type { GitHub, PrStatus } from "./github.js";
 import type { ConsultBridge } from "./consult.js";
 import { agentBridge, automationsExtension } from "./automations/tools.js";
-import { PIOPIO, turnError, type Automation } from "./automations/model.js";
+import { DEFAULT_BUDGET, PIOPIO, turnError, type Automation } from "./automations/model.js";
 import type { Automations } from "./automations/service.js";
 import { TimelineBuilder, type PiMessage } from "./timeline/builder.js";
 import { sdkMessages, SdkEventMapper } from "./timeline/pi-sdk.js";
@@ -227,6 +228,11 @@ export class Sessions {
 		private readonly piOverrides: { piSessionDir?: string; piAgentDir?: string; trashDir?: string } = {},
 		private readonly webOptions: WebOptions = {},
 	) {
+		// Utility, web search and embeddings are recorded by scope (a conversation's or an agent's id).
+		this.hub.ledger.resolve = (scope) => {
+			const entry = this.entries.get(scope);
+			return entry ? this.ledgerSource(entry) : undefined;
+		};
 		this.search = new LibrarySearch(join(paths.home, "search.db"), {
 			replaced: (key, items) => {
 				const origin = this.libraryOrigin(key);
@@ -558,6 +564,7 @@ export class Sessions {
 			if (!items.length) return;
 			this.search.setDestination(entry.ref.id, entry.ref, entry.title, entry.updatedAt);
 			this.search.replaceSession(entry.ref.id, entry.title, entry.updatedAt, items);
+			this.recordUsage(entry, items);
 			this.searchReady.add(entry.ref.id);
 			return;
 		}
@@ -573,6 +580,7 @@ export class Sessions {
 			const key = ref.conversationId ? `${ref.id}/${ref.conversationId}` : ref.id;
 			this.search.setDestination(key, ref, title, entry.updatedAt);
 			this.search.replaceSession(key, title, entry.updatedAt, view.snapshot().items);
+			this.recordUsage({ ...entry, ref: { ...ref, id: key }, title }, view.snapshot().items);
 			if (!this.indexedViews.has(view)) {
 				this.indexedViews.add(view);
 				view.onEvents(events => this.index({ ...entry, ref: { ...ref, id: key }, title }, events));
@@ -585,7 +593,7 @@ export class Sessions {
 		this.searchReady.add(entry.ref.id);
 	}
 
-	/** Keeps the search index in step with what the session shows. */
+	/** Keeps the search index and the usage ledger in step with what the session shows. */
 	private index(entry: CatalogEntry, events: readonly SessionEvent[]): void {
 		const id = entry.ref.id;
 		for (const event of events) {
@@ -593,18 +601,127 @@ export class Sessions {
 				case "item.added":
 				case "item.updated":
 					this.search.upsertItem(id, event.item);
+					if (event.item.kind === "assistant") this.recordUsage(entry, [event.item]);
 					break;
 				case "item.replaced":
 					this.search.upsertItem(id, event.item, event.oldId);
+					if (event.item.kind === "assistant") this.recordUsage(entry, [event.item]);
 					break;
 				case "item.removed":
+					// A removed answer (a branch left, a retry) was still paid for: the ledger keeps it.
 					this.search.removeItem(id, event.itemId);
 					break;
 				case "resnapshot":
 					this.search.replaceSession(id, entry.title, entry.updatedAt, event.snapshot.items);
+					this.recordUsage(entry, event.snapshot.items);
 					break;
 			}
 		}
+	}
+
+	// ── Usage ledger (docs/spec/34 §8.1) ──
+
+	/**
+	 * Where a conversation's requests belong: its container (a session, or the agent: one pi-durable session, so its
+	 * entry ids are unique across its conversations), and what it's part of. `entry.ref.id` may be search's key
+	 * ("<agent>/<conversationId>"). A subagent's or side conversation's requests count where its parent's do.
+	 */
+	private ledgerSource(entry: CatalogEntry): LedgerSource {
+		const key = entry.ref.id;
+		const slash = key.indexOf("/");
+		const container = slash < 0 ? key : key.slice(0, slash);
+		const conversation = slash < 0 ? entry.ref.conversationId : key.slice(slash + 1);
+		const own = this.entries.get(container) ?? { ...entry, ref: { ...entry.ref, id: container } };
+		const ref: ContainerRef = conversation ? { kind: own.ref.kind, id: container, conversationId: conversation } : { kind: own.ref.kind, id: container };
+		let root = own;
+		for (let i = 0; i < 8; i++) {
+			const up = root.parent?.id ?? root.side?.parent.id;
+			const next = up ? this.entries.get(up) : undefined;
+			if (!next) break;
+			root = next;
+		}
+		const agent = own.ref.kind === "agent" ? container : undefined;
+		const automation = agent
+			? conversation?.startsWith("run:") ? this.automations?.runOf({ agent, agentRun: conversation.slice(4) })?.run.automation : undefined
+			: (this.automations?.runOf({ conversation: container }) ?? this.automations?.runOf({ conversation: root.ref.id }))?.run.automation;
+		const project = root.helper?.project ?? root.projectPath ?? (root.ref.kind === "build" ? root.cwd : undefined);
+		return {
+			key,
+			container,
+			ref,
+			title: entry.title,
+			sourceKind: root.ref.kind === "build" || root.helper ? "build" : own.ref.kind,
+			...(project ? { project } : {}),
+			...(agent ? { agent } : {}),
+			...(automation ? { automation } : {}),
+			place: own.cloud ? "cloud" : "mac",
+		};
+	}
+
+	/** Writes the finished answers' usage into the ledger (idempotent: an answer read again isn't counted twice). */
+	private recordUsage(entry: CatalogEntry, items: readonly TimelineItem[]): void {
+		if (!items.some((i) => i.kind === "assistant" && i.usage)) return;
+		try {
+			this.hub.ledger.recordItems(this.ledgerSource(entry), items);
+		} catch (error) {
+			// Overview's numbers are never worth a failed turn.
+			console.error(`usage ledger: ${error instanceof Error ? error.message : String(error)}`);
+		}
+	}
+
+	private ledgerBackfill?: Promise<void>;
+
+	/**
+	 * Reads past usage into the ledger: `extra_costs` once, then every conversation that changed since it was last
+	 * read (its updatedAt; an agent's also by its month's spend, since its runs don't touch the catalog). The first
+	 * time it reads everything; after that, only what's new. Returns when done.
+	 */
+	backfillLedger(): Promise<void> {
+		this.ledgerBackfill ??= (async () => {
+			const ledger = this.hub.ledger;
+			ledger.importExtras(this.hub.extraCosts.all());
+			for (const entry of [...this.entries.values()]) {
+				if (!this.entries.has(entry.ref.id)) continue;
+				const mark = entry.ref.kind === "agent" ? `${entry.updatedAt}|${entry.agent?.status?.spendUsd ?? 0}` : entry.updatedAt;
+				if (ledger.synced(entry.ref.id) === mark) continue;
+				try {
+					if (entry.ref.kind === "agent" && entry.cloud) continue;
+					await this.indexContainer(entry);
+					ledger.markSynced(entry.ref.id, mark);
+				} catch {
+					// Unreadable or missing files: tried again next time.
+				}
+			}
+		})().finally(() => {
+			this.ledgerBackfill = undefined;
+		});
+		return this.ledgerBackfill;
+	}
+
+	/** Names for Overview's rows: an agent's or an automation's current name. */
+	ledgerNames() {
+		return {
+			agent: (id: string) => this.entries.get(id)?.title,
+			automation: (id: string) => this.automations?.find(id)?.name,
+		};
+	}
+
+	/** Every budget Piopio has (docs/spec/34 §5.4): each agent's month (AS3) and each automation's run (27). */
+	budgets(now = new Date()): Budget[] {
+		const out: Budget[] = [];
+		const resets = new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString();
+		for (const e of this.entries.values()) {
+			const s = e.ref.kind === "agent" ? e.agent?.status : undefined;
+			if (s?.budgetUsd === undefined) continue;
+			out.push({ id: `agent:${e.ref.id}`, kind: "agent", name: e.title, spentUsd: s.spendUsd, limitUsd: s.budgetUsd, period: "month", resets, ref: { kind: "agent", id: e.ref.id } });
+		}
+		for (const a of this.automations?.list() ?? []) {
+			if (!a.enabled) continue;
+			const limit = a.budgetPerRunUsd ?? (a.runsAs === PIOPIO ? DEFAULT_BUDGET.piopio : DEFAULT_BUDGET.agent);
+			const last = this.automations!.lastRun(a.id);
+			out.push({ id: `automation:${a.id}`, kind: "automation", name: a.name, spentUsd: last?.costUsd ?? 0, limitUsd: limit, period: "run", automation: a.id });
+		}
+		return out.sort((a, b) => b.spentUsd / b.limitUsd - a.spentUsd / a.limitUsd);
 	}
 
 	/**
@@ -789,6 +906,7 @@ export class Sessions {
 			if (!this.indexedViews.has(view)) {
 				this.indexedViews.add(view);
 				this.search.replaceSession(key, title, entry.updatedAt, view.snapshot().items);
+				this.recordUsage({ ...entry, title, ref: { ...ref, id: key } }, view.snapshot().items);
 				view.onEvents(events => {
 					this.searchReady.delete(entry.ref.id);
 					this.index({ ...entry, title: this.search.destination(key)?.title ?? title, ref: { ...ref, id: key } }, events);
@@ -2825,6 +2943,7 @@ export class Sessions {
 		if (entry.ref.kind !== "build") await this.chat?.resources.ready();
 		const runtime = this.withSegments(entry, await this.createRuntime(entry));
 		if (!this.search.isIndexed(entry.ref.id)) this.search.replaceSession(entry.ref.id, entry.title, entry.updatedAt, runtime.snapshot().items);
+		this.recordUsage(entry, runtime.snapshot().items);
 		runtime.onEvents((events) => {
 			this.searchReady.delete(entry.ref.id);
 			this.index(entry, events);

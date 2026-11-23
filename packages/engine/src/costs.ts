@@ -11,8 +11,16 @@ export class ExtraCosts {
 		// Every budget check and Usage reads by scope (and month): without it, each read went through every row ever written.
 		this.db.exec("CREATE INDEX IF NOT EXISTS extra_costs_scope_at ON extra_costs (scope, at)");
 	}
+	/** Each request as it's recorded, for the usage ledger (docs/spec/34 §8.1). */
+	onRecord?: (row: { at: string; scope: string; kind: string; model: string; usd: number | null }) => void;
 	record(kind: "web_search" | "utility" | "embeddings", model: string, usd: number | undefined, scope = "app"): void {
-		this.db.prepare("INSERT INTO extra_costs VALUES (?, ?, ?, ?, ?)").run(new Date().toISOString(), scope, kind, model, typeof usd === "number" && Number.isFinite(usd) && usd >= 0 ? usd : null);
+		const row = { at: new Date().toISOString(), scope, kind, model, usd: typeof usd === "number" && Number.isFinite(usd) && usd >= 0 ? usd : null };
+		this.db.prepare("INSERT INTO extra_costs VALUES (?, ?, ?, ?, ?)").run(row.at, row.scope, row.kind, row.model, row.usd);
+		this.onRecord?.(row);
+	}
+	/** Every row, oldest first (the ledger reads them once). */
+	all(): { rowid: number; at: string; scope: string; kind: string; model: string; usd: number | null }[] {
+		return this.db.prepare("SELECT rowid, at, scope, kind, model, usd FROM extra_costs ORDER BY rowid").all() as { rowid: number; at: string; scope: string; kind: string; model: string; usd: number | null }[];
 	}
 	summary(scope?: string) {
 		const where = scope ? "WHERE scope = ?" : "";

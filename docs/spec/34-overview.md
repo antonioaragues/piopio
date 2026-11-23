@@ -1,6 +1,6 @@
 # 34 · Overview: what Piopio costs, what you've set up, and what it has done
 
-Proposed and decided 2026-11-22 (§11). From the user's ask for a stats section (costs, a visual map of the system:
+Proposed and decided 2026-11-22 (§11). OV0–OV1 built 2026-11-23 (§13). From the user's ask for a stats section (costs, a visual map of the system:
 agents, cloud and so on, and other numbers worth seeing), and a read of what Piopio records today
 ([costs.ts](../../packages/engine/src/costs.ts), `usage.summary` and `usage.extras` in
 [protocol](../../packages/protocol/src/index.ts), [CostDetails.swift](../../apps/mac/App/Piopio/CostDetails.swift),
@@ -259,3 +259,40 @@ The user took every proposal.
 - Backfill time on a year of sessions.
 - The cloud's ledger: Cloudflare's own usage (requests, duration) needs its analytics API and a token scope 30's K1
   token may not have.
+
+## 13. Built: OV0–OV1 (2026-11-23)
+
+**The ledger** ([ledger.ts](../../packages/engine/src/ledger.ts)) is `usage.db` in the data folder, one row per
+request, with §8.1's columns. Rather than a hook in every runtime, it is fed where the search index already is: every
+finished answer a session shows carries its `Usage`, so the same events (live, a reopen, a resnapshot) write it, for
+chats, Build, subagents, side conversations, agents' conversations and runs, and coding agents.
+
+- **One request, one row.** A row's id is its container (a session, or the agent: one pi-durable session, so entry ids
+  are unique across its conversations), the answer's item id and its four token counts. Reading a conversation again
+  never counts an answer twice, and an answer on a branch you left, or replaced by a retry, stays: it was paid for.
+- **Prices that come late.** Claude Code's cost arrives with the turn's result, after its last answer was shown;
+  `chargeLastAnswer` now puts it on that answer (an `item.updated`), and the ledger takes a later, larger price.
+- **Unknown is unknown.** An answer that reports $0 for a model with no price is `usd = null`, counted in
+  `unknownCalls`, never added as $0. A plan's requests (a coding agent that didn't charge, a provider signed in with a
+  subscription) are `plan = true`: tokens, never dollars (OV4).
+- **extra_costs** keeps its table (agents' budgets read it), and each new row is also written to the ledger; the rows
+  from before are read in once. A scope that's a conversation or an agent counts there; `app` is Piopio's own work.
+- **Backfill** runs on Spend's first open: every conversation whose `updatedAt` changed since it was last read (an
+  agent's also when its month's spend changed, since runs don't touch the catalog). Spend waits for it 1.5 s, then
+  answers with what's there and `backfilling: true`; the page says "Reading past conversations…" and asks again.
+- **Not yet:** `route` and `role` stay empty for turns (29's route and 28's role aren't on the timeline item), cloud
+  agents aren't read (their views are, live, with `place = "cloud"`; OV4 pulls their rows), and `stats.billing` is
+  still `usage.summary` (OpenRouter only).
+
+**Methods:** `stats.spend` (range, grouping, filter by agent, automation or place; totals, days with Mac and Cloud and
+the top three, groups, forecast from day 5, `planTokens`), `stats.items` (what a row counts, costliest first),
+`stats.budgets` (each agent's month and each enabled automation's latest run against its budget per run; a project's
+budget per job isn't listed yet), `stats.export` (CSV, refs and numbers only).
+
+**The page** ([OverviewView.swift](../../apps/mac/App/Piopio/OverviewView.swift)): Spend only until OV2 adds tabs.
+The sidebar footer's cost line opens it (CostDetails stays the conversation's view in the inspector); ⌘K has
+Overview and Spend; `overview:<agent>` opens it filtered to an agent (the agent page doesn't link there yet). The
+plan-limit figure isn't shown: no plan window is readable yet (§12).
+
+**For L4 and OV4:** `stats.spend` is the data a `piopio` source reads (35 AL12), and `UsageLedger.monthUsd` is what
+OV3's Piopio-wide budget will check.

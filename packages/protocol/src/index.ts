@@ -1160,6 +1160,84 @@ export type CatalogChanged = Static<typeof CatalogChanged>;
 
 export const EngineCapabilities = Type.Object({ runtimes: Type.Array(ContainerKind), models: Type.Array(Type.String()) });
 
+// ── Overview (docs/spec/34) ─────────────────────────────────────────────────
+
+/** Days are local to the engine's Mac. "month" is this calendar month, "12m" the last twelve, by month. */
+export const SpendRange = literals("today", "7d", "month", "last_month", "12m");
+export type SpendRange = Static<typeof SpendRange>;
+export const SpendGroupBy = literals("what", "model", "provider", "project", "where");
+export type SpendGroupBy = Static<typeof SpendGroupBy>;
+export const SpendGroup = Type.Object({
+	/** Stable within a grouping: "conversations", "build", "piopio", "agent:<id>", "automation:<id>", a model, a provider, a project path, a place. */
+	id: Type.String(),
+	label: Type.String(),
+	/** Known USD (unknown prices excluded and counted in `unknownCalls`). */
+	usd: Type.Number(),
+	calls: Type.Number(),
+	unknownCalls: Type.Number(),
+	/** Billed to a subscription plan: shown as tokens, never as dollars (OV4). */
+	plan: Type.Boolean(),
+	tokens: Type.Number(),
+	/** Of the range's known USD, 0…1. */
+	share: Type.Number(),
+	/** What it opens: an agent, a conversation. */
+	ref: Type.Optional(ContainerRef),
+});
+export type SpendGroup = Static<typeof SpendGroup>;
+export const SpendDay = Type.Object({
+	/** "2026-11-23", or "2026-11" on 12 months. */
+	day: Type.String(),
+	macUsd: Type.Number(),
+	cloudUsd: Type.Number(),
+	calls: Type.Number(),
+	/** Requests that day with no price. */
+	unknownCalls: Type.Number(),
+	/** That day's top three spenders (the What grouping). */
+	top: Type.Array(Type.Object({ label: Type.String(), usd: Type.Number() })),
+});
+export const SpendResult = Type.Object({
+	range: SpendRange,
+	/** The range's start and end (end is exclusive; for an open range, its natural end). */
+	from: Type.String(),
+	to: Type.String(),
+	knownUsd: Type.Number(),
+	calls: Type.Number(),
+	/** Requests with no price: counted, never shown as $0. */
+	unknownCalls: Type.Number(),
+	/** Requests billed to a subscription plan, and their tokens (shown instead of dollars). */
+	planCalls: Type.Number(),
+	planTokens: Type.Number(),
+	tokens: Type.Object({ input: Type.Number(), output: Type.Number(), cacheRead: Type.Number(), cacheWrite: Type.Number() }),
+	/** "About" this much by the month's end, straight-line from the days so far; only for "month" from day 5. */
+	forecastUsd: Type.Optional(Type.Number()),
+	days: Type.Array(SpendDay),
+	groupBy: SpendGroupBy,
+	groups: Type.Array(SpendGroup),
+	/** The oldest request in the ledger (what the numbers can't see before). */
+	since: Type.Optional(Type.String()),
+	/** Past conversations are still being read into the ledger. */
+	backfilling: Type.Optional(Type.Boolean()),
+});
+export type SpendResult = Static<typeof SpendResult>;
+export const SpendItem = Type.Object({ ref: ContainerRef, title: Type.String(), usd: Type.Number(), calls: Type.Number(), unknownCalls: Type.Number(), plan: Type.Boolean(), tokens: Type.Number(), lastAt: Type.String() });
+export type SpendItem = Static<typeof SpendItem>;
+export const Budget = Type.Object({
+	/** "agent:<id>", "automation:<id>". */
+	id: Type.String(),
+	kind: literals("agent", "automation"),
+	name: Type.String(),
+	spentUsd: Type.Number(),
+	limitUsd: Type.Number(),
+	/** An agent's budget is per month; an automation's per run (its latest run's spend). */
+	period: literals("month", "run"),
+	/** When a monthly budget starts again (the 1st, local). */
+	resets: Type.Optional(Type.String()),
+	ref: Type.Optional(ContainerRef),
+	/** An automation's id, to open its page. */
+	automation: Type.Optional(Type.String()),
+});
+export type Budget = Static<typeof Budget>;
+
 export const methods = {
 	"engine.hello": {
 		params: Type.Object({
@@ -1285,6 +1363,28 @@ export const methods = {
 		params: Type.Object({ ref: Type.Optional(ContainerRef) }),
 		result: Type.Object({ scope: Type.String(), knownUsd: Type.Number(), unknownCalls: Type.Number(), calls: Type.Number(), breakdown: Type.Array(Type.Object({ kind: Type.String(), calls: Type.Number(), knownUsd: Type.Number(), unknownCalls: Type.Number() })) }),
 	},
+	/**
+	 * Overview › Spend (docs/spec/34 §5, §8): Piopio's own estimate from the usage ledger, one row per request. Never
+	 * includes a provider's bill (`usage.summary`); unknown prices are counted, not added as $0.
+	 */
+	"stats.spend": {
+		params: Type.Object({
+			range: SpendRange,
+			groupBy: Type.Optional(SpendGroupBy),
+			/** Only what one agent, automation or place spent (an agent's "$0.31 this month" opens Spend filtered to it). */
+			filter: Type.Optional(Type.Object({ agent: Type.Optional(Type.String()), automation: Type.Optional(Type.String()), place: Type.Optional(Type.String()) })),
+		}),
+		result: SpendResult,
+	},
+	/** What one grouped row counts (conversations, agents' conversations and runs), costliest first. */
+	"stats.items": {
+		params: Type.Object({ range: SpendRange, groupBy: SpendGroupBy, group: Type.String() }),
+		result: Type.Object({ items: Type.Array(SpendItem) }),
+	},
+	/** Every budget Piopio has (34 §5.4): an agent's month, an automation's run. */
+	"stats.budgets": { params: Type.Object({}), result: Type.Object({ budgets: Type.Array(Budget) }) },
+	/** The ledger for a range as CSV, one row per request (34 §8.3). Refs and numbers only. */
+	"stats.export": { params: Type.Object({ range: SpendRange }), result: Type.Object({ csv: Type.String(), rows: Type.Number() }) },
 	/** OpenRouter-key billing; includes other apps sharing that key. Cached a minute. */
 	"usage.summary": {
 		params: Type.Object({ refresh: Type.Optional(Type.Boolean()) }),

@@ -12,7 +12,7 @@ import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import type { ModelInfo, ModelRef, ProviderInfo } from "@piopio/protocol";
 import { credentialSecret, KeychainCredentialStore } from "./credentials.js";
 import { checkEndpoint, type Endpoint, endpointBilling, endpointConfig, type EndpointFormat, Endpoints, isEmbedding, isLocal } from "./endpoints.js";
-import { billingLabel, connectMethods, FEATURED, KEY_PAGES, maskKey, openaiApiAlias, POPULAR, PREFERRED_MODEL, providerFamilies, providerKind, UTILITY_MODEL, verifyKey } from "./providers.js";
+import { billingLabel, connectMethods, FEATURED, SUBSCRIPTION_PROVIDERS, KEY_PAGES, maskKey, openaiApiAlias, POPULAR, PREFERRED_MODEL, providerFamilies, providerKind, UTILITY_MODEL, verifyKey } from "./providers.js";
 import type { SecretBroker } from "./secrets.js";
 import { OpenRouterLive } from "./openrouter-live.js";
 import { CLAUDE_CODE, ClaudeCodeAgent } from "./coding-agents.js";
@@ -23,6 +23,7 @@ export const DEFAULT_MODEL: ModelRef = { provider: "openrouter", id: "anthropic/
 type FauxHandle = ReturnType<typeof fauxProvider>;
 
 import { ExtraCosts } from "./costs.js";
+import { UsageLedger } from "./ledger.js";
 import { OnDeviceModel, OnDeviceUnavailable } from "./on-device.js";
 import type { UtilityChoice } from "@piopio/protocol";
 import { writeFileAtomic } from "./atomic.js";
@@ -30,6 +31,8 @@ import { writeFileAtomic } from "./atomic.js";
 
 export class ModelHub {
 	readonly extraCosts: ExtraCosts;
+	/** Every paid request, for Overview (docs/spec/34 §8.1); `extraCosts` writes into it too. */
+	readonly ledger: UsageLedger;
 	readonly credentials: KeychainCredentialStore;
 	readonly endpoints: Endpoints;
 	readonly faux?: FauxHandle;
@@ -69,6 +72,9 @@ export class ModelHub {
 		this.credentials = new KeychainCredentialStore(secrets, options.home ? join(options.home, "credentials.json") : undefined);
 		this.endpoints = new Endpoints(options.home ? join(options.home, "endpoints.json") : undefined);
 		this.extraCosts = new ExtraCosts(options.home ? join(options.home, "extra-costs.db") : undefined);
+		this.ledger = new UsageLedger(options.home ? join(options.home, "usage.db") : undefined);
+		this.ledger.planOf = (provider, usd) => this.billedToPlan(provider, usd);
+		this.extraCosts.onRecord = (row) => void this.ledger.recordExtra(row);
 		this.loadVisibility();
 		if (options.faux) {
 			// PIOPIO_FAUX_MODEL_NAME: captures of a long model name (the composer in a narrow column, docs/spec/37).
@@ -150,6 +156,16 @@ export class ModelHub {
 		if ((await this.connected()).size === 0) throw new EngineError("AUTH", "No model provider is connected. Connect one in Settings › Models.");
 		const name = this.runtime?.getProvider(provider)?.name ?? provider;
 		throw new EngineError("AUTH", `${name} isn't connected. Connect it in Settings › Models, or pick another model.`);
+	}
+
+	/**
+	 * Requests through this provider are billed to a subscription, not per use (docs/spec/34 OV4): a coding agent on
+	 * your plan, or a provider you signed in to with your subscription. `usd` is what the request reported.
+	 */
+	billedToPlan(provider: string, usd: number): boolean {
+		// A coding agent charges a turn only when it's billed by key (Claude Code's runtime decides, CA6).
+		if (provider === CLAUDE_CODE || this.acpAgents.some((a) => a.spec.id === provider)) return !(usd > 0);
+		return this.credentials.typeOf(provider) === "oauth" && SUBSCRIPTION_PROVIDERS.has(provider);
 	}
 
 	/** Providers with a stored credential (not ambient ones: billing stays explicit). */

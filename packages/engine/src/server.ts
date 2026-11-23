@@ -708,6 +708,7 @@ export class Engine {
 		await this.connectors.close();
 		this.inputReceipts.close();
 		this.hub.extraCosts.close();
+		this.hub.ledger.close();
 		await this.memory.reset();
 		if (existsSync(this.options.paths.socket)) unlinkSync(this.options.paths.socket);
 	}
@@ -1460,6 +1461,24 @@ export class Engine {
 			case "usage.extras": {
 				const p = params as Params<"usage.extras">;
 				return this.hub.extraCosts.summary(p.ref?.id) satisfies Result<"usage.extras">;
+			}
+			case "stats.spend": {
+				const p = params as Params<"stats.spend">;
+				// The first open reads past conversations into the ledger; what's there after a moment is shown, marked.
+				const done = await Promise.race([this.sessions.backfillLedger().then(() => true), new Promise<false>((r) => setTimeout(() => r(false), 1500))]);
+				const result = this.hub.ledger.spend(p, this.sessions.ledgerNames());
+				return (done ? result : { ...result, backfilling: true }) satisfies Result<"stats.spend">;
+			}
+			case "stats.items": {
+				const p = params as Params<"stats.items">;
+				return { items: this.hub.ledger.items(p, this.sessions.ledgerNames()) } satisfies Result<"stats.items">;
+			}
+			case "stats.budgets":
+				return { budgets: this.sessions.budgets() } satisfies Result<"stats.budgets">;
+			case "stats.export": {
+				const p = params as Params<"stats.export">;
+				await this.sessions.backfillLedger();
+				return this.hub.ledger.csv(p.range) satisfies Result<"stats.export">;
 			}
 			case "usage.summary": {
 				const p = params as Params<"usage.summary">;

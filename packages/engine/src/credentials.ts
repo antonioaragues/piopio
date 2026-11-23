@@ -61,6 +61,11 @@ export class KeychainCredentialStore implements CredentialStore {
 		return Object.entries(this.index).map(([providerId, type]) => ({ providerId, type }));
 	}
 
+	/** How a provider is connected, from the index alone (no Keychain read). */
+	typeOf(providerId: string): Credential["type"] | undefined {
+		return this.index[providerId];
+	}
+
 	/** Whether a credential is stored for the provider, without reading the Keychain beyond OpenRouter's key. */
 	async has(providerId: string): Promise<boolean> {
 		if (this.cache.has(providerId)) return true;

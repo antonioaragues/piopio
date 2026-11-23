@@ -2101,6 +2101,80 @@ public struct ExtraCostSummary: Decodable, Sendable {
     public var scope: String; public var knownUsd: Double; public var unknownCalls, calls: Int; public var breakdown: [Breakdown]
 }
 
+// MARK: Overview (docs/spec/34)
+
+/// Days are local to the engine's Mac; "month" is this calendar month, "12m" the last twelve by month.
+public enum SpendRange: String, Codable, Sendable, CaseIterable { case today, sevenDays = "7d", month, lastMonth = "last_month", twelveMonths = "12m" }
+public enum SpendGroupBy: String, Codable, Sendable, CaseIterable { case what, model, provider, project, `where` }
+
+public struct SpendFilter: Encodable, Sendable, Hashable {
+    public var agent: String?; public var automation: String?; public var place: String?
+    public init(agent: String? = nil, automation: String? = nil, place: String? = nil) { self.agent = agent; self.automation = automation; self.place = place }
+}
+public struct SpendParams: Encodable, Sendable {
+    public var range: SpendRange; public var groupBy: SpendGroupBy?; public var filter: SpendFilter?
+    public init(range: SpendRange, groupBy: SpendGroupBy? = nil, filter: SpendFilter? = nil) { self.range = range; self.groupBy = groupBy; self.filter = filter }
+}
+/// A grouped row: known USD (unknown prices excluded and counted), or tokens when billed to a plan.
+public struct SpendGroup: Decodable, Sendable, Hashable, Identifiable {
+    public var id: String; public var label: String
+    public var usd: Double; public var calls, unknownCalls: Int
+    public var plan: Bool; public var tokens: Double; public var share: Double
+    public var ref: ContainerRef?
+}
+public struct SpendDay: Decodable, Sendable, Hashable, Identifiable {
+    public struct Top: Decodable, Sendable, Hashable { public var label: String; public var usd: Double }
+    /// "2026-11-23", or "2026-11" on 12 months.
+    public var day: String
+    public var macUsd, cloudUsd: Double; public var calls: Int
+    /// That day's requests with no price (not in its amounts).
+    public var unknownCalls: Int
+    public var top: [Top]
+    public var id: String { day }
+}
+public struct SpendResult: Decodable, Sendable {
+    public struct Tokens: Decodable, Sendable { public var input, output, cacheRead, cacheWrite: Double }
+    public var range: SpendRange
+    public var from, to: String
+    public var knownUsd: Double
+    public var calls, unknownCalls, planCalls: Int
+    /// Tokens of the requests billed to a subscription plan.
+    public var planTokens: Double
+    public var tokens: Tokens
+    /// "About" this much by the month's end; only for "month" from day 5.
+    public var forecastUsd: Double?
+    public var days: [SpendDay]
+    public var groupBy: SpendGroupBy
+    public var groups: [SpendGroup]
+    public var since: String?
+    public var backfilling: Bool?
+}
+public struct SpendItemsParams: Encodable, Sendable {
+    public var range: SpendRange; public var groupBy: SpendGroupBy; public var group: String
+    public init(range: SpendRange, groupBy: SpendGroupBy, group: String) { self.range = range; self.groupBy = groupBy; self.group = group }
+}
+public struct SpendItem: Decodable, Sendable, Hashable, Identifiable {
+    public var ref: ContainerRef; public var title: String
+    public var usd: Double; public var calls, unknownCalls: Int
+    public var plan: Bool; public var tokens: Double; public var lastAt: String
+    public var id: String { ref.key }
+}
+public struct SpendItems: Decodable, Sendable { public var items: [SpendItem] }
+/// An agent's month or an automation's run (34 §5.4).
+public struct Budget: Decodable, Sendable, Hashable, Identifiable {
+    public enum Kind: String, Decodable, Sendable { case agent, automation }
+    public enum Period: String, Decodable, Sendable { case month, run }
+    public var id: String; public var kind: Kind; public var name: String
+    public var spentUsd, limitUsd: Double
+    public var period: Period
+    public var resets: String?
+    public var ref: ContainerRef?
+    public var automation: String?
+}
+public struct Budgets: Decodable, Sendable { public var budgets: [Budget] }
+public struct SpendExportParams: Encodable, Sendable { public var range: SpendRange; public init(range: SpendRange) { self.range = range } }
+public struct SpendExport: Decodable, Sendable { public var csv: String; public var rows: Int }
+
 // MARK: Your cloud (docs/spec/30 K1)
 
 /// Your cloud as the Mac's engine sees it: connected, reachable, and the agents its registry lists.
