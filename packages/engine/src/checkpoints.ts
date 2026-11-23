@@ -5,7 +5,7 @@
  */
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { appendFileSync, existsSync, mkdirSync, statSync, unlinkSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, rmSync, statSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { EngineError } from "./models.js";
 
@@ -80,6 +80,16 @@ export class CheckpointStore {
 			if (back.length) await git(["checkout", target, "--pathspec-from-file=-", "--pathspec-file-nul"], back.join("\0"));
 			await git(["add", "-A", "."]);
 			return changes;
+		});
+	}
+
+	/**
+	 * Deletes a folder's checkpoints (its shadow repository): the folder was a worktree that's gone, or a project the user
+	 * removed. Its history of the folder's files shouldn't outlive it.
+	 */
+	forget(cwd: string): Promise<void> {
+		return this.serial(cwd, async () => {
+			rmSync(join(this.root, `${createHash("sha256").update(cwd).digest("hex").slice(0, 16)}.git`), { recursive: true, force: true });
 		});
 	}
 

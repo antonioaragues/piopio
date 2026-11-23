@@ -682,6 +682,7 @@ export class Sessions {
 		const runtime = this.open.get(ref.id);
 		this.open.delete(ref.id);
 		if (runtime) await (await runtime.catch(() => undefined))?.close();
+		await this.dropWorktree(entry);
 		// A file another conversation still reads stays: branches made before 2026-11-22 share their earlier parts (and a
 		// migrated chat's old file) with the chat they came from.
 		const others = new Set([...this.entries.values()].filter((e) => e !== entry).flatMap(historyFiles));
@@ -2746,18 +2747,46 @@ export class Sessions {
 	}
 
 	/** Drops the build sessions of a folder from the catalog (the files stay with pi). */
+	/**
+	 * A project the user removed: its conversations (in its folder, and in worktrees of it) leave the list, with what
+	 * Piopio kept for them (attachments, worktrees), and its checkpoints go: they hold the history of the project's files.
+	 * The pi session files stay where pi keeps them, as the user's own.
+	 */
 	async forgetFolder(cwd: string): Promise<void> {
-		const gone = [...this.entries.values()].filter((e) => e.ref.kind === "build" && e.cwd === cwd);
+		const gone = [...this.entries.values()].filter((e) => e.ref.kind === "build" && (e.cwd === cwd || e.projectPath === cwd));
 		for (const e of gone) {
 			const runtime = this.open.get(e.ref.id);
 			this.open.delete(e.ref.id);
 			if (runtime) await (await runtime.catch(() => undefined))?.close();
+			await this.dropWorktree(e);
+			deleteAttachments(this.paths.home, e.ref.id);
 			this.entries.delete(e.ref.id);
 			this.search.deleteSession(e.ref.id);
 		}
+		await this.checkpoints.forget(cwd).catch(() => undefined);
 		if (!gone.length) return;
 		this.save();
 		for (const l of this.listeners) l({ upserted: [], removed: gone.map((e) => e.ref) });
+	}
+
+	/**
+	 * A conversation's own worktree, when the conversation goes: removed when it's clean, moved to the Trash when it holds
+	 * work not committed. Its branch stays in the repository, so no commit is lost; its checkpoints go with it.
+	 */
+	private async dropWorktree(entry: CatalogEntry): Promise<void> {
+		if (!entry.worktree || entry.worktree.finished || !entry.projectPath || !entry.cwd) return;
+		const repo = entry.projectPath;
+		const path = entry.cwd;
+		try {
+			if (!existsSync(path)) await runGit(repo, ["worktree", "prune"]);
+			else if ((await gitStatus(path)).files.length) {
+				moveToTrash(path, this.piOverrides.trashDir ?? join(homedir(), ".Trash"));
+				await runGit(repo, ["worktree", "prune"]);
+			} else await runGit(repo, ["worktree", "remove", "--force", path]);
+		} catch {
+			// The repository moved or isn't there: the folder stays where it is.
+		}
+		await this.checkpoints.forget(path).catch(() => undefined);
 	}
 
 	async closeAll(): Promise<void> {

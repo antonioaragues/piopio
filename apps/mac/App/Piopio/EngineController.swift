@@ -459,8 +459,11 @@ final class EngineController {
         let log = home.appending(path: "logs/engine.log")
         if !FileManager.default.fileExists(atPath: log.path) { FileManager.default.createFile(atPath: log.path, contents: nil, attributes: [.posixPermissions: 0o600]) }
         try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: log.path)
-        if let handle = try? FileHandle(forWritingTo: log) {
-            handle.seekToEndOfFile()
+        // Append mode, as the launcher opens it: the engine rotates the log in place (packages/engine/src/logs.ts), and a
+        // handle that only sought to the end once would go on writing at the old offset, past the new end.
+        let fd = open(log.path, O_WRONLY | O_APPEND | O_CREAT, 0o600)
+        if fd >= 0 {
+            let handle = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
             p.standardError = handle
             p.standardOutput = handle
         }

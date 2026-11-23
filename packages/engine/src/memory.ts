@@ -6,6 +6,7 @@ import { randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { SQLITE_PRAGMAS } from "./requests.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { McpMemoryProvider as McpMemoryConfig } from "@piopio/protocol";
@@ -55,6 +56,7 @@ export class MemoryProviders {
 		// What's deleted is overwritten on disk, not left in free pages: forgetting has to mean it. (Here, not in
 		// BuiltinMemory: a Durable Object's SQLite refuses pragmas.)
 		db.exec("PRAGMA secure_delete = ON");
+		db.exec(SQLITE_PRAGMAS);
 		const sql: Sql = { exec: (s) => db.exec(s), run: (s, ...p) => void db.prepare(s).run(...(p as never[])), all: (s, ...p) => db.prepare(s).all(...(p as never[])) as never };
 		this.builtin = new BuiltinMemory(sql, () => randomUUID(), undefined, () => this.currentEmbedder());
 		this.embedder = this.makeEmbedder();

@@ -10,7 +10,7 @@
  * Telegram account (`t.me/<bot>?start=<code>`, valid for an hour).
  */
 import { randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import type { AgentDefinition } from "@piopio/runtime";
 import { TelegramBot, type TelegramMessage, type TelegramUpdate } from "./telegram.js";
@@ -26,7 +26,7 @@ export type ChannelHost = {
 	submit(agentId: string, contactId: string, text: string): Promise<void>;
 	/** A note in the owner's conversation (not a message from the agent, not seen by the model). */
 	notice(agentId: string, text: string): Promise<void>;
-	secrets: { get(name: string, purpose: string): Promise<string | null>; set(name: string, value: string): Promise<void> };
+	secrets: { get(name: string, purpose: string): Promise<string | null>; set(name: string, value: string): Promise<void>; delete?(name: string): Promise<void> };
 	stateDir: string;
 	log(line: string): void;
 	fetch?: typeof fetch;
@@ -81,6 +81,15 @@ export class TelegramChannels {
 			void this.poll(agent.id, live);
 		}
 		for (const [id, live] of this.live) if (!wanted.has(id)) (live.abort.abort(), this.live.delete(id));
+	}
+
+	/** An agent that was deleted: its bot stops, and its state file and its token in the Keychain go. */
+	async forget(agentId: string): Promise<void> {
+		this.live.get(agentId)?.abort.abort();
+		this.live.delete(agentId);
+		for (const key of [...this.waiting.keys()]) if (key.startsWith(`${agentId}/`)) this.waiting.delete(key);
+		rmSync(this.file(agentId), { force: true });
+		await this.host.secrets.delete?.(TelegramChannels.secretName(agentId)).catch(() => undefined);
 	}
 
 	stop(): void {

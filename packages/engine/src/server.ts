@@ -396,6 +396,12 @@ export class Engine {
 		this.watchdog.prune((id) => known.has(id));
 		this.sessions.onChange((change) => {
 			if (change.removed.length) this.watchdog.forget(change.removed.map((r) => r.id));
+			// A deleted agent's automations, its Telegram bot, state and token go with it: they ran, or polled, for nobody.
+			for (const ref of change.removed) {
+				if (ref.kind !== "agent") continue;
+				for (const a of this.automations?.list().filter((x) => x.runsAs === ref.id) ?? []) this.automations!.remove(a.id);
+				void this.telegram?.forget(ref.id).catch(() => undefined);
+			}
 		});
 		// GitHub (docs/spec/05-build G4–G8): pull requests linked to conversations, polled for what happens on them.
 		this.github = new GitHub(this.secrets, options.github ?? {});
