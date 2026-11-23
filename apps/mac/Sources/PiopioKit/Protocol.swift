@@ -943,7 +943,7 @@ public struct AppSourceStatus: Codable, Sendable, Hashable {
         public var failedAt: String?
     }
     public var name: String
-    /// file · calendar (docs/spec/35 §16)
+    /// file · calendar (docs/spec/35 §16) · piopio (Piopio's own numbers, L4)
     public var kind: String?
     /// As the manifest says it: relative to the app's file, or absolute; a calendar source in words.
     public var file: String

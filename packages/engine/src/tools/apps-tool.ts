@@ -1,11 +1,11 @@
 /**
- * `make_app` (docs/spec/35 §14, §16): turns a chart or a small page into an app that reads its data from files or your
- * calendar, so it stays current without a model. The engine writes the manifest itself (paths relative to the app's file), copies sources
+ * `make_app` (docs/spec/35 §14, §16, L4): turns a chart or a small page into an app that reads its data from files, your
+ * calendar or Piopio's own numbers, so it stays current without a model. The engine writes the manifest itself (paths relative to the app's file), copies sources
  * out of a chat's temporary folder, and writes nothing until the user allows the card that names those files.
  */
 import { Type } from "typebox";
 import { defineTool as defineCodingTool, type ExtensionFactory } from "@earendil-works/pi-coding-agent";
-import type { Apps, MakeContext } from "../apps.js";
+import { PIOPIO_READS, PIOPIO_SHAPES, type Apps, type MakeContext } from "../apps.js";
 import { promptSection, type PromptEvent } from "./prompt-sections.js";
 
 export const MAKE_APP = "make_app";
@@ -13,10 +13,13 @@ export const MAKE_APP = "make_app";
 /** How a conversation asks before the app is written: true when the user allowed it. */
 export type AppConfirm = (request: { tool: string; title: string; args: Record<string, unknown> }) => Promise<{ approved: boolean; reason?: string }>;
 
-const DESCRIPTION = `Make an app: a page that reads its data from files and redraws when they change, with no model. Use it when the user asks for an app, or to keep a chart you drew (show_visual) up to date ("Make the … visual into an app"). The user sees a card naming the files it will read and where it's saved, and allows it; nothing is written before.
+const DESCRIPTION = `Make an app: a page that reads its data (files, your calendar, Piopio's own numbers) and redraws when it changes, with no model. Use it when the user asks for an app, or to keep a chart you drew (show_visual) up to date ("Make the … visual into an app"). The user sees a card naming the files it will read and where it's saved, and allows it; nothing is written before.
 - sources: each one a file the page reads, by a name you choose: { "expenses": { "file": "data/expenses.csv", "columns": ["date", "category", "amount"] } }. CSV, TSV, JSON, Markdown or text, at most 2 MB. List in columns the CSV columns the page needs: if the file loses one, the app says so instead of drawing wrong numbers. Figures that exist only in this conversation: write them to a CSV file first, then read that.
 - html: like show_visual's (Piopio's CSS variables, bundled libraries, no network), but with no data in it. Draw from piopio.onData((data, meta) => draw(data)): data.expenses is the CSV's rows as objects by column (plain numbers already numbers, everything else text), a JSON file's value, or a text file's text. It's called again whenever a file changes, so draw everything from scratch each time.
 - A calendar source reads your connected calendars with no model: { "week": { "calendar": "this_week" } } (today, tomorrow, this_week Monday to Sunday, next_7_days, this_month, in the Mac's time zone). Add "accounts": ["<account id>"] to read only some; without it, every connected calendar, which the card lists. data.week is a list of { title, start, end, allDay, location, calendar, account } sorted by start (start and end as ISO dates; all-day events as dates).
+- A piopio source reads Piopio's own numbers with no model, the same ones Overview shows: { "spend": { "piopio": "stats.spend", "args": { "range": "month", "groupBy": "what" } } }. Use it for an app about what Piopio spent or did, its budgets, automations or agents; never copy those numbers into a file. What each gives:
+${PIOPIO_READS.map((r) => `  - ${r}${r === "stats.spend" ? ' (args: range today|7d|month|last_month|12m, groupBy what|model|provider|project|where, filter { agent?, automation?, place? })' : r === "stats.activity" ? " (args: range)" : r === "automations.runs" ? " (args: limit 1–100, automation?)" : ""}: ${PIOPIO_SHAPES[r]}`).join("\n")}
+  Dollars are USD; an estimate, never a provider's bill. Show requests with no price as a count, not as $0, and plan rows as tokens.
 - Every number, label and conclusion must come from data: totals, counts, averages, categories, the latest rows, "over budget". Nothing copied from this conversation, or the app goes wrong when the file changes.
 - meta.stale lists sources whose latest read failed (their data is the last good one); Piopio already says why above the page.`;
 
@@ -30,6 +33,8 @@ const PARAMETERS = Type.Object({
 			columns: Type.Optional(Type.Array(Type.String(), { description: "For a CSV or TSV: the columns the page needs." })),
 			calendar: Type.Optional(Type.Union([Type.Literal("today"), Type.Literal("tomorrow"), Type.Literal("this_week"), Type.Literal("next_7_days"), Type.Literal("this_month")], { description: "A calendar source: the span it reads." })),
 			accounts: Type.Optional(Type.Array(Type.String(), { description: "A calendar source: the accounts to read (all connected ones when left out)." })),
+			piopio: Type.Optional(Type.Union(PIOPIO_READS.map((r) => Type.Literal(r)), { description: "A piopio source: which of Piopio's own numbers it reads." })),
+			args: Type.Optional(Type.Record(Type.String(), Type.Unknown(), { description: "A piopio source's fixed arguments: range, groupBy, filter (stats.spend); range (stats.activity); limit, automation (automations.runs)." })),
 		}),
 		{ description: "Where the data comes from, by name (letters, digits and _)." },
 	),
@@ -43,7 +48,7 @@ export function codingAppsExtension(apps: Apps, where: () => MakeContext, confir
 				name: MAKE_APP,
 				label: "Make an app",
 				description: DESCRIPTION,
-				promptSnippet: `${MAKE_APP}: make an app that reads its data from files or the calendar and stays current`,
+				promptSnippet: `${MAKE_APP}: make an app that reads its data from files, the calendar or Piopio's own numbers (spending, activity, budgets, automations, agents) and stays current`,
 				parameters: PARAMETERS,
 				async execute(callId, params, signal) {
 					const text = (t: string, isError = false) => ({ content: [{ type: "text" as const, text: t }], details: {}, ...(isError ? { isError: true } : {}) }) as never;

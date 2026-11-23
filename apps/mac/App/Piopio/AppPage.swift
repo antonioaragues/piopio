@@ -96,7 +96,7 @@ struct AppPage: View {
                     if let fresh = try? await engine.refreshApp(path) { show(fresh) }
                 }
             } label: { Image(systemName: "arrow.clockwise") }
-                .buttonStyle(IconButtonStyle()).help("Read its files again").accessibilityLabel("Refresh").disabled(busy || app == nil)
+                .buttonStyle(IconButtonStyle()).help("Read its sources again").accessibilityLabel("Refresh").disabled(busy || app == nil)
             Menu {
                 ForEach(app?.sources ?? [], id: \.name) { s in
                     if let accounts = s.accounts {
@@ -106,6 +106,9 @@ struct AppPage: View {
                                 Text("\(a.label) · \(a.state == "gone" ? "not connected" : a.readAt.map { "read \(Self.time($0))" } ?? "not read yet")")
                             }
                         }
+                    } else if s.kind == "piopio" {
+                        // Piopio's own numbers (docs/spec/35 L4): nothing to show in Finder.
+                        Text("\(s.file)\(s.readAt.map { " · read \(Self.time($0))" } ?? "")")
                     } else {
                         Button("\(s.file)\(s.readAt.map { " · read \(Self.time($0))" } ?? "")") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: s.path)]) }
                     }
@@ -140,7 +143,11 @@ struct AppPage: View {
             }
         }
         ForEach(app.sources.filter { $0.state == "failed" }, id: \.name) { s in
-            if s.accounts != nil {
+            if s.kind == "piopio" {
+                notice("\(s.error ?? "\(s.file) couldn't be read.") \(s.readAt.map { "Showing what it read \(Self.time($0))." } ?? "Nothing to show from it yet.")", action: "Try Again") {
+                    Task { if let fresh = try? await engine.refreshApp(path) { show(fresh) } }
+                }
+            } else if s.accounts != nil {
                 // A calendar: the accounts that answered are shown as read now; the others say since when.
                 notice("\(s.error ?? "\(s.file) couldn't be read.") \(s.readAt.map { "Its other events are from \(Self.time($0))." } ?? "")", action: "Try Again") {
                     Task { if let fresh = try? await engine.refreshApp(path) { show(fresh) } }

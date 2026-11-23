@@ -1053,10 +1053,11 @@ export type LibraryItem = Static<typeof LibraryItem>;
 /** One source of an app (docs/spec/35 §14): a file, its last read, and why it failed. */
 export const AppSourceStatus = Type.Object({
 	name: Type.String(),
-	kind: literals("file", "calendar"),
-	/** As the manifest says it: relative to the app's file, or absolute; a calendar source in words. */
+	/** piopio: Piopio's own numbers (34's `stats.*`, automation runs, agents), read with no model. */
+	kind: literals("file", "calendar", "piopio"),
+	/** As the manifest says it: relative to the app's file, or absolute; a calendar or piopio source in words. */
 	file: Type.String(),
-	/** A file source's path ("" for a calendar). */
+	/** A file source's path ("" for a calendar or piopio source). */
 	path: Type.String(),
 	columns: Type.Optional(Type.Array(Type.String())),
 	/** A calendar source (docs/spec/35 §16): each account and how its last read went; "gone" when it's disconnected. */

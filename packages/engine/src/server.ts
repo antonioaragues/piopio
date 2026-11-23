@@ -11,6 +11,7 @@ import { EngineError, keyHint, ModelHub, providerUsage } from "./models.js";
 import { rangeBounds, type LedgerNames } from "./ledger.js";
 import { suggestions } from "./suggest.js";
 import { activity } from "./activity.js";
+import type { PiopioRead } from "./apps.js";
 import { cleanWorktrees, storage, worktrees } from "./storage.js";
 import { setupMap, type SetupAgent } from "./setup.js";
 import { ensureDirs, loadOrCreateToken, type EnginePaths } from "./paths.js";
@@ -42,7 +43,7 @@ import { groupSteps, StepsView } from "./timeline/steps.js";
 import { DeltaBatcher } from "./timeline/delta-batcher.js";
 import { replacedVisuals } from "./tools/visuals.js";
 import { fitCheck } from "./work/fit.js";
-import type { SpendSuggestion, TimelineItem, ToolItem } from "@piopio/protocol";
+import type { SpendRange, SpendSuggestion, TimelineItem, ToolItem } from "@piopio/protocol";
 
 /** Subagents keep their own card (it opens their session). */
 /** Tools that stay their own item when steps fold: subagent tasks, questions you answered, plans, files handed over, visuals and apps made (they read as part of the conversation). */
@@ -308,6 +309,8 @@ export class Engine {
 					return c.calendar.events(range);
 				},
 			},
+			// Piopio's own numbers (docs/spec/35 L4, 34's stats.*): the same reads Overview makes, no model.
+			piopio: { read: (what, args) => this.piopioRead(what, args) },
 		});
 		this.sessions.apps = this.apps;
 		this.sessions.secrets = this.secrets;
@@ -511,6 +514,42 @@ export class Engine {
 
 	/** Whether conversations use a global MCP server: chosen per server, else (before that) all that are on. */
 	/** Projects without a folder became folders (CF4): what they remembered goes into their NOTES.md. */
+	/** What an app's piopio source reads (docs/spec/35 §3.2): Overview's numbers, automation runs, agents. */
+	private async piopioRead(what: PiopioRead, args: Record<string, unknown>): Promise<unknown> {
+		const names = this.sessions.ledgerNames();
+		switch (what) {
+			case "stats.spend":
+				await this.sessions.backfillLedger();
+				return this.hub.ledger.spend(args as Params<"stats.spend">, names);
+			case "stats.activity":
+				await this.sessions.backfillLedger();
+				return activity(args.range as SpendRange, { ledger: this.hub.ledger, sessions: this.sessions.list(), runs: this.automations.allRuns(), automationName: (id) => this.automations.find(id)?.name, agentName: (id) => this.sessions.titleOf({ kind: "agent", id }) });
+			case "stats.budgets":
+				return { budgets: this.sessions.budgets(), piopio: this.hub.budget.state() };
+			case "automations.runs": {
+				const runs = await this.automations.runsOf(args.automation as string | undefined, (args.limit as number | undefined) ?? 30);
+				return runs.map((r) => ({ id: r.id, automation: r.automation, name: this.automations.find(r.automation)?.name ?? "Automation", firedAt: r.firedAt, status: r.status, ...(r.summary ? { summary: r.summary } : {}), ...(r.costUsd !== undefined ? { costUsd: r.costUsd } : {}) }));
+			}
+			case "agents": {
+				const summaries = new Map(this.sessions.list("agent").map((s) => [s.ref.id, s]));
+				return this.sessions.agentList().map((a) => {
+					const status = summaries.get(a.id)?.agent?.status;
+					return {
+						id: a.id,
+						name: a.name,
+						runsOn: this.sessions.isCloud(a.id) ? "cloud" : "mac",
+						model: a.definition.models.default,
+						paused: status?.paused ?? false,
+						spendUsd: status?.spendUsd ?? 0,
+						...(status?.budgetUsd !== undefined ? { budgetUsd: status.budgetUsd } : {}),
+						...(status?.nextRun ? { nextRun: status.nextRun } : {}),
+						inbox: status?.inbox ?? 0,
+					};
+				});
+			}
+		}
+	}
+
 	/** Worktrees in the data folder, each with whether a live session works in it (Overview › Disk). */
 	private worktreeList() {
 		const home = this.options.paths.home;

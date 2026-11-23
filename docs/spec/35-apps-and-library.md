@@ -2,7 +2,7 @@
 
 Status: draft 2026-11-22, from a conversation with the user. The user asked for the Library as a section of its own,
 with pins kept there instead of the sidebar's Pinned (AL1, AL9). The other decisions are proposed and still need
-confirming (§12). **L1 (the Library) built 2026-11-22 (§13); L2 (apps on files, §14), L3 (changing an app, §15) and L4's first part (the calendar as a source, §16) built the same day**. Mockup: [docs/design/apps](../design/apps/Apps.html), which includes a clickable
+confirming (§12). **L1 (the Library) built 2026-11-22 (§13); L2 (apps on files, §14), L3 (changing an app, §15) and L4's first part (the calendar as a source, §16) built the same day; L4's second part (Piopio's own numbers as a source, §18) built 2026-11-24**. Mockup: [docs/design/apps](../design/apps/Apps.html), which includes a clickable
 prototype. This spec continues [25](25-visuals.md): VS3 (saved visuals are files), VS4 (the engine records and the
 app draws), VS5 (no network) and VS7 (a visual talks back only on your click) all still hold.
 
@@ -705,3 +705,33 @@ draw card A.
   "App · Updated 0:22", Pin and Open.
 
 **Not checked:** Pin and Open clicked by hand; a calendar app's card; dark mode.
+
+## 18. L4, part 2: Piopio's own numbers as a source (2026-11-24)
+
+The `piopio` source of §3.2, now that 34's ledger exists (34 OV0–OV4). AL12 holds: Overview stays native; its
+numbers are what apps read.
+
+```json
+"spend": { "piopio": "stats.spend", "args": { "range": "month", "groupBy": "what" } }
+```
+
+- **What it reads:** `stats.spend` (args `range`, `groupBy`, `filter { agent, automation, place }`), `stats.activity`
+  (`range`), `stats.budgets`, `automations.runs` (`limit` 1–100, `automation`), `agents` (each with where it runs,
+  its model, paused, this month's spend and budget, next run, what waits in its Inbox). The same reads Overview
+  makes, in the engine, with no model ([apps.ts](../../packages/engine/src/apps.ts) `checkPiopio`, the server's
+  `piopioRead`). Anything else in `args` is refused with what's wrong; `range` defaults to the month.
+- **The same as a calendar source:** read when the app opens (if the last read is over a minute old) and on
+  Refresh; a failed read keeps the last good numbers, dated, with Try Again; it's part of what Allow covers, so
+  another range or grouping waits for Allow; at most 2 MB.
+- **The card and the menu** say it in words: "what Piopio spent this month, by what", "Piopio's budgets", "your
+  automations' latest runs". The sources menu lists it without a Finder link.
+- **The model** learns it in `make_app`'s description, with each read's shape (dollars are an estimate, requests
+  without a price are a count, plan rows are tokens), and an app's conversation is told the same about its
+  sources.
+- **Checked:** in [apps.test.ts](../../packages/engine/test/apps.test.ts) (the card, the read, a failed read, a
+  changed range waiting for Allow, every refused argument) and against an engine with a seeded month: an app with
+  `stats.spend` and `stats.budgets` was allowed and read both ($39.74, 342 requests). **Not seen drawn:** the
+  capture tool can't picture a web view (it draws the window, and WebKit's layer isn't in it), so the page drawing
+  in the app wasn't seen; data reaches the page the same way it does for file and calendar sources.
+- **Not yet:** the `tool` and `script` sources (the script runner waits for 36's W1), `every` as a model-free
+  automation, and "Make an app of this…".

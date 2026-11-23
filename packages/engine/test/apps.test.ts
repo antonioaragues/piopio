@@ -423,3 +423,64 @@ describe("calendar sources (docs/spec/35 §16)", () => {
 		expect(Date.parse(calendarSpan("next_7_days", sunday).to) - sunday.getTime()).toBe(7 * 86_400_000);
 	});
 });
+
+describe("Piopio's own numbers (docs/spec/35 L4)", () => {
+	const SPEND = `<b id=t></b><script>piopio.onData(({ spend }) => { t.textContent = spend.knownUsd; })</script>`;
+	function withPiopio() {
+		const root = folder();
+		const reads: { what: string; args: Record<string, unknown> }[] = [];
+		const state = { usd: 12.5, fail: false };
+		const apps = new Apps({
+			home: join(root, "home"),
+			appsDir: join(root, "Piopio", "Apps"),
+			piopio: {
+				read: async (what, args) => {
+					reads.push({ what, args });
+					if (state.fail) throw new Error("The ledger is busy.");
+					return what === "stats.spend" ? { knownUsd: state.usd, calls: 3 } : [];
+				},
+			},
+		});
+		return { root, apps, reads, state };
+	}
+
+	it("reads them with no model, says so on the card, and keeps the last good numbers when a read fails", async () => {
+		const { root, apps, reads, state } = withPiopio();
+		const plan = apps.plan({ title: "Spend", html: SPEND, sources: { spend: { piopio: "stats.spend", args: { groupBy: "what" } } as never } }, { cwd: root });
+		expect(plan.manifest.sources.spend).toEqual({ piopio: "stats.spend", args: { groupBy: "what", range: "month" } });
+		expect(plan.card.reads).toEqual(["what Piopio spent this month, by what"]);
+		expect(plan.card.refresh).toMatch(/no model/);
+		const made = await apps.write(plan);
+		expect(made.data.spend).toEqual({ knownUsd: 12.5, calls: 3 });
+		expect(made.sources[0]).toMatchObject({ kind: "piopio", file: "Piopio · what Piopio spent this month, by what", state: "ok" });
+		expect(reads).toEqual([{ what: "stats.spend", args: { groupBy: "what", range: "month" } }]);
+
+		state.usd = 14;
+		expect((await apps.refresh(plan.path)).data.spend).toEqual({ knownUsd: 14, calls: 3 });
+		state.fail = true;
+		const failed = await apps.refresh(plan.path);
+		expect(failed.data.spend).toEqual({ knownUsd: 14, calls: 3 });
+		expect(failed.sources[0]).toMatchObject({ state: "failed", error: "The ledger is busy." });
+		expect(failed.stale).toEqual(["spend"]);
+
+		// A changed source (another range) waits for Allow, like a file or a calendar.
+		writeFileSync(plan.path, readFileSync(plan.path, "utf8").replace('"range": "month"', '"range": "12m"'));
+		expect(apps.openApp(plan.path).allowed).toBe(false);
+		apps.closeApp(plan.path);
+
+		// The app's conversation is told what the source gives.
+		expect(apps.describe(plan.path)).toMatch(/spend: what Piopio spent the last 12 months, by what, read from Piopio with no model \(stats\.spend .*\): \{ knownUsd/);
+	});
+
+	it("takes only what each read allows", () => {
+		const { root, apps } = withPiopio();
+		const plan = (sources: Record<string, unknown>) => () => apps.plan({ title: "P", html: SPEND, sources: sources as never }, { cwd: root });
+		expect(plan({ spend: { piopio: "sessions.list" } })).toThrow(/piopio is one of stats\.spend/);
+		expect(plan({ spend: { piopio: "stats.spend", args: { range: "forever" } } })).toThrow(/range is one of/);
+		expect(plan({ spend: { piopio: "stats.spend", args: { groupBy: "mood" } } })).toThrow(/groupBy is one of/);
+		expect(plan({ spend: { piopio: "stats.budgets", args: { range: "month" } } })).toThrow(/stats\.budgets takes no “range”/);
+		expect(plan({ runs: { piopio: "automations.runs", args: { limit: 500 } } })).toThrow(/limit is a number from 1 to 100/);
+		expect(plan({ spend: { piopio: "stats.spend", args: { filter: { agent: "rita", secret: "x" } } } })).toThrow(/filter is/);
+		expect(plan({ runs: { piopio: "automations.runs", args: { limit: 10 } }, agents: { piopio: "agents" } })().card.reads).toEqual(["your automations' latest runs", "your agents and their status"]);
+	});
+});
