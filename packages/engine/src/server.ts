@@ -840,7 +840,7 @@ export class Engine {
 				const batcher = new DeltaBatcher((events) => conn.notify("session.events", { subscriptionId, seq: ++seq, events }));
 				let current = runtime;
 				let unsubscribe = runtime.onEvents((events) => {
-					batcher.push(steps ? steps.events(events, () => current.snapshot().items) : events);
+					batcher.push(steps ? steps.events(events) : events);
 				});
 				const off = () => {
 					unsubscribe();
@@ -859,7 +859,7 @@ export class Engine {
 							current = next;
 							const snap = next.snapshot();
 							batcher.push([{ type: "resnapshot", snapshot: steps ? { ...snap, items: steps.snapshot(snap.items) } : snap }]);
-							unsubscribe = next.onEvents((events) => batcher.push(steps ? steps.events(events, () => current.snapshot().items) : events));
+							unsubscribe = next.onEvents((events) => batcher.push(steps ? steps.events(events) : events));
 						},
 					});
 				}

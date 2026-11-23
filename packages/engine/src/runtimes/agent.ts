@@ -432,7 +432,7 @@ export class AgentView implements Runtime {
 	private readonly emitter = new Emitter();
 	private readonly builder: TimelineBuilder;
 	private readonly mapper: DurableViewMapper;
-	private readonly steps = new StepsView((items) => this.group(items));
+	private readonly steps = new StepsView((items) => this.group(items), () => this.items());
 	private watch?: ConversationWatch;
 	private readonly queueTexts = new Map<string, string>();
 	/** What the person said, for each turn still running (retained with the answer when it ends). */
@@ -689,7 +689,7 @@ export class AgentView implements Runtime {
 
 	private emit(events: SessionEvent[]): void {
 		const shown = events.map((e) => (e.type === "resnapshot" ? { ...e, snapshot: { ...e.snapshot, items: this.items() } } : e));
-		const out = this.steps.events(shown, () => this.items());
+		const out = this.steps.events(shown);
 		if (out.length) this.emitter.emit(out);
 	}
 

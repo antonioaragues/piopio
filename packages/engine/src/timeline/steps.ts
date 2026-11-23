@@ -63,23 +63,39 @@ function absorb(steps: Steps, answer: AssistantItem): void {
 /**
  * Turns a batch of the builder's events into events over the grouped items: the items the batch touched are
  * compared with what was sent before and re-sent as added, updated or removed.
+ *
+ * Without an `items` source, the view keeps its own list of the conversation's items, from the snapshot and the
+ * events (what any subscriber sees), and never changes an item it holds: an event's item replaces it, and a delta
+ * makes a new one. So an item that is the same object as the one sent is unchanged, and only the items that are new
+ * objects are compared, instead of copying and serializing the whole conversation on every update (a long Build turn
+ * paid 10 to 20% of a core for it: docs/research/memory-and-cpu.md).
  */
 export class StepsView {
-	private shown = new Map<string, string>();
+	/** What was sent last, by id; `json` only where the item could change in place (an `items` source). */
+	private shown = new Map<string, { item: TimelineItem; json?: string }>();
 	private order: string[] = [];
+	/** The conversation's items, when the view follows the events itself. */
+	private mirror: TimelineItem[] = [];
 
-	/** `group`: how items are folded (agents add result cards after each steps line). */
-	constructor(private readonly group: (items: readonly TimelineItem[]) => TimelineItem[] = groupSteps) {}
+	/**
+	 * `group`: how items are folded (agents add result cards after each steps line). `items`: where the current items
+	 * come from instead, read when a batch touched one; they may change in place, so they're compared by their JSON.
+	 */
+	constructor(
+		private readonly group: (items: readonly TimelineItem[]) => TimelineItem[] = groupSteps,
+		private readonly items?: () => readonly TimelineItem[],
+	) {}
 
 	/** The grouped items to send in a snapshot; remembers them as sent. */
 	snapshot(items: readonly TimelineItem[]): TimelineItem[] {
+		this.mirror = [...items];
 		const grouped = this.group(items);
-		this.shown = new Map(grouped.map((i) => [i.id, JSON.stringify(i)]));
-		this.order = grouped.map((i) => i.id);
+		this.remember(grouped);
 		return grouped;
 	}
 
-	events(events: readonly SessionEvent[], items: () => readonly TimelineItem[]): SessionEvent[] {
+	events(events: readonly SessionEvent[]): SessionEvent[] {
+		const items = this.items;
 		const out: SessionEvent[] = [];
 		let touched = false;
 		for (const e of events) {
@@ -89,27 +105,91 @@ export class StepsView {
 				continue;
 			}
 			if (e.type === "item.added" || e.type === "item.updated" || e.type === "item.replaced" || e.type === "item.removed") {
+				if (!items) this.apply(e);
 				touched = true;
 				continue;
+			}
+			if (e.type === "item.delta" && !items) {
+				// An answer not sent yet goes out whole at the end of this batch, with this text in it.
+				const sent = this.shown.has(e.itemId);
+				this.applyDelta(e);
+				if (!sent) continue;
 			}
 			out.push(e);
 		}
 		if (!touched) return out;
-		const next = this.group(items());
+		const next = this.group(items ? items() : this.mirror);
 		const ids = new Set(next.map((i) => i.id));
 		for (const id of this.order) if (!ids.has(id)) out.push({ type: "item.removed", itemId: id });
 		next.forEach((item, i) => {
-			const json = JSON.stringify(item);
 			const before = this.shown.get(item.id);
 			if (before === undefined) {
 				const following = next.slice(i + 1).find((n) => this.shown.has(n.id));
 				out.push({ type: "item.added", item, ...(following ? { before: following.id } : {}) });
-			} else if (before !== json) {
+			} else if (items ? before.json !== JSON.stringify(item) : !same(before.item, item)) {
 				out.push({ type: "item.updated", item });
 			}
 		});
-		this.shown = new Map(next.map((i) => [i.id, JSON.stringify(i)]));
-		this.order = next.map((i) => i.id);
+		this.remember(next);
 		return out;
 	}
+
+	private remember(grouped: readonly TimelineItem[]): void {
+		this.shown = new Map(grouped.map((i) => [i.id, this.items ? { item: i, json: JSON.stringify(i) } : { item: i }]));
+		this.order = grouped.map((i) => i.id);
+	}
+
+	/** Where an item is in the view's list: looked for from the end, where a turn's changes are. */
+	private at(id: string): number {
+		for (let i = this.mirror.length - 1; i >= 0; i--) if (this.mirror[i]!.id === id) return i;
+		return -1;
+	}
+
+	private apply(e: Extract<SessionEvent, { type: "item.added" | "item.updated" | "item.replaced" | "item.removed" }>): void {
+		if (e.type === "item.removed") {
+			const i = this.at(e.itemId);
+			if (i >= 0) this.mirror.splice(i, 1);
+			return;
+		}
+		const i = this.at(e.type === "item.replaced" ? e.oldId : e.item.id);
+		if (e.type !== "item.added" && i >= 0) {
+			this.mirror[i] = e.item;
+			return;
+		}
+		if (i >= 0) this.mirror.splice(i, 1);
+		const before = e.type === "item.added" && e.before ? this.at(e.before) : -1;
+		if (before >= 0) this.mirror.splice(before, 0, e.item);
+		else this.mirror.push(e.item);
+	}
+
+	/** Streamed text, as the client adds it: a new item (the one sent stays as it was), which counts as sent. */
+	private applyDelta(e: Extract<SessionEvent, { type: "item.delta" }>): void {
+		const i = this.at(e.itemId);
+		const old = this.mirror[i];
+		if (!old || old.kind !== "assistant") return;
+		const parts = [...old.parts];
+		const part = parts[e.partIndex];
+		if (part) parts[e.partIndex] = { ...part, text: part.text + e.textDelta };
+		else parts[e.partIndex] = { type: e.partType, text: e.textDelta };
+		const item = { ...old, parts };
+		this.mirror[i] = item;
+		const sent = this.shown.get(item.id);
+		if (sent?.item === old) this.shown.set(item.id, { item });
+	}
+}
+
+/**
+ * Whether a grouped item is what was sent: the same object, or a steps line made again of the same objects (each
+ * regrouping makes new steps lines). Anything else that is a new object counts as changed.
+ */
+function same(a: TimelineItem, b: TimelineItem): boolean {
+	if (a === b) return true;
+	if (a.kind !== "steps" || b.kind !== "steps") return false;
+	const ka = Object.keys(a);
+	if (ka.length !== Object.keys(b).length) return false;
+	return ka.every((k) => {
+		const x = (a as Record<string, unknown>)[k];
+		const y = (b as Record<string, unknown>)[k];
+		return x === y || (Array.isArray(x) && Array.isArray(y) && x.length === y.length && x.every((v, i) => v === y[i]));
+	});
 }

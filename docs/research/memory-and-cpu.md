@@ -65,6 +65,22 @@ conversation on this Mac has 326 entries, and one has entries of 18 KB on averag
 The app redraws on top of that (`TranscriptDocument` walks all its items per batch, per the review), which isn't
 timed here.
 
+**Fixed the same day:** the folded subscription's `StepsView` now keeps its own list of the items from the snapshot
+and the events, never changing an item it holds, so an unchanged item is the same object and only new ones are
+compared; nothing copies the conversation. One update, a command's output growing in a conversation of N items:
+
+| Items | 3 KB tool outputs | 18 KB tool outputs |
+|---|---|---|
+| 100 | 0.03 ms | |
+| 250 | | 0.02 ms |
+| 500 | 0.05 ms | 0.04 ms |
+| 1,000 | 0.11 ms | |
+| 4,000 | 0.40 ms | |
+
+Under 1% of a core even at 4,000 items. What's left per update is sending the steps line that changed, whole: a turn
+with many large tool outputs re-sends them all while one of its commands streams. `test/steps-view.test.ts` checks
+that what a client builds from the folded events is the fold of the conversation, after every batch.
+
 ## 4. At rest
 
 With the window not in front: 0.0% CPU for the app, the engine and the web content, and 6 idle wakeups in 5 seconds
@@ -77,7 +93,7 @@ measured: that needs the app in front, on each of them, for a minute.
 | # | What | Why | Size |
 |---|---|---|---|
 | 1 | ~~Close a coding-agent runtime after it's been idle a while~~ Done: its process ends after 15 minutes idle, the conversation stays open, and the next message resumes the session (`test/idle-agents.test.ts`) | 40 to 300 MB per conversation, for days | Small |
-| 2 | Streaming without copying the conversation: `StepsView` regroups only the steps group an update touches, from the builder's items read in place, and remembers each item's serialized form instead of making it twice | 10 to 20% of a core during long turns, growing with the square of the turn | Medium |
+| 2 | ~~Streaming without copying the conversation~~ Done: `StepsView` follows the events and compares only the items that are new objects (§3) | 10 to 20% of a core during long turns, growing with the square of the turn | Medium |
 | 3 | Measure the visible views (Home's mascot, the browser panel, a project page, a file view) with the app in front | Before touching any of the review's battery items | A minute each |
 | 4 | Measure the web views with tabs, visuals and an app open: the review says parked browser tabs keep running at full speed in a hidden window | Each one is a WebKit process | After 3 |
 | 5 | An idle cap on the engine's own runtimes | Only for engines left running for weeks | Later |
