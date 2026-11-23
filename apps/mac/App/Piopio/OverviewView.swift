@@ -3,9 +3,10 @@ import PiopioKit
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Overview (docs/spec/34): what Piopio costs, from the engine's usage ledger. OV1 ships Spend; Setup (OV2) and
-/// Activity (OV3) become tabs beside it under the title. Piopio's estimate and a provider's bill are different scopes:
-/// they sit side by side and are never added. Unknown prices are counted, never shown as $0; a plan is not free.
+/// Overview (docs/spec/34): one page, three tabs (OV2). Spend is what Piopio costs, from the engine's usage ledger;
+/// Setup is the map of what you have and where it runs (OverviewSetup.swift); Activity is what got done, a year of
+/// days and Disk (OverviewActivity.swift). Piopio's estimate and a provider's bill are different scopes: they sit side
+/// by side and are never added. Unknown prices are counted, never shown as $0; a plan is not free.
 struct OverviewPage: View {
     let engine: EngineController
     /// Only what one agent spent (its "$… this month" opens it), else everything.
@@ -13,6 +14,8 @@ struct OverviewPage: View {
     @Binding var item: SidebarItem
     @AppStorage("overviewRange") private var rangeRaw = SpendRange.month.rawValue
     @AppStorage("overviewGroupBy") private var groupRaw = SpendGroupBy.what.rawValue
+    /// Spend · Setup · Activity, remembered like the range; ⌘K's "Setup" and "Activity" set it before opening.
+    @AppStorage(OverviewTab.key) private var tabRaw = OverviewTab.spend.rawValue
     @State private var spend: SpendResult?
     @State private var budgets: [Budget] = []
     @State private var error: String?
@@ -24,6 +27,8 @@ struct OverviewPage: View {
     @State private var budgetText = ""
 
     private var range: SpendRange { SpendRange(rawValue: rangeRaw) ?? .month }
+    /// Filtered to an agent, the page is that agent's Spend.
+    private var tab: OverviewTab { agent == nil ? (OverviewTab(rawValue: tabRaw) ?? .spend) : .spend }
     private var groupBy: SpendGroupBy { SpendGroupBy(rawValue: groupRaw) ?? .what }
     private var agentName: String? { agent.map { id in engine.agents.first { $0.ref.id == id }?.title ?? "this agent" } }
 
@@ -31,6 +36,45 @@ struct OverviewPage: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 header
+                if agent == nil {
+                    NeutralSegmented(selection: $tabRaw, options: OverviewTab.allCases.map { ($0.rawValue, $0.title) })
+                        .frame(width: 270)
+                        .padding(.bottom, 20)
+                }
+                switch tab {
+                case .spend: spendTab
+                case .setup: OverviewSetupTab(engine: engine, item: $item)
+                case .activity: OverviewActivityTab(engine: engine, range: range, item: $item)
+                }
+            }
+            .padding(.horizontal, 48)
+            .padding(.top, 44)
+            .padding(.bottom, 90)
+            .frame(maxWidth: 760 + 96)
+            .frame(maxWidth: .infinity)
+        }
+        .background(Color.dsWin)
+        .task(id: "\(rangeRaw)|\(groupRaw)|\(agent ?? "")") { if tab == .spend { await load() } }
+        .task(id: tabRaw) { if tab == .spend && spend == nil { await load() } }
+        // While past conversations are read in, look again every few seconds.
+        .task(id: spend?.backfilling == true) {
+            guard spend?.backfilling == true else { return }
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(3))
+                await load()
+                if spend?.backfilling != true { break }
+            }
+        }
+        .sheet(item: $opened) { group in
+            SpendItemsSheet(engine: engine, range: range, groupBy: groupBy, group: group) { ref in
+                opened = nil
+                if let target = engine.item(for: ref.id) { item = target }
+            }
+        }
+    }
+
+    @ViewBuilder private var spendTab: some View {
+        VStack(alignment: .leading, spacing: 0) {
                 if let agentName {
                     HStack(spacing: 6) {
                         Text("Only \(agentName)").foregroundStyle(Color.dsFg2)
@@ -57,29 +101,6 @@ struct OverviewPage: View {
                 } else {
                     ProgressView().controlSize(.small).padding(.top, 30).frame(maxWidth: .infinity)
                 }
-            }
-            .padding(.horizontal, 48)
-            .padding(.top, 44)
-            .padding(.bottom, 90)
-            .frame(maxWidth: 760 + 96)
-            .frame(maxWidth: .infinity)
-        }
-        .background(Color.dsWin)
-        .task(id: "\(rangeRaw)|\(groupRaw)|\(agent ?? "")") { await load() }
-        // While past conversations are read in, look again every few seconds.
-        .task(id: spend?.backfilling == true) {
-            guard spend?.backfilling == true else { return }
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(3))
-                await load()
-                if spend?.backfilling != true { break }
-            }
-        }
-        .sheet(item: $opened) { group in
-            SpendItemsSheet(engine: engine, range: range, groupBy: groupBy, group: group) { ref in
-                opened = nil
-                if let target = engine.item(for: ref.id) { item = target }
-            }
         }
     }
 
@@ -90,18 +111,25 @@ struct OverviewPage: View {
         HStack(alignment: .firstTextBaseline, spacing: 14) {
             Text("Overview").font(.system(size: 20, weight: .bold)).tracking(-0.3)
             Spacer()
-            Button("Export CSV") { export() }
-                .buttonStyle(PillStyle(compact: true))
-                .disabled((spend?.calls ?? 0) == 0)
-                .help("The requests in this range, one row per request: when, where, what, the model and the cost. No messages.")
+            if tab == .spend {
+                Button("Export CSV") { export() }
+                    .buttonStyle(PillStyle(compact: true))
+                    .disabled((spend?.calls ?? 0) == 0)
+                    .help("The requests in this range, one row per request: when, where, what, the model and the cost. No messages.")
+            }
+            // The range applies to Spend and Activity (OV2); Setup is how things are now.
+            if tab != .setup { rangeMenu }
+        }
+        .padding(.bottom, 18)
+    }
+
+    private var rangeMenu: some View {
             Menu {
                 ForEach(SpendRange.allCases, id: \.self) { r in
                     Button { rangeRaw = r.rawValue } label: { if r == range { Label(Self.rangeName(r), systemImage: "checkmark") } else { Text(Self.rangeName(r)) } }
                 }
             } label: { Text(Self.rangeName(range)).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2) }
                 .menuStyle(.button).buttonStyle(SelectorStyle()).menuIndicator(.hidden).fixedSize()
-        }
-        .padding(.bottom, 18)
     }
 
     static func rangeName(_ r: SpendRange) -> String {
@@ -753,5 +781,52 @@ private struct SpendItemsSheet: View {
                 items = try await client.call("stats.items", SpendItemsParams(range: range, groupBy: groupBy, group: group.id), as: SpendItems.self).items
             } catch { self.error = error.localizedDescription }
         }
+    }
+}
+
+/// Overview's tabs (OV2). ⌘K's "Setup" and "Activity" write the key before opening the page.
+enum OverviewTab: String, CaseIterable {
+    case spend, setup, activity
+    static let key = "overviewTab"
+    var title: String {
+        switch self {
+        case .spend: "Spend"
+        case .setup: "Setup"
+        case .activity: "Activity"
+        }
+    }
+    /// Opens Overview on this tab.
+    @MainActor func open() {
+        UserDefaults.standard.set(rawValue, forKey: Self.key)
+        NotificationCenter.default.post(name: .selectItem, object: SidebarItem.overview(nil).raw)
+    }
+}
+
+/// A section of Overview: a hairline above, a 12pt title (and something on the right), then its content.
+struct OverviewSection<Trailing: View, Content: View>: View {
+    let title: String
+    @ViewBuilder var trailing: () -> Trailing
+    @ViewBuilder var content: () -> Content
+
+    init(_ title: String, @ViewBuilder trailing: @escaping () -> Trailing = { EmptyView() }, @ViewBuilder content: @escaping () -> Content) {
+        self.title = title
+        self.trailing = trailing
+        self.content = content
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(title).foregroundStyle(Color.dsFg3)
+                Spacer()
+                trailing()
+            }
+            .font(.system(size: 12, weight: .medium))
+            content()
+        }
+        .padding(.top, 16)
+        .padding(.bottom, 4)
+        .overlay(alignment: .top) { Rectangle().fill(Color.dsLine).frame(height: 0.5) }
+        .padding(.top, 14)
     }
 }

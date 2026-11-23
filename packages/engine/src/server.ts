@@ -10,6 +10,9 @@ import { Value } from "typebox/value";
 import { EngineError, keyHint, ModelHub, providerUsage } from "./models.js";
 import { rangeBounds, type LedgerNames } from "./ledger.js";
 import { suggestions } from "./suggest.js";
+import { activity } from "./activity.js";
+import { cleanWorktrees, storage, worktrees } from "./storage.js";
+import { setupMap, type SetupAgent } from "./setup.js";
 import { ensureDirs, loadOrCreateToken, type EnginePaths } from "./paths.js";
 import { socketAnswers } from "./lock.js";
 import { MethodNotFound, RpcConnection } from "./rpc/connection.js";
@@ -508,6 +511,92 @@ export class Engine {
 
 	/** Whether conversations use a global MCP server: chosen per server, else (before that) all that are on. */
 	/** Projects without a folder became folders (CF4): what they remembered goes into their NOTES.md. */
+	/** Worktrees in the data folder, each with whether a live session works in it (Overview › Disk). */
+	private worktreeList() {
+		const home = this.options.paths.home;
+		const inUse = new Set<string>();
+		// A worktree session works in its worktree until it's merged or discarded (then its cwd is the project).
+		for (const s of this.sessions.list()) if (s.cwd) inUse.add(s.cwd);
+		return worktrees(home, inUse, (id) => {
+			try {
+				return this.projects.get(id).path;
+			} catch {
+				return undefined;
+			}
+		});
+	}
+
+	private projectName(id: string): string | undefined {
+		try {
+			return this.projects.get(id).name;
+		} catch {
+			return id === "teams" ? "Teams (before 26)" : undefined;
+		}
+	}
+
+	/** Overview › Setup (docs/spec/34 §6): what the engine knows, as the map and the table. */
+	private async setup(): Promise<Result<"stats.setup">> {
+		const now = new Date();
+		const month = rangeBounds("month", now);
+		const monthRows = this.hub.ledger.rows(month.from, month.to);
+		const monthOf = (match: (r: (typeof monthRows)[number]) => boolean) => monthRows.filter((r) => !r.plan && match(r)).reduce((n, r) => n + (r.usd ?? 0), 0);
+		const since = new Date(now.getTime() - 30 * 86_400_000);
+		const usedProviders = new Set(this.hub.ledger.rows(since, now).flatMap((r) => (r.provider ? [r.provider] : [])));
+		const toolNames = new Set(this.hub.ledger.activityRows(since, now).flatMap((r) => (r.kind === "tool" && r.name ? [r.name] : [])));
+		const [providers, codingAgents, connectors, memory, cloud] = await Promise.all([
+			this.hub.listProviders((id) => this.logins.connecting(id)).catch(() => []),
+			this.hub.listAgents().catch(() => []),
+			this.connectorInfos().catch(() => []),
+			this.memory.status().catch(() => ({ semantic: false })),
+			this.cloud.status().catch(() => ({ connected: false, agents: [] })),
+		]);
+		const mcp = this.mcp.list(undefined).servers;
+		const usedMcp = new Set(mcp.map((m) => m.name).filter((name) => [...toolNames].some((t) => t.startsWith(`${name}_`) || t.startsWith(`mcp__${name}__`) || t.includes(`__${name}__`))));
+		const summaries = new Map(this.sessions.list("agent").map((s) => [s.ref.id, s]));
+		const automations = this.automations.list();
+		const agents: SetupAgent[] = this.sessions.agentList().map((a) => {
+			const s = summaries.get(a.id);
+			const status = s?.agent?.status;
+			return {
+				id: a.id,
+				name: a.name,
+				...(s?.agent?.avatar ? { avatar: s.agent.avatar } : {}),
+				cloud: this.sessions.isCloud(a.id),
+				model: a.definition.models.default,
+				telegram: Boolean(a.definition.channels?.telegram),
+				paused: status?.paused ?? false,
+				overBudget: status?.budgetUsd !== undefined && status.spendUsd >= status.budgetUsd,
+				...(status?.nextRun ? { nextRun: status.nextRun } : {}),
+				monthUsd: monthOf((r) => r.agent === a.id),
+				automations: automations.filter((x) => x.runsAs === a.id).length,
+			};
+		});
+		const cloudAgents = new Set(agents.filter((a) => a.cloud).map((a) => a.id));
+		return setupMap({
+			providers,
+			codingAgents,
+			connectors,
+			mcp,
+			memory,
+			cloud,
+			agents,
+			automations: automations.map((x) => ({
+				id: x.id,
+				name: x.name,
+				runsAs: x.runsAs,
+				enabled: x.enabled,
+				result: x.result,
+				...(x.next ? { nextRun: new Date(x.next).toISOString() } : {}),
+				monthUsd: monthOf((r) => r.automation === x.id),
+				cloud: cloudAgents.has(x.runsAs),
+			})),
+			projects: this.projects.list().length,
+			defaultModel: `${this.hub.defaultModel.provider}/${this.hub.defaultModel.id}`,
+			usedProviders,
+			usedMcp,
+		});
+	}
+
 	/** Cheaper next time (docs/spec/34 §5.5): from the range's rows, today's prices and what this Mac can run. */
 	private async spendSuggestions(p: Params<"stats.spend">, names: LedgerNames): Promise<SpendSuggestion[]> {
 		const { from, to } = rangeBounds(p.range);
@@ -1495,6 +1584,24 @@ export class Engine {
 				const p = params as Params<"stats.items">;
 				return { items: this.hub.ledger.items(p, this.sessions.ledgerNames()) } satisfies Result<"stats.items">;
 			}
+			case "stats.activity": {
+				const p = params as Params<"stats.activity">;
+				const done = await Promise.race([this.sessions.backfillLedger().then(() => true), new Promise<false>((r) => setTimeout(() => r(false), 1500))]);
+				const result = activity(p.range, {
+					ledger: this.hub.ledger,
+					sessions: this.sessions.list(),
+					runs: this.automations.allRuns(),
+					automationName: (id) => this.automations.find(id)?.name,
+					agentName: (id) => this.sessions.titleOf({ kind: "agent", id }),
+				});
+				return (done ? result : { ...result, backfilling: true }) satisfies Result<"stats.activity">;
+			}
+			case "stats.storage":
+				return (await storage(this.options.paths.home, this.worktreeList(), (id) => this.projectName(id))) satisfies Result<"stats.storage">;
+			case "stats.storage.clean":
+				return (await cleanWorktrees(this.worktreeList())) satisfies Result<"stats.storage.clean">;
+			case "stats.setup":
+				return (await this.setup()) satisfies Result<"stats.setup">;
 			case "stats.budgets":
 				return { budgets: this.sessions.budgets(), piopio: this.hub.budget.state() } satisfies Result<"stats.budgets">;
 			case "stats.budget.set": {

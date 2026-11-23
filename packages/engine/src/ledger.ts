@@ -61,6 +61,8 @@ type Stored = {
 	provider: string | null; route: string | null; model: string | null; role: string | null; input: number; output: number; cache_read: number; cache_write: number; usd: number | null; plan: number;
 };
 
+/** Tools that write a file at `path` (pi's and Claude Code's names). */
+const FILE_TOOLS = new Set(["edit", "write", "multi_edit", "Edit", "Write", "MultiEdit"]);
 const COLUMNS = "id, at, place, kind, source, source_kind, project, agent, automation, provider, route, model, role, input, output, cache_read, cache_write, usd, plan";
 const DAY = 86_400_000;
 
@@ -90,7 +92,17 @@ export class UsageLedger {
 			CREATE TABLE IF NOT EXISTS ledger_sources (key TEXT PRIMARY KEY, ref TEXT NOT NULL, title TEXT NOT NULL);
 			CREATE TABLE IF NOT EXISTS ledger_synced (key TEXT PRIMARY KEY, mark TEXT NOT NULL);
 			CREATE TABLE IF NOT EXISTS ledger_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+			-- What sessions show, for Overview › Activity (34 §7): your messages, tool calls, approvals, errors, compactions,
+			-- checkpoints, undone results. Refs, names and numbers; no content.
+			CREATE TABLE IF NOT EXISTS activity (id TEXT PRIMARY KEY, at TEXT NOT NULL, source TEXT NOT NULL, kind TEXT NOT NULL, name TEXT, status TEXT, value REAL);
+			CREATE INDEX IF NOT EXISTS activity_at ON activity (at);
 		`);
+		// The activity index came after the ledger (2026-11-23), and files written came with v2: read every
+		// conversation again once to fill it.
+		if (!this.meta("activity_v2")) {
+			this.db.exec("DELETE FROM ledger_synced");
+			this.setMeta("activity_v2", new Date().toISOString());
+		}
 		// Same request, same id: a live answer and the same answer read back are one request. A price that arrived later
 		// (Claude Code's cost comes with the turn's result, after its last answer) replaces a missing or smaller one.
 		this.insertRow = this.db.prepare(
@@ -103,6 +115,7 @@ export class UsageLedger {
 
 	/** Records every finished answer in `items` that reports usage. Returns how many were new. */
 	recordItems(source: LedgerSource, items: readonly TimelineItem[], fromFile = false): number {
+		if (!fromFile) this.recordActivity(source, items);
 		const answers = items.filter((i): i is AssistantItem => i.kind === "assistant" && i.status !== "streaming" && Boolean(i.usage));
 		this.db.prepare("INSERT INTO ledger_sources (key, ref, title) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET ref = excluded.ref, title = excluded.title").run(source.key, JSON.stringify(source.ref), source.title);
 		if (!answers.length) return 0;
@@ -112,6 +125,62 @@ export class UsageLedger {
 		});
 		if (added) this.onWrite();
 		return added;
+	}
+
+	/** What a session shows, as Activity counts it (idempotent by item: a tool that ends updates its row). */
+	recordActivity(source: LedgerSource, items: readonly TimelineItem[]): void {
+		const rows: [string, string, string, string | null, string | null, number | null][] = [];
+		const add = (id: string, at: string, kind: string, name?: string, status?: string, value?: number) => rows.push([`${source.container}#${id}`, at, kind, name ?? null, status ?? null, value ?? null]);
+		const tool = (t: Extract<TimelineItem, { kind: "tool" }>) => {
+			if (t.status === "running" || t.status === "pending_approval") return;
+			add(t.id, t.at, "tool", t.tool, t.status, t.durationMs);
+			// A file it wrote (Build's edit and write): its path, to count files changed (34 §7).
+			const args = t.args as { path?: unknown; file_path?: unknown } | undefined;
+			const path = typeof args?.path === "string" ? args.path : typeof args?.file_path === "string" ? args.file_path : undefined;
+			if (path && t.status === "done" && FILE_TOOLS.has(t.tool)) add(`${t.id}#file`, t.at, "file", path);
+		};
+		for (const item of items) {
+			switch (item.kind) {
+				case "user": add(item.id, item.at, "message"); break;
+				case "assistant": if (item.status === "error") add(item.id, item.at, "error", item.errorKind ?? "other"); break;
+				case "tool": tool(item); break;
+				case "steps": for (const t of item.tools) tool(t); break;
+				case "approval": if (item.status !== "pending") add(item.id, item.at, "approval", item.tool, item.status); break;
+				case "compaction": add(item.id, item.at, "compaction"); break;
+				case "checkpoint": add(item.id, item.at, "checkpoint", undefined, undefined, item.files ?? 0); break;
+				case "result": if (item.undo?.status === "undone") add(item.id, item.at, "undone"); break;
+			}
+		}
+		if (!rows.length) return;
+		const insert = this.db.prepare("INSERT INTO activity (id, at, source, kind, name, status, value) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET status = excluded.status, value = excluded.value, name = excluded.name");
+		this.transaction(() => {
+			for (const [id, at, kind, name, status, value] of rows) insert.run(id, at, source.key, kind, name, status, value);
+		});
+	}
+
+	/** Activity rows in [from, to): kind, name, status and value, for counting. */
+	activityRows(from: Date, to: Date): { at: string; source: string; kind: string; name: string | null; status: string | null; value: number | null }[] {
+		return this.db.prepare("SELECT at, source, kind, name, status, value FROM activity WHERE at >= ? AND at < ?").all(from.toISOString(), to.toISOString()) as never;
+	}
+
+	/** How much happened each local day since `from`: your messages plus Piopio's requests. */
+	perDay(from: Date, to: Date): Map<string, number> {
+		const out = new Map<string, number>();
+		const add = (at: string) => {
+			const d = new Date(at);
+			const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+			out.set(key, (out.get(key) ?? 0) + 1);
+		};
+		for (const r of this.db.prepare("SELECT at FROM activity WHERE kind = 'message' AND at >= ? AND at < ?").all(from.toISOString(), to.toISOString()) as { at: string }[]) add(r.at);
+		for (const r of this.db.prepare("SELECT at FROM usage_ledger WHERE at >= ? AND at < ?").all(from.toISOString(), to.toISOString()) as { at: string }[]) add(r.at);
+		return out;
+	}
+
+	/** The first thing the ledger or the activity index knows of. */
+	firstAt(): string | undefined {
+		const a = this.since();
+		const b = (this.db.prepare("SELECT MIN(at) at FROM activity").get() as { at: string | null } | undefined)?.at ?? undefined;
+		return a && b ? (a < b ? a : b) : (a ?? b);
 	}
 
 	private recordAnswer(source: LedgerSource, item: AssistantItem, fromFile: boolean): boolean {

@@ -426,6 +426,11 @@ export class Automations {
 		return this.execute(a, run, prompt, key, cause, now);
 	}
 
+	/** Every run kept (Overview › Activity counts them), oldest first. */
+	allRuns(): readonly AutomationRun[] {
+		return this.runs;
+	}
+
 	/** Runs the budget holds, oldest first. */
 	heldRuns(): { run: string; automation: string; name: string; at: string }[] {
 		return this.runs.filter((r) => r.held).map((r) => ({ run: r.id, automation: r.automation, name: this.find(r.automation)?.name ?? "Automation", at: r.firedAt }));

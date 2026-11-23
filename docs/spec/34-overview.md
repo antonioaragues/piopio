@@ -1,6 +1,6 @@
 # 34 · Overview: what Piopio costs, what you've set up, and what it has done
 
-Proposed and decided 2026-11-22 (§11). OV0–OV1 built 2026-11-23 (§13), OV4 the same day (§14). From the user's ask for a stats section (costs, a visual map of the system:
+Proposed and decided 2026-11-22 (§11). OV0–OV1 built 2026-11-23 (§13), OV4 (§14) and OV2–OV3 (§15) the same day. From the user's ask for a stats section (costs, a visual map of the system:
 agents, cloud and so on, and other numbers worth seeing), and a read of what Piopio records today
 ([costs.ts](../../packages/engine/src/costs.ts), `usage.summary` and `usage.extras` in
 [protocol](../../packages/protocol/src/index.ts), [CostDetails.swift](../../apps/mac/App/Piopio/CostDetails.swift),
@@ -343,3 +343,45 @@ $37.96 of $35 and one held automation on Home.
 
 **Not yet:** the budget doesn't hold an agent's run started by something other than an automation (none today
 besides channels), and a project's budget per job still isn't listed with the others.
+
+## 15. Built: OV2–OV3 (2026-11-23)
+
+Overview has its three tabs (OV2): Spend · Setup · Activity, remembered; ⌘K opens each. An agent's filtered Spend
+has no tabs.
+
+**Activity** ([activity.ts](../../packages/engine/src/activity.ts), `stats.activity`). Each number beside the same
+range before (absent before Piopio's first day). The counts come from what's stored:
+
+- An **activity index** beside the ledger (`activity` in `usage.db`), fed by the same events and backfill: your
+  messages, tool calls (name, status), files written by `edit` and `write` (their paths), agents' approvals, provider
+  errors, compactions, undone results. Refs, names and numbers; no content. Read once more for existing
+  conversations (`activity_v2`).
+- The catalog (conversations, side conversations, subagents, Build sessions, pull requests, merged worktrees), the
+  automation runs (run, finished, skipped, failed, waited, the one that failed most), the ledger (agents' runs).
+- **Changed from §7:** "time the work ran" isn't shown: only 47 of 1,054 tool calls in real history carry a duration
+  (it's measured live). Build's approvals leave nothing when allowed, so the group counts tool calls you denied and
+  agents' approvals (with how many you allowed). Files changed is distinct files written, not lines +/−; commits
+  and checks run aren't counted. "Questions answered", MCP and skills use and "Always allow" rules wait for the
+  data to be stored.
+- **The year of days** (OV5): one count per local day, your messages plus Piopio's requests, from Piopio's first day
+  or a year ago.
+- On a copy of the user's data: 11 conversations, 76 messages, 15 Build sessions, 38 files changed, 1,054 tool
+  calls (bash, read, web_fetch), 44 that failed, 3 denied; busiest day 22 Nov.
+
+**Disk** ([storage.ts](../../packages/engine/src/storage.ts), `stats.storage`): the data folder by kind
+(conversations, checkpoints, attachments, memory, library and apps, logs, worktrees per project, the rest), with the
+total. **Clean up unused worktrees** removes worktrees no session works in, only when they hold no uncommitted
+change (through `git worktree remove`, so the branch stays), and says what it freed. Browser data is the app's
+(WebKit gives no size): its row clears it with Settings' own action.
+
+**Setup** ([setup.ts](../../packages/engine/src/setup.ts), `stats.setup`): You (This Mac, each agent's Telegram) ·
+Piopio (This Mac with its projects, agents and automations; the cloud with its agents) · Uses (connected providers
+with the default model, coding agents, connectors, global MCP servers, memory). A dot and its reason for a rejected
+key, a cloud that doesn't answer, an agent out of budget or invalid, a signed-out coding agent, a connector account
+with a problem, failing semantic memory; dashes for a provider, coding agent or MCP server unused in 30 days, an
+agent with no automation, channel or spend, a server turned off. Lines: channel → agent, place → what it uses, the
+cloud → OpenRouter. **What runs where** lists agents and automations with where they run, model, how they reach
+you, next run and this month. Settings › This Mac & cloud doesn't link here yet.
+
+**Not in Setup yet:** the iPhone (K3), WhatsApp, the Mac Bridge, the provider order and roles (29, 28), skills,
+the browser and computer use as nodes.

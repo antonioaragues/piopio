@@ -1256,6 +1256,80 @@ export const Budget = Type.Object({
 	automation: Type.Optional(Type.String()),
 });
 export type Budget = Static<typeof Budget>;
+/** Overview › Activity (34 §7): one number, the same for the range before, and what it counts. */
+export const ActivityRow = Type.Object({
+	id: Type.String(),
+	label: Type.String(),
+	value: Type.Number(),
+	/** The range before, of the same length (absent when Piopio didn't exist yet). */
+	previous: Type.Optional(Type.Number()),
+	/** count (default) · ms: a duration · files. */
+	unit: Type.Optional(literals("count", "ms", "files")),
+	/** A word on what it is ("Morning briefing failed most", "read_file, bash, edit"). */
+	detail: Type.Optional(Type.String()),
+});
+export const ActivityGroup = Type.Object({ id: Type.String(), title: Type.String(), rows: Type.Array(ActivityRow) });
+export const ActivityResult = Type.Object({
+	range: SpendRange,
+	from: Type.String(),
+	to: Type.String(),
+	groups: Type.Array(ActivityGroup),
+	/** A year of days (34 §7, OV5): from the day Piopio started or a year ago, how much happened each local day. */
+	year: Type.Array(Type.Object({ day: Type.String(), count: Type.Number() })),
+	backfilling: Type.Optional(Type.Boolean()),
+});
+export type ActivityResult = Static<typeof ActivityResult>;
+/** Overview › Activity › Disk (34 §7.1): sizes inside the data folder, and what can be cleaned. */
+export const StorageResult = Type.Object({
+	totalBytes: Type.Number(),
+	items: Type.Array(Type.Object({
+		id: Type.String(),
+		label: Type.String(),
+		bytes: Type.Number(),
+		detail: Type.Optional(Type.String()),
+		/** A cleanup, with what it would free. */
+		action: Type.Optional(Type.Object({ id: literals("worktrees"), label: Type.String(), freesBytes: Type.Number(), count: Type.Number() })),
+	})),
+	/** The data folder (shown, not opened). */
+	path: Type.String(),
+});
+export type StorageResult = Static<typeof StorageResult>;
+/** Overview › Setup (34 §6): a node of the map. */
+export const SetupNode = Type.Object({
+	id: Type.String(),
+	column: literals("you", "piopio", "uses"),
+	kind: literals("device", "channel", "place", "provider", "coding_agent", "connector", "mcp", "memory"),
+	name: Type.String(),
+	/** One line of what matters: "3 agents · 4 automations", "first · Sonnet 5.5". */
+	line: Type.String(),
+	/** needs_you: the blue dot, and `reason` says why · unused: dashed (a cleanup candidate) · off. */
+	state: literals("ok", "needs_you", "unused", "off"),
+	reason: Type.Optional(Type.String()),
+	/** What a click opens. */
+	open: Type.Optional(Type.Object({ kind: literals("agent", "settings", "automation", "project", "overview"), id: Type.Optional(Type.String()), pane: Type.Optional(Type.String()) })),
+	/** Agents that live on this place (a place's own list, drawn inside it). */
+	agents: Type.Optional(Type.Array(Type.Object({ id: Type.String(), name: Type.String(), avatar: Type.Optional(Type.String()), state: literals("ok", "needs_you", "unused", "off"), reason: Type.Optional(Type.String()) }))),
+});
+export type SetupNode = Static<typeof SetupNode>;
+export const SetupResult = Type.Object({
+	nodes: Type.Array(SetupNode),
+	/** From → to by node id, or "agent:<id>" for an agent inside a place. */
+	edges: Type.Array(Type.Object({ from: Type.String(), to: Type.String() })),
+	/** What runs where (34 §6.2). */
+	rows: Type.Array(Type.Object({
+		kind: literals("agent", "automation"),
+		id: Type.String(),
+		name: Type.String(),
+		runsOn: literals("mac", "cloud"),
+		model: Type.Optional(Type.String()),
+		/** "Telegram", "its chat", "a conversation", "quietly". */
+		reachesYouIn: Type.String(),
+		nextRun: Type.Optional(Type.String()),
+		monthUsd: Type.Number(),
+		paused: Type.Optional(Type.Boolean()),
+	})),
+});
+export type SetupResult = Static<typeof SetupResult>;
 /**
  * Piopio this month (docs/spec/34 §5.4, OV3): one budget over everything the ledger counts on this Mac, off until set.
  * At 80% it notifies once; at 100% background work (automations) waits for your yes; your conversations keep going.
@@ -1422,6 +1496,14 @@ export const methods = {
 	"stats.budget.set": { params: Type.Object({ monthUsd: Type.Union([Type.Number(), Type.Null()]) }), result: PiopioBudget },
 	/** Your yes at 100%: run one held automation run, or let background work go on for the rest of this month (and run what's held). */
 	"stats.budget.release": { params: Type.Object({ run: Type.Optional(Type.String()), month: Type.Optional(Type.Boolean()) }), result: PiopioBudget },
+	/** Overview › Activity (34 §7): what got done in the range, against the range before, and a year of days. */
+	"stats.activity": { params: Type.Object({ range: SpendRange }), result: ActivityResult },
+	/** Overview › Disk (34 §7.1). */
+	"stats.storage": { params: Type.Object({}), result: StorageResult },
+	/** Runs a Disk cleanup; says what it freed. */
+	"stats.storage.clean": { params: Type.Object({ action: literals("worktrees") }), result: Type.Object({ freedBytes: Type.Number(), removed: Type.Number() }) },
+	/** Overview › Setup (34 §6): the map and What runs where. */
+	"stats.setup": { params: Type.Object({}), result: SetupResult },
 	/** The ledger for a range as CSV, one row per request (34 §8.3). Refs and numbers only. */
 	"stats.export": { params: Type.Object({ range: SpendRange }), result: Type.Object({ csv: Type.String(), rows: Type.Number() }) },
 	/** OpenRouter-key billing; includes other apps sharing that key. Cached a minute. */

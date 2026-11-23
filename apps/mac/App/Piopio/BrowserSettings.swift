@@ -80,7 +80,12 @@ struct BrowserSettingsPane: View {
     }
 
     private func clear() async {
-        await BrowserCenter.shared.store.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast)
+        await Self.clearData()
         cleared = true
+    }
+
+    /// Every site's cookies, storage and cache in Piopio's browser (also Overview › Disk's "Clear browser data").
+    static func clearData() async {
+        await BrowserCenter.shared.store.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast)
     }
 }

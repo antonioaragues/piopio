@@ -617,11 +617,11 @@ export class Sessions {
 				case "item.added":
 				case "item.updated":
 					this.search.upsertItem(id, event.item);
-					if (event.item.kind === "assistant") this.recordUsage(entry, [event.item]);
+					this.recordUsage(entry, [event.item]);
 					break;
 				case "item.replaced":
 					this.search.upsertItem(id, event.item, event.oldId);
-					if (event.item.kind === "assistant") this.recordUsage(entry, [event.item]);
+					this.recordUsage(entry, [event.item]);
 					break;
 				case "item.removed":
 					// A removed answer (a branch left, a retry) was still paid for: the ledger keeps it.
@@ -675,8 +675,10 @@ export class Sessions {
 	}
 
 	/** Writes the finished answers' usage into the ledger (idempotent: an answer read again isn't counted twice). */
-	private recordUsage(entry: CatalogEntry, items: readonly TimelineItem[], fromFile = false): void {
-		if (!items.some((i) => i.kind === "assistant" && i.usage)) return;
+	private recordUsage(entry: CatalogEntry, all: readonly TimelineItem[], fromFile = false): void {
+		// Only what's settled: a streaming answer or a running tool is written when it ends.
+		const items = all.filter((i) => (i.kind === "assistant" ? i.status !== "streaming" : i.kind === "tool" ? i.status !== "running" && i.status !== "pending_approval" : i.kind !== "system" && i.kind !== "agent_msg"));
+		if (!items.length) return;
 		try {
 			this.hub.ledger.recordItems(this.ledgerSource(entry), items, fromFile);
 		} catch (error) {

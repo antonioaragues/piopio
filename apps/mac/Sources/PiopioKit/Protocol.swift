@@ -2217,6 +2217,54 @@ public struct BudgetChanged: Decodable, Sendable { public var notify: String? }
 public struct SpendExportParams: Encodable, Sendable { public var range: SpendRange; public init(range: SpendRange) { self.range = range } }
 public struct SpendExport: Decodable, Sendable { public var csv: String; public var rows: Int }
 
+/// Overview › Activity (docs/spec/34 §7): one number, the range before, and what it counts.
+public struct ActivityRow: Decodable, Sendable, Hashable, Identifiable {
+    public enum Unit: String, Decodable, Sendable { case count, ms, files }
+    public var id: String; public var label: String; public var value: Double
+    public var previous: Double?; public var unit: Unit?; public var detail: String?
+}
+public struct ActivityGroup: Decodable, Sendable, Hashable, Identifiable { public var id: String; public var title: String; public var rows: [ActivityRow] }
+public struct ActivityDay: Decodable, Sendable, Hashable { public var day: String; public var count: Double }
+public struct ActivityParams: Encodable, Sendable { public var range: SpendRange; public init(range: SpendRange) { self.range = range } }
+public struct ActivityResult: Decodable, Sendable {
+    public var range: SpendRange; public var from: String; public var to: String
+    public var groups: [ActivityGroup]
+    /// A year of days (OV5), from the day Piopio started or a year ago.
+    public var year: [ActivityDay]
+    public var backfilling: Bool?
+}
+/// Overview › Disk (34 §7.1).
+public struct StorageResult: Decodable, Sendable {
+    public struct Action: Decodable, Sendable, Hashable { public var id: String; public var label: String; public var freesBytes: Double; public var count: Int }
+    public struct Item: Decodable, Sendable, Hashable, Identifiable { public var id: String; public var label: String; public var bytes: Double; public var detail: String?; public var action: Action? }
+    public var totalBytes: Double; public var items: [Item]; public var path: String
+}
+public struct StorageCleanParams: Encodable, Sendable { public var action: String; public init(action: String) { self.action = action } }
+public struct StorageCleanResult: Decodable, Sendable { public var freedBytes: Double; public var removed: Int }
+/// Overview › Setup (34 §6): a node of the map.
+public struct SetupNode: Decodable, Sendable, Hashable, Identifiable {
+    public enum Column: String, Decodable, Sendable { case you, piopio, uses }
+    public enum Kind: String, Decodable, Sendable { case device, channel, place, provider, codingAgent = "coding_agent", connector, mcp, memory }
+    public enum State: String, Decodable, Sendable { case ok, needsYou = "needs_you", unused, off }
+    public struct Open: Decodable, Sendable, Hashable {
+        public var kind: String; public var id: String?; public var pane: String?
+        public init(kind: String, id: String? = nil, pane: String? = nil) { self.kind = kind; self.id = id; self.pane = pane }
+    }
+    public struct Agent: Decodable, Sendable, Hashable, Identifiable { public var id: String; public var name: String; public var avatar: String?; public var state: State; public var reason: String? }
+    public var id: String; public var column: Column; public var kind: Kind; public var name: String; public var line: String
+    public var state: State; public var reason: String?; public var open: Open?; public var agents: [Agent]?
+}
+public struct SetupResult: Decodable, Sendable {
+    public struct Edge: Decodable, Sendable, Hashable { public var from: String; public var to: String }
+    public struct Row: Decodable, Sendable, Hashable, Identifiable {
+        public var kind: String; public var id: String; public var name: String
+        /// "mac" | "cloud".
+        public var runsOn: String; public var model: String?; public var reachesYouIn: String
+        public var nextRun: String?; public var monthUsd: Double; public var paused: Bool?
+    }
+    public var nodes: [SetupNode]; public var edges: [Edge]; public var rows: [Row]
+}
+
 // MARK: Your cloud (docs/spec/30 K1)
 
 /// Your cloud as the Mac's engine sees it: connected, reachable, and the agents its registry lists.
