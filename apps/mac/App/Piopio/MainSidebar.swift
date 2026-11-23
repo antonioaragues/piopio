@@ -3,7 +3,7 @@ import PiopioTranscript
 import SwiftUI
 
 /// The one sidebar (docs/design/grey 9a): a 52pt top bar (traffic lights, toggle), Search ⌘K beside New (a round +), Home and Automations,
-/// then Pinned · Agents · Projects · Conversations (docs/spec/18 §21), and a footer with the cost today and Settings.
+/// then Pinned · Agents · Projects · Conversations (docs/spec/18 §21), and a footer with you, Overview and Settings.
 /// Rows are plain: a 16pt outline glyph, the name, and status only as a blue dot (needs you) or a grey ring (running).
 /// Long lists show only what's live: a project's sessions that are running, waiting on you or touched in the last
 /// 3 days (the rest fold into "N earlier sessions"), and a few of each section ("N more ›" opens the full index).
@@ -93,7 +93,8 @@ struct MainSidebar: View {
         .padding(.bottom, 6)
     }
 
-    /// Avatar, name, "This Mac · $0.91 today", and Settings.
+    /// Avatar, name and where Piopio runs, then Overview and Settings. No money here: what Piopio costs lives in
+    /// Overview (docs/design/overview-way-in, B).
     private var footer: some View {
         HStack(spacing: 10) {
             Text(String(HomeView.firstName.prefix(1)).uppercased())
@@ -102,14 +103,13 @@ struct MainSidebar: View {
                 .background(Color.dsChip, in: Circle())
             VStack(alignment: .leading, spacing: 1) {
                 Text(HomeView.firstName).font(.system(size: 13)).foregroundStyle(Color.dsFg).lineLimit(1)
-                // What requests cost lives here, not in Settings: today's spend opens Overview › Spend (docs/spec/34 §4).
-                Button { item = .overview(nil) } label: {
-                    Text(footerLine).font(.system(size: 11)).foregroundStyle({ if case .overview = item { return Color.dsFg }; return Color.dsFg3 }()).lineLimit(1)
-                }
-                .buttonStyle(.plain)
-                .help("OpenRouter spending today for this API key, including other apps that share it. Other providers are not included. Click for Overview.")
+                Text(footerLine).font(.system(size: 11)).foregroundStyle(Color.dsFg3).lineLimit(1)
             }
             Spacer(minLength: 4)
+            Button { item = .overview(nil) } label: { Image(systemName: "chart.bar") }
+                .buttonStyle(IconButtonStyle(on: { if case .overview = item { return true }; return false }()))
+                .help("Overview: what Piopio costs, what you've set up, what it has done")
+                .accessibilityLabel("Overview")
             Button { WindowOpener.shared.openSettings?() } label: { Image(systemName: "gearshape") }
                 .buttonStyle(IconButtonStyle()).help("Settings (⌘,)").accessibilityLabel("Settings")
         }
@@ -119,9 +119,9 @@ struct MainSidebar: View {
 
     private var footerLine: String {
         switch engine.status {
-        case .starting: return "This Mac · starting…"
-        case .failed: return "This Mac · engine stopped"
-        case .ready: return "This Mac" + ((engine.usage?.todayUsd).map { " · \(Self.money($0)) today" } ?? "")
+        case .starting: "This Mac · starting…"
+        case .failed: "This Mac · engine stopped"
+        case .ready: "This Mac"
         }
     }
 

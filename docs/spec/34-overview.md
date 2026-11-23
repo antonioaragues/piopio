@@ -51,10 +51,13 @@ approvals, and how much disk it all takes. Every number is a link to the things 
 
 ## 4. Where it lives
 
-- **The sidebar footer.** "This Mac · $0.91 today" stays; clicking it opens Overview › Spend (today it opens the
-  CostDetails popover, which becomes the conversation-only view in the inspector).
+- **The sidebar footer.** A chart button beside Settings opens Overview, lit while it's open. The footer shows no
+  money: it reads "Antonio · This Mac" (changed 2026-11-24, OV8; the cost line was the only way in, and too hidden).
+  Mockups: [docs/design/overview-way-in/Sidebar.html](../design/overview-way-in/Sidebar.html), option B.
 - **⌘K:** "Overview", "Spend", "Setup", "Activity".
 - **Not a sidebar row.** It's a page you open a few times a week, not a place you work (OV1).
+- **No cost on the main screens** (OV8): not in the sidebar, not on Home. A conversation's own cost stays in its
+  inspector, and an agent's month in its setup, since they're about that one thing.
 - **Links in:** an agent's "$0.31 this month" opens Spend filtered to that agent; Settings › Cloud's usage opens
   Spend filtered to the cloud; an automation's budget line opens its runs.
 
@@ -230,7 +233,7 @@ and 33's PS0; the cloud half of OV4 needs K1's sync.
 
 ## 10. What you see, in short
 
-- Sidebar footer: unchanged text, opens Spend.
+- Sidebar footer: a chart button beside Settings opens Overview; no money in the sidebar (OV8).
 - Spend: four numbers, a chart of days, a list by what, budgets, at most three suggestions.
 - Setup: a map you hover and click, then the same facts as a table.
 - Activity: a year of days, plain groups of numbers with comparisons, Disk at the end.
@@ -249,6 +252,7 @@ The user took every proposal.
 | OV5 | **The year of days stays**, as one quiet row at the top of Activity. No streaks, scores or badges |
 | OV6 | **USD**, as providers bill. EUR comes later as an opt-in setting, because the rate needs a request |
 | OV7 | **Cheaper next time is on**, with at most three suggestions. Each shows the number it's based on and one action |
+| OV8 | (2026-11-24) **The way in is a chart button beside Settings** in the sidebar footer, and the sidebar shows no money. Replaces OV1's footer cost line; Overview still has no sidebar row |
 
 ## 12. Not verified
 
@@ -306,7 +310,7 @@ the top three, groups, forecast from day 5, `planTokens`), `stats.items` (what a
 budget per job isn't listed yet), `stats.export` (CSV, refs and numbers only).
 
 **The page** ([OverviewView.swift](../../apps/mac/App/Piopio/OverviewView.swift)): Spend only until OV2 adds tabs.
-The sidebar footer's cost line opens it (CostDetails stays the conversation's view in the inspector); ⌘K has
+The sidebar footer's cost line opened it until OV8's chart button (CostDetails stays the conversation's view in the inspector); ⌘K has
 Overview and Spend; `overview:<agent>` opens it filtered to an agent (the agent page doesn't link there yet). The
 plan-limit figure isn't shown: no plan window is readable yet (§12).
 

@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Piopio · The way into Overview</title>
+<style>
+:root {
+  --win:#fcfcfb; --side:#f4f4f2; --fg:#1f1f1e; --fg2:#6b6b67; --fg3:#9b9b96; --line:rgba(0,0,0,.09);
+  --field:#ebebe8; --chip:rgba(0,0,0,.06); --inv:#1f1f1e; --invfg:#fff; --accent:#2f6fde; --page:#e9e9e6;
+  --card:#ffffff; --menu:rgba(252,252,251,.96);
+}
+:root[data-theme="dark"] {
+  --win:#1e1e1d; --side:#191918; --fg:#ececea; --fg2:#a6a6a1; --fg3:#77776f; --line:rgba(255,255,255,.1);
+  --field:#252524; --chip:rgba(255,255,255,.08); --inv:#ececea; --invfg:#1e1e1d; --accent:#6ea0ff; --page:#121211;
+  --card:#252524; --menu:rgba(44,44,42,.97);
+}
+* { box-sizing:border-box; }
+body { margin:0; background:var(--page); color:var(--fg); font:13px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif; -webkit-font-smoothing:antialiased; }
+main { max-width:1280px; margin:0 auto; padding:40px 20px 80px; }
+header.doc { display:flex; gap:20px; align-items:flex-start; margin-bottom:30px; }
+header.doc h1 { font-size:22px; font-weight:600; margin:0 0 6px; }
+header.doc p { color:var(--fg2); margin:0 0 4px; max-width:820px; }
+.theme { margin-left:auto; color:var(--fg2); cursor:pointer; padding:3px 8px; border-radius:6px; user-select:none; white-space:nowrap; }
+.theme:hover { background:var(--chip); color:var(--fg); }
+
+.grid { display:grid; grid-template-columns:repeat(3, 1fr); gap:28px; }
+.label { display:flex; gap:10px; align-items:baseline; margin:0 0 12px; }
+.label b { font-size:12px; color:var(--fg3); font-weight:600; }
+.label h2 { font-size:15px; margin:0; font-weight:600; }
+.note { color:var(--fg2); margin:14px 0 0; padding-left:18px; }
+.note li { margin:4px 0; }
+
+/* window: sidebar + a sliver of the page */
+.win { background:var(--side); border-radius:12px; box-shadow:0 0 0 .5px var(--line), 0 20px 50px rgba(0,0,0,.12); overflow:hidden; display:flex; height:760px; position:relative; }
+.side { width:248px; flex:none; display:flex; flex-direction:column; }
+.page { flex:1; background:var(--win); border-radius:10px; margin:8px 8px 8px 0; box-shadow:0 0 0 .5px var(--line); padding:18px 16px; overflow:hidden; min-width:0; }
+.page h3 { margin:34px 0 10px; font-size:18px; font-weight:600; }
+.page .tabs { display:flex; gap:4px; }
+.page .tabs span { padding:3px 9px; border-radius:6px; color:var(--fg2); font-size:12px; }
+.page .tabs span.on { background:var(--chip); color:var(--fg); }
+.page .big { font-size:26px; font-weight:600; margin:18px 0 2px; }
+.page .sub { color:var(--fg3); font-size:12px; }
+.page .bars { display:flex; align-items:flex-end; gap:3px; height:70px; margin-top:16px; }
+.page .bars i { flex:1; background:var(--fg3); opacity:.45; border-radius:2px 2px 0 0; }
+
+.top { height:52px; display:flex; align-items:center; padding:0 14px; }
+.lights i { display:inline-block; width:12px; height:12px; border-radius:50%; margin-right:7px; }
+.lights i:nth-child(1){background:#ec6a5e}.lights i:nth-child(2){background:#f4bf4f}.lights i:nth-child(3){background:#61c554}
+.top .tog { margin-left:auto; color:var(--fg2); }
+.rows { padding:0 8px; flex:1; overflow:hidden; }
+.search { display:flex; gap:8px; margin-bottom:6px; }
+.pill { flex:1; display:flex; align-items:center; gap:8px; height:32px; padding:0 12px; background:var(--field); border-radius:16px; color:var(--fg2); }
+.pill .k { margin-left:auto; color:var(--fg3); font-size:11px; }
+.new { width:32px; height:32px; border-radius:50%; background:var(--inv); color:var(--invfg); display:grid; place-items:center; flex:none; }
+.row { display:flex; align-items:center; gap:10px; height:29px; padding:0 8px; border-radius:7px; white-space:nowrap; overflow:hidden; }
+.row.on { background:var(--chip); }
+.row .g { width:18px; display:grid; place-items:center; color:var(--fg2); flex:none; }
+.row .t { overflow:hidden; text-overflow:ellipsis; }
+.row .r { margin-left:auto; color:var(--fg3); font-size:11px; font-family:ui-monospace, "SF Mono", Menlo, monospace; }
+.row .ch { color:var(--fg3); font-size:9px; }
+.row.more { color:var(--fg3); font-size:12.5px; height:28px; }
+h4 { font-size:12px; color:var(--fg3); font-weight:500; margin:16px 8px 4px; display:flex; justify-content:space-between; }
+h4 span { font-weight:400; }
+.av { width:18px; height:18px; border-radius:5px; background:#b79cf2; color:#fff; font-size:10px; font-weight:600; display:grid; place-items:center; }
+
+.foot { height:56px; display:flex; align-items:center; gap:10px; padding:0 10px 0 16px; position:relative; }
+.foot .me { display:flex; align-items:center; gap:10px; padding:4px 6px 4px 4px; margin-left:-4px; border-radius:8px; min-width:0; }
+.foot .me.hov { background:var(--chip); }
+.foot .circle { width:26px; height:26px; border-radius:50%; background:var(--chip); color:var(--fg2); font-size:11px; font-weight:500; display:grid; place-items:center; flex:none; }
+.foot .name { font-size:13px; line-height:1.2; }
+.foot .where { font-size:11px; color:var(--fg3); line-height:1.3; }
+.foot .btn { width:28px; height:28px; border-radius:7px; display:grid; place-items:center; color:var(--fg2); flex:none; }
+.foot .btn.on { background:var(--chip); color:var(--fg); }
+.foot .sp { flex:1; }
+.tip { position:absolute; bottom:52px; right:28px; background:var(--inv); color:var(--invfg); font-size:11px; padding:3px 7px; border-radius:5px; white-space:nowrap; }
+
+.menu { position:absolute; left:12px; bottom:58px; width:224px; background:var(--menu); border-radius:10px; box-shadow:0 0 0 .5px var(--line), 0 10px 30px rgba(0,0,0,.18); padding:5px; backdrop-filter:blur(20px); }
+.menu .it { display:flex; align-items:center; gap:9px; padding:5px 8px; border-radius:6px; }
+.menu .it .g { width:16px; display:grid; place-items:center; color:var(--fg2); }
+.menu .it.on { background:var(--accent); color:#fff; }
+.menu .it.on .g { color:#fff; }
+.menu .it .k { margin-left:auto; color:var(--fg3); font-size:12px; }
+.menu .it.on .k { color:rgba(255,255,255,.8); }
+.menu .sep { height:1px; background:var(--line); margin:4px 8px; }
+.menu .hd { padding:6px 8px 4px; }
+.menu .hd .n { font-weight:500; }
+.menu .hd .w { color:var(--fg3); font-size:11.5px; }
+svg { display:block; }
+
+.cmp { margin-top:44px; max-width:900px; }
+.cmp h2 { font-size:15px; font-weight:600; margin:0 0 10px; }
+.cmp table { border-collapse:collapse; width:100%; }
+.cmp td, .cmp th { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+.cmp th { color:var(--fg3); font-weight:500; font-size:12px; }
+.cmp td:first-child { font-weight:500; white-space:nowrap; }
+</style>
+</head>
+<body>
+<main>
+<header class="doc">
+  <div>
+    <h1>The way into Overview</h1>
+    <p>Today Overview opens only from "This Mac · $0.00 today" in the sidebar footer. Every option below takes the cost out of the sidebar: the footer says who you are and where Piopio runs, and money lives only in Overview.</p>
+    <p>Each window shows Overview open, so you see how the sidebar marks where you are.</p>
+  </div>
+  <span class="theme" onclick="document.documentElement.dataset.theme = document.documentElement.dataset.theme === 'dark' ? '' : 'dark'">Light / Dark</span>
+</header>
+
+<div class="grid">
+  <section>
+    <div class="label"><b>A</b><h2>A row beside Library</h2></div>
+    <div class="win" data-variant="a"></div>
+    <ul class="note">
+      <li>Overview joins Home, Automations and Library: the places that aren't one thing you're working on.</li>
+      <li>Found without looking; selected like any other page.</li>
+      <li>Costs one more row at the top (29pt).</li>
+    </ul>
+  </section>
+  <section>
+    <div class="label"><b>B</b><h2>A button beside Settings</h2></div>
+    <div class="win" data-variant="b"></div>
+    <ul class="note">
+      <li>The footer holds the "about Piopio" things: you, where it runs, how it's going (Overview), Settings.</li>
+      <li>The top of the sidebar stays as it is.</li>
+      <li>An icon alone needs its tooltip the first time.</li>
+    </ul>
+  </section>
+  <section>
+    <div class="label"><b>C</b><h2>Your name opens a menu</h2></div>
+    <div class="win" data-variant="c"></div>
+    <ul class="note">
+      <li>The usual account menu: Overview, Settings, and room for Help and Feedback later.</li>
+      <li>One click away from Overview, as today, but the menu says so.</li>
+      <li>The gear stays as a shortcut to Settings.</li>
+    </ul>
+  </section>
+</div>
+
+<div class="cmp">
+  <h2>In short</h2>
+  <table>
+    <tr><th></th><th>Found by</th><th>Clicks</th><th>Sidebar change</th></tr>
+    <tr><td>A · Row</td><td>Seeing it</td><td>1</td><td>One row more at the top</td></tr>
+    <tr><td>B · Button</td><td>The icon, then its tooltip</td><td>1</td><td>A second icon in the footer</td></tr>
+    <tr><td>C · Menu</td><td>Clicking your name</td><td>2</td><td>Your name becomes a button</td></tr>
+  </table>
+</div>
+</main>
+
+<script>
+const I = {
+  house:'<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2.5 7.2 8 2.5l5.5 4.7V13.5h-3.7V9.6H6.2v3.9H2.5z" stroke-linejoin="round"/></svg>',
+  clock:'<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M3.2 5A5.5 5.5 0 1 1 2.5 8"/><path d="M2.6 2.6v2.7h2.7M8 5v3.2l2.2 1.4" stroke-linecap="round"/></svg>',
+  books:'<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2" y="3" width="3" height="10.5" rx=".6"/><rect x="5.5" y="2" width="3" height="11.5" rx=".6"/><path d="m9.8 3.6 2.8-.7 2 10-2.8.7z"/></svg>',
+  chart:'<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2" y="8.5" width="3" height="5" rx=".6"/><rect x="6.5" y="5" width="3" height="8.5" rx=".6"/><rect x="11" y="2.5" width="3" height="11" rx=".6"/></svg>',
+  gear:'<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.6v1.8M8 12.6v1.8M1.6 8h1.8M12.6 8h1.8M3.5 3.5l1.3 1.3M11.2 11.2l1.3 1.3M3.5 12.5l1.3-1.3M11.2 4.8l1.3-1.3" stroke-linecap="round"/><circle cx="8" cy="8" r="4.6"/></svg>',
+  folder:'<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M1.8 4.2c0-.6.4-1 1-1h3.3l1.4 1.5h5.7c.6 0 1 .4 1 1v6.8c0 .6-.4 1-1 1H2.8c-.6 0-1-.4-1-1z" stroke-linejoin="round"/></svg>',
+  bubble:'<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2.3 3.3c0-.6.4-1 1-1h9.4c.6 0 1 .4 1 1v6.4c0 .6-.4 1-1 1H6.3L3.5 13v-2.3h-.2c-.6 0-1-.4-1-1z" stroke-linejoin="round"/></svg>',
+  search:'<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="4.6"/><path d="m10.4 10.4 3.4 3.4" stroke-linecap="round"/></svg>',
+  plus:'<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2.5v11M2.5 8h11" stroke-linecap="round"/></svg>',
+  plusThin:'<svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 2v12M2 8h12" stroke-linecap="round"/></svg>',
+  toggle:'<svg width="17" height="15" viewBox="0 0 18 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1.5" y="2" width="15" height="12" rx="2.5"/><path d="M6.5 2v12"/></svg>',
+  ellipsis:'<svg width="14" height="4" viewBox="0 0 14 4" fill="currentColor"><circle cx="2" cy="2" r="1.3"/><circle cx="7" cy="2" r="1.3"/><circle cx="12" cy="2" r="1.3"/></svg>',
+  updown:'<svg width="9" height="11" viewBox="0 0 9 12" fill="none" stroke="currentColor" stroke-width="1.3"><path d="m1.5 4.5 3-3 3 3M1.5 7.5l3 3 3-3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  help:'<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="6"/><path d="M6.3 6.3a1.8 1.8 0 1 1 2.4 1.7c-.5.2-.7.6-.7 1.1v.3" stroke-linecap="round"/><circle cx="8" cy="11.3" r=".5" fill="currentColor"/></svg>',
+};
+const row = (g, t, opts = {}) => `<div class="row ${opts.on ? 'on' : ''}"><span class="g">${g}</span><span class="t">${t}</span>${opts.ch ? '<span class="ch">›</span>' : ''}${opts.r ? `<span class="r">${opts.r}</span>` : ''}</div>`;
+
+function sidebar(v) {
+  const nav = row(I.house, 'Home') + row(I.clock, 'Automations') + row(I.books, 'Library') + (v === 'a' ? row(I.chart, 'Overview', { on: true }) : '');
+  const lists = `
+    <h4>Agents <span>${I.plusThin}</span></h4>
+    <div class="row"><span class="g"><span class="av">P</span></span><span class="t">Pinpin</span></div>
+    <h4>Projects <span>${I.plusThin}</span></h4>
+    ${row(I.folder, 'piopio', { ch: true, r: 'main' })}
+    ${row(I.folder, 'test-linear', { ch: true })}
+    ${row(I.folder, 'taller-…', { ch: true, r: 'main' })}
+    ${row(I.folder, 'ohoi', { ch: true, r: 'main' })}
+    <div class="row more"><span class="g">${I.ellipsis}</span><span>3 more projects ›</span></div>
+    <h4>Conversations <span>${I.plusThin}</span></h4>
+    ${row(I.bubble, 'Make me an app with my…')}
+    ${row(I.bubble, 'Spending (app)')}
+    ${row(I.bubble, 'Create expenses.csv wit…')}
+    ${row(I.bubble, 'cual es mi agenda esta s…')}
+    ${row(I.bubble, 'Mañana tengo entrevista…')}
+    <div class="row more"><span class="g">${I.ellipsis}</span><span>5 earlier ›</span></div>`;
+
+  const me = (hov, chevron) => `<div class="me ${hov ? 'hov' : ''}"><span class="circle">A</span><span><div class="name">Antonio${chevron ? ` <span style="color:var(--fg3);display:inline-block;vertical-align:-1px;margin-left:2px">${I.updown}</span>` : ''}</div><div class="where">This Mac</div></span></div>`;
+  let foot;
+  if (v === 'a') foot = `${me(false)}<span class="sp"></span><span class="btn">${I.gear}</span>`;
+  if (v === 'b') foot = `${me(false)}<span class="sp"></span><span class="btn on">${I.chart}</span><span class="btn">${I.gear}</span><span class="tip">Overview</span>`;
+  if (v === 'c') foot = `${me(true, true)}<span class="sp"></span><span class="btn">${I.gear}</span>`;
+
+  const menu = v === 'c' ? `<div class="menu">
+      <div class="hd"><div class="n">Antonio</div><div class="w">This Mac · engine running</div></div>
+      <div class="sep"></div>
+      <div class="it on"><span class="g">${I.chart}</span>Overview</div>
+      <div class="it"><span class="g">${I.gear}</span>Settings…<span class="k">⌘,</span></div>
+      <div class="sep"></div>
+      <div class="it"><span class="g">${I.help}</span>Help and Feedback</div>
+    </div>` : '';
+
+  const pageSel = v !== 'c';
+  return `<aside class="side">
+      <div class="top"><span class="lights"><i></i><i></i><i></i></span><span class="tog">${I.toggle}</span></div>
+      <div class="rows">
+        <div class="search"><div class="pill">${I.search}<span>Search</span><span class="k">⌘K</span></div><div class="new">${I.plus}</div></div>
+        ${nav}${lists}
+      </div>
+      <div class="foot">${foot}</div>
+    </aside>
+    <div class="page">
+      ${pageSel ? `<h3>Overview</h3>
+      <div class="tabs"><span class="on">Spend</span><span>Setup</span><span>Activity</span></div>
+      <div class="big">$4.12</div><div class="sub">this month · on track for $9</div>
+      <div class="bars">${[3,5,2,8,4,6,9,3,5,7,4,6].map(h => `<i style="height:${h*10}%"></i>`).join('')}</div>`
+      : ''}
+    </div>${menu}`;
+}
+document.querySelectorAll('[data-variant]').forEach(el => el.innerHTML = sidebar(el.dataset.variant));
+</script>
+</body>
+</html>
