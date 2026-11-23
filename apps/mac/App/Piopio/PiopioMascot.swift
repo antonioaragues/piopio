@@ -168,11 +168,13 @@ struct PiopioPerch: View {
         Color.clear
             .frame(width: size, height: size)
             .overlay {
-                // Hats, confetti and the hop reach past the 120-unit box, so the canvas is half as large again.
+                // Hats, confetti and the hop reach past the 120-unit box: a quarter of the size around it, and above it as
+                // much as the tallest hat at the top of a hop (`PiopioDrawing.headroom`), so nothing is cut off.
+                let room = PiopioDrawing.headroom(size)
                 TimelineView(.animation(minimumInterval: model.lively ? 1 / 30 : 1 / 10, paused: reduceMotion || activeState == .inactive)) { timeline in
                     PiopioDrawing(model: model, time: reduceMotion ? .distantPast : timeline.date, size: size, still: reduceMotion)
                 }
-                .frame(width: size * 1.5, height: size * 1.5)
+                .frame(width: size * 1.5, height: size + 2 * room)
                 .allowsHitTesting(false)
             }
             .overlay(alignment: bubbleBeside ? .topTrailing : .top) {
@@ -239,7 +241,7 @@ private struct PiopioDrawing: View {
         Canvas { context, _ in
             let t = still ? 0 : time.timeIntervalSinceReferenceDate
             let s = size / 120
-            context.translateBy(x: size * 0.25, y: size * 0.25)
+            context.translateBy(x: size * 0.25, y: Self.headroom(size))
             context.scaleBy(x: s, y: s)
             if asleep {
                 Self.drawAsleep(&context, t: t)
@@ -260,6 +262,13 @@ private struct PiopioDrawing: View {
     }
 
     // MARK: Motion
+
+    /// Room above the 120-unit box, in points: the tallest hat (14 units above it), stretched by the hop (7% from the
+    /// feet at 114, so 9 units more), lifted by the hop (16 pt) and the bob (2.5 pt), plus 2 pt to spare. At least a
+    /// quarter of the size, as around the other sides.
+    static func headroom(_ size: CGFloat) -> CGFloat {
+        max(size * 0.25, (14 + 9) * size / 120 + 16 + 2.5 + 2)
+    }
 
     /// The hop: 0.6s, squash, rise 16pt stretched, land squashed, rest (each step eases out).
     static func hop(_ elapsed: Double) -> (y: Double, sx: Double, sy: Double)? {
