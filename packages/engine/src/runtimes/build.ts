@@ -1228,6 +1228,8 @@ function chatFactories(o: BuildOpenOptions, broker: PromptBroker, runtime: () =>
 		...(o.history ? [historySdkExtension(o.history)] : []),
 		...(o.side ? [sideExtension(o.side)] : []),
 		...(o.automations ? [automationsExtension(o.automations)] : []),
+		// /goal: it keeps going on its own until the goal is met (docs/spec/32 CM4), bounded as in Build.
+		goalExtension(),
 		...(o.chat!.extensions ?? []),
 		// Last: pi's tools list and rules for the chat's preamble, from the tools the others turned on.
 		promptToolsExtension(),

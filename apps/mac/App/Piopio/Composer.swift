@@ -829,7 +829,7 @@ struct BuiltInCommand: Hashable {
     var engine = false
 
     static let all = [
-        BuiltInCommand(name: "goal", summary: "Keep working until a goal is met", icon: "scope", keywords: ["done", "until", "finish"], buildOnly: true, hint: "What done looks like…", engine: true),
+        BuiltInCommand(name: "goal", summary: "Keep working until a goal is met", icon: "scope", keywords: ["done", "until", "finish"], hint: "What done looks like…", engine: true),
         BuiltInCommand(name: "side", summary: "A side conversation for something else; this one goes on", icon: "bubble.left.and.text.bubble.right", keywords: ["btw", "aside", "meanwhile"], hint: "What the side conversation is about…"),
         BuiltInCommand(name: "automation", summary: "Make an automation: work that starts on its own, once or on a schedule", icon: "clock", keywords: ["schedule", "timer", "remind", "every", "later", "cron"], hint: "What, and when or how often…", engine: true),
         BuiltInCommand(name: "grill-me", summary: "Pressure-test an idea: one question at a time until the plan is clear", icon: "questionmark.bubble", keywords: ["question", "interview", "idea", "pressure"], hint: "The idea to pressure-test…", engine: true),

@@ -1,6 +1,6 @@
 # 32 · The / menu: commands as intents
 
-Proposed 2026-11-21; decided and CM1–CM3 built the same day (§7). From the user's screenshots of Antigravity's composer and a read of Piopio's
+Proposed 2026-11-21; decided and CM1–CM3 built the same day (§7); CM4's /goal in Chat built 2026-11-23 (§8). From the user's screenshots of Antigravity's composer and a read of Piopio's
 composer ([Composer.swift](../../apps/mac/App/Piopio/Composer.swift)), the engine's command list
 ([build.ts](../../packages/engine/src/runtimes/build.ts) `commands()`) and the specs each command maps to.
 
@@ -91,7 +91,7 @@ them when built.
 
 | Command | Mode | Kind | Runs in |
 |---|---|---|---|
-| /goal | Build (Chat later) | Words | `piopio-goal` extension |
+| /goal | Both (Chat since 2026-11-23) | Words | `piopio-goal` extension |
 | /side | Both | Words | App (24) |
 | /automation | Both | Words | Bundled template → automation tools (27) |
 | /grill-me | Both | Words | Bundled template → `ask_user` |
@@ -111,7 +111,7 @@ the Piopio group with their own icons rather than as templates.
 | **CM1 · The menu** | §4.1: icons, body font, groups, scroll, one matching rule, keywords, skill names, dedupe; /compact in Chat | S · built |
 | **CM2 · The chip** | §4.2, for every command that takes words, including pi templates and skills | S–M · built |
 | **CM3 · Cheap commands** | /automation, /grill-me, /browser as bundled templates; /goal shown as a Piopio command | S · built |
-| **CM4 · Commands with engine work** | /learn (after PAR12's skill writing), /parallel (after real use of the board), /goal in Chat | M each |
+| **CM4 · Commands with engine work** | /learn (after PAR12's skill writing), /parallel (after real use of the board), /goal in Chat | M each · /goal in Chat built 2026-11-23 |
 
 CM1 and CM2 are app-only and change nothing in the protocol. CM3 adds three template files and their rows.
 
@@ -143,3 +143,14 @@ CM1 and CM2 are app-only and change nothing in the protocol. CM3 adds three temp
 - **Templates** ([piopio-commands.ts](../../packages/engine/src/runtimes/piopio-commands.ts)) join pi's through the
   resource loader's `promptsOverride`, so Build and chats have them; a template of the same name in the user's pi
   folder or a package wins. Agents' chats (pi-durable) don't have them yet.
+
+## 8. CM4, /goal in Chat (2026-11-23)
+
+- **Chats have it.** The same `piopio-goal` extension as Build joins a chat's extensions, so /goal lists there and
+  works as in Build: another round each time the model ends a turn without `update_goal`, up to 25 rounds or $5.00,
+  Stop pauses it, `/goal continue` and `/goal off`. The composer shows it wherever the session lists it (it was
+  Build only).
+- **Checked:** an engine test (`goal-budget.test.ts`): a chat lists `goal`, and a goal set there gets a second round
+  on its own and ends when the model calls `update_goal`. Not yet with a real model.
+- **Still waiting:** /learn needs skill writing (PAR12, spec 40 SH0); /parallel waits for real use of the board (CM-Q3).
+
