@@ -2160,6 +2160,11 @@ export const reverseMethods = {
 			 * profile (its folder); `local` the local addresses ("localhost:5173") its pages may open.
 			 */
 			preview: Type.Optional(Type.Object({ profile: Type.String(), local: Type.Array(Type.String()) })),
+			/**
+			 * Browser, an agent (22 §7, W3): the profile its tabs use, `agent:<id>` for its own empty one. Unset: your
+			 * profile, with your sign-ins.
+			 */
+			profile: Type.Optional(Type.String()),
 			groups: Type.Array(Type.String()),
 			shortcuts: Type.Array(Type.String()),
 		}),

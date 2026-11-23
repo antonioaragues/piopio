@@ -78,6 +78,18 @@ export const AgentDefinition = Type.Object({
 		apple: Type.Optional(Type.Array(Type.Union([Type.Literal("reminders"), Type.Literal("calendar"), Type.Literal("contacts"), Type.Literal("notes"), Type.Literal("music")]))),
 		/** Shortcuts the agent may run, by name. */
 		shortcuts: Type.Optional(Type.Array(Type.String({ minLength: 1 }))),
+		/**
+		 * Piopio's browser (docs/spec/22 W3), served by the Mac app. Reading runs; clicking and typing on a site asks the
+		 * owner, except, when `use` is "allowed", on the listed `sites`. `profile` "yours" browses with the owner's
+		 * sign-ins; by default the agent has an empty profile of its own.
+		 */
+		browser: Type.Optional(
+			Type.Object({
+				use: Type.Union([Type.Literal("asks"), Type.Literal("allowed")]),
+				sites: Type.Optional(Type.Array(Type.String({ minLength: 1 }))),
+				profile: Type.Optional(Type.Union([Type.Literal("own"), Type.Literal("yours")])),
+			}),
+		),
 		agents: Type.Optional(Type.Array(Type.String())),
 	}),
 	contacts: Type.Array(Contact),

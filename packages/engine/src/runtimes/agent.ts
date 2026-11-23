@@ -26,6 +26,7 @@ import { TimelineBuilder } from "../timeline/builder.js";
 import { DurableViewMapper, type DurableView, type Entry } from "../timeline/pi-durable.js";
 import { groupSteps, StepsView } from "../timeline/steps.js";
 import { createWebExtension, type WebOptions } from "../tools/web.js";
+import { durableBrowserExtension, type BrowserCall } from "../tools/browser-tools.js";
 import { replacedVisuals } from "../tools/visuals.js";
 import { Emitter, type Runtime, type SubmitOptions } from "./runtime.js";
 
@@ -71,6 +72,8 @@ export type AgentOpenOptions = {
 	files?: { bridge: AgentFilesBridge; keep(attachments: readonly KeptAttachment[], from: string): AgentFileInfo[] };
 	/** Apple app tools through the Mac app (06 §4.1). */
 	appTool?: AgentCoreOptions["appTool"];
+	/** Piopio's browser through the Mac app (docs/spec/22 W3), offered when the definition turns it on. */
+	browser?: BrowserCall;
 	/** The other agents (06 §7). */
 	peers?: AgentCoreOptions["peers"];
 	askTimeoutMs?: number;
@@ -120,6 +123,18 @@ export class AgentRuntime implements Runtime {
 			return built.extensions;
 		};
 		const definition = () => withConnectorApprovals(options.definition(), hub);
+		// The browser (docs/spec/22 W3): acting on a site it isn't allowed asks the owner like its other approvals.
+		let runtime: AgentRuntime | undefined;
+		const browser = options.browser
+			? (durableBrowserExtension(options.browser, (call, context) => async (request) => {
+					const core = runtime?.core;
+					if (!core) return { approved: false, reason: "the agent isn't ready" };
+					const site = request.site;
+					const page = typeof request.args.url === "string" ? request.args.url : undefined;
+					return core.safety.ask({ callId: `${call.callId}:site:${site}`, tool: "browser_site", args: { site, ...(page ? { page } : {}) }, key: `browser_site:${site}` }, call.conversationId as never, context as never);
+				}) as unknown as Extension)
+			: undefined;
+		const wantsBrowser = () => Boolean(browser && options.definition().tools.browser);
 		const harness = await Harness.open(storage, { models: options.hub.models, registry }, ctx);
 		// The extra extensions (writing, About me, visuals) must be installed too, or their tools are never offered and
 		// their sections never read: a conversation's config names extensions, the registry holds them. Installing by
@@ -129,7 +144,6 @@ export class AgentRuntime implements Runtime {
 			for (const e of list) registry.install(e as never);
 			return list;
 		};
-		let runtime: AgentRuntime | undefined;
 		const core = new AgentCore({
 			harness,
 			definition,
@@ -138,7 +152,7 @@ export class AgentRuntime implements Runtime {
 			extensions: () => {
 				const apps = appExtensions();
 				for (const e of apps) registry.install(e as never);
-				return [...(wantsWeb() ? [web] : []), ...apps, ...extras()];
+				return [...(wantsWeb() ? [web] : []), ...(wantsBrowser() ? [browser!] : []), ...apps, ...extras()];
 			},
 			context: ctx,
 			...(options.now ? { now: options.now } : {}),
@@ -180,7 +194,7 @@ export class AgentRuntime implements Runtime {
 			...(options.files ? { files: options.files.bridge } : {}),
 			...(options.updateSelf ? { updateSelf: options.updateSelf } : {}),
 		});
-		for (const e of [web, core.extension, ...appExtensions()]) registry.install(e as never);
+		for (const e of [web, core.extension, ...(browser ? [browser] : []), ...appExtensions()]) registry.install(e as never);
 		runtime = new AgentRuntime(options, harness, core);
 		runtime.owner = await runtime.view(ownerOf(options.definition()));
 		await core.configureAll();

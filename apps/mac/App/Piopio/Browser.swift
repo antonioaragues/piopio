@@ -1,4 +1,5 @@
 import AppKit
+import CryptoKit
 import Observation
 import PiopioKit
 import WebKit
@@ -89,10 +90,28 @@ final class BrowserCenter {
         content.addSubview(view)
     }
 
-    func makeWebView(_ configuration: WKWebViewConfiguration? = nil) -> WKWebView {
+    /// An agent's own profile (`agent:<id>`, spec 22 §7 and W3): created empty, kept between launches. Nil: yours.
+    static func profileID(_ profile: String) -> UUID {
+        var bytes = Array(SHA256.hash(data: Data("piopio.profile:\(profile)".utf8)).prefix(16))
+        bytes[6] = (bytes[6] & 0x0F) | 0x50
+        bytes[8] = (bytes[8] & 0x3F) | 0x80
+        return UUID(uuid: (bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7], bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15]))
+    }
+
+    @ObservationIgnored private var profiles: [String: WKWebsiteDataStore] = [:]
+
+    func store(for profile: String?) -> WKWebsiteDataStore {
+        guard let profile else { return store }
+        if let s = profiles[profile] { return s }
+        let s = WKWebsiteDataStore(forIdentifier: Self.profileID(profile))
+        profiles[profile] = s
+        return s
+    }
+
+    func makeWebView(_ configuration: WKWebViewConfiguration? = nil, profile: String? = nil) -> WKWebView {
         let config = configuration ?? {
             let c = WKWebViewConfiguration()
-            c.websiteDataStore = store
+            c.websiteDataStore = store(for: profile)
             // Look like Safari: some sites refuse a WebKit they don't recognise (spec 22 §12).
             c.applicationNameForUserAgent = "Version/27.0 Safari/605.1.15"
             c.userContentController.addUserScript(WKUserScript(source: BrowserScript.source, injectionTime: .atDocumentEnd, forMainFrameOnly: false, in: world))
@@ -110,6 +129,8 @@ final class BrowserCenter {
 
     /// The model is browsing in this conversation: open its panel.
     func reveal(_ id: String) {
+        // An agent browses on its own: Watch on its page opens the panel (spec 22 §5).
+        if sessions[id]?.isAgent == true { return }
         openPanels.insert(id)
         reveals[id, default: 0] += 1
     }
@@ -127,9 +148,16 @@ final class BrowserCenter {
         let args = params["args"] ?? .object([:])
         guard params["groups"]?.arrayValue?.contains(where: { $0.stringValue == "browser" }) == true,
               let id = params["ref"]?["id"]?.stringValue else {
-            return Self.reply(ok: false, "The browser is for conversations and Build sessions.")
+            return Self.reply(ok: false, "The browser is for conversations, Build sessions and agents.")
         }
         let session = session(id)
+        // An agent's tabs live in its own profile unless its Setup says yours (W3). Changing it starts its tabs afresh.
+        let profile = params["profile"]?.stringValue
+        if session.profile != profile {
+            session.tabs.forEach { session.closeTab($0) }
+            session.profile = profile
+        }
+        if params["ref"]?["kind"]?.stringValue == "agent" { session.isAgent = true }
         let sites = params["sites"]?.arrayValue?.compactMap(\.stringValue) ?? []
         do {
             let r = try await session.run(name, args, sites: sites, preview: BrowserPreview(params["preview"]))
@@ -179,6 +207,10 @@ final class BrowserSession {
     private(set) var tabs: [BrowserTab] = []
     var current: BrowserTab?
     @ObservationIgnored private var nextTab = 1
+    /// The profile its tabs use: nil is yours; an agent's own is `agent:<id>` (spec 22 W3).
+    @ObservationIgnored var profile: String?
+    /// An agent's: it browses on its own, so its panel opens only when you Watch (spec 22 §5).
+    @ObservationIgnored var isAgent = false
 
     init(id: String, center: BrowserCenter) {
         self.id = id
@@ -187,7 +219,7 @@ final class BrowserSession {
 
     @discardableResult
     func newTab(_ configuration: WKWebViewConfiguration? = nil) -> BrowserTab {
-        let tab = BrowserTab(id: "t\(nextTab)", session: self, view: center.makeWebView(configuration))
+        let tab = BrowserTab(id: "t\(nextTab)", session: self, view: center.makeWebView(configuration, profile: profile))
         nextTab += 1
         tabs.append(tab)
         current = tab

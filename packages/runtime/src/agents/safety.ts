@@ -243,19 +243,55 @@ export class Safety {
 		}
 		const rule = (this.def.policies?.requireApproval ?? []).find((r) => matches(r, call.name, args, owner?.id ?? "owner"));
 		if (!rule) return undefined;
-		const key = allowKey(call.name, args);
-		let state = await this.host.read();
+		const approval = await this.obtain({ callId: call.id, tool: call.name, args, key: allowKey(call.name, args), rule }, conversationId, context);
+		if (!approval) return undefined;
+		switch (approval.status) {
+			case "approved":
+				return approval.editedArgs ? { arguments: approval.editedArgs } : undefined;
+			case "denied":
+				return { block: `The owner declined this${approval.reason ? `: ${approval.reason}` : ""}. Don't try it again unless asked.` };
+			case "expired":
+				return { block: "No answer within 24 hours, so it wasn't done." };
+			default:
+				return { block: "The request was cancelled." };
+		}
+	}
+
+	/**
+	 * A tool asks the owner in the middle of its call, for something only it knows (the browser: the site of the page it
+	 * would act on, docs/spec/22 W3). The same approval as a `requireApproval` rule's: in the chat, in Needs you, kept
+	 * across a restart by `callId`, and "Always allow" remembers `key`. `approved` is true at once when it's remembered.
+	 */
+	async ask(request: { callId: string; tool: string; args: JsonObject; key: string }, conversationId: ConversationId, context: Context): Promise<{ approved: boolean; reason?: string }> {
+		const gate = await this.gate();
+		if (!gate.ok) return { approved: false, reason: gate.message };
+		const approval = await this.obtain({ ...request, rule: request.tool }, conversationId, context);
+		if (!approval || approval.status === "approved") return { approved: true };
+		if (approval.status === "denied") return { approved: false, ...(approval.reason ? { reason: approval.reason } : {}) };
+		return { approved: false, reason: approval.status === "expired" ? "no answer within 24 hours" : "the request was cancelled" };
+	}
+
+	/** Whether "Always allow" remembers this key. */
+	async allows(key: string): Promise<boolean> {
+		return (await this.host.read()).allowed?.includes(key) ?? false;
+	}
+
+	/** The approval for this call, asked (and waited on) if it wasn't yet; undefined when "Always allow" covers it. */
+	private async obtain(call: { callId: string; tool: string; args: JsonObject; key: string; rule: string }, conversationId: ConversationId, context: Context): Promise<Approval | undefined> {
+		const { key, rule, args } = call;
+		const state = await this.host.read();
 		if (state.allowed?.includes(key)) return undefined;
-		let approval = state.approvals?.find((a) => a.conversationId === String(conversationId) && a.callId === call.id);
+		const who = await this.host.whose(conversationId);
+		let approval = state.approvals?.find((a) => a.conversationId === String(conversationId) && a.callId === call.callId);
 		if (!approval) {
 			const now = this.host.now();
 			const created: Approval = {
 				id: `apr_${now.toString(36)}${Math.random().toString(36).slice(2, 6)}`,
 				conversationId: String(conversationId),
-				callId: call.id,
-				tool: call.name,
+				callId: call.callId,
+				tool: call.tool,
 				args,
-				title: describe(call.name, args, this.def),
+				title: describe(call.tool, args, this.def),
 				from: who.runId ?? (who.peerId ? `agent:${who.peerId}` : `person:${who.contact?.id ?? "owner"}`),
 				key,
 				rule,
@@ -269,17 +305,7 @@ export class Safety {
 			approval = created;
 		}
 		if (approval.status === "pending") approval = await this.wait(approval, context);
-		state = await this.host.read();
-		switch (approval.status) {
-			case "approved":
-				return approval.editedArgs ? { arguments: approval.editedArgs } : undefined;
-			case "denied":
-				return { block: `The owner declined this${approval.reason ? `: ${approval.reason}` : ""}. Don't try it again unless asked.` };
-			case "expired":
-				return { block: "No answer within 24 hours, so it wasn't done." };
-			default:
-				return { block: "The request was cancelled." };
-		}
+		return approval;
 	}
 
 	private async wait(approval: Approval, context: Context): Promise<Approval> {
@@ -444,6 +470,7 @@ export function allowKey(tool: string, args: Record<string, unknown>): string {
 export function alwaysLabel(key: string, def: AgentDefinition): string {
 	const [tool, qualifier, value] = key.split(":");
 	if (tool === "send_message" && qualifier === "to") return `Always allow messages to ${def.contacts.find((c) => c.id === value)?.name ?? value}`;
+	if (tool === "browser_site" && qualifier) return `Always allow ${qualifier}`;
 	if (qualifier && /^[A-Z]+$/.test(qualifier)) return `Always allow ${qualifier} requests (${tool})`;
 	return `Always allow ${tool}`;
 }
@@ -461,5 +488,6 @@ export function describe(tool: string, args: Record<string, unknown>, def: Agent
 	if (tool === "remember") return `Remember: “${clip(args.fact)}”`;
 	if (tool === "forget") return `Forget the fact ${clip(args.id, 40)}`;
 	if (tool === "http_request") return `${String(args.method ?? "GET").toUpperCase()} ${clip(args.url, 120)}`;
+	if (tool === "browser_site") return `Click and type on ${clip(args.site, 80)}${args.page ? ` (${clip(args.page, 100)})` : ""}`;
 	return `${tool}(${clip(JSON.stringify(args), 140)})`;
 }

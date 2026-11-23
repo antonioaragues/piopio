@@ -2,7 +2,7 @@
 
 Status: draft, 2026-11-12. **2026-11-14: Playwright MCP built in as an interim browser (§13). 2026-11-15: the user
 chose this design (WebKit in the app) as the browser; §11 decided as proposed. W1 built 2026-11-15 (§14) and the
-interim one removed. W2 built 2026-11-15 (§15).** Companion to [23-computer-use.md](23-computer-use.md): the browser
+interim one removed. W2 built 2026-11-15 (§15). W3 (agents) built 2026-11-23 (§16); W4 is the project preview, built 2026-11-21 as roadmap PAR3 (§6.1).** Companion to [23-computer-use.md](23-computer-use.md): the browser
 is for websites, computer use is for Mac apps. §8 here holds the plumbing both share. Covers roadmap items B10 (web
 preview) and part of D10.
 
@@ -233,8 +233,8 @@ as untrusted content. It never counts as an instruction from you, and it can't g
 | **W0 · Spike** | A web view driven from a test harness: the page map on 10 real sites, trusted clicks and typing, an off-screen window, two data stores side by side, an image tool result through pi and OpenRouter to a model and back. | Read a go / no-go on BW1, with the sites that failed and why. | S |
 | **W1 · Read** | The pane; `browser_open`, `_read`, `_map`, `_screenshot`, `_find`, `_scroll`, `_back`, `_tabs`, `_wait`; your profile; the protocol changes in §8; folded steps. Conversations only. | Ask about a page that needs scripts or your sign-in, and watch it read. | M |
 | **W2 · Act** | `_click`, `_type`, `_select`, `_key`; site grants and levels; secret fields; hand-offs; take over and hand back; downloads and uploads ask; Settings › Browser. | Have it fill a form on a site you allowed, sign in yourself when asked, and stop it mid-way. | L |
-| **W3 · Agents** | The `browser` row in agent setup with its sites; separate profiles; off-screen runs; Watch; hand-offs in Needs you and notifications. | Give a routine three pages to check each morning with the window closed (app open). | M |
-| **W4 · Preview** | Local addresses for a project's own servers; per-project profile; `_console`, `_requests`, `_eval`. | Ask a Build session to run the app and check a page it just changed. | M |
+| **W3 · Agents** | The `browser` row in agent setup with its sites; separate profiles; off-screen runs; Watch; hand-offs in Needs you and notifications. | Give a routine three pages to check each morning with the window closed (app open). | M · built 2026-11-23 (§16) |
+| **W4 · Preview** | Local addresses for a project's own servers; per-project profile; `_console`, `_requests`, `_eval`. | Ask a Build session to run the app and check a page it just changed. | M · built 2026-11-21 (§6.1) |
 
 W1 can ship without W2; each later one is useful on its own.
 
@@ -392,4 +392,36 @@ after Tab; captures of the bar and Settings › Browser. Not yet with a real mod
 **Not in W2:** "Ask before each submit" (§4.4) and a built-in list of blocked sites; taking over by clicking in the
 page (Stop is the way); downloads into the conversation's files; secret fields blurred in screenshots; site levels
 for agents (W3).
+
+## 16. W3 as built (2026-11-23)
+
+**Setup.** An agent's Setup › What it can use has a **Browser** row: Off · Asks · Allowed (definition
+`tools.browser: { use, sites?, profile? }`). With Allowed, **Sites** lists the ones it clicks and types on without
+asking; any other site still asks. **Sign-ins** is Its own (default) or Yours, which says "It browses as you, signed
+in where you are".
+
+**Engine.** The same tools as a conversation's (§3), as a pi-durable extension (`durableBrowserExtension`) installed
+for agents whose definition turns the browser on; each call goes to the app as `app.tool` with the agent's ref and, for
+its own profile, `profile: "agent:<id>"`. Reading runs. Acting on a site that isn't allowed (by its Setup, by your
+Always allowed in Settings › Browser, or earlier in this engine's life) becomes one of the agent's approvals
+(`browser_site`, "Click and type on example.com"): in its chat, in Needs you and as a notification, held across a
+restart, and an automation set to skip what needs your OK skips it. "Always allow example.com" is the agent's own
+(kept in its state, like its other Always allows), not your Settings › Browser list. Sites blocked in Settings ›
+Browser are refused for agents too. Agents in the cloud have no browser (§10).
+
+**App.** An agent's tabs live in a WebKit profile of their own (a fixed id from `agent:<id>`), kept between launches,
+in the transparent window while no panel shows them, so routines browse with the window closed (the app open). The
+panel doesn't open by itself for an agent. **Watch** in the agent's header opens its Browser beside its chat, in the
+profile its Setup gives it: that's where you sign it in to a site, or take over. Changing Sign-ins starts its tabs
+afresh.
+
+**Hand-offs.** As in W2, they are the prompt and a message: the agent says what it needs ("sign in to …"), and you do
+it with Watch. There is still no paused run or Hand back button.
+
+**Checked.** Engine test (`agent-browser.test.ts`): Off offers no tools; Asks reads in its own profile under its ref;
+the first click on a site is an approval in its chat and Needs you; Always allow stops asking without touching your
+Settings list; Deny tells it not to try another way; Allowed sites don't ask; Yours sends no profile; a site blocked in
+Settings is refused. The app builds. **Not yet:** a capture of the Setup row and Watch, a real model, a routine run
+with the window closed, Settings › Browser listing agents' profiles with Clear, and the glance strip's "Can: browse
+as you".
 

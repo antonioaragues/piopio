@@ -268,6 +268,36 @@ struct AgentDefinitionView: View {
                 }))
                 .textFieldStyle(.roundedBorder).frame(width: 260)
             }
+            browserRows
+        }
+    }
+
+    /// Piopio's browser (docs/spec/22 W3): Off hides it; Asks asks you before it clicks or types on a site; Allowed
+    /// doesn't ask on the sites listed. It browses with a profile of its own unless you give it yours.
+    @ViewBuilder private var browserRows: some View {
+        SetupRow("Browser", subtitle: "Read pages; clicking and typing on a site asks you") {
+            NeutralSegmented(selection: Binding(get: { def?.tools.browser?.use ?? "off" }, set: { v in
+                if v == "off" { def?.tools.browser = nil } else { def?.tools.browser = .init(use: v, sites: def?.tools.browser?.sites, profile: def?.tools.browser?.profile) }
+            }), options: [("off", "Off"), ("asks", "Asks"), ("allowed", "Allowed")])
+            .frame(width: 210)
+        }
+        if let browser = def?.tools.browser {
+            if browser.use == "allowed" {
+                SetupRow("Sites", subtitle: "It clicks and types on these without asking; other sites still ask") {
+                    TextField("example.com, shop.example", text: Binding(get: { def?.tools.browser?.sites?.joined(separator: ", ") ?? "" }, set: { v in
+                        let sites = v.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces).lowercased() }.filter { !$0.isEmpty }
+                        def?.tools.browser?.sites = sites.isEmpty ? nil : sites
+                    }))
+                    .textFieldStyle(.roundedBorder).frame(width: 260)
+                }
+            }
+            SetupRow("Sign-ins", subtitle: browser.profile == "yours" ? "It browses as you, signed in where you are" : "Its own, empty: sign it in with Watch on its page") {
+                Picker("", selection: Binding(get: { def?.tools.browser?.profile ?? "own" }, set: { def?.tools.browser?.profile = $0 == "own" ? nil : $0 })) {
+                    Text("Its own").tag("own")
+                    Text("Yours").tag("yours")
+                }
+                .labelsHidden().fixedSize()
+            }
         }
     }
 

@@ -1932,6 +1932,29 @@ export class Sessions {
 		};
 	}
 
+	/**
+	 * An agent's browser (docs/spec/22 W3): its tabs in a profile of its own (or yours, when its Setup says so), the
+	 * sites its Setup allows, and the sites you allow or block everywhere (Settings › Browser).
+	 */
+	private agentBrowser(ref: ContainerRef): { browser?: BrowserCall } {
+		const app = this.agentHost?.app;
+		if (!app) return {};
+		const id = ref.id;
+		const setting = () => this.agentDefinition(id).definition.tools.browser;
+		return {
+			browser: (name, args, ask) => {
+				const b = setting();
+				if (!b) return Promise.resolve({ text: "The browser is off in this agent's Setup.", images: [], isError: true });
+				const call = browserCaller(app, { kind: "agent", id }, {
+					allowPrivate: false,
+					...(this.browserSites ? { sites: this.browserSites } : {}),
+					agent: { ...(b.profile === "yours" ? {} : { profile: `agent:${id}` }), sites: () => (b.use === "allowed" ? (b.sites ?? []) : []) },
+				});
+				return call(name, args, ask);
+			},
+		};
+	}
+
 	/** make_app for a conversation: where it is, and whether that's a chat's own folder (which goes with the chat). */
 	private appsFor(entry: CatalogEntry): { apps?: { service: Apps; where: () => MakeContext } } {
 		const service = this.apps;
@@ -2874,6 +2897,7 @@ export class Sessions {
 				webOptions: this.webOptions,
 				onActivity: () => this.touch(entry.ref),
 				...(this.agentHost?.app ? { appTool: (call: Parameters<AppServices["tool"]>[0]) => this.agentHost!.app!.tool(call) } : {}),
+				...this.agentBrowser(entry.ref),
 				peers: this.peerHost(),
 				...(this.connectors ? { connectors: this.connectors } : {}),
 				extraExtensions: () => this.agentExtras(),

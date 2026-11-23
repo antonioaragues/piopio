@@ -72,7 +72,7 @@ Steps, pass criteria, evidence and a results table for each item: [acceptance.md
 - Agent definitions refuse fields that nothing runs yet (http_request, codemode, tools.mcp, WhatsApp) on save.
 - The browser (spec 22 W1–W2, §14–15): a WebKit view per conversation tab, in your profile, shown in the
   conversation's Browser panel. It reads freely; clicking and typing ask per site (Settings › Browser keeps the
-  answers). Passwords, codes and card details are always yours. It needs the app open; agents don't have it yet.
+  answers). Passwords, codes and card details are always yours. It needs the app open. Agents have it too (W3, 2026-11-23): a Browser row in their Setup, a profile of their own unless you give them yours, acting on a new site is one of their approvals, and Watch on their page shows it.
 - Cloud agents (spec 30 K1) answer and run their time automations with the Mac off. Automations that watch a folder,
   your email or a URL stay on the Mac, off, while the agent is up there. Run now, pause, approvals and the Inbox reach
   them through the Mac's engine (approvals show in Needs you, not yet in their chat); their conversations from the

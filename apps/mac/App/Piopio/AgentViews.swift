@@ -14,7 +14,9 @@ extension Notification.Name {
 /// agent.json v1, for the form editor. Fields the form doesn't edit pass through as JSON.
 struct AgentDef: Codable, Equatable {
     struct Models: Codable, Equatable { var `default`: String; var utility: String? }
-    struct Tools: Codable, Equatable { var builtin: [String]; var mcp: JSONValue?; var apple: [String]?; var shortcuts: [String]?; var agents: [String]? }
+    struct Tools: Codable, Equatable { var builtin: [String]; var mcp: JSONValue?; var apple: [String]?; var shortcuts: [String]?; var browser: Browser?; var agents: [String]? }
+    /// Piopio's browser (docs/spec/22 W3): "asks" or "allowed" (its `sites` don't ask), and whose profile ("own", "yours").
+    struct Browser: Codable, Equatable { var use: String; var sites: [String]?; var profile: String? }
     struct Contact: Codable, Equatable, Identifiable {
         var id: String
         var name: String
@@ -143,8 +145,19 @@ struct AgentPage: View {
                     tab = .chat
                 }
             default:
-                if let conversation { backBar(conversation) }
-                chat
+                HStack(spacing: 0) {
+                    VStack(spacing: 0) {
+                        if let conversation { backBar(conversation) }
+                        chat
+                    }
+                    // Watch (docs/spec/22 §5, W3): its live browser, where you can sign it in or take over.
+                    if watching {
+                        Divider()
+                        BrowserPanel(refID: summary.ref.id, onStop: { Task { await engine.thread(summary.ref).stop() } },
+                                     onClose: { BrowserCenter.shared.openPanels.remove(summary.ref.id) })
+                            .frame(width: 520)
+                    }
+                }
             }
         }
         .task(id: summary.updatedAt) { await load() }
@@ -190,6 +203,20 @@ struct AgentPage: View {
     }
 
     private var inCloud: Bool { summary.agent?.location == "cloud" }
+
+    private var watching: Bool { BrowserCenter.shared.openPanels.contains(summary.ref.id) }
+
+    /// Opens or closes its browser, in the profile its Setup gives it (so what you sign in to there is its own).
+    private func toggleWatch() {
+        let session = BrowserCenter.shared.session(summary.ref.id)
+        session.isAgent = true
+        let profile = def?.tools.browser?.profile == "yours" ? nil : "agent:\(summary.ref.id)"
+        if session.profile != profile {
+            session.tabs.forEach { session.closeTab($0) }
+            session.profile = profile
+        }
+        if watching { BrowserCenter.shared.openPanels.remove(summary.ref.id) } else { BrowserCenter.shared.openPanels.insert(summary.ref.id) }
+    }
 
     private func move() {
         moving = true
@@ -315,6 +342,16 @@ struct AgentPage: View {
                     }
                     .buttonStyle(.plain)
                     .help("Open Automations, showing \(summary.title)'s")
+                }
+                if def?.tools.browser != nil, !inCloud {
+                    Button { toggleWatch() } label: {
+                        Label("Watch", systemImage: "globe").font(.system(size: 12.5, weight: .medium))
+                            .padding(.horizontal, 10).padding(.vertical, 6)
+                            .background(watching ? Color.accentColor.opacity(0.12) : Color.dsChip, in: RoundedRectangle(cornerRadius: DS.Radius.button, style: .continuous))
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help(watching ? "Hide its browser" : "Its browser: watch it work, sign it in, or take over")
                 }
                 placeButton
                 moreMenu
