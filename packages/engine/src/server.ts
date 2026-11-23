@@ -880,6 +880,8 @@ export class Engine {
 			}
 			case "sessions.submit": {
 				const p = params as Params<"sessions.submit">;
+				// A subagent still queued: your words join its brief; it starts in its turn (docs/spec/37).
+				if (this.sessions.addToQueuedBrief(p.ref, p.input.text)) return { accepted: true, disposition: "queued" } satisfies Result<"sessions.submit">;
 				const runtime = await this.sessions.runtime(p.ref);
 				const isFirst = runtime.snapshot().items.length === 0;
 				// An app's conversation: the page's changes from now on are this request's, for Undo (docs/spec/35 §15).
@@ -904,8 +906,6 @@ export class Engine {
 				const p = params as Params<"sessions.edit">;
 				await this.capability(p.ref, "edit").then((r) => r.edit!(p.itemId, p.text));
 				this.sessions.touch(p.ref);
-				// A subagent still queued: your words join its brief; it starts in its turn (docs/spec/37).
-				if (this.sessions.addToQueuedBrief(p.ref, p.input.text)) return { accepted: true, disposition: "queued" } satisfies Result<"sessions.submit">;
 				return {};
 			}
 			case "sessions.regenerate": {
