@@ -14,7 +14,7 @@ import { TimelineBuilder, type PiContentBlock, type PiMessage, type PiUsage, typ
 import type { ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import { collectTools, PIOPIO_MCP, PIOPIO_MCP_PREFIX, piopioServer } from "./claude-code-tools.js";
 import { PromptBroker } from "./prompts.js";
-import { Emitter, type Runtime, type SubmitOptions } from "./runtime.js";
+import { agentIdleMs, Emitter, IdleTimer, type Runtime, type SubmitOptions } from "./runtime.js";
 
 type Stored = { version: 1; sessionId?: string; messages: PiMessage[] };
 type Input = { text: string; attachments: (Attachment & { stored?: string })[] };
@@ -44,6 +44,8 @@ export type ClaudeCodeOpenOptions = {
 	 * without it they do. Untrusted, only the user's own setup applies.
 	 */
 	projectTrusted?: () => boolean;
+	/** How long Claude Code's process may sit idle before it's ended (resumed on the next message); AGENT_IDLE_MS. */
+	idleMs?: number;
 };
 
 /** How one of Piopio's tools asks the user (a connector's change, acting on a site): through the composer tray. */
@@ -220,6 +222,8 @@ export class ClaudeCodeRuntime implements Runtime {
 	/** Calls to Piopio's tools Claude Code made and the MCP server hasn't run yet: their ids key the transcript's cards. */
 	private piopioCalls: { id: string; name: string; input: string }[] = [];
 	private turnAbort = new AbortController();
+	/** Ends Claude Code's process when the conversation has been idle a while (AGENT_IDLE_MS). */
+	private idle: IdleTimer;
 
 	private constructor(private readonly options: ClaudeCodeOpenOptions) {
 		this.ref = options.ref;
@@ -230,6 +234,10 @@ export class ClaudeCodeRuntime implements Runtime {
 		this.stored = ClaudeCodeRuntime.load(options.file);
 		this.builder.reset(this.stored.messages, (i) => `m${i}`, false);
 		this.builder.setState({ status: "idle", model: this.model, prompts: [], ...(this.thinking ? { thinking: this.thinking } : {}), ...(options.chat ? {} : { approvalMode: options.approvalMode() }) });
+		this.idle = new IdleTimer(options.idleMs ?? agentIdleMs(), () => {
+			if (this.busy || this.broker.list().length) return this.idle.arm();
+			this.endQuery();
+		});
 		this.builder.flush();
 		this.broker.onChange = (prompts, changed, added) => {
 			if (changed.callId) this.builder.toolStatus(changed.callId, added ? "pending_approval" : "running");
@@ -296,6 +304,7 @@ export class ClaudeCodeRuntime implements Runtime {
 	}
 
 	private async start(input: Input): Promise<void> {
+		this.idle.disarm();
 		this.busy = true;
 		const index = this.stored.messages.length;
 		const attachments: AttachmentInfo[] = input.attachments.map((a) => ({ name: a.name, kind: a.kind, ...(a.mimeType ? { mimeType: a.mimeType } : {}), ...(a.stored ? { stored: a.stored } : {}) }));
@@ -392,6 +401,7 @@ export class ClaudeCodeRuntime implements Runtime {
 		this.followUps = [];
 		this.builder.setState({ status: "idle", queue: [] });
 		this.emit();
+		if (this.query) this.idle.arm();
 	}
 
 	private apply(m: AgentMessage): void {
@@ -521,7 +531,7 @@ export class ClaudeCodeRuntime implements Runtime {
 		if (next) {
 			this.builder.setState({ queue: this.followUps.map((f, i) => ({ id: `q${i}`, mode: "followUp" as const, text: f.text })) });
 			void this.start(next);
-		}
+		} else if (this.query) this.idle.arm();
 	}
 
 	/** What a result's running total adds (a /clear inside Claude Code starts it again), on the turn's last answer. */
@@ -643,6 +653,7 @@ export class ClaudeCodeRuntime implements Runtime {
 	}
 
 	async close(): Promise<void> {
+		this.idle.disarm();
 		this.broker.cancelAll();
 		this.inbox?.end();
 		this.query?.close();

@@ -8,6 +8,7 @@
  *   call: <tool> | <JSON>        one of Piopio's tools, through the "piopio" MCP server the session was given (HTTP for
  *                                the Codex flavor, the stdio bridge for the Antigravity one, as the real agents)
  *   effort? / mode? / model?     answers with the session's setting
+ *   process?                     answers with this process's id
  * No imports from the project: Node runs it as it is.
  */
 import { spawn } from "node:child_process";
@@ -130,7 +131,7 @@ async function prompt(sessionId: string, blocks: any[]) {
 	}
 	if (s.cancelled) return { stopReason: "cancelled" };
 	const q = text.trim();
-	const answer = q === "instructions?" ? `Instructions: ${s.instructions || "none"}` : q === "effort?" ? `Effort: ${setting(s, thinkingId)}` : q === "mode?" ? `Mode: ${setting(s, "mode")}` : q === "model?" ? `Model: ${setting(s, "model")}` : `Echo: ${[...resources, text].join("\n")}`;
+	const answer = q === "instructions?" ? `Instructions: ${s.instructions || "none"}` : q === "effort?" ? `Effort: ${setting(s, thinkingId)}` : q === "mode?" ? `Mode: ${setting(s, "mode")}` : q === "model?" ? `Model: ${setting(s, "model")}` : q === "process?" ? `Process: ${process.pid}` : `Echo: ${[...resources, text].join("\n")}`;
 	update(sessionId, { sessionUpdate: "agent_thought_chunk", content: { type: "text", text: "Thinking it over." } });
 	for (const piece of answer.match(/.{1,12}/gs) ?? []) update(sessionId, { sessionUpdate: "agent_message_chunk", content: { type: "text", text: piece } });
 	update(sessionId, { sessionUpdate: "usage_update", used: 1200, size: 200000 });

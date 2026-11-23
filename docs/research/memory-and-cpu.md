@@ -41,6 +41,10 @@ engine left running for weeks with hundreds opened.
 The exception is a conversation on a coding agent: its runtime keeps the agent's process, so each one opened costs the
 40 to 300 MB above, for as long as the engine runs (in background mode, until the Mac restarts).
 
+**Fixed the same day:** a coding agent's process now ends after 15 minutes idle (`AGENT_IDLE_MS` in
+`runtimes/runtime.ts`), and the next message resumes its session: Claude Code by `resume`, Codex and Antigravity CLI by
+`session/load`. An ACP agent that can't load a session keeps its process, since ending it would lose the conversation.
+
 ## 3. Streaming in a long conversation
 
 The app subscribes with `fold: true`, so for every batch of updates the server copies the whole conversation
@@ -72,7 +76,7 @@ measured: that needs the app in front, on each of them, for a minute.
 
 | # | What | Why | Size |
 |---|---|---|---|
-| 1 | Close a coding-agent runtime after it's been idle a while (say 15 minutes): its process goes, and the next message resumes Claude Code's or Codex's session by id, as a restart already does | 40 to 300 MB per conversation, for days | Small |
+| 1 | ~~Close a coding-agent runtime after it's been idle a while~~ Done: its process ends after 15 minutes idle, the conversation stays open, and the next message resumes the session (`test/idle-agents.test.ts`) | 40 to 300 MB per conversation, for days | Small |
 | 2 | Streaming without copying the conversation: `StepsView` regroups only the steps group an update touches, from the builder's items read in place, and remembers each item's serialized form instead of making it twice | 10 to 20% of a core during long turns, growing with the square of the turn | Medium |
 | 3 | Measure the visible views (Home's mascot, the browser panel, a project page, a file view) with the app in front | Before touching any of the review's battery items | A minute each |
 | 4 | Measure the web views with tabs, visuals and an app open: the review says parked browser tabs keep running at full speed in a hidden window | Each one is a WebKit process | After 3 |

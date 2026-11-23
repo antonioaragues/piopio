@@ -14,6 +14,8 @@ import { dirname, isAbsolute, join } from "node:path";
 import type { AgentMessage, AgentModel, AgentPermissionMode, AgentQuery, AgentUserMessage, CanUseTool, QueryFn } from "../coding-agents.js";
 
 let counter = 0;
+/** Each query is one Claude Code process: "process?" says which, and whether it resumed a session. */
+let queries = 0;
 
 export const fakeClaudeQuery: QueryFn = ({ prompt, options }) => new FakeQuery(prompt, options);
 
@@ -29,6 +31,7 @@ class FakeQuery implements AgentQuery {
 	private interrupted = false;
 	private closed = false;
 	private readonly sessionId: string;
+	private readonly instance = ++queries;
 	private mcp?: Promise<Client>;
 
 	constructor(
@@ -121,7 +124,13 @@ class FakeQuery implements AgentQuery {
 			return;
 		}
 		// "effort?": which effort the session started with (thinking level tests).
-		const answer = text.trim() === "effort?" ? `Effort: ${(this.options.effort as string | undefined) ?? "default"}` : `Echo: ${text}`;
+		// "process?": which process this is, and whether it resumed the session (idle tests).
+		const answer =
+			text.trim() === "effort?"
+				? `Effort: ${(this.options.effort as string | undefined) ?? "default"}`
+				: text.trim() === "process?"
+					? `Process: ${this.instance} ${this.options.resume ? `resumed ${String(this.options.resume)}` : "new"}`
+					: `Echo: ${text}`;
 		yield* this.message([{ type: "text", text: answer }], true);
 		// As the SDK reports it: the query's running total, $0.01 a turn.
 		this.costSoFar += 0.01;

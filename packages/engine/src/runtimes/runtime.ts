@@ -34,3 +34,41 @@ export class Emitter {
 		for (const l of this.listeners) l(events);
 	}
 }
+
+/**
+ * How long a coding agent's process (Claude Code, Codex, Antigravity CLI) stays alive with nothing to do. Each one
+ * costs 40 to 300 MB (docs/research/memory-and-cpu.md); once ended, the next message resumes its session by id, as
+ * after a restart. Node's timers pause while the Mac sleeps, so this is time awake.
+ */
+export const AGENT_IDLE_MS = 15 * 60_000;
+
+/** AGENT_IDLE_MS, or PIOPIO_AGENT_IDLE_MS when set (tests, and trying it by hand). */
+export function agentIdleMs(): number {
+	const set = Number(process.env.PIOPIO_AGENT_IDLE_MS);
+	return Number.isFinite(set) && set > 0 ? set : AGENT_IDLE_MS;
+}
+
+/** Calls `onIdle` once `ms` pass after `arm()` without a `disarm()`. Doesn't keep the engine running. */
+export class IdleTimer {
+	private timer?: ReturnType<typeof setTimeout>;
+
+	constructor(
+		private readonly ms: number,
+		private readonly onIdle: () => void,
+	) {}
+
+	arm(): void {
+		this.disarm();
+		if (!(this.ms > 0)) return;
+		this.timer = setTimeout(() => {
+			this.timer = undefined;
+			this.onIdle();
+		}, this.ms);
+		this.timer.unref?.();
+	}
+
+	disarm(): void {
+		if (this.timer) clearTimeout(this.timer);
+		this.timer = undefined;
+	}
+}

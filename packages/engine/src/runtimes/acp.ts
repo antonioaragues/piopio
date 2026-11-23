@@ -16,7 +16,7 @@ import { bridgeScript, type ToolServer } from "../tool-server.js";
 import { collectTools, PIOPIO_MCP, type CapturedTool } from "./claude-code-tools.js";
 import type { ToolAsk } from "./claude-code.js";
 import { PromptBroker } from "./prompts.js";
-import { Emitter, type Runtime, type SubmitOptions } from "./runtime.js";
+import { agentIdleMs, Emitter, IdleTimer, type Runtime, type SubmitOptions } from "./runtime.js";
 
 type Stored = { version: 1; sessionId?: string; messages: PiMessage[] };
 type Input = { text: string; attachments: (Attachment & { stored?: string })[] };
@@ -50,6 +50,8 @@ export type AcpOpenOptions = {
 	/** Piopio's own tools (docs/spec/31 CA8), served to the agent as the MCP server "piopio" by `toolServer`. */
 	tools?: (ask: ToolAsk) => ExtensionFactory[];
 	toolServer?: ToolServer;
+	/** How long the agent's process may sit idle before it's ended (its session loaded again on the next message). */
+	idleMs?: number;
 };
 
 const WRITES = new Set(["edit", "delete", "move", "execute"]);
@@ -116,6 +118,9 @@ export class AcpRuntime implements Runtime {
 	/** What Piopio's tools answered, by call: the card's output when the agent doesn't report it (Antigravity). */
 	private readonly piopioResults = new Map<string, string>();
 	private turnAbort = new AbortController();
+	/** Ends the agent's process when the conversation has been idle a while, if it can load its session again. */
+	private idle: IdleTimer;
+	private canLoad = false;
 
 	private constructor(private readonly options: AcpOpenOptions) {
 		this.ref = options.ref;
@@ -126,6 +131,10 @@ export class AcpRuntime implements Runtime {
 		this.stored = AcpRuntime.load(options.file);
 		this.builder.reset(this.stored.messages, (i) => `m${i}`, false);
 		this.builder.setState({ status: "idle", model: this.model, prompts: [], ...(this.thinking ? { thinking: this.thinking } : {}), ...(options.chat ? {} : { approvalMode: options.approvalMode() }) });
+		this.idle = new IdleTimer(options.idleMs ?? agentIdleMs(), () => {
+			if (this.busy || this.starting || this.broker.list().length) return this.idle.arm();
+			void this.endConnection();
+		});
 		this.builder.flush();
 		this.broker.onChange = (prompts, changed, added) => {
 			if (changed.callId) this.builder.toolStatus(changed.callId, added ? "pending_approval" : "running");
@@ -205,6 +214,7 @@ export class AcpRuntime implements Runtime {
 		};
 		type Caps = { loadSession?: boolean; mcpCapabilities?: { http?: boolean }; sessionCapabilities?: { systemPrompt?: unknown }; _meta?: { antigravity?: { systemPrompt?: { append?: unknown } } } };
 		const init = await conn.request<{ agentCapabilities?: Caps }>("initialize", { protocolVersion: 1, clientCapabilities: CLIENT_CAPABILITIES }, 30_000);
+		this.canLoad = Boolean(init.agentCapabilities?.loadSession);
 		const mcpServers = await this.mcpServers(Boolean(init.agentCapabilities?.mcpCapabilities?.http));
 		// What Piopio's tools add to the instructions (connected apps, About me, visuals), the way each agent takes it:
 		// ACP's `systemPrompt` in append mode (Codex), or Antigravity's `_meta.antigravity.systemPrompt.append`.
@@ -322,6 +332,7 @@ export class AcpRuntime implements Runtime {
 	}
 
 	private async start(input: Input): Promise<void> {
+		this.idle.disarm();
 		this.busy = true;
 		const index = this.stored.messages.length;
 		const attachments: AttachmentInfo[] = input.attachments.map((a) => ({ name: a.name, kind: a.kind, ...(a.mimeType ? { mimeType: a.mimeType } : {}), ...(a.stored ? { stored: a.stored } : {}) }));
@@ -354,6 +365,7 @@ export class AcpRuntime implements Runtime {
 		this.followUps = [];
 		this.builder.setState({ status: "idle", queue: [] });
 		this.emit();
+		this.armIdle();
 	}
 
 	private turnEnded(result: { stopReason?: string; usage?: Record<string, number> }): void {
@@ -380,7 +392,22 @@ export class AcpRuntime implements Runtime {
 		if (next) {
 			this.builder.setState({ queue: this.followUps.map((f, i) => ({ id: `q${i}`, mode: "followUp" as const, text: f.text })) });
 			void this.start(next);
-		}
+		} else this.armIdle();
+	}
+
+	/** Only an agent that loads its sessions again is ended when idle: one that can't would forget the conversation. */
+	private armIdle(): void {
+		if (this.conn && this.canLoad && this.stored.sessionId) this.idle.arm();
+	}
+
+	/** Ends the agent's process; Piopio's tool server stays, for the session loaded on the next message. */
+	private async endConnection(): Promise<void> {
+		const conn = this.conn;
+		const sessionId = this.sessionId;
+		this.conn = undefined;
+		this.sessionId = undefined;
+		if (conn && sessionId) await conn.request("session/close", { sessionId }, 3000).catch(() => undefined);
+		conn?.close();
 	}
 
 	// ── What the agent says ──────────────────────────────────────────────────
@@ -564,6 +591,7 @@ export class AcpRuntime implements Runtime {
 	}
 
 	async close(): Promise<void> {
+		this.idle.disarm();
 		this.broker.cancelAll();
 		const conn = this.conn;
 		this.conn = undefined;
