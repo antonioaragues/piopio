@@ -53,7 +53,9 @@ function repo(): string {
 }
 
 async function conversation(client: TestClient, cwd: string): Promise<Ref> {
-	await client.call("projects.add", { path: cwd });
+	// Trusted, as your own projects are: Full access needs it (docs/spec/39).
+	const { project: added } = (await client.call("projects.add", { path: cwd })) as { project: { id: string } };
+	await client.call("projects.configure", { id: added.id, trust: true });
 	return ((await client.call("sessions.create", { kind: "build", cwd, approvalMode: "full_auto" })) as { ref: Ref }).ref;
 }
 
@@ -194,7 +196,9 @@ test("proposed (SD3): a card you start or dismiss, withdrawn by Piopio, refused 
 test("from a conversation with no project, a task about one of your projects goes there (SCQ5, 26 CL11)", async () => {
 	const client = await start();
 	const dir = repo();
-	await client.call("projects.add", { path: dir });
+	// Trusted, as your own projects are: Full access needs it (docs/spec/39).
+	const { project: added } = (await client.call("projects.add", { path: dir })) as { project: { id: string } };
+	await client.call("projects.configure", { id: added.id, trust: true });
 	const name = dir.split("/").pop()!;
 	const { ref: chat } = (await client.call("sessions.create", { kind: "thread" })) as { ref: Ref };
 	await client.call("sessions.submit", { ref: chat, input: { text: `In that project, add a changelog, separately.\n${sideStart({ title: "Changelog", brief: "write: CHANGELOG.md | # Changes", project: name })}` } });

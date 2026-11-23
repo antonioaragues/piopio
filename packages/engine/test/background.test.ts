@@ -41,7 +41,9 @@ async function stateWhere(a: Ctx, sub: string, predicate: (s: State) => boolean)
 async function session(a: Ctx, mode: string) {
 	const folder = realpathSync(mkdtempSync(join(tmpdir(), "piopio-bg-project-")));
 	writeFileSync(join(folder, "package.json"), "{}");
-	await a.client.call("projects.add", { path: folder });
+	// Trusted, as your own projects are: Full access needs it (docs/spec/39).
+	const { project: added } = (await a.client.call("projects.add", { path: folder })) as { project: { id: string } };
+	await a.client.call("projects.configure", { id: added.id, trust: true });
 	const { ref } = await a.client.call("sessions.create", { kind: "build", cwd: folder });
 	const sub = (await a.client.call("sessions.subscribe", { ref })).subscriptionId as string;
 	await a.client.call("sessions.configure", { ref, approvalMode: mode });
@@ -167,6 +169,7 @@ describe("the project's check after edits (05-build Diagnostics, roadmap PAR5)",
 		const folder = realpathSync(mkdtempSync(join(tmpdir(), "piopio-check-project-")));
 		writeFileSync(join(folder, "package.json"), "{}");
 		const { project } = await a.client.call("projects.add", { path: folder });
+		await a.client.call("projects.configure", { id: (project as { id: string }).id, trust: true });
 		expect(project.check).toEqual({ source: "auto" });
 		// A type checker that finds one error in the edited file and one in a file it didn't touch.
 		writeFileSync(join(folder, "check.js"), "console.error('src/cart.ts(2,7): error TS2322: Type string is not assignable to type number.');\nconsole.error('src/other.ts(1,1): error TS1005: semicolon expected.');\nprocess.exit(1);\n");

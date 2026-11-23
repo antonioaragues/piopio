@@ -316,10 +316,12 @@ struct ProjectSettingsSheet: View {
                 Text("New conversations start in").font(.system(size: 13)).foregroundStyle(Color.dsFg2).frame(width: 180, alignment: .leading)
                 Menu {
                     ForEach(ApprovalMode.allCases) { m in
+                        let locked = m == .fullAuto && !project.allowsFullAccess
                         Button { Task { await engine.setApprovalMode(m, for: project); await engine.loadProjects() } } label: {
                             if m == project.approvalMode { Label(m.title, systemImage: "checkmark") } else { Text(m.title) }
-                            Text(m.summary)
+                            Text(locked ? ProjectInfo.fullAccessNeedsTrust : m.summary)
                         }
+                        .disabled(locked)
                     }
                 } label: { Text(project.approvalMode.title).font(.system(size: 13)) }
                     .menuStyle(.button).buttonStyle(ChipStyle()).menuIndicator(.hidden).fixedSize()

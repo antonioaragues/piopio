@@ -677,6 +677,8 @@ describe("approvals and questions (docs/spec/05-build §6)", () => {
 		const folder = realpathSync(mkdtempSync(join(tmpdir(), "piopio-approvals-")));
 		writeFileSync(join(folder, "package.json"), "{}"); // a code folder: Auto-edit (a folder of documents starts in Read only)
 		const { project } = await a.client.call("projects.add", { path: folder });
+		// Trusted, as your own projects are: Full access needs it (docs/spec/39).
+		await a.client.call("projects.configure", { id: project.id, trust: true });
 		return { folder, project };
 	}
 
@@ -994,7 +996,9 @@ describe("composer and extensions (milestone 2.5)", () => {
 	async function session(a: Ctx, mode: "full_auto" | "auto_edit" = "full_auto", planMode = false) {
 		const folder = realpathSync(mkdtempSync(join(tmpdir(), "piopio-25-")));
 		writeFileSync(join(folder, "a.txt"), "one\n");
-		await a.client.call("projects.add", { path: folder });
+		const { project } = await a.client.call("projects.add", { path: folder });
+		// Trusted, as your own projects are: Full access needs it (docs/spec/39).
+		await a.client.call("projects.configure", { id: project.id, trust: true });
 		const { ref } = await a.client.call("sessions.create", { kind: "build", cwd: folder, approvalMode: mode, planMode });
 		const sub = await a.client.call("sessions.subscribe", { ref });
 		return { folder, ref, sub: sub.subscriptionId as string };
@@ -1452,7 +1456,9 @@ describe("projects in the Chat lens (milestone 3.1)", () => {
 		const port = (server.address() as { port: number }).port;
 		const folder = realpathSync(mkdtempSync(join(tmpdir(), "piopio-ro-")));
 		writeFileSync(join(folder, "notes.md"), "Budget: 12k\n");
-		await a.client.call("projects.add", { path: folder });
+		const { project } = await a.client.call("projects.add", { path: folder });
+		// Trusted, as your own projects are: Full access needs it (docs/spec/39).
+		await a.client.call("projects.configure", { id: project.id, trust: true });
 		const { ref } = await a.client.call("sessions.create", { kind: "build", cwd: folder, approvalMode: "full_auto" });
 		await a.client.call("sessions.subscribe", { ref });
 		const tools = async () => ((await a.client.call("sessions.open", { ref })) as Snapshot).items.flatMap((i) => (i.kind === "tool" ? [i] : []));

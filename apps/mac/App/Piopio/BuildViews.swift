@@ -934,6 +934,12 @@ struct FlowLayout: Layout {
 }
 
 /// The session's approval mode (toolbar pill, docs/design 2a "Ask before edits").
+extension ProjectInfo {
+    /// Full access has no sandbox and asks nothing, so only a project you've trusted gets it (docs/spec/39 §2).
+    var allowsFullAccess: Bool { network != .filtered }
+    static let fullAccessNeedsTrust = "Needs a trusted project: trust it first (Settings › Approvals)"
+}
+
 struct ApprovalModeMenu: View {
     let engine: EngineController
     let session: ThreadModel
@@ -942,12 +948,14 @@ struct ApprovalModeMenu: View {
     var body: some View {
         Menu {
             ForEach(ApprovalMode.allCases) { mode in
+                let locked = mode == .fullAuto && project?.allowsFullAccess == false
                 Button {
                     Task { await session.setApprovalMode(mode) }
                 } label: {
                     Text(Self.title(mode) + (mode == session.approvalMode ? "  ✓" : ""))
-                    Text(Self.summary(mode))
+                    Text(locked ? ProjectInfo.fullAccessNeedsTrust : Self.summary(mode))
                 }
+                .disabled(locked)
             }
             if let project, project.approvalMode != session.approvalMode {
                 Divider()

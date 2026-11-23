@@ -619,10 +619,12 @@ struct AskBox: View {
         Menu {
             ForEach(ApprovalMode.allCases) { m in
                 if m == .fullAuto { Divider() }
+                let locked = m == .fullAuto && project?.allowsFullAccess == false
                 Button { mode = m; plan = false } label: {
                     if !plan && m == effectiveMode { Label(m.title, systemImage: "checkmark") } else { Text(m.title) }
-                    Text(m.summary)
+                    Text(locked ? ProjectInfo.fullAccessNeedsTrust : m.summary)
                 }
+                .disabled(locked)
             }
             Divider()
             Button { plan = true } label: {

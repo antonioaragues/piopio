@@ -218,7 +218,12 @@ export class Projects {
 			entry.folders = (entry.folders ?? []).filter((f) => f.path !== change.unlinkFolder);
 			if (!entry.folders.length) delete entry.folders;
 		}
+		// Full access has no sandbox and asks nothing: not for a project you haven't trusted (docs/spec/39 §2).
+		const filteredAfter = change.network === "filtered" || (change.network === undefined && change.trust !== true && entry.network === "filtered");
+		if (change.approvalMode === "full_auto" && filteredAfter) throw new EngineError("INVALID", "Full access needs a trusted project. Trust it first: its commands run in the sandbox until then.");
 		if (change.approvalMode) entry.approvalMode = change.approvalMode;
+		// Filtering a project that started in Full access: Auto-edit, so its commands are sandboxed.
+		if (change.network === "filtered" && entry.approvalMode === "full_auto") entry.approvalMode = "auto_edit";
 		if (change.prEvents) entry.prEvents = change.prEvents;
 		if (change.check === null) delete entry.check;
 		else if (change.check !== undefined) entry.check = change.check.trim();
@@ -245,9 +250,11 @@ export class Projects {
 		return entry && { id: entry.id, path: entry.path };
 	}
 
-	/** Approval mode for new sessions in `cwd` (global default: auto-edit, BQ1). */
+	/** Approval mode for new sessions in `cwd` (global default: auto-edit, BQ1); Full access only in a project that isn't filtered (docs/spec/39 §2). */
 	modeFor(cwd: string): ApprovalMode {
-		return this.entryFor(cwd)?.approvalMode ?? "auto_edit";
+		const entry = this.entryFor(cwd);
+		const mode = entry?.approvalMode ?? "auto_edit";
+		return mode === "full_auto" && entry?.network === "filtered" ? "auto_edit" : mode;
 	}
 
 	/** What conversations in `cwd`'s project hear about their pull requests (default: tell). */

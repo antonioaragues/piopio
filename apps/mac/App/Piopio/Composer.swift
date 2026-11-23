@@ -756,11 +756,12 @@ struct EditModeChip: View {
             let buildOn = Areas.shared.contains(.build)
             ForEach(ApprovalMode.allCases) { mode in
                 if mode == .fullAuto { Divider() }
+                let locked = mode == .fullAuto && project?.allowsFullAccess == false
                 Button { set(mode) } label: {
                     if !thread.planMode && mode == thread.approvalMode { Label(mode.title, systemImage: "checkmark") } else { Text(mode.title) }
-                    Text(buildOn || mode == .readOnly ? mode.summary : "Turn on Build in Settings › General to change files")
+                    Text(locked ? ProjectInfo.fullAccessNeedsTrust : buildOn || mode == .readOnly ? mode.summary : "Turn on Build in Settings › General to change files")
                 }
-                .disabled(!buildOn && mode != .readOnly)
+                .disabled((!buildOn && mode != .readOnly) || locked)
             }
             Divider()
             Button { Task { await thread.setPlanMode(true) } } label: {

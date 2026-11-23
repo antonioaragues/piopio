@@ -301,7 +301,8 @@ private struct ProjectApprovalsPage: View {
                     }
                     SettingRow(title: "New sessions start in", subtitle: ApprovalModeMenu.summary(project.approvalMode), last: true) {
                         Picker("", selection: Binding(get: { project.approvalMode }, set: { mode in Task { await engine.setApprovalMode(mode, for: project) } })) {
-                            ForEach(ApprovalMode.allCases) { Text(ApprovalModeMenu.title($0)).tag($0) }
+                            // Full access only once the project is trusted (docs/spec/39 §2).
+                            ForEach(ApprovalMode.allCases) { Text(ApprovalModeMenu.title($0)).tag($0).selectionDisabled($0 == .fullAuto && !project.allowsFullAccess) }
                         }
                         .labelsHidden()
                         .fixedSize()

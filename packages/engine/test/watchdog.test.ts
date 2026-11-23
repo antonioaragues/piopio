@@ -48,7 +48,9 @@ async function start(mode = "full_auto", git = false, seed?: (home: string) => v
 		sh("add", "-A");
 		sh("commit", "-qm", "init");
 	}
-	await client.call("projects.add", { path: dir });
+	// Trusted, as your own projects are: Full access needs it (docs/spec/39).
+	const { project: added } = (await client.call("projects.add", { path: dir })) as { project: { id: string } };
+	await client.call("projects.configure", { id: added.id, trust: true });
 	const { ref } = (await client.call("sessions.create", { kind: "build", cwd: dir, approvalMode: mode })) as { ref: Ref };
 	return { client, ref };
 }

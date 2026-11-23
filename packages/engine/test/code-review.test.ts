@@ -71,7 +71,9 @@ const FINDINGS = {
 test("a session's changes: the reviewer gets the diff; its findings land on the session, which fixes or dismisses them", { timeout: 60_000 }, async () => {
 	const a = await start();
 	const folder = repo();
-	await a.client.call("projects.add", { path: folder });
+	// Trusted, as your own projects are: Full access needs it (docs/spec/39).
+	const { project: added } = (await a.client.call("projects.add", { path: folder })) as { project: { id: string } };
+	await a.client.call("projects.configure", { id: added.id, trust: true });
 	const { ref } = await a.client.call("sessions.create", { kind: "build", cwd: folder });
 	const sub = (await a.client.call("sessions.subscribe", { ref })).subscriptionId as string;
 	await a.client.call("sessions.configure", { ref, approvalMode: "full_auto" });
@@ -110,7 +112,9 @@ test("with no changes in the session, its branch against main; with nothing at a
 	execFileSync("git", ["checkout", "-q", "-b", "fix-total"], { cwd: folder });
 	writeFileSync(join(folder, "cart.js"), "export const total = (items) => items.length;\n");
 	execFileSync("git", ["commit", "-qam", "simpler"], { cwd: folder });
-	await a.client.call("projects.add", { path: folder });
+	// Trusted, as your own projects are: Full access needs it (docs/spec/39).
+	const { project: added } = (await a.client.call("projects.add", { path: folder })) as { project: { id: string } };
+	await a.client.call("projects.configure", { id: added.id, trust: true });
 	const { ref } = await a.client.call("sessions.create", { kind: "build", cwd: folder });
 	await a.client.call("sessions.subscribe", { ref });
 	const { ref: reviewer } = await a.client.call("sessions.review", { ref });
@@ -119,7 +123,9 @@ test("with no changes in the session, its branch against main; with nothing at a
 	expect(first?.kind === "user" && first.text).toMatch(/^Review branch fix-total against main\./);
 
 	const plain = repo();
-	await a.client.call("projects.add", { path: plain });
+	// Trusted, as your own projects are: Full access needs it (docs/spec/39).
+	const { project: addedPlain } = (await a.client.call("projects.add", { path: plain })) as { project: { id: string } };
+	await a.client.call("projects.configure", { id: addedPlain.id, trust: true });
 	const other = await a.client.call("sessions.create", { kind: "build", cwd: plain });
 	await expect(a.client.call("sessions.review", { ref: other.ref })).rejects.toThrow(/nothing to review/);
 });

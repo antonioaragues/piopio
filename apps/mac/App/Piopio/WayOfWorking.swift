@@ -67,7 +67,8 @@ struct WayOfWorkingSection: View {
         }
         row("Helpers may", "What they do without asking") {
             Picker("", selection: Binding(get: { way.helperMode }, set: { v in configure(ConfigureWorkParams(project: project.id, helperMode: v)) })) {
-                ForEach(ApprovalMode.allCases) { m in Text(m.title).tag(m.rawValue) }
+                // Full access only once the project is trusted (docs/spec/39 §2).
+                ForEach(ApprovalMode.allCases) { m in Text(m.title).tag(m.rawValue).selectionDisabled(m == .fullAuto && !project.allowsFullAccess) }
             }
             .labelsHidden().fixedSize()
         }

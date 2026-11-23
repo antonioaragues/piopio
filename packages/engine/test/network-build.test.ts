@@ -63,4 +63,16 @@ describe.skipIf(process.platform !== "darwin")("the network filter in Build", ()
 		const trusted = (await a.client.call("projects.configure", { id: project.id, trust: true })) as { project: ProjectInfo };
 		expect(trusted.project.network).toBe("open");
 	}, 60_000);
+
+	test("a session can't be put in Full access while its project is filtered, and doesn't start in it", async () => {
+		const a = await start();
+		const folder = realpathSync(mkdtempSync(join(tmpdir(), "piopio-netb-fa-")));
+		writeFileSync(join(folder, "package.json"), "{}");
+		await a.client.call("projects.add", { path: folder });
+		const { ref } = await a.client.call("sessions.create", { kind: "build", cwd: folder, approvalMode: "full_auto" });
+		const snap: Snapshot = await a.client.call("sessions.open", { ref });
+		expect(snap.state.approvalMode).toBe("auto_edit");
+		await expect(a.client.call("sessions.configure", { ref, approvalMode: "full_auto" })).rejects.toMatchObject({ data: { code: "INVALID" } });
+	}, 60_000);
 });
+

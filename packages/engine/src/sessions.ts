@@ -284,8 +284,24 @@ export class Sessions {
 		for (const l of this.listeners) l({ upserted: [summary(entry)], removed: [] });
 	}
 
+	/**
+	 * Full access needs a trusted project (docs/spec/39 §2): it has no sandbox and asks nothing, so in a project whose
+	 * network is filtered (one you added or cloned and haven't trusted) it's Auto-edit.
+	 */
+	private modeAt(place: string, mode: ApprovalMode): ApprovalMode {
+		return mode === "full_auto" && this.policy.networkFiltered?.(place) ? "auto_edit" : mode;
+	}
+
+	/** The project folder a session works for: its own, a worktree's project, or a Board helper's (its worktree is elsewhere). */
+	private placeOf(entry: CatalogEntry): string {
+		return entry.projectPath ?? (entry.helper ? this.projectNamed?.(entry.helper.project)?.path : undefined) ?? entry.cwd!;
+	}
+
 	async configure(ref: ContainerRef, change: { model?: ModelRef; thinking?: string; web?: boolean; approvalMode?: ApprovalMode; planMode?: boolean; toolsOff?: string[] }): Promise<void> {
 		const entry = this.entry(ref);
+		if (change.approvalMode === "full_auto" && entry.cwd && this.modeAt(this.placeOf(entry), "full_auto") !== "full_auto") {
+			throw new EngineError("INVALID", "Full access needs a trusted project: this one's commands run in the sandbox until you trust it (Settings › Approvals, or the banner above the conversation).");
+		}
 		if (change.approvalMode) {
 			entry.approvalMode = change.approvalMode; // read by the runtime's approvals bridge
 			entry.profile = change.approvalMode === "read_only" ? "chat" : "build"; // the runtime switches its tools
@@ -886,7 +902,7 @@ export class Sessions {
 			...(worktree ? { projectPath: params.cwd!, worktree } : {}),
 			...(params.thinking ? { thinking: params.thinking } : {}),
 			...(params.planMode ? { planMode: true } : {}),
-			...(params.kind === "build" ? buildMode(params.profile === "chat" ? "read_only" : (params.approvalMode ?? this.policy.modeFor(params.cwd!))) : {}),
+			...(params.kind === "build" ? buildMode(params.profile === "chat" ? "read_only" : this.modeAt(params.cwd!, params.approvalMode ?? this.policy.modeFor(params.cwd!))) : {}),
 			// An app's conversation works where the app is (docs/spec/35 §15): its project, or its own folder.
 			...(params.kind === "thread" ? { cwd: params.app && params.cwd ? params.cwd : this.scratch(ref.id) } : {}),
 			...(params.app ? { app: params.app } : {}),
@@ -1045,7 +1061,7 @@ export class Sessions {
 		const parent = this.entry(parentRef);
 		// A child never gets more than its parent: the same profile (a Chat-lens parent has no bash) and the same tools
 		// turned off (see `toolsOff` in build(), which also follows later changes to the parent).
-		const ref = await this.create({ kind: "build", cwd: parent.cwd!, ...(parent.model ? { model: parent.model } : {}), approvalMode: parent.approvalMode ?? this.policy.modeFor(parent.projectPath ?? parent.cwd!), title: task.description });
+		const ref = await this.create({ kind: "build", cwd: parent.cwd!, ...(parent.model ? { model: parent.model } : {}), approvalMode: this.modeAt(parent.projectPath ?? parent.cwd!, parent.approvalMode ?? this.policy.modeFor(parent.projectPath ?? parent.cwd!)), title: task.description });
 		const child = this.entry(ref);
 		// Counted here, after the await and right before the child takes its place: tasks the model starts in one
 		// message run in parallel, and counting before `create` let all of them past the limit.
@@ -1155,7 +1171,7 @@ export class Sessions {
 			try {
 				const path = this.findExternal(task.agent);
 				if (!path) return { text: `${AGENT_NAMES[task.agent]} isn't installed on this Mac.`, sessionId: "", costUsd: 0, status: "error" };
-				return await runExternalAgent(task.agent, { path, cwd: parent.cwd!, prompt: task.prompt, mode: parent.approvalMode ?? this.policy.modeFor(parent.projectPath ?? parent.cwd!), ...(signal ? { signal } : {}), onProgress });
+				return await runExternalAgent(task.agent, { path, cwd: parent.cwd!, prompt: task.prompt, mode: this.modeAt(parent.projectPath ?? parent.cwd!, parent.approvalMode ?? this.policy.modeFor(parent.projectPath ?? parent.cwd!)), ...(signal ? { signal } : {}), onProgress });
 			} finally {
 				slot.running--;
 				slot.waiting.shift()?.();
@@ -2167,7 +2183,7 @@ export class Sessions {
 		const elsewhere = input.project?.trim() ? this.projectNamed?.(input.project.trim()) : undefined;
 		if (input.project?.trim() && !elsewhere) throw new EngineError("NOT_FOUND", `No project called “${input.project.trim()}”.`);
 		const folder = elsewhere ? elsewhere.path : parent.ref.kind === "build" ? (parent.projectPath ?? parent.cwd!) : undefined;
-		const mode = elsewhere ? this.policy.modeFor(elsewhere.path) : (parent.approvalMode ?? (folder ? this.policy.modeFor(folder) : undefined));
+		const mode = elsewhere ? this.modeAt(elsewhere.path, this.policy.modeFor(elsewhere.path)) : folder ? this.modeAt(folder, parent.approvalMode ?? this.policy.modeFor(folder)) : parent.approvalMode;
 		let workOn: WorkOn | undefined;
 		if (folder && input.workOn !== "here" && mode !== "read_only" && (await gitStatus(folder)).repo) {
 			const slug = title.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "side";
@@ -3089,12 +3105,12 @@ export class Sessions {
 			...(entry.sessionFile ? { sessionFile: entry.sessionFile } : {}),
 			...this.piOverrides,
 			approvals: {
-				mode: () => entry.approvalMode ?? this.policy.modeFor(entry.projectPath ?? entry.cwd!),
+				mode: () => this.modeAt(this.placeOf(entry), entry.approvalMode ?? this.policy.modeFor(entry.projectPath ?? entry.cwd!)),
 				// Linked folders that can be edited (18 §18) are written to as the project's own folder is: without asking in
 				// Auto-edit and Full auto; Ask still asks, and Read only can't.
 				rules: () => {
 					const place = entry.projectPath ?? entry.cwd!;
-					const mode = entry.approvalMode ?? this.policy.modeFor(place);
+					const mode = this.modeAt(place, entry.approvalMode ?? this.policy.modeFor(place));
 					const linked = mode === "auto_edit" || mode === "full_auto" ? (this.policy.foldersFor?.(place) ?? []).filter((f) => f.edit) : [];
 					return [...this.policy.rulesFor(place), ...linked.map((f) => ({ id: `linked:${f.path}`, kind: "path" as const, pattern: `${f.path}/**`, createdAt: "" }))];
 				},
@@ -3103,9 +3119,9 @@ export class Sessions {
 			// A project you haven't trusted yet: its commands reach only the sites allowed (docs/spec/39). A chat's own
 			// folder isn't a project, so its network stays open.
 			network: {
-				filtered: () => this.policy.networkFiltered?.(entry.projectPath ?? entry.cwd!) ?? false,
-				rules: () => this.policy.rulesFor(entry.projectPath ?? entry.cwd!).filter((r) => r.kind === "host").map((r) => r.pattern),
-				addRule: (pattern: string) => this.policy.addRule(entry.projectPath ?? entry.cwd!, { kind: "host", pattern }),
+				filtered: () => this.policy.networkFiltered?.(this.placeOf(entry)) ?? false,
+				rules: () => this.policy.rulesFor(this.placeOf(entry)).filter((r) => r.kind === "host").map((r) => r.pattern),
+				addRule: (pattern: string) => this.policy.addRule(this.placeOf(entry), { kind: "host", pattern }),
 			},
 			folders: () => this.policy.foldersFor?.(entry.projectPath ?? entry.cwd!) ?? [],
 			// The project's check after the agent's edits (05-build "Diagnostics"); not for a review or a chat lens.
@@ -3292,7 +3308,7 @@ export class Sessions {
 				...(entry.thinking ? { thinking: entry.thinking } : {}),
 				file: entry.agentFile,
 				agent: acp,
-				approvalMode: () => entry.approvalMode ?? this.policy.modeFor(entry.projectPath ?? cwd),
+				approvalMode: () => this.modeAt(entry.projectPath ?? cwd, entry.approvalMode ?? this.policy.modeFor(entry.projectPath ?? cwd)),
 				...(chat ? { chat: true } : {}),
 				keepImages: toolImageKeeper(attachmentsDir(this.paths.home, entry.ref.id)),
 				onAttention: (message) => this.onAttention?.({ ref: entry.ref, title: entry.title, kind: "waiting", message }),
@@ -3307,7 +3323,7 @@ export class Sessions {
 			...(entry.thinking ? { thinking: entry.thinking } : {}),
 			file: entry.agentFile,
 			agent: this.hub.claudeCode,
-			approvalMode: () => entry.approvalMode ?? this.policy.modeFor(entry.projectPath ?? cwd),
+			approvalMode: () => this.modeAt(entry.projectPath ?? cwd, entry.approvalMode ?? this.policy.modeFor(entry.projectPath ?? cwd)),
 			...(chat ? { chat: true } : {}),
 			keepImages: toolImageKeeper(attachmentsDir(this.paths.home, entry.ref.id)),
 			onAttention: (_kind, message) => this.onAttention?.({ ref: entry.ref, title: entry.title, kind: "waiting", message }),

@@ -34,3 +34,18 @@ test("a folder you open starts filtered unless it's trusted already; New project
 	projects.addRule(cloned.path, { kind: "host", pattern: "api.example.com" });
 	expect(projects.hostRules(cloned.path)).toEqual(["api.example.com"]);
 });
+
+test("Full access needs a trusted project: refused while filtered, allowed once trusted, undone by filtering", () => {
+	const base = realpathSync(mkdtempSync(join(tmpdir(), "piopio-net-fa-")));
+	const agentDir = join(base, "agent");
+	mkdirSync(agentDir);
+	mkdirSync(join(base, "cloned"));
+	const projects = new Projects(join(base, "projects.json"), agentDir, join(base, "Piopio"));
+	const p = projects.add(join(base, "cloned"));
+	expect(() => projects.configure(p.id, { approvalMode: "full_auto" })).toThrow(/Full access needs a trusted project/);
+	expect(projects.configure(p.id, { trust: true, approvalMode: "full_auto" }).approvalMode).toBe("full_auto");
+	expect(projects.modeFor(p.path)).toBe("full_auto");
+	expect(projects.configure(p.id, { network: "filtered" }).approvalMode).toBe("auto_edit");
+	expect(projects.modeFor(p.path)).toBe("auto_edit");
+});
+

@@ -39,7 +39,9 @@ async function start() {
 	open.push({ engine, client });
 	await client.call("engine.hello", { token: readFileSync(paths.tokenFile, "utf8").trim(), client: "test", protocolVersion: "1.0", services: [] });
 	const dir = realpathSync(mkdtempSync(join(tmpdir(), "piopio-tasks-dir-")));
-	await client.call("projects.add", { path: dir });
+	// Trusted, as your own projects are: Full access needs it (docs/spec/39).
+	const { project } = (await client.call("projects.add", { path: dir })) as { project: { id: string } };
+	await client.call("projects.configure", { id: project.id, trust: true });
 	const { ref } = (await client.call("sessions.create", { kind: "build", cwd: dir, approvalMode: "full_auto" })) as { ref: Ref };
 	return { client, ref, dir };
 }
