@@ -2,7 +2,7 @@
 
 Status: decided 2026-11-20 from a question by the user; phases A1 (Claude Code), A2 and A3 (Antigravity CLI and Codex)
 built the same day
-(§10). Mockups: [mockup.html](../design/agent-runtimes/mockup.html) (the idea) and
+(§10). CA11–CA14 (one tool catalog with spec 41, the agents at the same level) proposed 2026-11-23, §4.1. Mockups: [mockup.html](../design/agent-runtimes/mockup.html) (the idea) and
 [picker.html](../design/agent-runtimes/picker.html) (the picker and chip as decided).
 
 **The question (the user, 2026-11-20):** can Piopio use my Gemini subscription? Then: if we add the coding agents as
@@ -79,6 +79,48 @@ covered by Antigravity plans. So the Google agent is Antigravity CLI, phase A3.
 - **CA9 Agents and automations stay on Piopio's agent** for now. Unattended scheduled runs on a personal plan need their
   own decision (plan limits, terms, who approves at 03:00).
 - **CA10 The `task` helper stays.** A conversation on Piopio's agent can still hand a task to Claude Code or Codex.
+  *(Revisited by CA14, proposed 2026-11-23: the helper stays, but its separate integration goes.)*
+
+### 4.1 One tool catalog, and the agents at the same level (proposed 2026-11-23, not decided)
+
+From a question by the user on 2026-11-23: now that spec 41 makes Piopio an MCP server, can coding agents run with
+their own tools and reach everything else through Piopio? Mostly they already do (CA8). What's left is to make it
+one surface instead of two, and to close the gaps the 2026-11-22 review listed (its §4.1 table: no `@agent`, no side
+conversations, no automations on a coding agent).
+
+- **CA11 One catalog, two ways in.** Piopio's tools are defined once and served over MCP through two ways in that
+  differ only in who's asking and what they may touch:
+  - **The conversation's way in (this spec, CA8):** the coding agent Piopio runs for a conversation. It's scoped to
+    that conversation and its project, and runs with the conversation's approval mode. It gets Piopio's "hands"
+    (connectors, the browser, Mac apps) because the calls are the conversation's, and their approvals go to the tray.
+  - **The outside way in (spec 41):** a client Piopio didn't start, held to its grant. It gets Piopio's "work" only
+    (41 PM2).
+
+  Each tool says which way in may serve it. `tool-server.ts`, `mcp-bridge.ts` and `claude-code-tools.ts` serve both;
+  the outside way in adds auth and grants (41 §10). Spec 41's PM8 stays: an agent Piopio runs only ever uses the
+  conversation's way in.
+- **CA12 The same tools as Piopio's agent, where they make sense.** The conversation's way in adds the extensions a
+  Build session or chat already loads but coding agents don't get today:
+  - `ask_agent` (`consult.ts`), so `@Agent` works in a conversation on Claude Code;
+  - `side_start` / `side_send` / `side_read` / `side_stop` / `side_offer` (`tools/side.ts`), so a coding agent can
+    open side conversations (24) like Piopio's agent does;
+  - `automate` and its siblings (`automations/tools.ts`), always as the card you confirm (27), never a silent schedule;
+  - recall from the project's memory and `NOTES.md` (14), read only, as spec 41's `recall_memory`.
+
+  Not added: `web_search` and `web_fetch` (each agent has its own), the shell and file tools (the agent's own, CA2),
+  and `task` (each agent has its own subagents).
+- **CA13 The agent's own tools are guarded the agent's way.** Bash, Edit and the like run inside the agent's process,
+  where Piopio's Seatbelt profile, `policy.ts`, checkpoints and the post-edit check can't wrap them. MCP doesn't change
+  that. Rather than rebuild Piopio's guards around another harness, Piopio turns on the agent's own: Claude Code's
+  sandbox setting, Codex's `read-only` / `workspace-write` sandbox, and whatever Antigravity CLI offers beyond its modes
+  (to check). It keeps what it already does from outside: approvals through `canUseTool` and ACP permission requests
+  (CA4), and project trust before loading a project's hooks and MCP servers (the 2026-11-22 security fixes). It adds
+  checkpoints taken before and after each turn, which only need the project's folder. The conversation's toolbar says what guards it ("runs
+  in Claude Code · its sandbox"), so choosing an agent never weakens the guards silently.
+- **CA14 One way to run a coding agent.** `external-agents.ts` (`claude -p` / `codex exec`, one unattended run per
+  `task`) duplicates the runtimes. A `task` handed to Claude Code or Codex becomes a side conversation on that agent's
+  runtime (24): same transcript, approvals in the tray, resumable, the idle shutdown of `runtime.ts`. The `task`
+  helper's contract (a brief in, one answer and its cost out) doesn't change for the model that calls it.
 
 ## 5. What you see
 
@@ -121,6 +163,7 @@ Decided 2026-11-20 with the user on [picker.html](../design/agent-runtimes/picke
 | **A2** | Piopio's tools through MCP (CA8); switching to and from an agent mid-conversation with a summary (CA7); thinking level as the agent's effort | A Claude Code conversation remembers something in Piopio's memory and switches back to Piopio's agent |
 | **A3** | `AcpRuntime`: Antigravity CLI (`agy acp`) and Codex | A Build session on Antigravity CLI with your Google plan edits a file |
 | **A4** | Agents and automations on a coding agent (CA9). **Left for later (2026-11-21, with the user):** an unattended run spends the plan the user codes with by day, and Piopio can't see how much is left until it fails; running a CLI on a schedule against a personal plan is the case providers are likeliest to rule out (read their terms first); and what makes agents and automations useful (memory, channels, approvals while away) already works on any model. If it's ever needed: an automation that leaves a conversation ready on the agent, for the user to start | Later |
+| **A5** | One catalog (CA11–CA14, if decided): the extensions of CA12 on the conversation's way in, the agent's own sandbox on and named in the toolbar, checkpoints around each turn, `task` to Claude Code or Codex as a side conversation, `external-agents.ts` removed. Built with spec 41's MS0, which adds the outside way in to the same code | A conversation on Claude Code asks `@Agent` a question, opens a side conversation, and its edits can be undone from the checkpoint; a `task` from Piopio's agent to Codex shows as a side conversation you can open |
 
 ## 8. Open questions
 
@@ -130,6 +173,11 @@ Decided 2026-11-20 with the user on [picker.html](../design/agent-runtimes/picke
   asking (spec 29).
 - Notebooks' heading organizer is Piopio's own: does it keep running on a model while the conversation runs on an
   agent?
+- **CA11–CA14 (2026-11-23):** to decide. To check before A5: which sandbox setting the Claude Agent SDK takes and
+  whether it covers Bash only or every tool; what Antigravity CLI offers besides its modes; whether a side conversation
+  on a coding agent can be unattended in Ask mode, as `task` runs are today (CA14), or must ask through the tray; and
+  whether coding agents find `ask_agent` and `side_*` behind their own deferred-tool search (Claude Code's ToolSearch)
+  without a line in the instructions.
 
 ## 10. As built (2026-11-20)
 
