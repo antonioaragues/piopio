@@ -14,11 +14,15 @@ struct NeedsYouEntry: Identifiable {
     var session: SessionSummary?
     /// The Watchdog's note (docs/spec/17 §4): a conversation that looks stuck or repeats itself.
     var watchdog: WatchdogNote?
+    /// An automation run Piopio's monthly budget holds (docs/spec/34 OV3), with the budget it's past.
+    var held: PiopioBudget.Held?
+    var budget: PiopioBudget?
 
     var isApproval: Bool { kind == .approval || kind == .buildPrompt }
 
     /// Never hidden (docs/spec/15): an item from a hidden area still shows, marked with its area.
     @MainActor var hiddenArea: Area? {
+        if held != nil { return nil }
         let area: Area = session.map { $0.profile == .chat ? .chat : .build } ?? .agents
         return Areas.shared.contains(area) ? nil : area
     }
@@ -41,6 +45,11 @@ extension EngineController {
         for s in buildSessions where liveStatus[s.ref.id] == .waitingApproval {
             out.append(NeedsYouEntry(id: "session:\(s.ref.id)", kind: .buildPrompt, at: s.updatedAt, session: s))
         }
+        if let budget = piopioBudget {
+            for h in budget.held {
+                out.append(NeedsYouEntry(id: "held:\(h.run)", kind: .budget, at: h.at, held: h, budget: budget))
+            }
+        }
         for n in watchdogNotes {
             out.append(NeedsYouEntry(id: "watchdog:\(n.id)", kind: .watchdog, at: n.at, session: (buildSessions + threads).first { $0.ref.id == n.ref.id }, watchdog: n))
         }
@@ -53,6 +62,7 @@ extension EngineController {
 enum NeedsYouText {
     @MainActor static func source(_ entry: NeedsYouEntry, engine: EngineController) -> String {
         let hidden = entry.hiddenArea.map { " (\($0.title) · hidden)" } ?? ""
+        if let h = entry.held { return h.name }
         if let s = entry.session { return s.title + hidden }
         if let n = entry.watchdog { return n.title + hidden }
         return (entry.agent?.title ?? entry.inbox?.agentName ?? "Agent") + hidden
@@ -63,7 +73,9 @@ enum NeedsYouText {
         case .approval: return entry.inbox?.approval?.title ?? "Asks before doing something"
         case .message: return entry.inbox.map { firstLine($0.body) } ?? "Wrote to you"
         case .runFailed: return "\(source(entry, engine: engine)) didn't run"
-        case .budget: return entry.inbox?.title ?? "Budget"
+        case .budget:
+            if entry.held != nil, let b = entry.budget { return heldLine(b) }
+            return entry.inbox?.title ?? "Budget"
         case .watchdog: return entry.watchdog?.text ?? "Looks stuck"
         case .buildPrompt:
             guard let s = entry.session, let prompt = engine.thread(s.ref).prompts.first else { return "Waiting on you" }
@@ -78,10 +90,22 @@ enum NeedsYouText {
         case .approval: "asks first"
         case .message: entry.inbox?.conversationId?.hasPrefix("run:") == true ? "wrote after a run" : "wrote to you"
         case .runFailed: "didn't run"
-        case .budget: entry.inbox?.title == "Budget used up" ? "paused itself" : "budget"
+        case .budget: entry.held != nil ? "waits for your OK" : entry.inbox?.title == "Budget used up" ? "paused itself" : "budget"
         case .buildPrompt: "is waiting on you"
         case .watchdog: entry.watchdog?.rule == "looping" ? "is repeating itself" : "looks stuck"
         }
+    }
+
+    /// "held: Piopio is past its $20 budget for November" (the row's second line already says it waits for your OK).
+    static func heldLine(_ b: PiopioBudget) -> String {
+        "held: Piopio is past its \(MainSidebar.money(b.limitUsd ?? b.spentUsd)) budget for \(monthName(b.month))"
+    }
+
+    /// "2026-11" → "November".
+    static func monthName(_ month: String) -> String {
+        let parts = month.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 2, (1...12).contains(parts[1]) else { return "this month" }
+        return DateFormatter().standaloneMonthSymbols[parts[1] - 1]
     }
 
     private static func firstLine(_ text: String) -> String {
@@ -156,6 +180,7 @@ struct WaitingItem: View {
         switch entry.kind {
         case .buildPrompt: entry.session.flatMap { engine.project(of: $0)?.name } ?? "Build"
         case .watchdog: "Watchdog"
+        case .budget where entry.held != nil: "Automation · \(NeedsYouText.what(entry))"
         default: "Agent · \(NeedsYouText.what(entry))"
         }
     }
@@ -190,6 +215,9 @@ struct WaitingItem: View {
                 } else {
                     Button("Run again") { runAgain() }.buttonStyle(HomePillStyle(primary: true))
                 }
+            case .budget where entry.held != nil:
+                Button("Continue this month") { release(month: true) }.buttonStyle(HomePillStyle())
+                Button("Run it") { release(month: false) }.buttonStyle(HomePillStyle(primary: true))
             case .budget:
                 Button("Keep paused") { markRead() }.buttonStyle(HomePillStyle())
                 if let budget = entry.agent?.agent?.status?.budgetUsd {
@@ -235,6 +263,9 @@ struct WaitingItem: View {
 
     private var content: String? {
         if let note = entry.watchdog { return note.text }
+        if entry.held != nil, let b = entry.budget {
+            return "Piopio has spent \(MainSidebar.money(b.spentUsd)) of its \(MainSidebar.money(b.limitUsd ?? b.spentUsd)) budget for \(NeedsYouText.monthName(b.month)), so this automation waits. Run it now, or let background work continue until the budget resets."
+        }
         guard let inbox = entry.inbox else { return nil }
         if entry.kind == .approval, let title = inbox.approval?.title, inbox.body.isEmpty { return title }
         return inbox.body.isEmpty ? inbox.title : inbox.body
@@ -244,7 +275,7 @@ struct WaitingItem: View {
         switch entry.kind {
         case .buildPrompt: "Open session"
         case .runFailed: "Open run"
-        case .budget: "Open agent"
+        case .budget: entry.held != nil ? "Open Overview" : "Open agent"
         default: "Open conversation"
         }
     }
@@ -252,6 +283,10 @@ struct WaitingItem: View {
     // MARK: Actions
 
     private func open() {
+        if entry.held != nil {
+            item = .overview(nil)
+            return
+        }
         if let s = entry.session {
             item = engine.item(for: s.ref.id) ?? .session(s.ref.id)
             return
@@ -305,6 +340,12 @@ struct WaitingItem: View {
             _ = try await engine.agentRunNow(agent.ref, scheduleId: upcoming?.id, prompt: upcoming == nil ? "Run your usual check now." : nil)
             if let inbox = entry.inbox { await engine.markInboxRead([inbox]) }
         }
+    }
+
+    /// Your yes at 100% (docs/spec/34 OV3): this run, or background work for the rest of the month.
+    private func release(month: Bool) {
+        guard let h = entry.held else { return }
+        perform { try await engine.releaseBudget(run: month ? nil : h.run, month: month) }
     }
 
     private func raise(to budget: Double) {

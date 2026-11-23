@@ -24,6 +24,7 @@ type FauxHandle = ReturnType<typeof fauxProvider>;
 
 import { ExtraCosts } from "./costs.js";
 import { UsageLedger } from "./ledger.js";
+import { MonthBudget } from "./budget.js";
 import { OnDeviceModel, OnDeviceUnavailable } from "./on-device.js";
 import type { UtilityChoice } from "@piopio/protocol";
 import { writeFileAtomic } from "./atomic.js";
@@ -33,6 +34,8 @@ export class ModelHub {
 	readonly extraCosts: ExtraCosts;
 	/** Every paid request, for Overview (docs/spec/34 §8.1); `extraCosts` writes into it too. */
 	readonly ledger: UsageLedger;
+	/** Piopio this month (docs/spec/34 OV3): off until you set it. */
+	readonly budget: MonthBudget;
 	readonly credentials: KeychainCredentialStore;
 	readonly endpoints: Endpoints;
 	readonly faux?: FauxHandle;
@@ -75,6 +78,8 @@ export class ModelHub {
 		this.ledger = new UsageLedger(options.home ? join(options.home, "usage.db") : undefined);
 		this.ledger.planOf = (provider, usd) => this.billedToPlan(provider, usd);
 		this.extraCosts.onRecord = (row) => void this.ledger.recordExtra(row);
+		this.budget = new MonthBudget(options.home ? join(options.home, "budget.json") : undefined, this.ledger);
+		this.ledger.onWrite = () => this.budget.written();
 		this.loadVisibility();
 		if (options.faux) {
 			// PIOPIO_FAUX_MODEL_NAME: captures of a long model name (the composer in a narrow column, docs/spec/37).

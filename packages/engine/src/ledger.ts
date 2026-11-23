@@ -74,6 +74,8 @@ export class UsageLedger {
 	planOf: (provider: string, usd: number) => boolean = () => false;
 	/** What an `extra_costs` scope is (a conversation's or an agent's id); unknown and "app" are Piopio's own work. */
 	resolve: (scope: string) => LedgerSource | undefined = () => undefined;
+	/** After a write that added or changed rows (Piopio's monthly budget checks itself). */
+	onWrite: () => void = () => {};
 
 	constructor(file = ":memory:") {
 		this.db = new DatabaseSync(file);
@@ -108,6 +110,7 @@ export class UsageLedger {
 		this.transaction(() => {
 			for (const item of answers) if (this.recordAnswer(source, item, fromFile)) added++;
 		});
+		if (added) this.onWrite();
 		return added;
 	}
 
@@ -185,6 +188,7 @@ export class UsageLedger {
 	}
 
 	private insert(r: LedgerRow): boolean {
+		if (!this.db.isTransaction) queueMicrotask(() => this.onWrite());
 		const changes = this.insertRow.run(r.id, r.at, r.place, r.kind, r.source, r.sourceKind, r.project ?? null, r.agent ?? null, r.automation ?? null, r.provider ?? null, r.route ?? null, r.model ?? null, r.role ?? null, r.input, r.output, r.cacheRead, r.cacheWrite, r.usd, r.plan ? 1 : 0).changes;
 		return Number(changes) > 0;
 	}
@@ -213,6 +217,13 @@ export class UsageLedger {
 
 	since(): string | undefined {
 		return (this.db.prepare("SELECT MIN(at) at FROM usage_ledger").get() as { at: string | null } | undefined)?.at ?? undefined;
+	}
+
+	/** Known USD in the local month of `now`, everything on this Mac and in the cloud (plans excluded). */
+	monthKnownUsd(now = new Date()): number {
+		const { from, to } = rangeBounds("month", now);
+		const row = this.db.prepare("SELECT SUM(usd) usd FROM usage_ledger WHERE at >= ? AND at < ? AND plan = 0").get(from.toISOString(), to.toISOString()) as { usd: number | null } | undefined;
+		return row?.usd ?? 0;
 	}
 
 	/** Known USD for an agent (or a conversation) in a local month, for budgets that read the ledger. */
@@ -267,6 +278,7 @@ export class UsageLedger {
 			days,
 			groupBy,
 			groups: this.group(rows, groupBy, names, knownUsd),
+			suggestions: [],
 			...(since ? { since } : {}),
 		};
 	}

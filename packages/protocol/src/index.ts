@@ -1195,6 +1195,21 @@ export const SpendDay = Type.Object({
 	/** That day's top three spenders (the What grouping). */
 	top: Type.Array(Type.Object({ label: Type.String(), usd: Type.Number() })),
 });
+/** Cheaper next time (34 §5.5, OV7): a saving with the number it's based on, and one thing to do about it. */
+export const SpendSuggestion = Type.Object({
+	id: Type.String(),
+	/** "Morning briefing spent $4.10 on Opus 5.5; Haiku 5.5 would have been about $0.80". */
+	text: Type.String(),
+	/** The saving it's based on (USD this range); informational ones too. */
+	savingUsd: Type.Number(),
+	action: Type.Optional(Type.Object({
+		kind: literals("automation", "agent", "on_device"),
+		/** The automation's or agent's id. */
+		id: Type.Optional(Type.String()),
+		label: Type.String(),
+	})),
+});
+export type SpendSuggestion = Static<typeof SpendSuggestion>;
 export const SpendResult = Type.Object({
 	range: SpendRange,
 	/** The range's start and end (end is exclusive; for an open range, its natural end). */
@@ -1217,6 +1232,10 @@ export const SpendResult = Type.Object({
 	since: Type.Optional(Type.String()),
 	/** Past conversations are still being read into the ledger. */
 	backfilling: Type.Optional(Type.Boolean()),
+	/** At most three (OV7), only when the numbers support them. */
+	suggestions: Type.Array(SpendSuggestion),
+	/** Your cloud's usage is counted up to this time (it was unreachable since). Absent when current or no cloud. */
+	cloudAsOf: Type.Optional(Type.String()),
 });
 export type SpendResult = Static<typeof SpendResult>;
 export const SpendItem = Type.Object({ ref: ContainerRef, title: Type.String(), usd: Type.Number(), calls: Type.Number(), unknownCalls: Type.Number(), plan: Type.Boolean(), tokens: Type.Number(), lastAt: Type.String() });
@@ -1237,6 +1256,22 @@ export const Budget = Type.Object({
 	automation: Type.Optional(Type.String()),
 });
 export type Budget = Static<typeof Budget>;
+/**
+ * Piopio this month (docs/spec/34 §5.4, OV3): one budget over everything the ledger counts on this Mac, off until set.
+ * At 80% it notifies once; at 100% background work (automations) waits for your yes; your conversations keep going.
+ */
+export const PiopioBudget = Type.Object({
+	/** "2026-11": the month it's measured in (local). */
+	month: Type.String(),
+	limitUsd: Type.Optional(Type.Number()),
+	spentUsd: Type.Number(),
+	resets: Type.String(),
+	/** off: no budget · ok · near: past 80% · over: at 100%, background work waits · allowed: over, and you said go on this month. */
+	state: literals("off", "ok", "near", "over", "allowed"),
+	/** Automation runs waiting because of it, oldest first. */
+	held: Type.Array(Type.Object({ run: Type.String(), automation: Type.String(), name: Type.String(), at: Type.String() })),
+});
+export type PiopioBudget = Static<typeof PiopioBudget>;
 
 export const methods = {
 	"engine.hello": {
@@ -1382,7 +1417,11 @@ export const methods = {
 		result: Type.Object({ items: Type.Array(SpendItem) }),
 	},
 	/** Every budget Piopio has (34 §5.4): an agent's month, an automation's run. */
-	"stats.budgets": { params: Type.Object({}), result: Type.Object({ budgets: Type.Array(Budget) }) },
+	"stats.budgets": { params: Type.Object({}), result: Type.Object({ budgets: Type.Array(Budget), piopio: PiopioBudget }) },
+	/** Sets (or, with null, turns off) Piopio's monthly budget. */
+	"stats.budget.set": { params: Type.Object({ monthUsd: Type.Union([Type.Number(), Type.Null()]) }), result: PiopioBudget },
+	/** Your yes at 100%: run one held automation run, or let background work go on for the rest of this month (and run what's held). */
+	"stats.budget.release": { params: Type.Object({ run: Type.Optional(Type.String()), month: Type.Optional(Type.Boolean()) }), result: PiopioBudget },
 	/** The ledger for a range as CSV, one row per request (34 §8.3). Refs and numbers only. */
 	"stats.export": { params: Type.Object({ range: SpendRange }), result: Type.Object({ csv: Type.String(), rows: Type.Number() }) },
 	/** OpenRouter-key billing; includes other apps sharing that key. Cached a minute. */
@@ -2295,6 +2334,8 @@ export const notifications = {
 	"session.attention": Type.Object({ ref: ContainerRef, title: Type.String(), kind: literals("waiting", "notify"), message: Type.String() }),
 	/** The Watchdog's notes changed (docs/spec/17 §4): list them again. */
 	"watchdog.changed": Type.Object({}),
+	/** Piopio's monthly budget changed level or held a run (34 OV3): read `stats.budgets` again. `notify`: say it once (80%, 100%). */
+	"budget.changed": Type.Object({ notify: Type.Optional(Type.String()) }),
 	/** The Inbox changed; `count` is what waits for you (badges). `approval` is set when an agent asks (notifications). */
 	/** A step of a provider sign-in started with `providers.login`. */
 	"providers.auth": Type.Object({ loginId: Type.String(), provider: Type.String(), event: ProviderAuthEvent }),

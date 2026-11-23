@@ -1,6 +1,6 @@
 # 34 · Overview: what Piopio costs, what you've set up, and what it has done
 
-Proposed and decided 2026-11-22 (§11). OV0–OV1 built 2026-11-23 (§13). From the user's ask for a stats section (costs, a visual map of the system:
+Proposed and decided 2026-11-22 (§11). OV0–OV1 built 2026-11-23 (§13), OV4 the same day (§14). From the user's ask for a stats section (costs, a visual map of the system:
 agents, cloud and so on, and other numbers worth seeing), and a read of what Piopio records today
 ([costs.ts](../../packages/engine/src/costs.ts), `usage.summary` and `usage.extras` in
 [protocol](../../packages/protocol/src/index.ts), [CostDetails.swift](../../apps/mac/App/Piopio/CostDetails.swift),
@@ -312,3 +312,34 @@ plan-limit figure isn't shown: no plan window is readable yet (§12).
 
 **For L4 and OV4:** `stats.spend` is the data a `piopio` source reads (35 AL12), and `UsageLedger.monthUsd` is what
 OV3's Piopio-wide budget will check.
+
+## 14. Built: OV4 (2026-11-23)
+
+**Piopio this month** ([budget.ts](../../packages/engine/src/budget.ts), `budget.json`): off until set, measured on
+the ledger's known USD in the local month (plans excluded), on this Mac and the cloud rows it has.
+
+- **Levels:** ok · near (80%) · over (100%) · allowed (over, and you said go on this month). Near and over are each
+  said once a month (`budget.changed` with `notify`, a macOS notification that opens Overview); a new limit starts
+  that over.
+- **What waits:** an automation's fire past 100% becomes a held run (`waiting`, with what it would run kept on the
+  run), shown in Needs you with **Run it** and **Continue this month**. Run now is never held (it's your yes already).
+  Raising the budget above what's spent, turning it off, or Continue this month runs what's held. Agents' runs started
+  by their own automations are held the same way; a person writing to an agent isn't background work and isn't
+  held. Automations of agents in the cloud run there and aren't held from here.
+- **Your conversations** keep going; past 100% their composer says so once, with Open Overview.
+
+**Cheaper next time** ([suggest.ts](../../packages/engine/src/suggest.ts)), at most three, each from a number:
+an automation or agent whose spend on a heavy model would have been under half on the same maker's light model
+(at least $0.50 saved; action: its page, to change the model); what cache reads saved (information only); and
+titles and memory on a paid model when the on-device model is available and not chosen (action: Use on-device).
+Prices come from the models list; a model with no price makes no suggestion.
+
+**The cloud's rows:** the backfill now reads cloud agents' conversations and runs through the cloud (10 s at most
+each); while the cloud doesn't answer, Spend says "Cloud usage up to <time>" (`cloudAsOf`).
+
+**Shows it works** (§9): tested in [budget.test.ts](../../packages/engine/test/budget.test.ts): a run past the
+budget waits, Run now doesn't, and your yes runs the held one with what it would have run; captured with a month at
+$37.96 of $35 and one held automation on Home.
+
+**Not yet:** the budget doesn't hold an agent's run started by something other than an automation (none today
+besides channels), and a project's budget per job still isn't listed with the others.

@@ -103,6 +103,7 @@ struct Composer: View {
     // MARK: Notice
 
     @State private var contextNoticeDismissed = false
+    @State private var budgetNoticeDismissed = false
 
     private var contextFraction: Double { thread.state?.context.map { ($0.tokens ?? 0) / max(1, $0.window) } ?? 0 }
 
@@ -139,6 +140,15 @@ struct Composer: View {
                 detail: thread.isCompactingContext ? "compacting…" : nil,
                 primary: thread.canCompact && !thread.isCompactingContext ? .init(title: "Compact now") { Task { await thread.compact() } } : nil,
                 dismiss: { contextNoticeDismissed = true })
+        }
+        // Piopio past its monthly budget (docs/spec/34 OV3): your conversations are never stopped, only told.
+        if let budget = engine.piopioBudget, budget.state == .over, !budgetNoticeDismissed {
+            return ComposerNotice(
+                id: "budget", tone: .info, symbol: "chart.bar",
+                title: "Piopio is past its \(MainSidebar.money(budget.limitUsd ?? budget.spentUsd)) budget for \(NeedsYouText.monthName(budget.month))",
+                detail: "your conversations keep going; automations wait for you",
+                secondary: .init(title: "Open Overview") { NotificationCenter.default.post(name: .selectItem, object: SidebarItem.overview(nil).raw) },
+                dismiss: { budgetNoticeDismissed = true })
         }
         return nil
     }

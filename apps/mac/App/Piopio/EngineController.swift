@@ -36,6 +36,8 @@ final class EngineController {
     @ObservationIgnored private var reportFrom = "work"
     /// The Watchdog's notes about your conversations (docs/spec/17 §4): in Needs you.
     private(set) var watchdogNotes: [WatchdogNote] = []
+    /// Piopio's monthly budget (docs/spec/34 OV3): its state, and the automation runs it holds for your yes.
+    private(set) var piopioBudget: PiopioBudget?
     /// Build: folders added as projects, and their sessions (newest first).
     private(set) var projects: [ProjectInfo] = []
     private(set) var buildSessions: [SessionSummary] = []
@@ -392,7 +394,7 @@ final class EngineController {
             }
         }
         Task { [weak self] in await self?.loadInbox() }
-        Task { [weak self] in await self?.loadWork(); await self?.loadWatchdog(); await self?.loadAutomations(); await self?.loadLibrary() }
+        Task { [weak self] in await self?.loadWork(); await self?.loadWatchdog(); await self?.loadAutomations(); await self?.loadLibrary(); await self?.loadBudget() }
         Task { [weak self] in
             for await note in client.providerEvents {
                 guard let self else { return }
@@ -408,6 +410,9 @@ final class EngineController {
                     await self.loadWork()
                 case .watchdogChanged:
                     await self.loadWatchdog()
+                case .budgetChanged(let change):
+                    if let text = change.notify { Notifier.shared.budget(text) }
+                    await self.loadBudget()
                 case .automationsChanged:
                     await self.loadAutomations()
                 case .libraryChanged:
@@ -810,6 +815,24 @@ final class EngineController {
         await loadProjects()
     }
 
+    // MARK: Piopio's monthly budget (docs/spec/34 OV3)
+
+    func loadBudget() async {
+        if let b = try? await client?.call("stats.budgets", Empty(), as: Budgets.self).piopio { piopioBudget = b }
+    }
+
+    /// Sets the budget (or, with nil, turns it off).
+    func setBudget(_ monthUsd: Double?) async throws {
+        guard let client else { return }
+        piopioBudget = try await client.call("stats.budget.set", BudgetSetParams(monthUsd: monthUsd), as: PiopioBudget.self)
+    }
+
+    /// Your yes at 100%: one held run, or background work for the rest of the month.
+    func releaseBudget(run: String? = nil, month: Bool = false) async throws {
+        guard let client else { return }
+        piopioBudget = try await client.call("stats.budget.release", BudgetReleaseParams(run: run, month: month ? true : nil), as: PiopioBudget.self)
+    }
+
     // MARK: The Watchdog (docs/spec/17 §4)
 
     func loadWatchdog() async {
@@ -1194,7 +1217,7 @@ final class EngineController {
 
     /// Everything that waits for you (docs/design v2 "Needs you"): agents' Inbox items and Build sessions waiting on an approval.
     var needsYouCount: Int {
-        inboxCount + buildSessions.filter { liveStatus[$0.ref.id] == .waitingApproval }.count + watchdogNotes.count
+        inboxCount + buildSessions.filter { liveStatus[$0.ref.id] == .waitingApproval }.count + watchdogNotes.count + (piopioBudget?.held.count ?? 0)
     }
 
     func markInboxRead(_ items: [InboxItem]) async {

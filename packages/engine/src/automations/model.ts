@@ -64,6 +64,8 @@ export type AutomationRun = {
 	/** An agent's run: which agent, and its run's id. */
 	agent?: string;
 	agentRun?: string;
+	/** Held by Piopio's monthly budget (docs/spec/34 OV3) until your yes: what it will run with. */
+	held?: { prompt: string; key?: string };
 };
 
 export const PIOPIO = "piopio";

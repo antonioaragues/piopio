@@ -701,7 +701,13 @@ export class Sessions {
 				const mark = entry.ref.kind === "agent" ? `${entry.updatedAt}|${entry.agent?.status?.spendUsd ?? 0}` : entry.updatedAt;
 				if (ledger.synced(entry.ref.id) === mark) continue;
 				try {
-					if (entry.ref.kind === "agent" && entry.cloud) continue;
+					if (entry.ref.kind === "agent" && entry.cloud) {
+						// Your cloud's agents (docs/spec/34 OV4): their conversations and runs, read through the cloud when it answers.
+						const read = await Promise.race([this.indexContainer(entry).then(() => true), new Promise<false>((r) => setTimeout(() => r(false), 10_000).unref())]).catch(() => false);
+						this.cloudLedger = read ? { ...this.cloudLedger, at: new Date().toISOString(), failed: false } : { ...this.cloudLedger, failed: true };
+						if (read) ledger.markSynced(entry.ref.id, mark);
+						continue;
+					}
 					await this.indexContainer(entry);
 					// The whole file, open or not: branches you left and what a compaction folded were paid for too.
 					if (entry.ref.kind === "thread" || entry.ref.kind === "build") this.recordUsage(entry, this.storedAnswers(entry), true);
@@ -717,6 +723,15 @@ export class Sessions {
 			this.ledgerBackfill = undefined;
 		});
 		return this.ledgerBackfill;
+	}
+
+	/** When the cloud's usage was last read, and whether the latest try failed (Spend says "Cloud usage up to 14:02"). */
+	private cloudLedger: { at?: string; failed?: boolean } = {};
+
+	/** Your cloud's usage is counted up to this time: set while the cloud didn't answer the latest read. */
+	cloudLedgerAsOf(): string | undefined {
+		if (!this.cloudLedger.failed) return undefined;
+		return this.cloudLedger.at ?? this.hub.ledger.since();
 	}
 
 	/** Names for Overview's rows: an agent's or an automation's current name. */

@@ -174,6 +174,9 @@ public actor EngineClient {
                     }
                 } else if method == "watchdog.changed" {
                     providersContinuation.yield(.watchdogChanged)
+                } else if method == "budget.changed" {
+                    let n = try? decoder.decode(NotificationEnvelope<BudgetChanged>.self, from: line)
+                    providersContinuation.yield(.budgetChanged(n?.params ?? BudgetChanged(notify: nil)))
                 } else if method == "projects.changed" {
                     if let n = try? decoder.decode(NotificationEnvelope<ProjectsChanged>.self, from: line) {
                         projectsContinuation.yield(n.params.projects)

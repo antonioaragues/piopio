@@ -19,6 +19,9 @@ struct OverviewPage: View {
     @State private var showsAll = false
     @State private var opened: SpendGroup?
     @State private var hovered: String?
+    /// The Piopio budget's popover (Set a budget… / Change…) and what's typed in it.
+    @State private var editingBudget = false
+    @State private var budgetText = ""
 
     private var range: SpendRange { SpendRange(rawValue: rangeRaw) ?? .month }
     private var groupBy: SpendGroupBy { SpendGroupBy(rawValue: groupRaw) ?? .what }
@@ -43,7 +46,8 @@ struct OverviewPage: View {
                         headline(spend)
                         section("By day", trailing: { Text("Where it ran").foregroundStyle(Color.dsFg3) }) { byDay(spend) }
                         groupsSection(spend)
-                        if agent == nil && !budgets.isEmpty { section("Budgets") { budgetRows } }
+                        if agent == nil, let suggestions = spend.suggestions, !suggestions.isEmpty { section("Cheaper next time") { suggestionRows(Array(suggestions.prefix(3))) } }
+                        if agent == nil { section("Budgets") { budgetRows } }
                     }
                     if spend.backfilling == true {
                         FinePrint("Reading past conversations… the numbers fill in as it goes.").padding(.top, 14)
@@ -139,6 +143,11 @@ struct OverviewPage: View {
                 }
             }
             if let why = why(s) { Text(why).font(.system(size: 12)).foregroundStyle(Color.dsFg3).fixedSize(horizontal: false, vertical: true) }
+            if let asOf = s.cloudAsOf.flatMap(Self.date) {
+                Text("Cloud usage up to \(asOf.formatted(Calendar.current.isDateInToday(asOf) ? .dateTime.hour().minute() : .dateTime.day().month(.abbreviated).hour().minute()))")
+                    .font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                    .help("Your cloud couldn't be reached since then; what it spent after isn't counted yet.")
+            }
         }
         .padding(.bottom, 4)
     }
@@ -374,9 +383,128 @@ struct OverviewPage: View {
 
     private var budgetRows: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ForEach(Array(budgets.enumerated()), id: \.element.id) { i, b in
+            piopioBudgetRow
+            ForEach(budgets) { b in
+                Rectangle().fill(Color.dsLine).frame(height: 0.5)
                 budgetRow(b)
-                if i < budgets.count - 1 { Rectangle().fill(Color.dsLine).frame(height: 0.5) }
+            }
+        }
+    }
+
+    /// Piopio this month (OV3): off until you set it; amber past 80%; at 100% background work waits for your OK.
+    @ViewBuilder private var piopioBudgetRow: some View {
+        let b = engine.piopioBudget
+        let limit = b?.limitUsd
+        let used = (limit ?? 0) > 0 ? (b?.spentUsd ?? 0) / limit! : 0
+        let warn = b?.state == .near || b?.state == .over || (b?.state == .allowed)
+        HStack(spacing: 14) {
+            HStack(spacing: 6) {
+                Text("Piopio this month").lineLimit(1).fixedSize()
+                if limit == nil { Text("no budget").font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1).fixedSize() }
+            }
+            .help("Everything Piopio spends on this Mac and in your cloud. Past it, automations wait for your OK; your conversations keep going.")
+            .frame(maxWidth: .infinity, alignment: .leading)
+            if let limit, let b {
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(Color.dsTrack)
+                        Capsule().fill(warn ? Color.dsWarn : Color.dsFg2).frame(width: geo.size.width * CGFloat(min(used, 1)))
+                    }
+                }
+                .frame(width: 160, height: 3)
+                Text(piopioBudgetLine(b, limit: limit)).font(.system(size: 12.5)).foregroundStyle(warn ? Color.dsWarn : Color.dsFg2).monospacedDigit()
+                    .lineLimit(1).fixedSize()
+                Button("Change…") { budgetText = String(format: "%.0f", limit); editingBudget = true }
+                    .buttonStyle(SelectorStyle()).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
+                    .popover(isPresented: $editingBudget, arrowEdge: .bottom) { budgetEditor }
+                Button("Turn off") { setBudget(nil) }.buttonStyle(SelectorStyle()).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
+            } else {
+                Button("Set a budget…") { budgetText = ""; editingBudget = true }
+                    .buttonStyle(SelectorStyle()).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
+                    .popover(isPresented: $editingBudget, arrowEdge: .bottom) { budgetEditor }
+            }
+        }
+        .font(.system(size: 13))
+        .padding(.vertical, 7)
+    }
+
+    private func piopioBudgetLine(_ b: PiopioBudget, limit: Double) -> String {
+        var line = "\(money(b.spentUsd)) of \(money(limit))"
+        if let resets = Self.date(b.resets) { line += " · resets \(resets.formatted(.dateTime.day().month(.abbreviated)))" }
+        if b.state == .allowed { line += " · going on this month at your OK" }
+        return line
+    }
+
+    /// A dollar amount: at 80% you're told once; at 100% automations wait for your OK. Your conversations never stop.
+    private var budgetEditor: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Piopio's budget this month").font(.system(size: 13, weight: .semibold))
+            HStack(spacing: 6) {
+                Text("$").foregroundStyle(Color.dsFg2)
+                TextField("20", text: $budgetText).textFieldStyle(.roundedBorder).frame(width: 90)
+                    .onSubmit(saveBudget)
+            }
+            Text("At 80% you're told once. At 100% automations wait for your OK; your own conversations keep going.")
+                .font(.system(size: 12)).foregroundStyle(Color.dsFg2).fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Spacer()
+                Button("Cancel") { editingBudget = false }.buttonStyle(PillStyle(compact: true))
+                Button("Save") { saveBudget() }.buttonStyle(PillStyle(kind: .primary, compact: true))
+                    .disabled(budgetValue == nil)
+            }
+        }
+        .padding(16).frame(width: 280)
+    }
+
+    private var budgetValue: Double? {
+        let text = budgetText.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: ".")
+        guard let v = Double(text), v > 0 else { return nil }
+        return v
+    }
+
+    private func saveBudget() {
+        guard let v = budgetValue else { return }
+        editingBudget = false
+        setBudget(v)
+    }
+
+    private func setBudget(_ value: Double?) {
+        Task {
+            do { try await engine.setBudget(value) } catch { self.error = (error as? EngineError)?.message ?? error.localizedDescription }
+        }
+    }
+
+    // MARK: Cheaper next time (§5.5)
+
+    /// At most three, each the number it's based on and one plain-text action.
+    private func suggestionRows(_ list: [SpendSuggestion]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(list) { s in
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text(s.text).font(.system(size: 13)).foregroundStyle(Color.dsFg2)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    if let action = s.action {
+                        Button(action.label) { perform(action) }
+                            .buttonStyle(SelectorStyle()).font(.system(size: 12.5)).foregroundStyle(Color.dsFg)
+                            .fixedSize()
+                    }
+                }
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    private func perform(_ action: SpendSuggestion.Action) {
+        switch action.kind {
+        case .automation:
+            if let id = action.id { item = .automation(id) }
+        case .agent:
+            if let id = action.id { item = engine.item(for: id) ?? .agent(id) }
+        case .onDevice:
+            Task {
+                await engine.updateSettings(SettingsPatch(models: .init(utility: .onDevice)))
+                await load()
             }
         }
     }
@@ -476,7 +604,9 @@ struct OverviewPage: View {
             async let s = client.call("stats.spend", SpendParams(range: range, groupBy: groupBy, filter: filter), as: SpendResult.self)
             async let b = client.call("stats.budgets", Empty(), as: Budgets.self)
             spend = try await s
-            budgets = ((try? await b)?.budgets ?? []).filter { agent == nil || $0.ref?.id == agent }
+            let got = try? await b
+            budgets = (got?.budgets ?? []).filter { agent == nil || $0.ref?.id == agent }
+            if got?.piopio != nil { await engine.loadBudget() }
             error = nil
         } catch {
             if spend == nil { self.error = error.localizedDescription }

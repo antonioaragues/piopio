@@ -1800,7 +1800,7 @@ public struct ProviderAuthEvent: Decodable, Sendable, Hashable {
     public init(type: String, message: String? = nil) { self.type = type; self.message = message }
 }
 public struct ProviderAuthNotification: Decodable, Sendable { public var loginId, provider: String; public var event: ProviderAuthEvent }
-public enum ProviderNotification: Sendable { case auth(ProviderAuthNotification), changed, connectorAuth(ConnectorAuthNotification), connectorsChanged, workChanged, watchdogChanged, automationsChanged, libraryChanged, appData(AppView) }
+public enum ProviderNotification: Sendable { case auth(ProviderAuthNotification), changed, connectorAuth(ConnectorAuthNotification), connectorsChanged, workChanged, watchdogChanged, automationsChanged, libraryChanged, appData(AppView), budgetChanged(BudgetChanged) }
 
 // MARK: Connected apps (docs/spec/12-connectors)
 
@@ -2148,6 +2148,18 @@ public struct SpendResult: Decodable, Sendable {
     public var groups: [SpendGroup]
     public var since: String?
     public var backfilling: Bool?
+    /// Cheaper next time (34 §5.5): at most three, each with the number it's based on.
+    public var suggestions: [SpendSuggestion]?
+    /// The cloud's usage is counted up to this time (it was unreachable since).
+    public var cloudAsOf: String?
+}
+/// Cheaper next time (34 §5.5, OV7): a saving with the number it's based on, and one thing to do about it.
+public struct SpendSuggestion: Decodable, Sendable, Hashable, Identifiable {
+    public struct Action: Decodable, Sendable, Hashable {
+        public enum Kind: String, Decodable, Sendable { case automation, agent, onDevice = "on_device" }
+        public var kind: Kind; public var id: String?; public var label: String
+    }
+    public var id: String; public var text: String; public var savingUsd: Double; public var action: Action?
 }
 public struct SpendItemsParams: Encodable, Sendable {
     public var range: SpendRange; public var groupBy: SpendGroupBy; public var group: String
@@ -2171,7 +2183,37 @@ public struct Budget: Decodable, Sendable, Hashable, Identifiable {
     public var ref: ContainerRef?
     public var automation: String?
 }
-public struct Budgets: Decodable, Sendable { public var budgets: [Budget] }
+/// Piopio this month (34 §5.4, OV3): one budget over everything the ledger counts on this Mac, off until set.
+public struct PiopioBudget: Decodable, Sendable, Equatable {
+    public enum State: String, Decodable, Sendable { case off, ok, near, over, allowed }
+    public struct Held: Decodable, Sendable, Equatable, Identifiable {
+        public var run, automation, name, at: String
+        public var id: String { run }
+    }
+    /// "2026-11".
+    public var month: String
+    public var limitUsd: Double?
+    public var spentUsd: Double
+    public var resets: String
+    public var state: State
+    public var held: [Held]
+}
+public struct Budgets: Decodable, Sendable { public var budgets: [Budget]; public var piopio: PiopioBudget? }
+public struct BudgetSetParams: Encodable, Sendable {
+    public var monthUsd: Double?
+    public init(monthUsd: Double?) { self.monthUsd = monthUsd }
+    // `null` turns it off, so the key is always sent.
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(monthUsd, forKey: .monthUsd)
+    }
+    private enum CodingKeys: String, CodingKey { case monthUsd }
+}
+public struct BudgetReleaseParams: Encodable, Sendable {
+    public var run: String?; public var month: Bool?
+    public init(run: String? = nil, month: Bool? = nil) { self.run = run; self.month = month }
+}
+public struct BudgetChanged: Decodable, Sendable { public var notify: String? }
 public struct SpendExportParams: Encodable, Sendable { public var range: SpendRange; public init(range: SpendRange) { self.range = range } }
 public struct SpendExport: Decodable, Sendable { public var csv: String; public var rows: Int }
 

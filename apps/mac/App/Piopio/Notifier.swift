@@ -57,8 +57,30 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
+    /// Piopio's monthly budget (docs/spec/34 OV3): once at 80%, once at 100%. Clicking opens Overview.
+    func budget(_ text: String) {
+        Task {
+            if authorized == nil {
+                authorized = (try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])) ?? false
+            }
+            guard authorized == true else { return }
+            let content = UNMutableNotificationContent()
+            content.title = "Piopio's budget"
+            content.body = text
+            content.userInfo = ["budget": true]
+            try? await UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil))
+        }
+    }
+
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
         let info = response.notification.request.content.userInfo
+        if info["budget"] as? Bool == true {
+            await MainActor.run {
+                WindowOpener.shared.showMain()
+                NotificationCenter.default.post(name: .selectItem, object: SidebarItem.overview(nil).raw)
+            }
+            return
+        }
         if let agentId = info["agentId"] as? String, let approvalId = info["approvalId"] as? String {
             let action = response.actionIdentifier
             await MainActor.run {

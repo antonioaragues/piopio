@@ -8,6 +8,8 @@ import { createServer, type Server } from "node:net";
 import { methods, PROTOCOL_VERSION, reverseMethods, SECRET_OPENROUTER, type MethodName, type Params, type Result } from "@piopio/protocol";
 import { Value } from "typebox/value";
 import { EngineError, keyHint, ModelHub, providerUsage } from "./models.js";
+import { rangeBounds, type LedgerNames } from "./ledger.js";
+import { suggestions } from "./suggest.js";
 import { ensureDirs, loadOrCreateToken, type EnginePaths } from "./paths.js";
 import { socketAnswers } from "./lock.js";
 import { MethodNotFound, RpcConnection } from "./rpc/connection.js";
@@ -37,7 +39,7 @@ import { groupSteps, StepsView } from "./timeline/steps.js";
 import { DeltaBatcher } from "./timeline/delta-batcher.js";
 import { replacedVisuals } from "./tools/visuals.js";
 import { fitCheck } from "./work/fit.js";
-import type { TimelineItem, ToolItem } from "@piopio/protocol";
+import type { SpendSuggestion, TimelineItem, ToolItem } from "@piopio/protocol";
 
 /** Subagents keep their own card (it opens their session). */
 /** Tools that stay their own item when steps fold: subagent tasks, questions you answered, plans, files handed over, visuals and apps made (they read as part of the conversation). */
@@ -337,8 +339,16 @@ export class Engine {
 				for (const conn of this.authed) conn.notify("automations.changed", {});
 			},
 			watchesChanged: () => void this.watchers?.sync().catch(() => undefined),
+			hold: () => this.hub.budget.holdReason(),
+			heldChanged: () => this.hub.budget.heldChanged(),
 		});
 		this.sessions.automations = this.automations;
+		// Piopio this month (docs/spec/34 OV3): it holds automations past 100%, and says each level once.
+		this.hub.budget.heldRuns = () => this.automations.heldRuns();
+		this.hub.budget.releaseAll = () => void this.automations.release().catch((error) => this.log(`Held runs: ${(error as Error).message}`));
+		this.hub.budget.onChange = (event) => {
+			for (const conn of this.authed) conn.notify("budget.changed", event);
+		};
 		this.sessions.log = this.log;
 		this.sessions.onAutomationsMigrated = (lines) => this.appendAutomationReport(lines);
 		this.sessions.onRuntimeReplaced = (ref) => {
@@ -498,6 +508,14 @@ export class Engine {
 
 	/** Whether conversations use a global MCP server: chosen per server, else (before that) all that are on. */
 	/** Projects without a folder became folders (CF4): what they remembered goes into their NOTES.md. */
+	/** Cheaper next time (docs/spec/34 §5.5): from the range's rows, today's prices and what this Mac can run. */
+	private async spendSuggestions(p: Params<"stats.spend">, names: LedgerNames): Promise<SpendSuggestion[]> {
+		const { from, to } = rangeBounds(p.range);
+		const [models, onDevice] = await Promise.all([this.hub.listModels().catch(() => []), this.hub.onDevice.status().catch(() => ({ available: false }))]);
+		const labels: Record<string, string> = { today: "today", "7d": "these 7 days", month: "this month", last_month: "last month", "12m": "this year" };
+		return suggestions(this.hub.ledger.rows(from, to), { models, names, onDeviceOffer: onDevice.available && this.settings.get().models?.utility !== "on_device", rangeLabel: labels[p.range] ?? "" });
+	}
+
 	private async notesFromMemory(): Promise<void> {
 		for (const { id, notes } of this.projects.migrated) {
 			const bank = `project:${id}`;
@@ -708,6 +726,7 @@ export class Engine {
 		await this.connectors.close();
 		this.inputReceipts.close();
 		this.hub.extraCosts.close();
+		this.hub.budget.close();
 		this.hub.ledger.close();
 		await this.memory.reset();
 		if (existsSync(this.options.paths.socket)) unlinkSync(this.options.paths.socket);
@@ -1466,15 +1485,32 @@ export class Engine {
 				const p = params as Params<"stats.spend">;
 				// The first open reads past conversations into the ledger; what's there after a moment is shown, marked.
 				const done = await Promise.race([this.sessions.backfillLedger().then(() => true), new Promise<false>((r) => setTimeout(() => r(false), 1500))]);
-				const result = this.hub.ledger.spend(p, this.sessions.ledgerNames());
-				return (done ? result : { ...result, backfilling: true }) satisfies Result<"stats.spend">;
+				const names = this.sessions.ledgerNames();
+				const result = this.hub.ledger.spend(p, names);
+				result.suggestions = await this.spendSuggestions(p, names).catch(() => []);
+				const cloudAsOf = this.sessions.cloudLedgerAsOf();
+				return { ...result, ...(done ? {} : { backfilling: true }), ...(cloudAsOf ? { cloudAsOf } : {}) } satisfies Result<"stats.spend">;
 			}
 			case "stats.items": {
 				const p = params as Params<"stats.items">;
 				return { items: this.hub.ledger.items(p, this.sessions.ledgerNames()) } satisfies Result<"stats.items">;
 			}
 			case "stats.budgets":
-				return { budgets: this.sessions.budgets() } satisfies Result<"stats.budgets">;
+				return { budgets: this.sessions.budgets(), piopio: this.hub.budget.state() } satisfies Result<"stats.budgets">;
+			case "stats.budget.set": {
+				const p = params as Params<"stats.budget.set">;
+				try {
+					return this.hub.budget.set(p.monthUsd) satisfies Result<"stats.budget.set">;
+				} catch (error) {
+					throw new EngineError("INVALID", (error as Error).message);
+				}
+			}
+			case "stats.budget.release": {
+				const p = params as Params<"stats.budget.release">;
+				if (p.month) return this.hub.budget.allowMonth() satisfies Result<"stats.budget.release">;
+				if (p.run) await this.automations.release(p.run);
+				return this.hub.budget.state() satisfies Result<"stats.budget.release">;
+			}
 			case "stats.export": {
 				const p = params as Params<"stats.export">;
 				await this.sessions.backfillLedger();

@@ -36,6 +36,10 @@ export type AutomationsHost = {
 	mailboxes?(): number;
 	/** A webhook automation's address. */
 	hookUrl?(id: string): string | undefined;
+	/** Why background work waits now (Piopio's monthly budget, docs/spec/34 OV3), or nothing. */
+	hold?(): string | undefined;
+	/** A run was held or let go. */
+	heldChanged?(): void;
 	/** Resolves when runs can reach their model's key (the app is connected, or it waited long enough). */
 	ready?(): Promise<unknown>;
 	/** The list or a run changed (the app lists again). */
@@ -406,6 +410,49 @@ export class Automations {
 		const outside = detail ? outsideText(detail, OUTSIDE[a.on] ?? "something that happened") : "";
 		const prompt = a.prompt.includes("{{body}}") ? a.prompt.replaceAll("{{body}}", outside) : `${a.prompt}${outside ? `\n\nWhat happened:\n${outside}` : ""}`;
 		const run: AutomationRun = { id: `ar${now.toString(36)}${Math.random().toString(36).slice(2, 5)}`, automation: a.id, firedAt: new Date(now).toISOString(), cause, status: "running" };
+		// Past Piopio's monthly budget, a run waits for your yes. Run now is your yes already.
+		const hold = cause === "now" ? undefined : this.host.hold?.();
+		if (hold) {
+			run.status = "waiting";
+			run.summary = hold;
+			run.held = { prompt, ...(key ? { key } : {}) };
+			this.runs.push(run);
+			this.runs = this.runs.slice(-this.maxRuns());
+			this.saveRuns();
+			this.host.changed();
+			this.host.heldChanged?.();
+			return run;
+		}
+		return this.execute(a, run, prompt, key, cause, now);
+	}
+
+	/** Runs the budget holds, oldest first. */
+	heldRuns(): { run: string; automation: string; name: string; at: string }[] {
+		return this.runs.filter((r) => r.held).map((r) => ({ run: r.id, automation: r.automation, name: this.find(r.automation)?.name ?? "Automation", at: r.firedAt }));
+	}
+
+	/** Your yes for a held run (or all of them): it runs now, as it would have. */
+	async release(runId?: string): Promise<void> {
+		for (const run of this.runs.filter((r) => r.held && (!runId || r.id === runId))) {
+			const held = run.held!;
+			delete run.held;
+			const a = this.find(run.automation);
+			if (!a) {
+				run.status = "skipped";
+				run.summary = "Its automation is gone.";
+				continue;
+			}
+			run.status = "running";
+			delete run.summary;
+			this.runs = this.runs.filter((r) => r !== run);
+			await this.execute(a, run, held.prompt, held.key, run.cause, this.now());
+		}
+		this.saveRuns();
+		this.host.changed();
+		this.host.heldChanged?.();
+	}
+
+	private async execute(a: Automation, run: AutomationRun, prompt: string, key: string | undefined, cause: AutomationRun["cause"], now: number): Promise<AutomationRun> {
 		try {
 			if (a.runsAs === PIOPIO) {
 				const text = `[Automation] “${a.name}” (${whenLabel(a)}). Nobody started this conversation: the automation did.${a.result === "quiet" ? " If nothing needs the user, end with one line saying so." : ""} Its budget is $${(a.budgetPerRunUsd ?? DEFAULT_BUDGET.piopio).toFixed(2)}.\n\n${prompt}`;
