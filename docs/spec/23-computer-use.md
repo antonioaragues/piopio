@@ -193,6 +193,7 @@ If 22 hasn't shipped its W1 by then, U1 carries the shared protocol work.
 - **Native provider tool types** (Anthropic's computer toolset, OpenAI's `computer`) when pi supports them, kept
   behind the same grants. To re-check against the providers' docs then; the spike's notes are from 2026-10-22.
 - **Teach by showing:** you do a task once while Piopio watches one app, and it becomes a routine's instructions.
+  Drafted 2026-11-23 as [40-show-me-how.md](40-show-me-how.md): recorded steps, not video, become a skill.
 - Cross-app drags; several displays in full control; acting in your browsers through an extension instead of pixels.
 
 ## 10. Questions for you
