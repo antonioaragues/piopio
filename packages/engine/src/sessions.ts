@@ -31,7 +31,7 @@ import { appConversationExtension, codingAppsExtension } from "./tools/apps-tool
 import type { Apps, MakeContext } from "./apps.js";
 import { historySdkExtension } from "./tools/history.js";
 import { isCodingAgent } from "./coding-agents.js";
-import { fileItems, handoffSummary, innerOf, pastItems, SegmentedRuntime, type Segment } from "./runtimes/segments.js";
+import { fileAnswers, fileItems, handoffSummary, innerOf, pastItems, SegmentedRuntime, type Segment } from "./runtimes/segments.js";
 import { parseVerdict, REVIEW_SYSTEM, reviewPrompt, type TaskResult } from "@piopio/pi-extensions";
 import type { Runtime } from "./runtimes/runtime.js";
 import { DatabaseSync } from "node:sqlite";
@@ -659,10 +659,10 @@ export class Sessions {
 	}
 
 	/** Writes the finished answers' usage into the ledger (idempotent: an answer read again isn't counted twice). */
-	private recordUsage(entry: CatalogEntry, items: readonly TimelineItem[]): void {
+	private recordUsage(entry: CatalogEntry, items: readonly TimelineItem[], fromFile = false): void {
 		if (!items.some((i) => i.kind === "assistant" && i.usage)) return;
 		try {
-			this.hub.ledger.recordItems(this.ledgerSource(entry), items);
+			this.hub.ledger.recordItems(this.ledgerSource(entry), items, fromFile);
 		} catch (error) {
 			// Overview's numbers are never worth a failed turn.
 			console.error(`usage ledger: ${error instanceof Error ? error.message : String(error)}`);
@@ -687,6 +687,11 @@ export class Sessions {
 				try {
 					if (entry.ref.kind === "agent" && entry.cloud) continue;
 					await this.indexContainer(entry);
+					// The whole file, open or not: branches you left and what a compaction folded were paid for too.
+					if (entry.ref.kind === "thread" || entry.ref.kind === "build") this.recordUsage(entry, this.storedAnswers(entry), true);
+					// An agent's views show a window of the latest entries; its answers are all in the harness.
+					const agent = entry.ref.kind === "agent" ? await this.open.get(entry.ref.id)?.catch(() => undefined) : undefined;
+					if (agent instanceof AgentRuntime) this.recordUsage(entry, await agent.answers());
 					ledger.markSynced(entry.ref.id, mark);
 				} catch {
 					// Unreadable or missing files: tried again next time.
@@ -2977,6 +2982,11 @@ export class Sessions {
 	}
 
 	/** A conversation's items from its files (every part), without opening it. */
+	/** Every answer its files paid for, earlier segments included (the usage ledger). */
+	private storedAnswers(entry: CatalogEntry): TimelineItem[] {
+		return [...(entry.segments ?? []), entry].flatMap((files) => fileAnswers(files));
+	}
+
 	private storedItems(entry: CatalogEntry): TimelineItem[] {
 		const current = fileItems(entry.ref, entry);
 		return entry.segments?.length ? [...pastItems(entry.ref, entry.segments, entry.model ?? this.hub.defaultModel), ...current] : current;

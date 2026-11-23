@@ -7,9 +7,9 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
-import type { Attachment, ContainerRef, ModelRef, SessionEvent, Snapshot, TimelineItem } from "@piopio/protocol";
+import type { AssistantItem, Attachment, ContainerRef, ModelRef, SessionEvent, Snapshot, TimelineItem } from "@piopio/protocol";
 import { agentName, isCodingAgent } from "../coding-agents.js";
-import { TimelineBuilder, type PiMessage } from "../timeline/builder.js";
+import { TimelineBuilder, toUsage, type PiMessage } from "../timeline/builder.js";
 import { sdkMessages, SdkEventMapper } from "../timeline/pi-sdk.js";
 import type { Runtime, SubmitOptions } from "./runtime.js";
 
@@ -33,6 +33,30 @@ export function fileItems(ref: ContainerRef, files: { sessionFile?: string; agen
 		builder.reset(sdkMessages(SessionManager.open(files.sessionFile).buildSessionContext().messages as unknown as PiMessage[]), (i) => SdkEventMapper.idOf(i), false);
 	} else return [];
 	return builder.snapshot().items;
+}
+
+/**
+ * Every answer a stored conversation paid for: all branches and what a compaction summarized, not only what it shows
+ * (the usage ledger's backfill, docs/spec/34 §8.1). Usage and model only; no content.
+ */
+export function fileAnswers(files: { sessionFile?: string; agentFile?: string }): AssistantItem[] {
+	let messages: PiMessage[] = [];
+	try {
+		if (files.agentFile && existsSync(files.agentFile)) messages = (JSON.parse(readFileSync(files.agentFile, "utf8")) as { messages?: PiMessage[] }).messages ?? [];
+		else if (files.sessionFile && existsSync(files.sessionFile)) {
+			messages = SessionManager.open(files.sessionFile).getEntries().flatMap((e) => (e.type === "message" ? [e.message as unknown as PiMessage] : []));
+		}
+	} catch {
+		return [];
+	}
+	return messages.flatMap((m, i) => {
+		if (m.role !== "assistant") return [];
+		const a = m as Extract<PiMessage, { role: "assistant" }>;
+		const usage = toUsage(a.usage);
+		if (!usage) return [];
+		const at = new Date(typeof a.timestamp === "number" ? a.timestamp : Date.now()).toISOString();
+		return [{ kind: "assistant" as const, id: `f${i}`, at, parts: [], status: "done" as const, usage, ...(a.model ? { model: a.provider ? `${a.provider}/${a.model}` : a.model } : {}) }];
+	});
 }
 
 const said = (items: readonly TimelineItem[]) => items.filter((i) => i.kind === "user" || i.kind === "assistant").length;

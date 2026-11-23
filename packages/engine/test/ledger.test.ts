@@ -4,7 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AssistantItem, Snapshot, SpendResult } from "@piopio/protocol";
 import { afterAll, beforeAll, expect, test } from "vitest";
+import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { type LedgerSource, rangeBounds, UsageLedger } from "../src/ledger.js";
+import { fileAnswers, fileItems } from "../src/runtimes/segments.js";
 import { enginePaths } from "../src/paths.js";
 import { Engine } from "../src/server.js";
 import { TestClient } from "./client.js";
@@ -116,6 +118,36 @@ test("ranges are local days; 12 months is by month; the forecast waits for day 5
 	expect(year.knownUsd).toBe(2);
 	expect(ledger.spend({ range: "month" }, {}, new Date(2026, 10, 3)).forecastUsd).toBeUndefined();
 	expect(ledger.csv("month", now).csv.split("\n")[1]).toMatch(/^.+,mac,turn,t1,,,,openrouter,openrouter\/anthropic\/claude-sonnet-5\.5,,1000,100,0,0,1,false$/);
+	ledger.close();
+});
+
+test("a stored conversation's answers on every branch count, not only the one it shows", () => {
+	const dir = mkdtempSync(join(tmpdir(), "piopio-ledger-file-"));
+	const sm = SessionManager.create(dir, dir);
+	const usage = (input: number, usd: number) => ({ input, output: 50, cacheRead: 0, cacheWrite: 0, totalTokens: input + 50, cost: { input: usd, output: 0, cacheRead: 0, cacheWrite: 0, total: usd } });
+	const said = (text: string, input: number, usd: number, at: number) => {
+		sm.appendMessage({ role: "user", content: text, timestamp: at } as never);
+		return sm.appendMessage({ role: "assistant", content: [{ type: "text", text: "ok" }], provider: "openrouter", model: "a/b", api: "openai-completions", usage: usage(input, usd), stopReason: "stop", timestamp: at + 1 } as never);
+	};
+	const first = said("one", 100, 0.1, Date.parse(day(4)));
+	said("two", 200, 0.2, Date.parse(day(4, 11)));
+	// Back to the first answer and on from there: "two" is on a branch you left.
+	sm.branch(first);
+	said("two, again", 210, 0.25, Date.parse(day(4, 12)));
+	const file = sm.getSessionFile()!;
+	const ref = { kind: "build" as const, id: "b9" };
+	expect(fileItems(ref, { sessionFile: file }).filter((i) => i.kind === "assistant")).toHaveLength(2);
+	const answers = fileAnswers({ sessionFile: file });
+	expect(answers).toHaveLength(3);
+	const ledger = new UsageLedger();
+	const source = { ...build, key: "b9", container: "b9", ref };
+	// What the session shows (live or reopened), then the whole file: the left branch is added, nothing twice.
+	ledger.recordItems(source, fileItems(ref, { sessionFile: file }));
+	expect(ledger.recordItems(source, answers, true)).toBe(1);
+	// …and again, and what's shown again: still three requests.
+	ledger.recordItems(source, answers, true);
+	ledger.recordItems(source, fileItems(ref, { sessionFile: file }));
+	expect(ledger.spend({ range: "month" }, {}, now)).toMatchObject({ calls: 3, knownUsd: expect.closeTo(0.55) });
 	ledger.close();
 });
 

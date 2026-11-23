@@ -6,7 +6,9 @@
  * Rows come from what sessions show (an assistant answer carries its `Usage`) and from the requests outside them
  * (`extra_costs`: utility, web search, embeddings), which it absorbs. Writing is idempotent: a row's id is its
  * container, the answer's item id and its token counts, so reading a conversation again (backfill, a reopen, the live
- * events) never counts an answer twice, and a branch you left keeps what it cost.
+ * events) never counts an answer twice, and a branch you left keeps what it cost. Answers read from a stored file's
+ * other branches (`fromFile`) have no item id to match: one is added only when its conversation has no row with the
+ * same model and token counts, so it can't double what's shown (two such requests would count once: an undercount).
  */
 import { DatabaseSync, type StatementSync } from "node:sqlite";
 import { basename } from "node:path";
@@ -98,26 +100,31 @@ export class UsageLedger {
 	// ── Writing ──
 
 	/** Records every finished answer in `items` that reports usage. Returns how many were new. */
-	recordItems(source: LedgerSource, items: readonly TimelineItem[]): number {
+	recordItems(source: LedgerSource, items: readonly TimelineItem[], fromFile = false): number {
 		const answers = items.filter((i): i is AssistantItem => i.kind === "assistant" && i.status !== "streaming" && Boolean(i.usage));
 		this.db.prepare("INSERT INTO ledger_sources (key, ref, title) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET ref = excluded.ref, title = excluded.title").run(source.key, JSON.stringify(source.ref), source.title);
 		if (!answers.length) return 0;
 		let added = 0;
 		this.transaction(() => {
-			for (const item of answers) if (this.recordAnswer(source, item)) added++;
+			for (const item of answers) if (this.recordAnswer(source, item, fromFile)) added++;
 		});
 		return added;
 	}
 
-	private recordAnswer(source: LedgerSource, item: AssistantItem): boolean {
+	private recordAnswer(source: LedgerSource, item: AssistantItem, fromFile: boolean): boolean {
 		const u = item.usage!;
 		const tokens = u.inputTokens + u.outputTokens + u.cacheReadTokens + u.cacheWriteTokens;
 		// An answer that cost nothing and used nothing (a stopped one, the faux model's) isn't a request worth a row.
 		if (tokens === 0 && !(u.costUsd > 0)) return false;
 		const [provider, ...rest] = (item.model ?? "").split("/");
 		const plan = provider ? this.planOf(provider, u.costUsd) : false;
+		const tokens4 = `${u.inputTokens}.${u.outputTokens}.${u.cacheReadTokens}.${u.cacheWriteTokens}`;
+		// The same request as a row from the other kind (shown vs read from the file): only its price may improve.
+		const twin = this.db
+			.prepare(`SELECT id FROM usage_ledger WHERE id LIKE ? ESCAPE '\\' AND kind = 'turn' AND ${fromFile ? "1" : "id LIKE ? ESCAPE '\\'"} AND coalesce(model, '') = ? AND input = ? AND output = ? AND cache_read = ? AND cache_write = ? LIMIT 1`)
+			.get(...[`${likeEscape(source.container)}#%`, ...(fromFile ? [] : [`${likeEscape(source.container)}#file#%`]), rest.length ? item.model! : "", u.inputTokens, u.outputTokens, u.cacheReadTokens, u.cacheWriteTokens]) as { id: string } | undefined;
 		return this.insert({
-			id: `${source.container}#${item.id}#${u.inputTokens}.${u.outputTokens}.${u.cacheReadTokens}.${u.cacheWriteTokens}`,
+			id: twin?.id ?? (fromFile ? `${source.container}#file#${item.model ?? ""}#${tokens4}` : `${source.container}#${item.id}#${tokens4}`),
 			at: item.at,
 			place: source.place,
 			kind: "turn",
@@ -423,5 +430,7 @@ function fromStored(s: Stored): LedgerRow {
 	};
 }
 
+/** For LIKE patterns ('\\' is the escape character in the statements that use it). */
+const likeEscape = (s: string) => s.replace(/[\\%_]/g, (c) => `\\${c}`);
 const sum = <T>(list: readonly T[], f: (x: T) => number) => list.reduce((n, x) => n + f(x), 0);
 const cell = (v: string | number) => (typeof v === "string" && /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : String(v));

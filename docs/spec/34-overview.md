@@ -277,6 +277,15 @@ chats, Build, subagents, side conversations, agents' conversations and runs, and
   subscription) are `plan = true`: tokens, never dollars (OV4).
 - **extra_costs** keeps its table (agents' budgets read it), and each new row is also written to the ledger; the rows
   from before are read in once. A scope that's a conversation or an agent counts there; `app` is Piopio's own work.
+- **What the backfill reads.** A conversation's view isn't its whole cost: Build's and chats' files keep branches you
+  left and what a compaction folded, and an agent's views show a window of its latest entries. So the backfill also
+  reads every answer in the file (`fileAnswers`) and every `pi.assistant` entry in an agent's harness
+  (`AgentRuntime.answers`). A file's answer has no item id to match what's shown: it's added only when its
+  conversation has no row with the same model and token counts.
+- **Checked on real data (2026-11-23),** a copy of the user's data folder: 909 requests since 8 Nov, $11.82. Turns
+  match the session files' own sums ($11.6286 vs $11.6263; the difference is a chat's earlier part, which the ledger
+  reads), extra costs match `extra_costs` exactly (108 rows, $0.1804), and the agent matches its own month
+  ($0.03209). Before the two reads above, the ledger missed $0.78 of left branches and $0.005 of the agent.
 - **Backfill** runs on Spend's first open: every conversation whose `updatedAt` changed since it was last read (an
   agent's also when its month's spend changed, since runs don't touch the catalog). Spend waits for it 1.5 s, then
   answers with what's there and `backfilling: true`; the page says "Reading past conversations…" and asks again.

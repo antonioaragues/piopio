@@ -15,14 +15,14 @@ import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { ConversationBusy, createRegistry, Harness, type Conversation, type ConversationWatch, type Extension, type SubmissionDraft } from "@earendil-works/pi-durable";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
 import { createToolSearchExtension } from "@earendil-works/pi-durable/tool-search";
-import type { ApprovalItem, ContainerRef, ModelRef, ResultItem, SessionEvent, Snapshot, TimelineItem, UtilityChoice } from "@piopio/protocol";
+import type { ApprovalItem, AssistantItem, ContainerRef, ModelRef, ResultItem, SessionEvent, Snapshot, TimelineItem, UtilityChoice } from "@piopio/protocol";
 import type { AgentFileInfo, AgentFilesBridge } from "@piopio/runtime";
 import type { KeptAttachment } from "../attachment-files.js";
 import { AGENT_ENTRY, AgentCore, type AgentCoreOptions, alwaysLabel, modelOf, type Envelope, LEARN_ENTRY, NOTICE_ENTRY, OUT_ENTRY, type AgentDefinition, type Approval, type MemoryProvider, type ResultCard, type RunRecord, type UndoRecord } from "@piopio/runtime";
 import { BOT_TOKEN } from "../channels/telegram.js";
 import { buildInput } from "../input.js";
 import { EngineError, type ModelHub } from "../models.js";
-import { TimelineBuilder } from "../timeline/builder.js";
+import { TimelineBuilder, toUsage, type PiMessage } from "../timeline/builder.js";
 import { DurableViewMapper, type DurableView, type Entry } from "../timeline/pi-durable.js";
 import { groupSteps, StepsView } from "../timeline/steps.js";
 import { createWebExtension, type WebOptions } from "../tools/web.js";
@@ -95,7 +95,40 @@ export class AgentRuntime implements Runtime {
 		private readonly options: AgentOpenOptions,
 		private readonly harness: Harness,
 		readonly core: AgentCore,
+		private readonly storage?: Awaited<ReturnType<typeof openNodeSqliteStorage>>,
 	) {}
+
+	/**
+	 * Every priced answer in the agent, in all its conversations (people, runs, other agents, its own tasks), as the
+	 * usage ledger reads them (docs/spec/34 §8.1): a view shows only a window of the latest entries. Ids are the entry
+	 * ids the views use, so an answer a view already showed is the same row. Usage and model only.
+	 */
+	async answers(): Promise<AssistantItem[]> {
+		if (!this.storage) return [];
+		const out = new Map<string, AssistantItem>();
+		let cursor: unknown;
+		do {
+			const page = await this.storage.scanConversations({}, 100, cursor as never, ctx);
+			for (const record of page.items) {
+				const conversation = await this.harness.conversation(record.id, ctx);
+				let at: unknown;
+				do {
+					const entries = await conversation!.entries({}, 200, at as never, ctx);
+					for (const entry of entries.items) {
+						const m = (entry as { kind?: string; model?: PiMessage[] }).kind === "pi.assistant" ? (entry as { model?: PiMessage[] }).model?.[0] : undefined;
+						if (m?.role !== "assistant" || out.has(String(entry.id))) continue;
+						const a = m as Extract<PiMessage, { role: "assistant" }>;
+						const usage = toUsage(a.usage);
+						if (!usage) continue;
+						out.set(String(entry.id), { kind: "assistant", id: String(entry.id), at: new Date(typeof a.timestamp === "number" ? a.timestamp : Date.now()).toISOString(), parts: [], status: "done", usage, ...(a.model ? { model: a.provider ? `${a.provider}/${a.model}` : a.model } : {}) });
+					}
+					at = entries.next;
+				} while (at);
+			}
+			cursor = page.next;
+		} while (cursor);
+		return [...out.values()];
+	}
 
 	get ref(): ContainerRef {
 		return this.options.ref;
@@ -195,7 +228,7 @@ export class AgentRuntime implements Runtime {
 			...(options.updateSelf ? { updateSelf: options.updateSelf } : {}),
 		});
 		for (const e of [web, core.extension, ...(browser ? [browser] : []), ...appExtensions()]) registry.install(e as never);
-		runtime = new AgentRuntime(options, harness, core);
+		runtime = new AgentRuntime(options, harness, core, storage);
 		runtime.owner = await runtime.view(ownerOf(options.definition()));
 		await core.configureAll();
 		harness.resume();
