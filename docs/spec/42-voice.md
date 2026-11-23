@@ -1,6 +1,7 @@
 # 42 · Voice: talk to Piopio
 
-Status: draft 2026-11-23 from a request by the user; decisions in §9 are proposals to confirm; nothing here is built.
+Status: draft 2026-11-23 from a request by the user; **decided by the user the same day (§9, VO1–VO9, every proposal
+accepted)**; the questions in §12 other than 2 are still open; nothing here is built.
 It develops backlog D5 ("voice input in the composers, dictation, push to talk") and AQ10's "voice", both parked until
 now (09 § Parked), and shares its transcription with 40's narrated demonstrations.
 
@@ -135,7 +136,7 @@ this good enough.
 - **Echo.** In talk mode the microphone uses the system's voice processing (echo cancellation) so Piopio doesn't hear
   its own voice through the speakers; with headphones it isn't needed.
 
-## 9. Decisions (to confirm)
+## 9. Decisions (2026-11-23)
 
 | # | Decision | Alternative considered |
 |---|---|---|
@@ -188,7 +189,7 @@ work well in the app, so it follows VC1. VC3 after a few weeks of VC1.
 
 1. **The keys.** ⌥⌘D to dictate and ⌥⌘T for talk mode, and holding ⌥Space for Quick Chat: good, or do you want hold to
    talk on a single key (as Claude Code's space) while the composer has focus?
-2. **Send when I let go:** off by default (VO1), or on?
+2. **Send when I let go:** off by default (VO1), or on? **Answered 2026-11-23:** off by default, with VO1.
 3. **Mixed Spanish and English:** if VC0 shows Apple's transcriber misses English terms in Spanish speech, would you
    rather add a local Whisper-class model (a download of about 1 GB, on the Mac) or a cloud transcriber with your key?
 4. **Talk mode's voice:** a system voice first, or is a cloud voice (better, paid, opt-in) worth it from VC3?
