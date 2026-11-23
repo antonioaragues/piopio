@@ -286,6 +286,13 @@ chats, Build, subagents, side conversations, agents' conversations and runs, and
   match the session files' own sums ($11.6286 vs $11.6263; the difference is a chat's earlier part, which the ledger
   reads), extra costs match `extra_costs` exactly (108 rows, $0.1804), and the agent matches its own month
   ($0.03209). Before the two reads above, the ledger missed $0.78 of left branches and $0.005 of the agent.
+- **Against OpenRouter's bill (2026-11-23),** November in GMT+1: the bill is $13.90 (app "pi", two keys), Spend
+  $11.82. On days where the user's own Piopio did the work it matches: 16 Nov $1.48 vs $1.473 (0.5%), 20 Nov $4.59
+  vs $4.583 (0.15%), 23 Nov exact. The $2.08 left falls on other days: $0.10 is pi sessions outside Piopio's catalog,
+  and the rest lines up with development runs that used the same key from throwaway data folders (real-model
+  trials on 10, 17 and 19 Nov, the cache experiment on 22 Nov) and the cloud on 19 Nov. So OV1's bar holds where
+  nothing else used the key; the line under the headline ("The bill includes other apps on this key") is the right
+  one for the rest.
 - **Backfill** runs on Spend's first open: every conversation whose `updatedAt` changed since it was last read (an
   agent's also when its month's spend changed, since runs don't touch the catalog). Spend waits for it 1.5 s, then
   answers with what's there and `backfilling: true`; the page says "Reading past conversations…" and asks again.
