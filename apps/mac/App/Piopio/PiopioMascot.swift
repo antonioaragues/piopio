@@ -20,6 +20,8 @@ final class Piopio {
     private(set) var look = CGVector.zero
     private(set) var lookFrom = CGVector.zero
     private(set) var lookChanged = Date.distantPast
+    /// A hop or a glance is under way: drawn at full speed until it settles (`lively`).
+    private(set) var stirred = false
 
     /// The pointer over Home, and the chick's centre, in Home's coordinate space.
     private var pointer: CGPoint?
@@ -28,6 +30,12 @@ final class Piopio {
     private var bubbleTask: Task<Void, Never>?
     private var typingTask: Task<Void, Never>?
     private var pointerTask: Task<Void, Never>?
+    private var stirTask: Task<Void, Never>?
+
+    /// Something moves quickly (a hop, a glance, flapping while you type or it talks): drawn at 30 fps. Otherwise only
+    /// the slow loops run (bob, blink, breath, the z's, periods of 2 to 5 s), and 10 fps draws them as smoothly for a
+    /// third of the work (docs/research/memory-and-cpu.md §4b: at 30 fps Home cost 9.6% of a core).
+    var lively: Bool { stirred || typing || bubble != nil }
 
     /// A chick with a job doesn't nap.
     var asleep: Bool { job == nil && mood == .morning && !woke }
@@ -96,7 +104,21 @@ final class Piopio {
         }
     }
 
-    private func hop() { hopStart = .now }
+    private func hop() {
+        hopStart = .now
+        stir(for: 0.7)
+    }
+
+    /// Full speed for this long (a hop is 0.6 s, a glance 0.18 s), then the calm rate again.
+    private func stir(for seconds: Double) {
+        if !stirred { stirred = true }
+        stirTask?.cancel()
+        stirTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(seconds))
+            guard !Task.isCancelled else { return }
+            self?.stirred = false
+        }
+    }
 
     private func say(_ text: String, for seconds: Double = 1.4) {
         withAnimation(.easeOut(duration: 0.22)) { bubble = text }
@@ -122,6 +144,7 @@ final class Piopio {
         lookFrom = currentLook(at: .now)
         look = target
         lookChanged = .now
+        stir(for: 0.3)
     }
 
     func currentLook(at time: Date) -> CGVector {
@@ -138,13 +161,15 @@ struct PiopioPerch: View {
     /// The bubble beside it, on its left, instead of above (the New agent page: hats reach where it would go).
     var bubbleBeside = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Inactive while another app is in front: it holds still, as no one is watching it (and it ran all day there).
+    @Environment(\.controlActiveState) private var activeState
 
     var body: some View {
         Color.clear
             .frame(width: size, height: size)
             .overlay {
                 // Hats, confetti and the hop reach past the 120-unit box, so the canvas is half as large again.
-                TimelineView(.animation(minimumInterval: 1 / 30, paused: reduceMotion)) { timeline in
+                TimelineView(.animation(minimumInterval: model.lively ? 1 / 30 : 1 / 10, paused: reduceMotion || activeState == .inactive)) { timeline in
                     PiopioDrawing(model: model, time: reduceMotion ? .distantPast : timeline.date, size: size, still: reduceMotion)
                 }
                 .frame(width: size * 1.5, height: size * 1.5)
