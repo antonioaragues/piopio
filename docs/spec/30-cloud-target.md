@@ -13,6 +13,9 @@ It extends 13 (Phase 5 plan) with the two goals the user set, and with what a cl
    take over a hand-off there. Telegram, WhatsApp, Slack and the rest are **add-ons**: extra ways an agent can reach
    you or other people, not the way you use Piopio away from the Mac. (Added 2026-11-19, from the user.)
 
+**A second kind of cloud, decided in 33 (2026-11-21):** a Piopio Server, the engine on a machine you rent or
+have, serving the same routes as the Worker. Everything here about "your cloud" applies to it; 33 §3 says what it adds.
+
 It resolves roadmap Q4 ("Where things run") and picks up 05 §"Cloud build sessions", 04's "Move to cloud", 18 CF7
 (the location chip), 22 and 23 (browser and computer use) for the cloud, and 02 §5 (the Worker's topology).
 
