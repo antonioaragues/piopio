@@ -24,7 +24,7 @@ A map of everything open, by track, and a proposed order. The order is a proposa
 | **E · Cloud and channels** | 13, 19 T3–T4, **30** | Spikes S4 and S7 (go); Telegram from the Mac; the Worker on a real account (2026-11-19: owner token at the door, a real model, a reminder fired by the alarm with nothing connected; Telegram by webhook; packages/cloud README); **30 K1** (2026-11-19: connect from Settings, agents move up and back, their conversations through the Mac's engine; 30 §13) | 30 **K1 on the account** and its gaps (30 §13); **K2** chats in the cloud; **K3** the iPhone app; K4–K7; channels as add-ons |
 | **F · Ship 1.0** | Phase 6, [releasing](../releasing.md) | Release scripts, bundled engine, update plumbing | GitHub PR and CI loop (G4–G8 and 17 DP5, built 2026-11-17); usage page; notarization and Gatekeeper; Sparkle and the cask; docs site |
 | **G · Memory** | 14 | M0–M3 | **M4** past chats, **M5** project lessons, **M6** Hindsight |
-| **H · Small things** | Backlog below | Most of batch 1 and 2 | Voice input (D5), a composer that keeps formatting (D7), web search visible everywhere (D12), Q2 worktree wording, Q3 context files, Q4 where things run, F1 3D |
+| **H · Small things** | Backlog below | Most of batch 1 and 2 | Voice (D5, 42 VC0–VC4), a composer that keeps formatting (D7), web search visible everywhere (D12), Q2 worktree wording, Q3 context files, Q4 where things run, F1 3D |
 | **I · Build parity** | 05, 22 §6, 31 | Most of Claude Code's and Codex's surface (approvals, sandbox, plan, `/goal`, rewind, worktrees, diff review, PR loop, MCP, subagents); 31 A1 | **PAR1–PAR12** below (added 2026-11-20) |
 
 ### Proposed order
@@ -66,7 +66,7 @@ from Later to Now.
 - **Memory M4–M6, notarization and Sparkle:** when daily use asks for them, or when someone else is
   about to install it.
 
-**Parked** (no spec work until something above is done): image generation, voice, MCP Apps, the connector
+**Parked** (no spec work until something above is done): image generation, MCP Apps, the connector
 marketplace, concept → 3D, rooms and side-by-side agents, cloud sandboxes, the iOS companion.
 
 ### Track I · Build parity with Claude Code and Codex (2026-11-20)
@@ -165,7 +165,7 @@ Noted by the user after using the v2 redesign. Not scheduled into a phase yet.
 - D2 · More model providers beyond OpenRouter: ChatGPT/Codex subscription and OpenAI API first, several connected at once, reusing pi's own provider and auth infrastructure. Requirements: [10-model-providers.md](10-model-providers.md). **P0 built 2026-10-22** (10-model-providers §11); a real ChatGPT sign-in isn't verified yet. Related: "direct providers + local models + subscription logins" in Later.
 - D3 · Truly proactive agents: agents that don't need you to chat with them. They observe their environment (mail, calendar, files, Mac apps), decide when something matters, ask you questions and act. Builds on 4.3 proactivity (schedules, heartbeat, triggers).
 - D4 · Create agents by chatting: describe what you want and Piopio drafts the definition (instructions, schedule, abilities, people) for you to confirm, replacing or complementing the form in the new agent sheet.
-- D5 · Voice input in the composers (dictation, push to talk).
+- D5 · Voice input in the composers (dictation, push to talk). **Spec 2026-11-23:** [42-voice.md](42-voice.md), dictation (VC1), files and voice notes (VC2), talk mode (VC3), cloud voices (VC4) after a VC0 spike on Apple's transcriber; not built.
 - D6 · MCP Apps support: MCP servers that return interactive UI, rendered in the transcript. **Spec 2026-11-16:** drawn in the visual card of [25-visuals.md](25-visuals.md) (milestone V4). Not built yet: pi's MCP extension drops tool `_meta` and `ui://` resources (25 §16).
 
 **Future idea**
