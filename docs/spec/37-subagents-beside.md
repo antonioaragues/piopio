@@ -30,7 +30,7 @@ parent's row. Steering a subagent means leaving the conversation that started it
 | SB4 | **It opens beside.** A click opens the subagent in the right column of the Build session, where Summary, Files and the Browser go: tabs for this conversation's subagents, its transcript as it happens, and its own composer (steer it while it works, ask a follow-up after; its approvals show there). Open in full moves to its session. When the window is too narrow for the column, the click opens the session, as before. |
 | SB5 | **One place.** The "Subagents" block above the composer goes. The `[Task] … finished / failed / was stopped` result rows aren't drawn: the row says it, and the column has the answer. The parent still gets the message; only its drawing goes. Watchdog notes ("looks stuck") show on the row, in amber, until it moves again (2026-11-22). |
 | SB6 | **A follow-up after it finished** is a new turn of the subagent: its row works again and its new answer reaches Piopio as another `[Task]` message, as any turn does (17 §9). |
-| SB7 | **Claude Code, Codex and Antigravity tasks** keep their card: they run on your account, report no steps, and always wait. |
+| SB7 | **Claude Code, Codex and Antigravity tasks** keep their card: they run on your account, report no steps, and always wait. *(31 CA14, decided 2026-11-23, not built (31's A5), would change this for Claude Code and Codex: such a `task` becomes a side conversation on that agent's runtime, and `external-agents.ts` goes.)* |
 
 ## 3. What you see
 
@@ -41,7 +41,8 @@ parent's row. Steering a subagent means leaving the conversation that started it
 - **The column:** tabs at its top, one per subagent of this conversation (glyph and title), and ✕. Under them the
   subagent's own transcript (its brief is its first message), and its composer with its model. Open in full is an
   icon beside ✕.
-- **Above the composer:** nothing for subagents. The plan block (26 §5) and side conversations stay as they are.
+- **Above the composer:** nothing for subagents. The plan block (26 §5) stays as it is. Side conversations stay in
+  the transcript, where 24 §11 put them on 2026-11-17: nothing of theirs sits above the composer either (§6).
 
 ## 4. How it's built
 

@@ -24,10 +24,10 @@ milestones. Nothing in the product changes yet.
 
 | Where | What it remembers | How | Gaps |
 |---|---|---|---|
-| **About me** (07-shared §5) | Facts about you, by section | Records in the `about-me` bank, tagged with the section. `remember_about_me` when learning is on. Shown to chats and notebooks, and to agents with `aboutMe.inAgents`. Settings › Chat. | Learned facts pile up: nothing notices that a new fact replaces an old one. |
+| **About me** (07-shared §5) | Facts about you, by section | Records in the `about-me` bank, tagged with the section. `remember_about_me` when learning is on. Shown to chats and notebooks, and to agents with `aboutMe.inAgents`. Settings › Chat. *(Since M3, built 2026-10-25, §7: About me's editor is in Settings › Memory.)* | Learned facts pile up: nothing notices that a new fact replaces an old one. |
 | **Threads** | Nothing but About me | — | No recall across chats ("what did we decide last week about…"). |
 | **Notebooks** (04-chat §3.2) | A shared memory doc | Markdown with sections, revisions and authors, proposals from topics, the first 4,000 characters in each prompt. `search_space` is a substring/FTS search over topic histories. | Search misses paraphrases. |
-| **Agents** (06-agents §8) | Messages and facts per person | A bank per partition (`owner`, `shared`, `contacts/<id>`). Before each turn, `recall` puts up to 1,200 tokens in the system section. After it, the person's message and the answer are retained word for word. Tools: `remember`, `recall`, `forget`. The provider is chosen per agent (`memory.provider`). | Banks grow with raw messages. A fact that changed is found next to its old value. No semantic recall. |
+| **Agents** (06-agents §8) | Messages and facts per person | A bank per partition (`owner`, `shared`, `contacts/<id>`). Before each turn, `recall` puts up to 1,200 tokens in the system section. After it, the person's message and the answer are retained word for word. Tools: `remember`, `recall`, `forget`. The provider is chosen per agent (`memory.provider`). *(Since 38 R3, built 2026-11-22: what a message recalls is written as an entry of its own just before it, not in the system section; the `agent-memory` section keeps only how to use memory and the pinned records.)* | Banks grow with raw messages. A fact that changed is found next to its old value. No semantic recall. |
 | **Build** (05-build) | `AGENTS.md`/`CLAUDE.md`, read by pi | Files in the repo. Checkpoints and compaction are not memory. | The agent learns nothing from one session to the next. |
 | **Providers** (07-shared §5.1) | — | **Built-in:** SQLite, FTS5 BM25 with a recency boost, pins, history. Stores what it's given; no extraction. **MCP memory:** any server's tools mapped to recall/retain/list/forget, with a Hindsight preset. The native Hindsight adapter (milestone 4.7) isn't built. | No semantics, no notion of time beyond recency. |
 
@@ -94,6 +94,10 @@ there. And memory systems should be compared on our data, with the embedding hel
   could call without the app open (third-party report; to verify). Fine for "is there a new fact in this turn?",
   to be checked against the cloud utility model in M0.
 
+> **Since 07 §1.3 (2026-11-07):** background work uses the conversation's own provider by default; Apple's on-device
+> model is an option and a last resort, used when no provider is connected. Its context is about 4k tokens, not 8k, and
+> the engine starts it directly through `piopio-fm`, so it works without the app open.
+
 ## 4. Measurement: semantic search in the built-in provider
 
 [S8](../spikes/s8/README.md) stored vectors as BLOBs in SQLite and scanned them in JavaScript, with no extension, so
@@ -104,6 +108,15 @@ stays under 10k records; a busy agent's whole history may reach 50k over years).
 Hindsight.
 
 ## 5. Proposal
+
+> **Since §7 (built 2026-10-25) and §8 (2026-11-24):** this section is the proposal; §7 and §8 say what was built.
+> - **§5.1:** there is no Basic / Standard choice and Standard is not the default. Search by words on this Mac is the
+>   default; search by meaning is off until you turn it on in Settings › Memory › How memory is searched (revised Q4).
+> - **§5.2:** past chats are on from day one (Q1, §6) and use the conversations' own word index, with no `chats` bank
+>   and no `search_chats` tool (§8). Notebooks are gone (18).
+> - **§5.3:** the section as built is in §7 (M3); per-area engines, "never remember" and local embeddings are not built.
+> - **§5.4:** the settings as built are `memory.semantic`, `memory.embeddings` and `memory.pastChats`, not
+>   `memory.engine` or `memory.areas.*`; `memory.localOnly` is still read, as off. The protocol as built is in §7 (M3).
 
 ### 5.1 Three engines, one interface
 `MemoryProvider` (07-shared §5.1) stays. What changes is what the built-in provider can do, and how you choose.
@@ -153,6 +166,10 @@ settings) with a link here.
 Each turn's inspector also shows **what was recalled** for that turn, in chats, notebooks and agents (agents already
 put it in their `agent-memory` system section, but the app doesn't show it): nothing gets into a prompt without a
 way to see it.
+
+> **Since 38 R3 (built 2026-11-22):** an agent's recall is no longer in the `agent-memory` system section; it is an
+> entry of its own just before the message (`piopio.recall`), which the transcript doesn't show. The "what was
+> recalled" line is still not built (§7).
 
 ### 5.4 Interface changes
 - `MemoryRecord` gains `validFrom?`, `replacedBy?` / `replaces?` and `about?` (the person or thing the fact is

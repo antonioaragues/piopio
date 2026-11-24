@@ -1,9 +1,11 @@
 # 26 · Agents, clarified: contacts, and Piopio orchestrates the work
 
 Status: draft 2026-11-16, from a conversation with the user; decisions CL1–CL12 confirmed by the user 2026-11-17;
-the questions of §10 are still open; nothing here is built. It changes what 19, 20 and 21 made of agents and teams: it keeps the machinery they built (the board, worktrees,
+the questions of §10 are still open; C1 and C2 built 2026-11-17 (§11, §12) and C4, the real-model trial, done the same
+day (§13); C3 (playbooks) is not built. It changes what 19, 20 and 21 made of agents and teams: it keeps the machinery they built (the board, worktrees,
 review, merging, project routines) and takes teams away as something you make and manage. 06 (agents) and 19 §0 S1–S5
-("simple first") still hold, more strictly.
+("simple first") still hold, more strictly, except what CL2 and CL12 overturn: S1's sentence that a team is an agent
+too, and S5's agent that leads a team.
 
 **The idea:** an agent is someone who lives with you. Work in a project is Piopio's to organize: it splits the work
 and creates helpers for it itself, and they go away when the work is done.
@@ -43,7 +45,7 @@ same result with nothing to set up.
 | CL7 | **Two memories, with clear owners.** What's learned about a project goes to its NOTES.md, and how to do the work goes to a playbook (Piopio may suggest the change, and you accept it). An agent's memory only comes from its own conversations. | The team's NOTES.md; 21 AD7 |
 | CL8 | **The one bridge: asking an agent.** In any conversation, `@Rita` or the model calling `ask_agent` asks one of your agents something. She answers from her own conversation, with her instructions, model, memory and tools, and the answer comes back indented (21 D6, as built). She doesn't work in the project's folder and doesn't become part of the work. | Also: agents as team members |
 | CL9 | **Piopio offers, you start.** Before it puts parallel work on the board in a project that hasn't done that yet, Piopio asks ("This could go faster in parallel: 3 parts", with Work in parallel / Do it here, one by one), as `offer_team` does today. Once the project has a way of working, Piopio splits work on its own and shows the plan. | `offer_team` → "A team for <project>" sheet → `teams.adopt` |
-| CL10 | **Routines keep their two owners** (21 AD5): an agent's (it messages you) or a project's (it opens a conversation there with Piopio). *27 (draft 2026-11-18) proposes one owner instead: an automation runs as Piopio or as an agent (AU2).* | Same; "with the lead" goes |
+| CL10 | **Routines keep their two owners** (21 AD5): an agent's (it messages you) or a project's (it opens a conversation there with Piopio). *27 (a draft of 2026-11-18, built on the Mac: A1–A2 2026-11-18; not yet confirmed) gives each one owner instead: an automation runs as Piopio or as an agent (AU2).* | Same; "with the lead" goes |
 | CL11 | **No Dispatch router** (added 2026-11-17). From Home, Piopio is the front door: work in one or more projects becomes one side conversation per project (24), which reports back there. 17's Watchdog, non-blocking `task`, PR events and limits stay (17's note). | 17: a separate router that never does the work; 19 TD2: Dispatch as the default team |
 | CL12 | **Agent-to-agent stays a bridge** (added 2026-11-17). `ask_agent` as built; `tell_agent` for notices only, not for handing work to another agent; the WhatsApp front agent answers and asks, and doesn't hand out work; agent boards (06 §12.1) go (06 §7's note). | 06 AA3 and §5.3: fire-and-forget delegation, a front agent that dispatches; 06 §12.1 |
 
@@ -75,6 +77,8 @@ This is the project Settings' "How work is done here", in place of "Who works he
 - **Checks:** the test command, prefilled by the fit check (21 D6).
 - **Tasks at once:** 3.
 - **Models:** for building and for reviewing; each defaults to the project's model.
+  28 (draft 2026-11-18, not built) would change this: the two models become the project's Build and review roles
+  (28 AM12).
 - **What helpers may do without asking:** the members' mode today.
 - **Budget per job:** what a conversation's tasks may cost (21 D1).
 - **Playbooks:** the ones this project uses, preselected from the folder (a code project gets Development).
@@ -87,6 +91,9 @@ minus the team.
 **The sidebar:** Search · Home · Projects · Agents · Conversations. Agents lists only your agents. A project row
 shows a dot while its tasks run, with no avatar stack.
 
+> **Since 27 §4 (built 2026-11-18) and 18 CF27 (2026-11-20):** Automations sits under Home, and Agents is a sidebar
+> section after Pinned and before Projects, with a row per agent.
+
 **A project conversation:**
 - It's always with Piopio. The "with the lead ⌄" pill goes, and so does the "Piopio team joined" line.
 - The plan block, the merge card and the "sent back / blocked" lines stay as 21 D6 built them. A plan row names the
@@ -94,6 +101,9 @@ shows a dot while its tasks run, with no avatar stack.
 - `@` lists your agents (CL8).
 
 **The project's Settings:** the way of working (§4), routines, AGENTS.md and NOTES.md.
+
+> **Since 27 §4 (built 2026-11-18):** in place of routines, the project's Settings shows "N automations work here ›",
+> which opens the Automations list filtered to the project.
 
 **The Board:** as today. Its empty state says "Piopio puts parallel work here" and shows the switch for parallel work,
 in place of the team picker (21 D6, 4b).
@@ -124,6 +134,7 @@ team's.
   Piopio, so every project conversation is the same kind of session and there's nothing to adopt.
 - **Helpers** are created per task from a kind (`build`, `review`, `merge`), the way of working's model for that kind,
   and a brief written by Piopio from the playbook. Their sessions are today's member sessions.
+  **As built (§11, 2026-11-17):** helpers have two kinds, `build` and `review`. Merging is the board's.
 - **Playbooks** are skills found through the existing skill discovery (`packages/engine/src/packages.ts`,
   `tools/chat-resources.ts`). Built-in ones ship with the app, and a project enables the ones it uses.
 - **`ask_agent`** stays as built. Members' sessions don't get it, and neither do helpers.
@@ -284,6 +295,8 @@ landing, two conversations, catching up, routines), `work-budget.test.ts`, `work
 - The app (C2).
 - Choosing among playbooks, and saving one (C3).
 - Routine tools for Piopio in a project without parallel work (it offers a routine instead, as before).
+  **Since 27 §10 (built 2026-11-18):** `offer_repeat` is gone, and Piopio has `automate` and its family in every
+  conversation with it.
 - A real trial (C4).
 
 ## 12. C2 as built (2026-11-17)

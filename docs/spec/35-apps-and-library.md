@@ -39,6 +39,10 @@ wherever the file lives, and pinned items go at the top of the Library.
    reloads, and the edit is a checkpoint like any other (Undo).
 6. When `expenses.csv` changes, the app redraws without running a model.
 
+> **Since §14 (2026-11-22, built):** steps 2 and 3 are replaced. The card's header has **Make app**, not Keep. It
+> sends a message and the model calls `make_app`; nothing is written until you allow it on a card that names what the
+> app reads and where it's saved (§17). There is no "Pin it in the Library" checkbox: pinning is only for finding it.
+
 **The Library**
 1. **Library** is a sidebar row under Automations, with your pinned items indented beneath it.
 2. Its page has a **Pinned** shelf of tiles, then everything else by day. You can filter by kind and by place, and
@@ -58,7 +62,7 @@ An app is one `.html` file with a manifest at the top:
   "title": "Spending",
   "sources": {
     "expenses": { "file": "data/expenses.csv" },
-    "week":     { "tool": "calendar_list_events", "args": { "days": 7 } },
+    "week":     { "tool": "calendar_events", "args": { "days": 7 } },
     "bills":    { "script": "bills.js", "tools": ["gmail_search"] },
     "spend":    { "piopio": "stats.spend", "args": { "groupBy": "agent", "range": "month" } }
   },
@@ -76,6 +80,8 @@ An app is one `.html` file with a manifest at the top:
   new thing in the wrapper is `piopio.onData`.
 - **It's still a file:** git, checkpoints, the file viewer and Finder all work on it. If you open it in another
   browser it draws its last cached data, or "Open in Piopio to see live data" when there is none.
+  *(Since §14: opened anywhere else, the file shows "Open in Piopio to see live data". The cache lives in the
+  engine's folder, not in the page.)*
 
 ### 3.2 Sources
 
@@ -85,6 +91,10 @@ An app is one `.html` file with a manifest at the top:
 | `tool` | One connector or MCP tool with fixed arguments. It must be a **read** tool (12's `access: "read"`, MCP's `readOnlyHint`). | No | Opening it, the timer |
 | `script` | A small JavaScript function in codemode's sandbox that calls only the tools listed in the manifest, all of them read tools, and returns JSON. The model writes it once. | No | Opening it, the timer |
 | `piopio` | Piopio's own numbers: 34's `stats.*`, automation runs, agents and their status. | No | Opening it, the timer |
+
+> **Since §16 (2026-11-22, built):** a calendar isn't read through the generic `tool` source. Calendar sources are
+> their own kind (`"week": { "calendar": "this_week", "accounts": […] }`), read by the engine directly, with no model.
+> `file` (§14), calendar (§16) and `piopio` (§18) are built; `tool` and `script` are not.
 
 There's no source that asks the model on each refresh. Work that needs a model belongs in an automation (27), which
 can write a file that an app then reads. That keeps "refreshing costs nothing" true, and it keeps everything that
@@ -99,6 +109,8 @@ When a source goes over, it fails (§3.5).
 - **`onChange`:** `file` sources are watched like folder watches (`watchers.ts`), with the same settle delay.
 - **`every`:** at least `15m`, and only while the app is pinned. It's an automation with no model (27): it appears in
   Automations as "Refresh *Spending*", with its runs and $0. Unpinning pauses it.
+  *(Since §14 and §16: pinning is only for finding it. Refreshing on a timer is kept apart from Pin, as a setting of
+  its own; it isn't built, §18.)*
 - **Refresh** in the toolbar reads everything now.
 
 The last result of each source is cached in the engine's data folder (`apps-cache/<hash of the path>.json`), not in
@@ -132,8 +144,11 @@ under Library.
 - **The conversation about it** is a right panel, 300 pt wide, open the first time and remembered after. It's a
   normal conversation in the app's project (or a chat, for apps in `~/Piopio/Apps/`) with the app file attached as
   context. Its prompt says to edit that file and to keep the manifest unless you ask. Each edit reloads the page.
+  *(Since §15, built: the panel is 360 pt wide and is called **Ask or change**; its conversation is made when you
+  first write in it.)*
 - **Keep from any visual card:** Keep is in the card's header next to Open, Save… and Copy HTML. Save… stays as a
   plain snapshot, which is still useful for sharing.
+  *(Since §14: the card's header has **Make app**, which replaces Keep.)*
 
 ### 3.7 Making an app on purpose
 
@@ -160,7 +175,7 @@ Items are added on their own:
 | **Files handed over** | Every file in a `present_files` call, from a conversation, a Build session or an agent. That's the signal that "this is for you", and it keeps code out: Build writes many files but hands over few. |
 | **Files written in a conversation's folder** | Files a chat writes in its own folder, of a kind meant to be looked at (pages, documents, data, images, slides), even if never presented |
 | **Saved visuals** | Save… on a card |
-| **Visuals not saved** | Every `show_visual` card, marked "in a conversation", with **Keep** and **Save…**. Drafts replaced in the same turn (25 §3.4) aren't listed. |
+| **Visuals not saved** | Every `show_visual` card, marked "in a conversation", with **Keep** and **Save…**. *(Since §14: **Make app** replaces Keep.)* Drafts replaced in the same turn (25 §3.4) aren't listed. |
 
 You can also add or remove items yourself:
 - **Add to Library** is in the ⋯ menu of any file card, in the file viewer, and in Build's file tree.
@@ -198,9 +213,10 @@ saved visual), Image, Data (`.csv`, `.json`, `.xlsx`), Slides.
 - **Any item can be pinned.** Apps are the usual ones.
 - **Pinned items** go on the shelf, and the five most recent pins show under Library in the sidebar. The rest stay
   on the shelf. You can drag to reorder both.
-- **The sidebar's Pinned section** stays for conversations and agents (18 CF10, CF27). Apps and files go only under
+- **The sidebar's Pinned section** stays for conversations and agents (18 CF27). Apps and files go only under
   Library.
 - **Unpinning** an app pauses its timed refresh (§3.3).
+  *(Since §14 and §16: pinning is only for finding it; the timed refresh is kept apart from Pin.)*
 
 ### 4.5 Agents, the cloud and the phone
 
@@ -246,6 +262,10 @@ saved visual), Image, Data (`.csv`, `.json`, `.xlsx`), Slides.
 | `app.data` (event) | New data for an open app, from a file change or the timer |
 | `library.changed` (event) | The index changed |
 
+> **Since §14's "L2 as built" (2026-11-22):** the methods are `apps.*` rather than `app.*`, because `app.tool` is
+> already the engine asking the Mac app. §14 lists `apps.open`, `apps.refresh`, `apps.close`, `apps.allow` and
+> `apps.data`; §15 adds `apps.conversation` and `apps.undo`; §16 adds `apps.revoke`.
+
 **App:** `LibraryPage.swift`, `AppPage.swift` (the toolbar, the visual's web view with `onData`, and the panel
 conversation), a Keep popover on `VisualCard`, and the sidebar row with its pins.
 
@@ -275,7 +295,7 @@ L1 is useful alone and doesn't need apps. L2 is the smallest version of apps.
 ## 9. Not in this spec
 
 - **Apps that write.** A source never writes, and there's no `piopio.call(tool)` from the page. If it's ever wanted,
-  it would go through MCP Apps' bridge with per-call approvals (25 D6), not through the Library.
+  it would go through MCP Apps' bridge with per-call approvals (09 D6), not through the Library.
 - **Sharing an app** with someone else. Save… and export still give a portable snapshot.
 - **A gallery of apps** to install. Your own apps and the ones Piopio makes come first.
 - **Apps as Piopio's own pages.** Overview, Settings and Home stay native (01 principle 1).
@@ -306,11 +326,11 @@ sidebar.
 | AL3 | Is it an index of files where they live, or a store of copies? | An index (25 VS3) |
 | AL4 | What comes in on its own: `present_files`, chat-folder writes, visuals, apps; Build's other writes stay out | As proposed |
 | AL5 | Do unsaved visuals from conversations show in the Library? | Yes, marked, with Keep |
-| AL6 | Name: App, View or Board; and the button: Keep | App, Keep |
+| AL6 | Name: App, View or Board; and the button: Keep | App, Keep *(Since §14: the button is **Make app**; it replaces Keep.)* |
 | AL7 | A source that asks the model on each refresh? | No; that's an automation writing a file the app reads |
 | AL8 | Where apps live outside a project | `~/Piopio/Apps/` |
 | AL9 | Pins: on the Library's shelf, with the five most recent under Library in the sidebar | **Yes** (the user, 2026-11-22) |
-| AL10 | The timed refresh: shortest interval, and only while pinned | 15 min, only while pinned |
+| AL10 | The timed refresh: shortest interval, and only while pinned | 15 min, only while pinned *(Since §14 and §16: pinning is only for finding it; the timed refresh is kept apart from Pin.)* |
 | AL11 | Does the app's conversation open by default? | The first time, then remembered |
 | AL12 | Does Overview become an app? | No, it stays native; it's the first `piopio` source |
 

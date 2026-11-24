@@ -1,12 +1,18 @@
 # 08 — App shell & UX
 
 ## 1. Window structure
+
+> **Since the one sidebar (15 §1, 2026-10-25) and 18 (2026-11-07):** there is no mode switcher, so `Build · Chat · Agents` and ⌘1 / ⌘2 / ⌘3 are history. One sidebar shows everything (15 §1); 18 removed lenses and notebooks, and what you see is conversations, projects and agents (18 §3).
+
 - A single main window type (multiple windows allowed), built on `NavigationSplitView`: **sidebar | content | inspector**.
 - **Mode switcher** in the sidebar header: `Build · Chat · Agents` (⌘1 / ⌘2 / ⌘3). Each mode remembers its own selection.
 - Toolbar (content): container title, model chip, mode-specific controls (branch, approval mode, space memory…), share/export, inspector toggle (⌘⌥I).
 - Native look: Liquid Glass materials on macOS 27, system accent color, SF Symbols, full Dark Mode support, and Dynamic Type where SwiftUI supports it on macOS. Settings › General › Appearance: System (follows macOS, the default), Light or Dark, for the whole app (2026-11-04).
 
 ## 2. Sidebar (per mode)
+
+> **Since 18 §16 and §21–§23 (2026-11-15 to 2026-11-22):** the sidebar is one list, not one per mode. Search and New share its first row (CF31); then Home, Automations (27 §4), Library (35 §4.3), Pinned, Agents as a section with a + (CF27), Projects and Conversations, each with a + (CF14, CF32). Spaces and topics are gone (18 §11), the Chat lens is the Read only permission (18 CF3), and the Agents Inbox is Home's "Waiting on you" (21 §8, 2026-11-18).
+
 - Build: Projects → sessions (status icons).
 - Chat: Pinned · Spaces (→ topics) · Projects (chat lens) · Threads (grouped by Today / Yesterday / Last 7 days / Older).
 - Agents: Inbox · Agents (status, local/cloud badge).
@@ -27,6 +33,9 @@
 - Shows the queued inputs list above the composer when not empty.
 
 ## 5. Global features
+
+> **Since 18 §14, §16 and §22 (2026-11-08 to 2026-11-20):** New is not contextual. ⌘N always opens the New conversation page with no project (CF9); a project's + opens it with that project chosen. New is a black + beside Search whose menu has New Conversation (⌘N), New Agent (⌥⌘N) and New Project… (⇧⌘N) (CF31), and a new project is named in place in the sidebar (CF15), so the start pages for project and chat in the New row are history. **Since 21 §8 (2026-11-18):** there is no approvals inbox. The Needs you row and its page are gone; Home's "Waiting on you" lists everything that waits for you, so the ⌘⇧A row is history.
+
 | Feature | Shortcut | Notes |
 |---|---|---|
 | Command palette | ⌘K | Navigate to anything, run actions (new session, switch model, deploy agent…) |

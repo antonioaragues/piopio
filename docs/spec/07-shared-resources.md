@@ -6,11 +6,13 @@ Resources defined once and opted in per mode, project, space or agent (decision 
 
 ### 1.1 Providers
 - **v1: OpenRouter only**, through pi-ai's provider support. One API key, stored in Keychain.
+  **Since 10 §11 (P0 built 2026-10-22):** OpenRouter is one provider among several. Settings › Models connects ChatGPT, an OpenAI API key, OpenRouter, every other pi provider and custom endpoints (LiteLLM, Ollama, LM Studio); each keeps its credentials in the Keychain.
 - **Later:** direct Anthropic/OpenAI/Google, local (Ollama, LM Studio), subscription logins where pi supports them, Cloudflare AI Gateway routing for cloud agents.
 - The engine's `models` module abstracts providers: `{providerId, modelId}`. OpenRouter IDs (`vendor/model`) are used as-is.
 
 ### 1.2 Catalog & picker
 - **MO1** Fetch the OpenRouter `/models` list on start (cached 24 h, manual refresh). Store `{id, name, context, pricing in/out/cache, supports: tools, vision, reasoning, files, audio}`.
+  **Since 10 §11 and §13 (2026-10-26):** `models.list` returns the connected providers' models from pi's catalog, and OpenRouter's public list adds the ones pi lacks, cached six hours.
 - **MO2** The picker (⌘M or click the model chip) offers fuzzy search, filters (tools, vision, reasoning, ≤$/Mtok), **favorites**, recents, and price + context shown inline. Models without tool support are dimmed where tools are needed (Build, Agents).
 - **MO3** Thinking level control appears only for reasoning-capable models.
 
@@ -24,6 +26,10 @@ Resources defined once and opted in per mode, project, space or agent (decision 
 | Utility | titles, summaries, commit messages, topic summaries, suggested replies, notebook suggestions, learned facts | **Automatic**: the provider each conversation already uses |
 
 Defaults are overridable per project, space, agent and session.
+
+> **Since 10 §8 (2026-10-22):** Settings › Models has a default model per mode: Build, Chats and notebooks, Quick Chat, New agents. The Organizer slot went with notebooks (18 §11, 2026-11-07); the Utility row is "Background work", below.
+>
+> 28 (draft 2026-11-18, not built) would add to this: an Auto setting with roles (Lead, Deep, Build, Quick) on top of the defaults per mode, which stay. Background work stays as it is.
 
 **Background work (2026-11-07).** Piopio should work well with whatever the user connected, without asking them to
 configure a utility model:
@@ -43,12 +49,16 @@ configure a utility model:
 
 ### 1.4 Cost tracking
 - **CO1** Every model call writes a ledger row (engine `catalog.db`; cloud: AgentDO, synced to the app when connected).
+  **Since 34 §13 (built 2026-11-23):** the ledger is `usage.db` in the data folder, one row per request.
 - **CO2** Shown per message (hover), per session header, per project/space/agent, and a global **Usage** page (by day, mode, model). CSV export.
+  **Since 34 OV1 (decided 2026-11-22, built 2026-11-23):** the page is Overview, with tabs Spend, Setup and Activity (OV2). It has no sidebar row.
 - **CO3** Optional global monthly budget with alerts. Agents have their own hard caps (06-agents §9).
+  **Since 34 OV3 (built 2026-11-23):** this is "Piopio this month", off until you set it. At 80% it notifies once; at 100% background work waits for your yes and your own conversations keep going with a notice.
 
 ## 2. Skills
 - Pi's skills format (`SKILL.md` folders). Discovered from pi's standard locations (so CLI skills just work) plus `~/Library/Application Support/Piopio/skills/`.
 - Settings › Skills: list, enable per mode/project/space/agent, install from git/npm (pi packages), and create new (opens a Build session with a skill-authoring prompt).
+  **As built (09 D9):** skills are read from `~/.pi/agent/skills` and enabled pi packages, with no UI to make or manage them. There is no Settings › Skills pane and no Piopio skills folder in Application Support.
 - Agents bundle their enabled skills on deploy (copied into the definition bundle).
 
 ## 3. Prompt templates
@@ -57,6 +67,7 @@ configure a utility model:
 ## 4. MCP servers
 - **MCP1** Registry in Settings › MCP: name, transport (stdio for local only; streamable HTTP for local + cloud), command/URL, auth (header token or OAuth), enabled scopes (Build / Chat / Spaces / Agents / specific projects).
 - **MCP2** Local: in Build via `createMcpExtension()`. For pi-durable runtimes (Threads/Spaces/Agents), via a Piopio MCP extension that maps MCP tools to `defineTool` (with `deferred: true` + tool-search when there are many tools).
+  **Since 18 §15 (2026-11-15):** chats left pi-durable and are pi SDK sessions; only agents run on pi-durable, and Spaces are gone (18 §11).
 - **MCP3** Cloud agents can only use **remote (HTTP) MCP servers**. stdio servers are flagged "local only".
 - **MCP4** Tool calls from MCP servers go through the same approval policies (write-like tools ask by default in Chat/Agents).
 
@@ -91,6 +102,7 @@ Every record keeps its source, and the app's memory views list it (01-product, p
 
 - **Models:** the provider uses the user's OpenRouter key. Extraction runs on the utility model slot (07 §1.3); embeddings run locally or through OpenRouter. No other key is needed.
 - **Settings › Chat › Memory:** provider (Built-in / Hindsight local / Hindsight remote URL), status, disk use, per-bank wipe and export.
+  **Since 14 §7 (M3 built 2026-10-25):** memory has its own top-level section, Settings › Memory; "Settings › Chat › Memory" here, in §6's table and in MM1 is history.
 - **Fallback:** if a provider is unreachable, conversations go on without memory and show a note. Nothing blocks on memory.
 - **Fit, in order:** (1) **Agents** (06 §8): long-lived, many people, schedules; recall across months matters most there. (2) **About me** (GM1): facts captured across Threads. (3) **Spaces:** the curated memory doc (04-chat S8) stays the source of truth; a provider may index topic histories later, for semantic `search_space`. Build keeps AGENTS.md and pi's own conventions.
 - Spike **S6** (2026-10-21, [docs/spikes/s6](../spikes/s6/README.md)) kept the built-in provider as the default. Hindsight locally: about 2 GB of opt-in download (uv, Python, wheels, models, Postgres, none of it in the signed bundle); about 300 ms recall; about $0.07 per 100 messages retained; `HINDSIGHT_API_LLM_OPENAI_COMPATIBLE_JSON_MODE=false` with OpenRouter. Each turn uses recall; reflect (about 7 s) is a tool.
@@ -107,10 +119,11 @@ Piopio has **no plugin format of its own**. You extend it with what pi and the w
 Why not a Piopio plugin API: in-process plugins would run third-party code inside the engine, with access to every conversation and key. They would need a stable API we'd have to keep, and they would split the ecosystem. MCP servers run in their own processes with only what they're given, and pi packages are pi's to define. Piopio's own extensions (approvals, checkpoints, plan, todos, subagents, the Space organizer…) stay bundled, written in the runtimes' own formats.
 
 ### 6.1 pi packages (Settings › Extensions)
-- **EX1** The list shows the user's packages (`~/.pi/agent/settings.json`, shared with the pi CLI) and, per project, the project's (`.pi/settings.json`, loaded only for trusted projects, 05-build). Each package shows its source (npm, git, local), pinned version, and what it brings: extensions, skills, prompt templates, themes.
+- **EX1** The list shows the user's packages (`~/.pi/agent/settings.json`, shared with the pi CLI) and, per project, the project's (`.pi/settings.json`, loaded only for trusted projects, 39 §2). Each package shows its source (npm, git, local), pinned version, and what it brings: extensions, skills, prompt templates, themes.
 - **EX2** **Install** from an npm name, a git URL or a local folder, with pi's own package manager (`DefaultPackageManager`, the code behind `pi install`), so the CLI and the app see the same packages. **Update** and **Remove** too. Before installing, a sheet says what the package contains and that extension code runs with the user's permissions. It links the source, and nothing installs without a click.
 - **EX3** **Per package, on or off**, and per resource where pi allows it. Changes reach new Build sessions; open ones offer to reload.
 - **EX4** Where each resource works: **pi extensions run in Build only.** Threads, Spaces and Agents run on pi-durable, which can't load pi extensions, and stay on Piopio's own extensions (user-installable pi-durable extensions wait until that format is stable upstream). **Skills and prompt templates work everywhere**, because they are text: Chat and Agents list a package's skills (name and description in the prompt, the body read on demand) and its templates as `/commands`. Themes are ignored (Piopio has its own look).
+  **Since 18 §15 (2026-11-15):** chats left pi-durable and are pi SDK sessions, and Spaces are gone (18 §11); only agents run on pi-durable.
 - **EX5** Extensions with a terminal UI show "This extension has a terminal UI that Piopio can't display" (05-build). Their tools, hooks and commands still work.
 - **EX6** A small catalog of recommended packages, including Piopio's own `@piopio/pi-extensions` for the CLI, links to the pi package gallery (pi.dev/packages).
 
@@ -122,6 +135,9 @@ Many memory systems already ship an MCP server (Hindsight serves one per bank). 
 - **MM4** Native adapters (Hindsight's REST API, the built-in provider) stay preferred where they exist: they have listing, editing, history and webhooks. MCP memory is the way in for everything else.
 
 ## 7. Settings map
+
+> **As built:** this map predates the panes. The built ones (`SettingsView.swift`) are General, Models, Connectors, Chat, Memory, Approvals, Git & GitHub, MCP servers, Browser, Extensions, This Mac & cloud and Backup; there is no Build, Agents, Skills, Cloud or Advanced pane. Where each is described: General › Areas in 15 §8, Models in 10 §11–§12, Connectors in 12, Memory in 14 §7 (M3), Approvals in 05 AP5–AP6 and 39 §2, Git & GitHub in 05 §8 (G4 as built), MCP servers in §4 here, Browser in 22, Extensions in §6.1 here, This Mac & cloud › Cloud in 30 §13. No spec holds the whole list.
+
 | Section | Contents |
 |---|---|
 | General | Appearance, launch at login, background mode, Quick Chat hotkey, default mode |
@@ -135,6 +151,7 @@ Many memory systems already ship an MCP server (Hindsight serves one per bank). 
 
 ## 8. Onboarding (first launch)
 1. Welcome → paste OpenRouter key (validated with a cheap call) → saved in Keychain.
+   **Since 15 §3 (built 2026-10-25):** the welcome first asks which areas you want, and its model step is the same connect step as Settings › Models (10), not only an OpenRouter key.
 2. Pick defaults (suggested models preselected).
 3. "What do you want to do first?" → New thread / Add a project / Create an agent.
 4. Cloud setup is **deferred** until the user deploys the first agent.

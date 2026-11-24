@@ -4,7 +4,7 @@ Current implementation and acceptance status: [../status.md](../status.md). The 
 
 Solo developer, no deadline (X9). **Start with the easiest mode.** Each phase ends with something usable every day.
 
-## Where things stand (2026-11-12)
+## Where things stand (2026-11-12; the tracks updated to 2026-11-24)
 
 A map of everything open, by track, and a proposed order. The order is a proposal to confirm; the rest of this page
 (phases, backlog) is unchanged below and is the detail behind it.
@@ -18,14 +18,14 @@ A map of everything open, by track, and a proposed order. The order is a proposa
 | Track | Specs | Built | Left |
 |---|---|---|---|
 | **A · Make it real** | [status](../status.md), [acceptance](../acceptance.md) | Scripted tests, captures, one real-model team trial (20 §14) | The eight acceptance items; real providers (ChatGPT sign-in, a real Ollama/LiteLLM); real Google and Microsoft accounts; sleep/wake schedules; VoiceOver |
-| **B · Agents and teams** | 06, 19, 20, 21, 26, 27 | 19 T0–T2; 20 P1–P4; 21 D1–D7 | 26 **C1–C4** (teams become a project's way of working and playbooks, decided 2026-11-17); 27 **A1–A3** (automations replace agents' schedules and projects' routines; built 2026-11-18, real-model trial A3 2026-11-19, 27 §11); the "not yet" lists of D2–D4 |
-| **C · Conversations** | 18, 24, 17, 37 | 18 phases 1–3; 37 **A** (subagents beside the conversation, 2026-11-22) | 24 side conversations **SD1–SD4**; 17 **DP1** Watchdog rules and **DP4** non-blocking subagents (the router is dropped: from Home, Piopio starts side conversations across projects, 26 CL11); 37 **C** (findings as they come, decided for later; board helpers on the same row). Debate (16) was removed 2026-11-15 |
-| **D · Reach** (what the model can touch) | 22, 23, 12, 10, 40, 41 | Connectors C1; providers P0–P1; browser **W1–W4** (22 §6.1, §14–16; agents W3 2026-11-23) | Computer use **U0–U4**; connectors **C2–C3**; custom skills UI (D9); skills from a demonstration **SH0–SH4** (40); Piopio as an MCP server for outside agents **MS0–MS4** (41, decided 2026-11-23, PM1–PM10); MCP Apps (D6); image generation (D11) |
+| **B · Agents and teams** | 06, 19, 20, 21, 26, 27 | 19 T0–T2; 20 P1–P4; 21 D1–D7; 26 **C1–C2** and the real-model trial **C4** (teams became a project's way of working, 2026-11-17, 26 §11–§13); 27 **A1–A3** (automations replace agents' schedules and projects' routines; built 2026-11-18, real-model trial A3 2026-11-19, 27 §11) | 26 **C3** (playbooks: choosing among them when planning, and saving one); the "not yet" lists of D2–D4 |
+| **C · Conversations** | 18, 24, 17, 37, 25, 35 | 18 phases 1–3; 24 side conversations **SD1–SD3** (2026-11-17, 24 §10–§11); 17 **DP4** non-blocking subagents and **DP1** Watchdog rules (2026-11-17, 17 §9–§10; the router is dropped: from Home, Piopio starts side conversations across projects, 26 CL11); 37 **A** (subagents beside the conversation, 2026-11-22); 25 visuals **V1–V3** and V4's export and Telegram (2026-11-16, 25 §13–§16); 35 **L1–L3** and L4's first part (the Library, apps on files, changing an app, the calendar as a source, 2026-11-22) and L4's second part (Piopio's own numbers as a source, 2026-11-24, 35 §18) | 24 **SD4** (hand-off mid-task) and SD3's replay set; 17 **DP6** (Watchdog W6, the off-track check); 37 **C** (findings as they come, decided for later; board helpers on the same row). Debate (16) was removed 2026-11-15 |
+| **D · Reach** (what the model can touch) | 22, 23, 12, 10, 40, 41 | Connectors C1 and C3 (Linear, Notion, Jira and Confluence, GitHub, Sentry, 2026-11-21; 12); providers P0–P1; browser **W1–W4** (22 §6.1, §14–16; agents W3 2026-11-23) | Computer use **U0–U4**; connectors **C2** (Gmail, Google Drive, Slack); custom skills UI (D9); skills from a demonstration **SH0–SH4** (40); Piopio as an MCP server for outside agents **MS0–MS4** (41, decided 2026-11-23, PM1–PM10); MCP Apps (D6); image generation (D11) |
 | **E · Cloud and channels** | 13, 19 T3–T4, **30**, 33 | Spikes S4 and S7 (go); Telegram from the Mac; the Worker on a real account (2026-11-19: owner token at the door, a real model, a reminder fired by the alarm with nothing connected; Telegram by webhook; packages/cloud README); **30 K1** (2026-11-19: connect from Settings, agents move up and back, their conversations through the Mac's engine; 30 §13) | 30 **K1 on the account** and its gaps (30 §13); **K2** chats in the cloud; **K3** the iPhone app; K4–K7; channels as add-ons; 33 **Piopio Server** (decided 2026-11-21, PS1–PS8: PS0–PS1 right after K1 on the account, before K2; then PS2–PS3) |
 | **F · Ship 1.0** | Phase 6, [releasing](../releasing.md) | Release scripts, bundled engine, update plumbing | GitHub PR and CI loop (G4–G8 and 17 DP5, built 2026-11-17); usage page (34 Overview: OV0–OV4 built 2026-11-23); notarization and Gatekeeper; Sparkle and the cask; docs site |
 | **G · Memory** | 14 | M0–M3 | **M4** past chats, **M5** project lessons, **M6** Hindsight |
 | **H · Small things** | Backlog below | Most of batch 1 and 2 | /goal in Chat built 2026-11-23 (32 CM4); voice (D5, 42 VC0–VC4), a composer that keeps formatting (D7), web search visible everywhere (D12), Q2 worktree wording, Q3 context files, Q4 where things run, F1 3D |
-| **I · Build parity** | 05, 22 §6, 31 | Most of Claude Code's and Codex's surface (approvals, sandbox, plan, `/goal`, rewind, worktrees, diff review, PR loop, MCP, subagents); 31 A1 | **PAR1–PAR12** below (added 2026-11-20) |
+| **I · Build parity** | 05, 22 §6, 31, 39 | Most of Claude Code's and Codex's surface (approvals, sandbox, plan, `/goal`, rewind, worktrees, diff review, PR loop, MCP, subagents); 31 A1–A3 (2026-11-20); 39 the filtered network for projects you haven't trusted, NF1–NF3 (2026-11-23) | **PAR1–PAR12** below (added 2026-11-20) |
 
 ### Proposed order
 
@@ -64,12 +64,14 @@ from Later to Now.
 - **Computer use U0–U4:** after the browser (W1–W4, built) shows how often reading alone is enough.
 - **Side conversations:** SD3 is built (24 §11) but untuned; its replay set comes after a week of using SD1–SD3. SD4
   (hand-off mid-task) after that.
-- **Connectors C2–C3:** after Piopio's own Google and Microsoft OAuth apps exist.
+- **Connectors C2** (Gmail, Google Drive, Slack): after Piopio's own Google and Microsoft OAuth apps exist. C3 is built
+  (12, 2026-11-21).
 - **Memory M4–M6, notarization and Sparkle:** when daily use asks for them, or when someone else is
   about to install it.
 
 **Parked** (no spec work until something above is done): image generation, MCP Apps, the connector
-marketplace, concept → 3D, rooms and side-by-side agents, cloud sandboxes, the iOS companion.
+marketplace, concept → 3D, rooms and side-by-side agents. Cloud sandboxes and the iOS companion left this list
+2026-11-19: they are 30's K7 (Later) and K3 (Next).
 
 ### Track I · Build parity with Claude Code and Codex (2026-11-20)
 
@@ -109,7 +111,7 @@ The table at the foot of this page says none are open; that was true on 2026-10-
 |---|---|
 | 21 §6 | What a "job" is for the budget; the team estimate; agent page width; Telegram on the strip |
 | 23 §10 | Attended only; browsers see-only; full control as its own milestone; keeping pictures |
-| 17 §8 | DPQ1–DPQ6, most of them moot since TD2; DPQ6 (the off-track check) still stands |
+| 17 §8 | DPQ4–DPQ6; DPQ6 (the off-track check) still stands. DPQ1–DPQ3 went with the router (26 CL11, 2026-11-17, which also replaced TD2) |
 | 16 §8 | DQ1–DQ3: the name, you as reviewer, remembering a result |
 | 14 §6 | Q1 and Q3, which gate M4 and M5 |
 | Below | Q2 worktree wording, Q3 context files, Q4 where things run, Q5 (moot: notebooks are gone) |
@@ -139,12 +141,12 @@ Each phase ends with something usable every day. What each milestone delivered, 
 | **2 · Build MVP** | 05-build §1–7, §9, G1–G3, bundled approvals/checkpoints/todos/notify/subagents, MCP | Real work on Piopio in Piopio; CLI interop both ways; no approval lost across a restart; correct checkpoint restore with untracked files | Built; real-model daily work and large repositories open |
 | **3 · Projects lens and Spaces** | 04-chat §2–3, global memory (07 §5), MCP in pi-durable | One real Space with 5+ topics; routing ≥ 90% on the 50-message replay; corrections learned | Built; the replay scored 49/50, daily use open |
 | **4 · Local agents** | 06-agents §2–4, §6–9, §11 (local), Apple app tools, Inbox, background mode | Two agents for a week; schedules fire with the app closed; delegation with loop guards | Built; real schedules across sleep/wake, permissions and budgets open |
-| **5 · Cloud agents and channels** | Cloud Engine (02 §5), deploy/rollback from the app, Telegram, WhatsApp, approvals over channels | Two agents 24/7 with the Mac off; both channels; owner approvals by button | Spikes S4 and S7 pass; nothing deployed to a real account yet |
+| **5 · Cloud agents and channels** | Cloud Engine (02 §5), deploy/rollback from the app, Telegram, WhatsApp, approvals over channels | Two agents 24/7 with the Mac off; both channels; owner approvals by button | Spikes S4 and S7 pass; the Worker on a real account 2026-11-19 and 30 K1 built the same day (Track E above); K1 from the app not yet run on the account |
 | **6 · 1.0 polish** | GitHub PR/CI loop (G4–G8, built 2026-11-17 except the OAuth device flow), worktrees UX, usage page, export everything, accessibility pass, Sparkle + Homebrew cask, docs site | — | G4–G8 built; the rest not started |
 
 **Spikes:** S1–S5 in Phase 0; S6 Hindsight as an opt-in memory provider; S7 the cloud harness (go); S8 the memory review. Reports are in [../spikes](../spikes), [packages/cloud](../../packages/cloud/README.md) and [14-memory](14-memory.md).
 
-**Work that started outside a phase:** onboarding and areas ([15](15-onboarding-and-areas.md)); conversation first ([18](18-conversation-first.md), phases 1–3 built 2026-11-07); what came from deepseek-harness (Build's sandbox, `/goal`, `present_files`, earlier conversations, auto review, Claude Code and Codex as subagents); Dispatch ([17](17-dispatch.md), planned); Debate ([16](16-debate.md), built, then removed 2026-11-15); side conversations ([24](24-side-conversations.md), decided 2026-11-12, not built).
+**Work that started outside a phase:** onboarding and areas ([15](15-onboarding-and-areas.md)); conversation first ([18](18-conversation-first.md), phases 1–3 built 2026-11-07); what came from deepseek-harness (Build's sandbox, `/goal`, `present_files`, earlier conversations, auto review, Claude Code and Codex as subagents); Dispatch ([17](17-dispatch.md), the router dropped 2026-11-17; DP1, DP4 and DP5 built 2026-11-17); Debate ([16](16-debate.md), built, then removed 2026-11-15); side conversations ([24](24-side-conversations.md), decided 2026-11-12, SD1–SD3 built 2026-11-17).
 
 ## Backlog from the v2 review (2026-10-22)
 Noted by the user after using the v2 redesign. Not scheduled into a phase yet.
@@ -199,13 +201,15 @@ Noted by the user after using the v2 redesign. Not scheduled into a phase yet.
 - Q4 · **Decided 2026-11-19 in [30-cloud-target.md](30-cloud-target.md)** (CT1–CT6: a location chip; agents start on the Mac and move up; an iPhone app; capabilities by place; phases K1–K7). **Where things run.** Claude and Codex let you pick, per chat, whether it runs on this Mac or in the cloud. Research per kind: Build sessions (this Mac, a worktree, or a cloud machine from the GitHub repo), chats and notebooks (this Mac or the cloud engine), agents (this Mac or a Durable Object, Phase 5). Decide whether the choice lives in the composer, the new-session sheet, or per project/agent, and how a running item moves between them. Related: "cloud Threads/Spaces" and "cloud Build sessions" in Later.
 
 ## Later (unordered)
-Mac Bridge · cloud Threads/Spaces · iOS companion · direct providers + local models + subscription logins · artifacts/canvas (→ [25-visuals.md](25-visuals.md): saved visuals are files) · code execution in Chat · email/Slack/Discord channels · group chats & agent rooms · cloud Build sessions · web preview · semantic search.
+Artifacts/canvas (→ [25-visuals.md](25-visuals.md): saved visuals are files) · code execution in Chat · email/Slack/Discord channels · group chats & agent rooms.
+
+No longer here: the Mac Bridge, cloud chats, the iPhone app and cloud Build sessions are 30's K5, K2, K3 and K7 (Now, Next and Later above); direct providers, local models and subscription logins are built (10 P0–P1, 31 A1–A3); the web preview is built (22 §6.1, PAR3); semantic search is built (14 M1).
 
 ---
 
 ## Open questions
 
-**None open** as of 2026-10-18. The resolved ones are below. New questions found during the Phase 0 spikes get added here.
+**None open** as of 2026-10-18. Questions opened since are under [Questions waiting for you](#questions-waiting-for-you) above. The resolved ones are below. New questions found during the Phase 0 spikes get added here.
 
 | ID | Question | Decision |
 |---|---|---|

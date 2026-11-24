@@ -138,6 +138,9 @@ untrusted content. It never counts as an instruction from you and can't grant a 
   sentence ("Set Name to 'Header / Dark'") with the window's picture when one was taken. Agents' chats show the same.
 - **Hand-offs** as in the browser: a card with the window's picture and what it needs ("Type your password in the
   dialog, then Hand back"), also in Needs you for agents.
+  > 22's hand-off as built is a message, not a card with a Hand back button: the model says what it needs and waits
+  > for you to say you did it (22 §15, 2026-11-15; §16 for agents). This draft builds on that, so the card here is
+  > still a proposal.
 - **Settings › Computer use:** the on/off switch with the first-run explanation, macOS permission status, the apps
   and their levels, the never list (read-only), the step budget, and whether pictures are kept.
 
@@ -181,7 +184,7 @@ untrusted content. It never counts as an instruction from you and can't grant a 
 | **U1 · See** | Settings › Computer use and the first-run sheet; macOS permissions; `computer_apps`, `_see`, `_find`, `_wait`; See grants; the never list; folded steps with pictures. Conversations only. Uses 22's protocol changes. | Ask about what's on screen in an app you allowed, and check it saw nothing else. | M |
 | **U2 · Use, beside you** | `_press`, `_set`, `_menu`, `_type`, `_key`, `_scroll`, `_open`; Use grants and levels; the pill and Stop; secure fields and hand-offs; the destructive net; pause when locked. | Have it do a repetitive job in one app while you work in another, and stop it mid-way. | L |
 | **U3 · Full control** | `_click`, `_drag`; the border; stop on your input; exclusivity. | Have it do something that needs dragging, and take the Mac back by moving the mouse. | M |
-| **U4 · Agents** | The `computer` row in agent setup with its apps; attended-only runs that wait in Needs you; grants raised from a routine. | Give an agent a monthly export from an app without an API. | M |
+| **U4 · Agents** | The `computer` row in agent setup with its apps; attended-only runs that wait in Needs you; grants raised from an automation. | Give an agent a monthly export from an app without an API. | M |
 
 If 22 hasn't shipped its W1 by then, U1 carries the shared protocol work.
 

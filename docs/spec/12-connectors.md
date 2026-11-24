@@ -1,6 +1,6 @@
 # 12 — Connectors
 
-Roadmap backlog D1. Rewritten 2026-10-23 around the experience; nothing is built yet.
+Roadmap backlog D1. Rewritten 2026-10-23 around the experience; C1 (Google Calendar and Outlook) built 2026-10-23, Google's app registered and tried with a real account 2026-11-22 (C1 status); C3 (Linear, Notion, Jira and Confluence, Sentry, GitHub) and tool search built 2026-11-21; per-conversation switches 2026-11-04; C6 built 2026-11-22. C2 is not built.
 
 ## 1. The experience
 
@@ -35,7 +35,7 @@ What you can do at the end of C1, in any chat, notebook, Build session or agent:
 1. Settings › Connectors: the list of apps, Connect / sign in, your accounts, and per app: "Use in chats" (on), and actions you've set to "Don't ask again".
 2. The Google Calendar and Outlook connectors (calendar; Outlook mail if it fits).
 3. Connector tools reaching chats, notebooks, Build and agents, with the approval card for changes.
-4. In agent Setup › Abilities, the connected apps listed (on by default, can be turned off per agent).
+4. In agent Setup › What it can use, the connected apps listed (on by default, can be turned off per agent).
 
 ## C1 status (2026-10-23)
 
@@ -160,6 +160,8 @@ Most of these now run official servers that speak MCP with their own sign-in (Gi
 
 Each app is a **connector**: a small folder that Piopio reads, so adding Datadog or Jira never means changing the rest of Piopio.
 
+> **Since C3 (2026-11-21):** as built, each connector is one file in the engine's `connectors/` (`connectors/linear.ts` is the whole Linear connector), not a folder with a `connector.json`. The folder below is the design.
+
 ```
 google-calendar/
   connector.json   name, icon, how it signs in, where its tools come from, which actions change things
@@ -168,8 +170,10 @@ google-calendar/
 
 - **Where the tools come from:** the app's own MCP server on the internet (most apps), a small server we write or bundle (Google Calendar and Outlook through their APIs in C1), or the Mac app itself (Apple apps).
 - **Sign-in:** OAuth through the browser, an API key, or nothing; tokens in the macOS Keychain, refreshed automatically; several accounts per app.
+  > On the Mac. The cloud and a Piopio Server sign in separately and keep their own tokens; nothing is copied off the Mac's Keychain (30 CT2, 33 §6.1).
 - **Which actions change things:** the connector marks each tool as reading or changing (or sending, or deleting). That's what decides whether Piopio asks first. When a connector doesn't say, Piopio assumes it changes things and asks.
 - **Plumbing:** pi's own MCP client (`@earendil-works/pi-mcp`, already installed) connects and signs in; the sign-in steps show in the same sheet as model providers; the tools reach chats, notebooks and agents (pi-durable) and Build (pi) from one place, found through tool search when there are many.
+  > **Since 18 §15 (2026-11-15):** a chat is a pi SDK session, not pi-durable; only agents run on pi-durable. Notebooks are gone (18 §11).
 - **Adding your own:** Settings › Connectors › "Add a custom connector…" takes an MCP server address or a connector folder. The existing "MCP servers" settings move here.
 
 ## 5. Marketplace (later, not now)

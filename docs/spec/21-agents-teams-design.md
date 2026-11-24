@@ -1,9 +1,12 @@
 # 21 · Agents and teams: the design handoff, as a plan
 
-Status: plan, 2026-11-10; nothing here is built yet. The design is `docs/design/agents-teams` (Claude Design: open
+Status: plan, 2026-11-10; D1–D3 built 2026-11-11 (§7–§9), D4 and D5 2026-11-12 (§10, §11), D6 and D7 2026-11-13
+(§12, §13). The design is `docs/design/agents-teams` (Claude Design: open
 `Agents and teams.dc.html` in a browser; the README is the written spec, and it wins over `docs/design/agents-brief.md`).
 It builds on 20 (projects, agents and teams) and changes some of its choices (§2). **Since 2026-11-17, 26 (agents,
-clarified) replaces AD1–AD3 and AD7 and the team pages;** the agent pages, AD4–AD6, AD8 and AD9 stay.
+clarified) replaces AD1–AD3 and AD7 and the team pages;** the agent pages, AD4–AD6, AD8 and AD9 stay. 27 (a draft of
+2026-11-18, built on the Mac: A1–A2 2026-11-18; not yet confirmed) changes AD5: a routine becomes an automation, an
+object of its own that runs as Piopio or as one of your agents (27 AU2).
 
 **The idea, in the design's words:** start from what you want to happen, not from which kind of object to create.
 Agents, teams and projects share one visual language: an avatar, a colour and a role verb.
@@ -26,6 +29,7 @@ Agents, teams and projects share one visual language: an avatar, a colour and a 
   - **Teams are born in a project:** Piopio offers one when work grows.
   - **Agents are made by talking** and "come alive".
   - **Agents can join teams.**
+    *(Since 26 CL2, 2026-11-17: agents never join a team.)*
   - **Home absorbs Needs you,** with a Today timeline.
 
 ## 2. Decisions this takes (to confirm)
@@ -124,6 +128,8 @@ and D6. D4 and D5 can swap.
 ## 8. D2 as built (2026-11-11)
 
 - **Sidebar (1a):** Search · Home · Projects · Agents · Conversations.
+  **Since 27 §4 (built 2026-11-18) and 18 CF27 (2026-11-20):** Automations sits under Home, and Agents is a sidebar
+  section after Pinned and before Projects, with a row per agent.
   - **Home** carries the count of what waits on you; the Needs you row is gone, and so is its page (2026-11-18):
     Home's "Waiting on you" lists everything, five rows and then "Show N more". Each row has the action that resolves
     it (Allow, an answer, Run again, Raise the budget, Dismiss); a click opens its full card under it (what came in, a
@@ -167,6 +173,8 @@ and D6. D4 and D5 can swap.
   - **Already as designed:** the setup-change card with Undo (`set_up`'s result card) and inline permission requests
     (approval items with Not now / Allow).
 - **Setup (2c):** the six questions on the left, with "History · View as file" at the foot.
+  **Since 27 AU3 and §12 (built 2026-11-18 and 2026-11-19):** Setup loses "When it acts"; when an agent acts is set in
+  Automations. Setup is four groups and a closing block on its automations.
   - **What it does:** name, avatar, one line, instructions, model, thinking.
   - **When it acts:** its schedules as sentences ("Weekdays at 8:00", the task, "Next: tomorrow at 8:00"); Edit shows
     the cron as "Custom" and Remove. The reminders and event routines it set itself are listed too, with "Change…"
@@ -207,6 +215,8 @@ and D6. D4 and D5 can swap.
 - **Join a team** (5d-1): on the agent's page, ••• › Join a Team…: the team, as what ("Reviews every task · replaces
   QA", or a new member who does tasks), and what changes for it there (it keeps its instructions plus TEAM.md, uses its
   own model unless the member has another, and writes what it learns to the team's notes, not its memory).
+  **Since 26 CL2 (C2 built 2026-11-17):** agents never join a team, and "Join a Team…" is gone from the agent's page
+  (26 §12).
 - **Fixed on the way:** opening a conversation didn't refresh views that read its items (the chips stayed empty).
 - **Not yet:** ⌘⇧N stays New Project (the design gives it to New agent); choosing an agent's colour; a team-only
   member's own page (5d-2, with D5); "this sounds like a job for an agent" in a conversation (5d-3, with D7).
@@ -279,6 +289,7 @@ and D6. D4 and D5 can swap.
     Bring in a team / Do it here, one by one. The second just answers with those words.
   - `offer_repeat` (what, when in words, a cron): "Make this happen on its own?", with Make it an agent (Turn into an
     agent's draft), Just a routine here (a project routine with that cron; the conversation is told it's set) and No.
+    **Since 27 §10 (built 2026-11-18):** `offer_repeat` is gone, and so are the `routines.*` calls.
 - **"A team for piopio"** (5b-2, `teams.draftFor`):
   - The project is read for its language, checks and git (`fit.ts`). The background model drafts the members from
     that and the request; without one, a code project gets the development template.

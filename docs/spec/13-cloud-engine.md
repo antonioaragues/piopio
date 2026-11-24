@@ -4,6 +4,12 @@ Status: plan, 2026-10-24. The architecture is in 02-architecture §5 (Cloud Engi
 (agent-to-agent), §11 (lifecycle). This page turns them into milestones and records what changed since they were
 written.
 
+> **Since 30 and 33:** [30](30-cloud-target.md) (the cloud's target state, decided 2026-11-19, K1 built the same day)
+> and [33](33-piopio-server.md) (Piopio Server, a second kind of cloud, decided 2026-11-21) extend this plan. Two
+> things changed: new agents start on this Mac and move up with Keep it always on, in place of 5.2's "Deploy to
+> cloud" (30 CT1, §13); and Telegram, WhatsApp and the rest are add-ons that come any time after K1, not part of the
+> acceptance below (30 §10).
+
 **Acceptance (from the roadmap):** two agents live 24/7 with the Mac off; Telegram and WhatsApp both work; the owner
 approves from Telegram buttons; agent-to-agent works in the cloud.
 
@@ -123,5 +129,7 @@ Details and gaps: [packages/cloud/README.md](../../packages/cloud/README.md).
 ## What only you can do
 - **Before 5.2:** a Cloudflare account and an API token (Workers Scripts edit, Durable Objects, R2, Account settings
   read). The free plan is enough to start.
+  **Since 30 §13 (K1 built 2026-11-19):** it's one API token, made in the dashboard from the "Edit Cloudflare
+  Workers" template; this list of scopes is history.
 - **Before 5.3:** one Telegram bot per agent from @BotFather (a minute each).
 - **Before 5.5:** a Meta developer app, a WhatsApp Business account and a dedicated phone number.

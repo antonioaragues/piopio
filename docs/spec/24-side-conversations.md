@@ -1,6 +1,6 @@
 # 24 — Side conversations
 
-Status: decisions SC1–SC9 confirmed by the user 2026-11-12; the questions of §9 decided 2026-11-14; nothing here is built. Reference: the Claude
+Status: decisions SC1–SC9 confirmed by the user 2026-11-12; the questions of §9 decided 2026-11-14; SD1–SD2 built 2026-11-17 (§10) and SD3 the same day, with its noticing rule untuned and its replay set not made yet (§11); SD4 is not built. Reference: the Claude
 desktop app, which opens a separate session when a request has nothing to do with the one you're in
 ([the card](../design/side-conversations/reference-card.png), [the note back](../design/side-conversations/reference-note.png)).
 
@@ -15,7 +15,7 @@ Piopio already has pieces of an answer, none of which does this:
 
 | Piece | What it does | Why it isn't this |
 |---|---|---|
-| Subagents (`task`, 05-build §4) | A child session for a piece of the current task; its result returns to the turn | You don't talk to it, and it's part of the same task |
+| Subagents (`task`, 05-build §4) | A child session for a piece of the current task; its result returns to the turn | You don't talk to it, and it's part of the same task *(Since 37 SB4, built 2026-11-22: an opened subagent has its own composer, to steer it while it works or ask a follow-up after.)* |
 | Fork (T5, `sessions.fork`) | You copy a conversation from one answer | By hand, no brief, no link back, no report |
 | Continue in (18 §5) | Takes a loose chat to a project folder | Moves the whole conversation; one subject still |
 | Board tasks (19, 20 PT6; since 2026-11-17, 26) | Piopio hands pieces of one job to helpers, shown as cards in the conversation | Delegation inside one job, with review and merge |
@@ -57,8 +57,8 @@ words or your click.**
 | SC1 | **The conversation's own model decides** what is a new subject, by a rule in its prompt (§3). | A classifier (utility model) on every message before the turn: faster card, works with weak models, but a second opinion to tune and a cost on every message (SCQ2). |
 | SC2 | **A request for unrelated work is offered, not moved.** The card asks; Return takes New conversation. | Start it without asking (quieter when right, disorienting when wrong); a setting can allow that later. |
 | SC3 | **Three ways to start, all yours:** *offered* (you asked for the work; the card asks where), *asked* (you said "separately"; starts now), *proposed* (Piopio's idea; a card you may start). | Let the model start what it proposes within a budget, as a team lead does (TD3). Not here: a lead was given a job; this is unasked work. |
-| SC4 | **A side conversation is an ordinary conversation** of the same kind, in the same project, listed under its parent. Not a new container kind. | A lighter "sub-thread" drawn inside the parent's transcript: keeps you in one place, but brings back two subjects in one history. |
-| SC5 | **Same project, same or narrower permissions, same "who"** (Piopio or an agent; before 26, also a team's lead) as the parent. It can't give itself more than its parent has. | Let the brief choose. |
+| SC4 | **A side conversation is an ordinary conversation** of the same kind, in the same project, listed under its parent. Not a new container kind. *(Since §11 and 26 CL11, 2026-11-17: or in another of your projects, when `project` names one.)* | A lighter "sub-thread" drawn inside the parent's transcript: keeps you in one place, but brings back two subjects in one history. |
+| SC5 | **Same project, same or narrower permissions, same "who"** (Piopio or an agent; before 26, also a team's lead) as the parent. It can't give itself more than its parent has. *(Since §11 and 26 CL11, 2026-11-17: the exception is a side conversation started in another project, which works in that project's folder with that project's permissions.)* | Let the brief choose. |
 | SC6 | **Work that changes files in a git project gets its own worktree** (BP5); read-only work shares the folder. In a folder without git it shares the folder, is told which files are its own, and edits to files changed on disk since it read them are refused (SCQ4). | Always share the folder: simpler, and two conversations overwrite each other. |
 | SC7 | **It reports back with a short note, which may wake the parent** when the parent is idle and no other side conversation of its own is still working. | Notes only shown, never read by the model (SD1 ships this way first). |
 | SC8 | **Your conversations only.** Loose chats and project conversations (lead conversations, before 26). Not agents' conversations with other people, not debates. | — |
@@ -94,6 +94,8 @@ it's offered here, as a question, because a new conversation would have to find 
 One tool group, `side`, in every conversation of §2 SC8. Names are stable across Build (pi SDK) and chat (pi-durable),
 as with `piopio-history`.
 
+> **Since 18 §15 (2026-11-15):** chats are pi SDK sessions, not pi-durable; this line is history.
+
 | Tool | Does |
 |---|---|
 | `side_offer({title})` | Shows the offer card and waits for your choice: `new` or `here`. Durable: survives a restart while waiting. On `here` the model does the work in this conversation. |
@@ -103,6 +105,9 @@ as with `piopio-history`.
 | `side_send({id, message})` | A follow-up to the side conversation that has the context, instead of starting another. Queued if it's busy. |
 | `side_read({id, from?})` | Its recent items as text: last answer, changed files, open question. No model call. |
 | `side_stop({id})` | Stops its running turn. |
+
+> 28 (draft 2026-11-18, not built) would change this: `side_start`'s `model` becomes `role`, a model only when you
+> named one.
 
 - **`context`** is the model's choice, never yours to worry about:
   - `fresh` (default): the brief alone. The brief names the files or area and what done looks like, in the model's
@@ -187,6 +192,7 @@ as with `piopio-history`.
   what §4 leaves to the model (`workOn`, `model`) for you to change before it starts.
 - **Settings › Conversations:** *When I bring up something unrelated:* Ask (default) · Always start a side
   conversation · Do nothing. *Propose follow-ups:* on. *Let side conversations wake their parent:* on.
+  > **Since §11 (SD3 as built, 2026-11-17):** the pane is Settings › Chat › Side conversations.
 
 ## 7. How it's built
 
@@ -195,6 +201,8 @@ as with `piopio-history`.
   Starting goes through the same path as `sessions.create` (worktree option included) or `sessions.fork` for `copy`.
 - **`tools/side.ts`:** the `piopio-side` extension, defined for both runtimes like `tools/history.ts`.
   `side_offer` waits the way approvals and questions do.
+  > **Since 18 §15 (2026-11-15):** chats are pi SDK sessions, not pi-durable. And `side_offer` doesn't wait, as built
+  > (§11).
 - **A report bridge** watches the state of sessions that have a parent link (as the subagent bridge and the team
   runner do for theirs) and submits notes with `whenBusy: "followUp"`. This is 17 §2.3's bridge; build it once and
   let board helpers and `task` use it too (26 §7.1).
@@ -212,6 +220,8 @@ as with `piopio-history`.
 - `sessions.side.answer({ ref, itemId, choice })` for offer and proposal cards;
   `sessions.side.start({ ref, title?, brief, fromItemId? })` for the manual paths.
 - Settings: `side.onUnrelated: "ask" | "start" | "off"`, `side.propose`, `side.wakeParent`, `side.maxRunning`.
+  > **Since §11 (SD3 as built, 2026-11-17):** the keys are `chat.sideOnUnrelated`, `chat.sidePropose` and
+  > `chat.sideWake`. §10 and §11 name no setting for `side.maxRunning`; the limit is 4 (§10).
 
 ### Tests
 With the scripted model and a fake clock:
@@ -235,7 +245,7 @@ With the scripted model and a fake clock:
 | **SD2 · It reports back** | Notes wake the parent (SC7) with batching and the loop guard; `side_send`, `side_read`, `side_stop`; "Side conversations now" in context; finishing from the card. | Ask for two things, keep working, and get "both done, merged?" here. |
 | **SD3 · It notices** | The rule of §3, `side_offer`, `side_propose` and `side_dismiss`, expiry, the settings, "Don't ask again" after three (SCQ3), the project chip on loose chats' offers (SCQ5). A replay set of ~60 real messages from this repo's conversations (half continuations, half new tasks), as the Notebook routing replay did. | Change subject and be asked where it goes. Accept: ≥ 90% of new tasks offered, and at most 1 false offer in 20 continuations, on the default models. |
 | **SD4 · Hand-off mid-task** | A new subject while a turn runs: the running task moves to a side conversation (`copy` plus the remaining plan; in a worktree project it commits first and starts from that tip) and this one answers. | Interrupt without losing the work in flight. |
-| **Later** | Open beside (split view) · a utility-model check before the turn, if SD3's replay asks for it (SCQ2) · a side conversation in the cloud or in another project ("in the api repo"; another project is brought forward, 26 CL11) · agents' own conversations · Watchdog W1–W5 (17 §4) on side conversations. | |
+| **Later** | Open beside (split view) · a utility-model check before the turn, if SD3's replay asks for it (SCQ2) · a side conversation in the cloud or in another project ("in the api repo"; another project is brought forward, 26 CL11) · agents' own conversations · Watchdog W1–W5 (17 §4) on side conversations. *(Since 17 §10, built 2026-11-17: the Watchdog's rules W1–W3 follow side conversations; a stuck one is reported to its parent.)* | |
 
 SD1 and SD2 need nothing that isn't built. SD3 is prompt work on top; it should wait for a week of using SD1–SD2 by
 hand, which also produces the replay set.
@@ -278,6 +288,8 @@ All seven went with the proposal.
 - **Tools**, for your own conversations (not a helper's or a subagent's):
   - `side_start` is refused unless the turn's last user message is yours, not one starting `[Side]`, `[Board]` or
     `[Routine]`.
+    > **Since 27 AU12 (2026-11-18):** the `[Routine]` prefix becomes `[Automation]`; this line was written the day
+    > before and its text is stale.
   - `side_send` is queued if the side conversation is busy, and added to the brief if it's queued.
   - `side_read` gives the state, branch, cost, what's committed and changed on its branch, and its last answer, in
     6,000-character pieces.
@@ -374,6 +386,9 @@ Side conversations moved out of the block above the composer and into the transc
 grey line, a card only for what needs you). Nothing about sides is pinned above the composer; the block stays only
 for subagents at work (17 §3).
 
+> **Since 37 SB5 (built 2026-11-22):** the "Subagents" block above the composer goes too; a subagent is one live row
+> in the transcript, opened beside the conversation.
+
 - **`side.from`** on a side conversation: the tool call that started it (`side_start`'s, or the offer's or proposal's
   you answered). The app finds a side's line by it.
 - **Starting:** `side_start` is a grey line, "Side conversation · *title* · *where it stands*", that follows the side
@@ -388,4 +403,6 @@ for subagents at work (17 §3).
   `side_offer`, `side_propose`, `offer_parallel`, `offer_repeat`, `propose_plan`), nor after a note the user didn't
   write (`[Side]`, `[Task]`, `[Board]`, `[Routine]`). `side_offer`'s result tells the model to end its turn without
   restating the card's choices.
+  > **Since 27 (built 2026-11-18):** `offer_repeat` is gone (27 §10), and the `[Routine]` prefix becomes
+  > `[Automation]` (27 AU12). This list was written the day before.
 - **Tests:** `follow-ups.test.ts` (`followUpsFit`), `side.test.ts` (`from`), `SideLinesTests` and `ToolCardTests`.

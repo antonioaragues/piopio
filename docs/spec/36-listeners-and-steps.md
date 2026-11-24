@@ -243,7 +243,7 @@ There are no loops: repeating something is another run.
 
 | Spec | Change |
 |---|---|
-| 27 Automations | Filter, until, batch and steps on the object; the page's What it does; the card's backtest line; failed filters in Waiting on you |
+| 27 Automations | Filter, until, batch and steps on the object; the page's What it does; the card's backtest line; failed filters in Waiting on you; 27 §8's "No workflow builder" ("no branches, and no conditions beyond the trigger's filters") changes, since a step can be skipped by a condition (§4.2). Still no chains and no canvas |
 | 35 Apps | Its `script` source runs on `scripts.ts`, with the same header and limits |
 | 28 Auto model | Agent steps and `classify` name a role |
 | 34 Overview | `classify` calls and steps' costs in the ledger; "Checks: 1,204 events, 9 runs" in Activity |

@@ -110,6 +110,10 @@ you and a notification):
 You act in the pane and press **Hand back**; the model gets "The user finished signing in" and a fresh page map,
 never what you typed.
 
+> **Since §15 (W2 as built, 2026-11-15):** hand-offs are the prompt and a message. The model tells you to sign in,
+> solve the check or pay in the panel and waits for you to say so; there is no paused run, no card and no Hand back
+> button. The same holds for agents (§16), where you act through Watch.
+
 ### 4.4 Levels, per site
 | Level | Reading | Clicking, typing | Submitting |
 |---|---|---|---|
@@ -233,7 +237,7 @@ as untrusted content. It never counts as an instruction from you, and it can't g
 | **W0 · Spike** | A web view driven from a test harness: the page map on 10 real sites, trusted clicks and typing, an off-screen window, two data stores side by side, an image tool result through pi and OpenRouter to a model and back. | Read a go / no-go on BW1, with the sites that failed and why. | S |
 | **W1 · Read** | The pane; `browser_open`, `_read`, `_map`, `_screenshot`, `_find`, `_scroll`, `_back`, `_tabs`, `_wait`; your profile; the protocol changes in §8; folded steps. Conversations only. | Ask about a page that needs scripts or your sign-in, and watch it read. | M |
 | **W2 · Act** | `_click`, `_type`, `_select`, `_key`; site grants and levels; secret fields; hand-offs; take over and hand back; downloads and uploads ask; Settings › Browser. | Have it fill a form on a site you allowed, sign in yourself when asked, and stop it mid-way. | L |
-| **W3 · Agents** | The `browser` row in agent setup with its sites; separate profiles; off-screen runs; Watch; hand-offs in Needs you and notifications. | Give a routine three pages to check each morning with the window closed (app open). | M · built 2026-11-23 (§16) |
+| **W3 · Agents** | The `browser` row in agent setup with its sites; separate profiles; off-screen runs; Watch; hand-offs in Needs you and notifications. | Give an automation three pages to check each morning with the window closed (app open). | M · built 2026-11-23 (§16) |
 | **W4 · Preview** | Local addresses for a project's own servers; per-project profile; `_console`, `_requests`, `_eval`. | Ask a Build session to run the app and check a page it just changed. | M · built 2026-11-21 (§6.1) |
 
 W1 can ship without W2; each later one is useful on its own.
@@ -241,6 +245,8 @@ W1 can ship without W2; each later one is useful on its own.
 ## 10. Later
 - **Cloud agents:** the same tool names over Cloudflare's Browser Rendering (a headless Chromium driven from the
   Worker), with a clean profile and no hand-offs to a pane; a hand-off becomes a link you open. Needs Phase 5.
+  > **Since 30 §4.2 (2026-11-19, not built):** the target is Cloudflare Browser Run with one profile per agent, and
+  > you take over a hand-off in Live View, not through a link. Today agents in the cloud have no browser (§16).
 - **A headless helper** so agents can browse with the app closed (with the login-item helper, 06-agents NB2).
 - Filling a saved sign-in from the Keychain on your approval, without the model seeing it.
 - Pick an element, record a flow as a routine, saved pages as conversation files, reader view, a content blocker.
@@ -267,6 +273,9 @@ W1 can ship without W2; each later one is useful on its own.
 Decided with the user on 2026-11-14: instead of building BW1's WebKit browser, ship an existing Chromium one, on by
 default. What was looked at first (npm, 2026-11-14): about 30 pi packages for the browser, every one Chromium
 (agent-browser, CDP to your own Chrome, Playwright, chrome-devtools-mcp); none hosts a browser inside an app.
+
+> **Since 18 §15 (2026-11-15):** chats are pi SDK sessions, not pi-durable; the reason below was true the day it was
+> written and is history.
 
 **Why Playwright MCP and not a pi package.** pi packages' extensions load only in Build; chats run on pi-durable and
 reach MCP servers instead. An MCP server works in both, through what already exists (Settings › MCP servers, Build's
@@ -333,6 +342,9 @@ prompt section. Each call goes to the app as `app.tool` with the conversation's 
 `engine.hello` is asked; with none, the tool says Piopio isn't open. `browser_open` refuses anything but http(s) and
 local or private addresses before asking the app (as `web_fetch`). In Build the tools count as network reads (like
 `web_fetch`): they run in Read only and Auto-edit, and ask in Ask.
+
+> **Since 18 §15 (2026-11-15):** chats are pi SDK sessions, not pi-durable. Agents get the tools as a pi-durable
+> extension (§16).
 
 **App.** `Browser.swift`: `BrowserCenter` keeps each conversation's tabs (`BrowserSession`, `BrowserTab`), all in one
 persistent `WKWebsiteDataStore(forIdentifier:)`: your profile (BW5). The page script (`BrowserScript.swift`, from W0)
@@ -410,7 +422,7 @@ restart, and an automation set to skip what needs your OK skips it. "Always allo
 Browser are refused for agents too. Agents in the cloud have no browser (§10).
 
 **App.** An agent's tabs live in a WebKit profile of their own (a fixed id from `agent:<id>`), kept between launches,
-in the transparent window while no panel shows them, so routines browse with the window closed (the app open). The
+in the transparent window while no panel shows them, so automations browse with the window closed (the app open). The
 panel doesn't open by itself for an agent. **Watch** in the agent's header opens its Browser beside its chat, in the
 profile its Setup gives it: that's where you sign it in to a site, or take over. Changing Sign-ins starts its tabs
 afresh.
@@ -421,7 +433,7 @@ it with Watch. There is still no paused run or Hand back button.
 **Checked.** Engine test (`agent-browser.test.ts`): Off offers no tools; Asks reads in its own profile under its ref;
 the first click on a site is an approval in its chat and Needs you; Always allow stops asking without touching your
 Settings list; Deny tells it not to try another way; Allowed sites don't ask; Yours sends no profile; a site blocked in
-Settings is refused. The app builds. **Not yet:** a capture of the Setup row and Watch, a real model, a routine run
+Settings is refused. The app builds. **Not yet:** a capture of the Setup row and Watch, a real model, an automation run
 with the window closed, Settings › Browser listing agents' profiles with Clear, and the glance strip's "Can: browse
 as you".
 

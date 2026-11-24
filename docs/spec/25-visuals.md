@@ -36,6 +36,7 @@ reuses it for all three.
 4. **Bigger when you want.** **Open** on the card shows the visual in the right column (where the browser and file
    previews go), at the column's full height. **Save…** writes it as an `.html` file: in a project, into the project
    folder by default.
+   > **Since §14 (V2 as built, 2026-11-16):** Open shows the visual in a sheet, not the right column.
 5. **It stays.** Scroll back tomorrow and it's still there, drawn again from what the model sent. A new version ("make
    B denser") is a new card under the new answer; the old one stays where it was.
 6. **Files too.** An `.html` file the model writes in Build, or that you attach, opens rendered in the file viewer,
@@ -87,6 +88,9 @@ screen at the conversation's column width, waits for it to settle (load, then 50
   same turn instead of you finding a blank card;
 - with `look: true`, a JPEG of the visual, at most 1280 px wide.
 
+> **Since §15 (V3 as built, 2026-11-16):** the check waits for the page to load (at most 5 s), then for half a second
+> without a change of height (at most 3 s more).
+
 With no app connected (a cloud agent, Telegram), the engine records the visual and answers `Recorded; not drawn, so
 not checked.` The card is drawn when an app opens the conversation.
 
@@ -134,6 +138,7 @@ where it folds steps (`replacedVisuals` in `tools/visuals.ts`), so every client 
 An attachment card, like the table and file cards (`NSTextAttachmentViewProvider`):
 
 - **Header:** an icon, the title, and on hover **Open**, **Save…**, **Copy HTML**, **Reload**.
+  > **Since 35 §14 (built 2026-11-22):** the header also has **Make app**, in chats and Build.
 - **Body:** the visual at the column's width. Its height follows the content: a `ResizeObserver` in the wrapper reports
   it, and the card resizes. At most 900 pt; past that the card shows the top and a **Show all** that opens it in the
   right column. No scrolling inside the card (a scroll area in a scrolling transcript catches the wheel).
@@ -164,6 +169,8 @@ redrawing.
 and full height, with the same buttons. It's the same visual, live; the card in the transcript shows a picture of it
 while it's open there.
 
+> **Since §14 (V2 as built, 2026-11-16):** Open is a sheet (1000 × 720, scrolling), not a view in the right column.
+
 ### 4.4 Talking back
 
 The wrapper defines:
@@ -174,6 +181,9 @@ The wrapper defines:
 | `piopio.prefill(text)` | Puts `text` in the composer without sending, for you to finish. Same rule. |
 
 Nothing else crosses: no reading the conversation, no files, no tools. A visual that needs data gets it in its HTML.
+
+> **Since 35 §14 (built 2026-11-22):** `piopio.onData` is in every visual's bridge, so an app's page gets its data
+> from Piopio. The page is still offline: no network, no files, and no channel back except your click (35 §5).
 
 ## 5. Safety
 
@@ -189,6 +199,8 @@ Each visual is a `WKWebView` with:
   wrapper and backed by a content rule list that blocks every other load;
 - navigation refused (link clicks open in the built-in browser only when you click them, and only http(s));
   pop-ups, downloads, camera, microphone, location and notifications refused; `alert`/`confirm`/`prompt` ignored.
+  > **Since §13 and §14 (as built, 2026-11-16):** a link you click opens in your default browser, not the built-in
+  > one.
 
 ### 5.2 Bundled libraries
 
@@ -259,6 +271,8 @@ V1 stands alone and is small. V2 alone already gives what the references show; V
 
 - **Editing a visual in place**: the model changes a saved file and the card follows it (canvas-style). Until then, a
   new card per version.
+  > **Since 35 §15 (built 2026-11-22):** this happens for a visual made into an app (Make app, 35 §14): you change it
+  > by talking in the app's conversation.
 - **Drawing as it streams**, once a partial page can be drawn without flicker.
 - **State that survives** scrolling away and reloading (a visual's inputs kept with the conversation).
 - **F1 as a feature**: a `/visual` command or a quick action that asks for a 3D explanation. With V2 it's a prompt
@@ -345,7 +359,8 @@ when steps fold (`keepAlone`).
 - **Open** shows the visual in a sheet (1000 × 720, scrolling), where `piopio.send` sends and closes the sheet.
   **Save…** writes the page without the CSP and with `send` a no-op, to the conversation's folder by default.
 
-**Different from the spec:** Open is a sheet, not the right column (§4.3). `piopio.send` came forward from V3, without
+**Different from the spec:** Open is a sheet, not the right column (§4.3). A link you click opens in your default
+browser, not the built-in one (§5.1). `piopio.send` came forward from V3, without
 the "from *title*" tag; `piopio.prefill` isn't built. Live views are the 6 most recent, not "the 4 in view" (§6). A saved
 visual's libraries stay `piopio-lib://` references, so it draws in Piopio's viewer but not in another browser.
 

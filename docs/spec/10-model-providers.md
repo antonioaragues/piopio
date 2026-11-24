@@ -1,6 +1,6 @@
 # 10 — Multi-provider model support
 
-Requirements written by the user outside this repo and handed over on 2026-10-22 (roadmap backlog D2). Not implemented yet; the first step is the inspection in §6.
+Requirements written by the user outside this repo and handed over on 2026-10-22 (roadmap backlog D2). P0 built 2026-10-22 (§11), with custom endpoints (P1) the same day; Settings › Models redesigned 2026-10-23 (§12); OpenRouter's live model list added 2026-10-26 (§13). The inspection is §9.
 
 ## 1. Background and research findings
 Piopio uses pi as its agent harness but exposes OpenRouter as the only model provider. pi already implements most of what multiple providers need:
@@ -47,7 +47,7 @@ Piopio uses pi as its agent harness but exposes OpenRouter as the only model pro
 - Local models and custom compatible endpoints.
 - Model search and favorites; reasoning/thinking level; model metadata and capabilities; catalog refresh.
 
-**Out of scope:** automatic provider fallback (revised by [29](29-provider-order.md): the same model through the next provider in your order, asking before credits); several models at once for one task; intelligent model routing; several accounts for the same provider; consolidated subscription usage or billing dashboards.
+**Out of scope:** automatic provider fallback ([29](29-provider-order.md), draft 2026-11-18, not built, would revise this: the same model through the next provider in your order, asking before credits); several models at once for one task; intelligent model routing ([28](28-auto-model.md), draft 2026-11-18, not built, would change this: Auto, once you turn it on, picks among the models in your roles); several accounts for the same provider; consolidated subscription usage or billing dashboards.
 
 ## 4. Functional requirements
 ### FR1 — Provider management
@@ -66,6 +66,7 @@ The model picker lists models from every connected provider.
   - OpenRouter → Claude model → OpenRouter credits
   - OpenAI API → GPT model → API billing
 - The same model name through two providers stays two distinct choices.
+  > 29 PO3 (draft 2026-11-18, not built) would change this: models from different providers with the same maker and the same normalized id become routes of one model.
 - Switching models inside a session keeps the conversation history.
 - Switching during a running turn is handled safely, without interrupting it unexpectedly.
 
@@ -79,7 +80,7 @@ The model picker lists models from every connected provider.
 ### FR4 — Authentication and errors
 Handle missing credentials, invalid API keys, expired OAuth, rate limits, subscription or quota limits, unavailable models and network failures.
 
-Never silently switch to another paid provider on an error (29 PO6: a switch along your order is never silent, and moving to credits asks by default). Make clear that a ChatGPT subscription, OpenAI API billing and OpenRouter billing are separate arrangements.
+Never silently switch to another paid provider on an error (29 PO6, draft 2026-11-18, not built, would change this: a switch only along your order, never silent, and moving to credits asks by default). Make clear that a ChatGPT subscription, OpenAI API billing and OpenRouter billing are separate arrangements.
 
 ## 5. UX requirements
 **Model Providers settings:** connected accounts and available providers, with simple add, reconnect and disconnect. OpenAI offers two clearly different methods that coexist with OpenRouter:
@@ -112,6 +113,7 @@ Before implementing, inspect the repo: the installed pi version and how it's int
 - Disconnecting one provider doesn't affect the others.
 - Authentication errors come with actionable recovery.
 - No automatic fallback to another paid provider.
+  > 29 (draft 2026-11-18, not built) would change this: the same model through the next provider in your order, asking before credits (PO4, PO6).
 - Credentials stay secure and isolated.
 - Integration tests cover authentication, model selection and session persistence.
 
@@ -170,6 +172,7 @@ After implementing, report: what changed; which pi capabilities were reused; bac
    - Sign-in sheet: opens the browser for `auth_url`, shows the device code with Copy, and offers a paste field for `manual_code`.
    - The model picker groups by provider and labels the billing route ("ChatGPT subscription", "OpenRouter credits", "OpenAI API").
 6. **Errors:** map `ModelsError` codes (auth, rate limit, quota, unavailable model, network) to error cards with one recovery action (Reconnect, Choose another model, Try again). Never fall back to another paid provider.
+   > 29 (draft 2026-11-18, not built) would change this: a request that fails before streaming is tried on the next route of the same model, asking before credits (PO4, PO6).
 7. **Fallbacks:** the utility model and web search use the session's provider when OpenRouter isn't connected, or say clearly that they're unavailable.
 8. **Tests:** a fake `CredentialStore` and a faux OAuth provider cover login, refresh written back, logout of one provider leaving the others, model listing across providers, switching provider mid-conversation, and persistence across restart.
 

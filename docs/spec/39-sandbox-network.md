@@ -1,7 +1,7 @@
 # 39 · A filtered network for projects you haven't trusted
 
 Status: built 2026-11-23, from the security audit (its "step 2", after the sandbox hid credentials and the Keychain tool in 8137fa8).
-Decided: NF1 (who's filtered), NF2 (a new site asks in the tray), NF3 (no Full access while filtered).
+Decided: NF1 (who's filtered), NF2 (a new site asks in the tray), NF3 (no Full auto while filtered).
 
 ## 1. Why
 
@@ -21,10 +21,10 @@ proxy.
   Code (`~/.claude.json`).
 - **Not filtered:** projects from before this (no field: open), New project (you made it), chats (their folder isn't
   a project), and the sandbox switched off (no sandbox at all).
-- **No Full access while filtered** (NF3, 2026-11-23): Full access has no sandbox and asks nothing, so it would go
-  around the filter. In a filtered project it's Auto-edit: setting it is refused with the reason, every mode picker
-  shows it unavailable ("Needs a trusted project"), a project's default, sessions, subagents, Board helpers and coding
-  agents read it as Auto-edit, and filtering a project that started in Full access moves it to Auto-edit.
+- **No Full auto while filtered** (NF3, 2026-11-23): Full auto has no sandbox and asks only for the deny-list (05 AP3),
+  so it would go around the filter. In a filtered project it's Auto-edit: setting it is refused with the reason, every
+  mode picker shows it unavailable ("Needs a trusted project"), a project's default, sessions, subagents, Board helpers
+  and coding agents read it as Auto-edit, and filtering a project that started in Full auto moves it to Auto-edit.
 - **Trusting the project opens it** (the trust banner's Trust Project, or Settings › Approvals › the project). The
   banner shows for a filtered project as it does for one with its own setup. Settings › Approvals › the project has
   a switch, "Filter commands' network", to turn it on or off by hand.

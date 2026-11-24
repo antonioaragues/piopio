@@ -207,6 +207,7 @@ in your routines", until you choose **Got it** (as 26 §8 did for teams).
   becomes the result's contact.
 - **The `heartbeat`** becomes an automation with a quiet result. Its `every` and `activeHours` become a cron (`30m`
   between 08:00 and 22:00 becomes `*/30 8-21 * * *`). The budget skip at 80% (PR2) becomes its budget per run.
+  **As found in A3 (§11, 2026-11-19):** migrated automations get no budget per run; new ones do.
 - **Webhook `triggers[]`** become webhook automations. Their old URLs are aliased.
 - **Reminders and watches** (the agent's state) become automations run by that agent, `by` the agent. A one-off
   reminder that already fired isn't carried over.
@@ -234,6 +235,8 @@ did). A3 follows.
 - **No workflow builder.** There are no chains (when A ends, start B), no branches, and no conditions beyond the
   trigger's filters. A condition goes in the prompt ("only if a price changed"). If chains are ever needed, the first
   step is a trigger "when automation X finishes", not a canvas.
+  36 (draft 2026-11-22, not built) would change this: a run in steps, where a step can be skipped by a condition on
+  earlier results.
 - **No Slack yet.** Slack is a channel (06 §5.5, Later), so it belongs to agents, beside Telegram and WhatsApp. The
   result options are the channels the agent has connected.
 - **No cloud.** That's 13. AU9 only makes where it runs visible.
@@ -336,6 +339,10 @@ fire, Rita's contact by id, Rita declining Piopio's work, and Piopio running the
 - Migrated automations get no budget per run; new ones do ($0.25 or $0.50).
 
 ## 12. The design pass (2026-11-19)
+
+> **Since 18 §21 (2026-11-20, CF27–CF28):** Agents is a sidebar section again, with a row per agent, and an agent's
+> page fills the content card. The agents' list column and the Agents row are gone, and so is "no per-agent rows in
+> the sidebar" below.
 
 The Claude Design handoff for this brief is in `docs/design/automations/handoff`, and what the app built from it, with
 captures, is in `docs/design/automations/IMPLEMENTATION.md`. In short: the Agents row opens a list column beside the

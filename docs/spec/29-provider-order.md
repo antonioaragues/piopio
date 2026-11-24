@@ -2,9 +2,10 @@
 
 Status: draft 2026-11-18, from a question by the user; nothing here is built. It revises spec 10's FR4 ("never
 silently switch to another paid provider") and its "out of scope: automatic provider fallback": switching becomes
-possible, but only along an order you set, only to **the same model**, and never in silence. Everything else in 10
-holds. It sits under [28](28-auto-model.md) (Auto model): 28 decides which model does a piece of work, this spec
-decides which of your providers serves that model (§11).
+possible, but only along an order you set, only to **the same model**, and never in silence. It also changes 10 FR2
+and 10 §7's "the same model through different providers is distinguishable" (PO3 and PO7: one model with several
+routes is one choice). Everything else in 10 holds. It sits under [28](28-auto-model.md) (Auto model): 28 decides
+which model does a piece of work, this spec decides which of your providers serves that model (§11).
 
 **The question (the user, 2026-11-18):** we can connect several providers, but can we order them? With more than one
 connected, what happens to the model picker? Can we say "spend from here first, then from there", for example "use my
@@ -83,6 +84,10 @@ than one of them, Piopio uses them top to bottom: the first one that can answer 
 | PO9 | **While you're away, the automation's rules hold.** An automation or agent run follows the same order. "Ask before using credits" means the run waits in Home's Waiting on you, or skips, as its "If it needs your approval" says (27 AU8). Credits it spends count against its budget per run; plan routes count as $0. | The run fails |
 | PO10 | **Not now:** another model as a backup (idea C), several accounts of one provider, cheapest-route or load-balancing, splitting one turn across routes. OpenRouter's own routing between its upstream hosts stays OpenRouter's. | — |
 
+> **Since §10 Q4 (decided 2026-11-18):** PO4 and PO5 have one exception. When the route resets in under 2 minutes, an
+> attended conversation waits and stays on the plan (the chip says "Waiting for ChatGPT · 1:30", with **Switch
+> now**). Automations don't wait; they follow PO9.
+
 ## 5. When Piopio moves on
 
 Classified with `describeModelError`'s kinds (`ErrorKind`), after pi-ai's own retries.
@@ -90,7 +95,7 @@ Classified with `describeModelError`'s kinds (`ErrorKind`), after pi-ai's own re
 | Kind | Moves to the next route? | Rests the route for |
 |---|---|---|
 | `credits`: plan limit, quota, out of credits | Yes | The reset time when the error or `retry-after` gives it; otherwise 30 min for a plan, until you add credits (checked hourly) for credits |
-| `rate_limit` (still failing after pi's retries, or a `retry-after` over 60 s) | Yes | `retry-after`, else 2 min |
+| `rate_limit` (still failing after pi's retries, or a `retry-after` over 60 s) | Yes | `retry-after`, else 2 min *(Since §10 Q4, decided 2026-11-18: when the route resets in under 2 minutes, an attended conversation waits and stays on the plan; automations don't wait.)* |
 | `provider`: 5xx, overloaded | Yes | 2 min |
 | `model`: not available on this route | Yes | Until the model list is refreshed |
 | `auth`: key rejected, sign-in expired | Yes, and the provider is marked Needs attention as today | Until you reconnect it |

@@ -32,8 +32,8 @@ makes one in ~/Piopio. Agents keep their own section. Notebooks stop being their
 
 | ID | Decision |
 |---|---|
-| CF1 | **One start: "New conversation".** Home is that page: a greeting and the composer, with Needs you, Coming up and Recent below. It replaces the Chat, Project and Notebook start pages and the project "new session" page. The Agent start page stays. |
-| CF2 | **The project is a chip in the composer:** No project, or a project (a folder). |
+| CF1 | **One start: "New conversation".** Home is that page: a greeting and the composer, with Needs you, Coming up and Recent below. It replaces the Chat, Project and Notebook start pages and the project "new session" page. The Agent start page stays. *(Since §14, 2026-11-08, and CF9: New opens a centered New conversation page in the main window, not Home; Home keeps its box.)* |
+| CF2 | **The project is a chip in the composer:** No project, or a project (a folder). *(Since CF11, §16, 2026-11-15: a selector in the box's bottom row, not a chip on top.)* |
 | CF3 | **Permissions are a chip too**, in conversations with a folder: Read only, Ask, Auto-edit, Full auto, plus Plan. **Read only replaces the Chat lens**, and it's the default for folders of documents. Before you press Return, the composer says where the message goes and whether Piopio may change files. |
 | CF4 | **A notebook is a project, and a project is always a folder** (revised 2026-11-08, §13). New project makes a folder in ~/Piopio. Its instructions are AGENTS.md, its shared memory is NOTES.md, its files are the folder's files: plain files you can open in Finder, that pi reads as it always does. The Notebook kind, Main and the organizer's routing go away. Phase 2 first built projects *without* a folder (§11); two kinds under one word confused more than they helped. |
 | CF5 | **Moving is manual first.** You start where you are and take the conversation to a project later with "Continue in": a new conversation in the project's folder, with this one's history (§5). Automatic suggestions ("This looks like Kitchen renovation") wait until a week of use shows conversations left loose by forgetting. Nothing files your messages without asking. |
@@ -92,6 +92,10 @@ With a folder chosen, the permissions chip appears and the line under the box sa
 Piopio may change anything (the permissions chip and the line under the box). With no project there's no chip and no
 line: a conversation without a folder can't touch your files.
 
+> **Since CF11 (§16, 2026-11-15):** the project is a selector in the box's bottom row, not a chip on top, and with no
+> project the line under the box says so: "Not in a project · it can't see or change your files". On the New
+> conversation page the line is in the permissions' tooltip (CF26).
+
 **Project ▾**, a popover with search:
 - **Recent:** the last projects you used, with and without folders.
 - **Folders on this Mac ›:** the recent-folders list the project start page had (git repos in the usual folders,
@@ -99,6 +103,9 @@ line: a conversation without a folder can't touch your files.
 - **Open folder… ⌘O** and **New project…:** a name, and optionally a folder. Phase 1 creates folder projects only;
   phase 2 adds folder-less ones.
 - **No project ✓.**
+
+> **Since §13 (2026-11-08, CF4 revised):** a project is always a folder, so there are no projects without one. New
+> project makes a folder in ~/Piopio.
 
 **Permissions ▾**, shown only with a folder.
 - **The default is the project's own**, `ProjectInfo.approvalMode`, which gains `read_only`. The chip can change it
@@ -118,6 +125,9 @@ line: a conversation without a folder can't touch your files.
 | Full auto | yes | yes | yes (the deny-list still asks) |
 | Plan | yes | after you approve the plan | after you approve the plan |
 
+> **05 §6 and 22 §14:** in Ask the web tools ask. They count as network tools, which run in Read only and Auto-edit
+> and ask in Ask. The Ask row's "yes" holds for reads and search.
+
 Read only differs from today's Chat lens:
 - **It can't write files.** The lens could when asked; choose Ask for that.
 - **What it keeps from the lens:** the knowledge-assistant prompt and the web tools.
@@ -130,6 +140,7 @@ Read only differs from today's Chat lens:
 **The rest of the composer:**
 - **Model, `+` and Debate don't change.** `+` is files, folder, commands, web search, extensions. Debate is `/debate`
   or a `+` item, with no project.
+  > **Since 16 (2026-11-15):** Debate was removed; its code is gone.
 - **`@`** mentions files in a project, and agents: `@agent` sends the message to that agent, as Home does today.
 - **Return sends.** Nothing exists until then; the draft is kept as start drafts are today
   (`<home>/drafts/start.json`).
@@ -164,6 +175,12 @@ Read only differs from today's Chat lens:
 
 ## 6. The sidebar
 
+> **Since §13 (2026-11-08), §19 (2026-11-16) and 21 §8 (2026-11-18):** three things below are history.
+> - A project is always a folder (CF4 revised), so there is no "(no folder)" row and no icon for it.
+> - Clicking a project's row folds or unfolds its conversations (CF20), and there is no project page (CF21); its
+>   settings are a sheet (CF22).
+> - The Needs you row is gone, and so is its page: Home's "Waiting on you" lists everything (21 §8).
+
 ```
 + New conversation        ⌘N
 Search                    ⌘K
@@ -195,6 +212,10 @@ Conversations             +
 | Notebook memory (markdown in pi-durable) | The project's memory bank (built-in provider) |
 | The Ask box's targets on Home | The project chip and `@agent` |
 | Areas: the Chat switch (15) | Conversations are always on. Build and Agents stay as switches: Build off hides folder projects' code tools (terminal, git, edit modes); folders can still be read in Read only |
+
+> **Since §13 and §14 (2026-11-08):** a project is always a folder, so a notebook's place is a folder New
+> project makes, with NOTES.md as its memory, not a project without a folder or a memory bank. New opens a centered
+> New conversation page, not Home's composer (§14, CF9).
 
 ## 8. Phases
 
@@ -233,6 +254,10 @@ Acceptance, the test of the whole simplification:
   decides the suggestions.
 
 ### Phase 2: projects without a folder; notebooks go
+
+> **Since §13 (2026-11-08):** projects without a folder were replaced by folders New project makes, so the project
+> parts of this phase are history (as §11's note says). The notebook removal stands.
+
 Engine:
 - Projects without a path: an id, name, instructions, a files folder in Piopio's data, and a memory bank
   `project:<id>`.
@@ -259,6 +284,7 @@ Acceptance:
 
 1. **Memory for folder projects:** answered by CF4's revision (§13): NOTES.md, a plain file in the folder.
 2. **Debate inside a project:** today debates take no folder or attachments. It stays that way for now.
+   > **Since 16 (2026-11-15):** Debate was removed, so this question is closed.
 3. **Agents in projects:** should an agent belong to a project and share its memory? Not now.
 
 ## 10. Phase 1 as built (2026-11-07)
@@ -289,6 +315,7 @@ Acceptance:
   - The Chat and Project start pages and the new-session page are gone.
   - Their routes, ⌘N, ⌘O and a project's `+` land on Home.
   - The Debate page stays, as before.
+    > **Since 16 (2026-11-15):** Debate was removed; the page and its code are gone.
 - **Conversations:**
   - A conversation with no project has "Continue in a project" (its folder icon) and a "Continued in …" bar.
   - The composer's mode chip has Read only.
@@ -299,6 +326,8 @@ Acceptance:
 - ~~The project chip is a menu, not a popover with search.~~ It became a popover with search in phase 3 (§12).
 - **⌘N always opens Home with no project.** It used to follow the selected project. A project's `+` and
   "New Conversation…" in its menu still preselect it.
+  > **Since §14 (2026-11-08) and CF9:** ⌘N opens the New conversation page with no project, not Home. A project's `+`
+  > and ⌘O open the same page with the project chosen.
 - ~~Plan isn't in Home's permissions chip.~~ Added in phase 3 (§12).
 - **MCP tools in Build sessions ask in Read only.** They're reached through codemode, so `readOnlyHint` isn't seen
   there yet.
@@ -478,6 +507,8 @@ runs every thread on the same agent, giving a thread without a project a folder 
   the browser, About me, earlier chats (`@conversation`, as a CHAT chip), skills (pi's own; `read` opens a skill's files
   only) and `/templates` (shown as typed). No file or command tools, no approval modes; a connector change or a browser
   action asks with a card in the transcript, as before.
+  > **Since 04 T14 (built 2026-11-20):** a chat writes files in its own folder with `write` and `edit`, which refuse
+  > any other path. A chat on a coding agent runs in its own folder in Auto-edit (31 CA4).
 - **Files** go in the message itself, tagged, so the session file is all there is; their chips still open the kept copy.
   Folder conversations take files now too.
 - **Versions** (edit, retry, ‹ 1 / 2 ›) are pi's session tree.
@@ -512,7 +543,7 @@ your work, when they are things you set up once and that then run on their own. 
 | CF10 | **Agents is a place, beside Home.** The sidebar's top is Search, Home and Agents. The Agents and Teams lists leave the sidebar; the Agents row opens one page with **Agents · Teams**, whose one black button is New agent or New team. The row is selected inside an agent or a team, and shows a grey ring while one runs, or the blue dot when one wrote to you. Pinned agents stay in Pinned. |
 | CF11 | **The project is a selector in the box's bottom row**, after attach, as plain text with its icon (grey ink, principle 6), not a chip on top. With no project, the line under the box says so: "Not in a project · it can't see or change your files". |
 | CF12 | **The project menu shows each project's permissions** ("piopio · Auto-edit"), recent first (from proposal B). |
-| CF13 | **Quick picks under the box** on the New conversation page, with no project chosen: "Or in piopio · BioGen · financial_ia", the three latest projects (from proposal C). Home doesn't show them. |
+| CF13 | **Quick picks under the box** on the New conversation page, with no project chosen: "Or in piopio · BioGen · financial_ia", the three latest projects (from proposal C). Home doesn't show them. *(Since CF25, §20, 2026-11-16: the "Or in" line is pills under the box.)* |
 
 **Not now:** the location selector (This Mac / Cloud) waits for the cloud engine (CF7); the mockups draw it greyed.
 
@@ -541,7 +572,7 @@ the project is stays visible, not behind a panel.
 
 | ID | Decision |
 |---|---|
-| CF17 | **The project page is a home, not tabs.** On the left: the name, where it is (path · branch · who · permissions), the box (in this project, with its own target and draft, apart from Home's), a team's board as one line ("Board · 2 doing · 1 in review · Open ›"), and the conversations as a hairline list. On the right, a 300 pt column in the Summary panel's blocks, open by default (a toolbar button hides it): Instructions and Notes (a few lines of AGENTS.md / NOTES.md, with Edit), Folders, and Project (who works here, the permissions new conversations start in, routines). Board and Settings open in place with "‹ Project" to go back; Settings is in the … menu, with Reveal in Finder and Remove from Piopio. |
+| CF17 | **The project page is a home, not tabs.** On the left: the name, where it is (path · branch · who · permissions), the box (in this project, with its own target and draft, apart from Home's), a team's board as one line ("Board · 2 doing · 1 in review · Open ›"), and the conversations as a hairline list. On the right, a 300 pt column in the Summary panel's blocks, open by default (a toolbar button hides it): Instructions and Notes (a few lines of AGENTS.md / NOTES.md, with Edit), Folders, and Project (who works here, the permissions new conversations start in, routines). Board and Settings open in place with "‹ Project" to go back; Settings is in the … menu, with Reveal in Finder and Remove from Piopio. *(Since §19, 2026-11-16: replaced. There is no project page (CF21); the project's settings are a sheet (CF22).)* |
 | CF18 | **A project can link other folders on the Mac.** Nothing is copied or moved. Each is **Read only** (the default) or **Can edit**. Add them from the column (Add folder…, several at once) or by dropping folders from Finder on the column or on the project's row in the sidebar. A folder that is the project's own, inside it, or holds it can't be linked. |
 | CF19 | **What a linked folder does.** Every turn, the model is told the folders and what it may do in each. `@` searches them too (absolute paths). A Can edit folder is written to like the project's own folder: without asking in Auto-edit and Full auto (path rules), writable in the sandbox, and still asking in Ask; Read only can't. Writing to a Read only folder asks, as anywhere outside the project. The line under the box counts them: "In Tesis and 2 linked folders · …". |
 
@@ -558,7 +589,7 @@ project's row; the row itself only folds. Designs: [proposal](../design/project-
 |---|---|
 | CF20 | **Clicking a project's row folds or unfolds its conversations.** On hover (and on the project you're in), two buttons replace the branch: **settings** (sliders, not the app's gear) and **+**. A project with nothing under it starts a conversation there instead. Right-click: New Conversation, Project Settings…, Board, Pin, Reveal in Finder, Remove from Piopio. Dropping folders on the row links them and says "Linked <name>" for two seconds; nothing else moves. |
 | CF21 | **No project page.** Links to a project (palette, Home, a team's page) open its New conversation page; "Review" on Home opens its board. A team's **Board** is the first row under its project, with "2 doing" and the ring, or the blue dot when a task is blocked. |
-| CF22 | **The settings sheet:** Folders (its own and linked ones, Add folder…, drop), Instructions (AGENTS.md, or CLAUDE.md when that's the project's) and Memory (NOTES.md, renamed from Notes), How it works (the permissions new conversations start in, who works here, a team's tasks at once and checks), Routines. Changes apply as they're made; Done closes; Remove from Piopio… asks first. |
+| CF22 | **The settings sheet:** Folders (its own and linked ones, Add folder…, drop), Instructions (AGENTS.md, or CLAUDE.md when that's the project's) and Memory (NOTES.md, renamed from Notes), How it works (the permissions new conversations start in, who works here, a team's tasks at once and checks), Routines. Changes apply as they're made; Done closes; Remove from Piopio… asks first. *(Since 27 AU10 and §4, 2026-11-18: in place of Routines, "N automations work here ›" opens the Automations list filtered to the project.)* |
 | CF23 | **Instructions and Memory are edited in the sheet or in your editor.** Each row has Edit and an arrow that opens the file in Settings › Open files in (or the default app). Edit widens the sheet to the file: plain markdown in a monospaced font, a line on what the file does, saved half a second after you stop typing and on leaving, Undo all, ⌘O to open it in your editor. Memory shows how much of it each turn reads (~6,000 characters). While it's open the file is watched: with nothing typed it reloads; with your edits pending a bar offers "Use theirs and mine" (the lines the file gained, after yours) or "Keep mine", and "Reload" when the file changed lines rather than adding them. |
 
 **Not built from the design:** bold headings and grey list marks in the editor (it's a plain text view), and the dashed
@@ -590,7 +621,7 @@ sidebar, with a +, and to put New Agent in the compose button
 |---|---|
 | CF27 | **Agents is a sidebar section,** after Pinned and before Projects: the heading folds it like the others, a **+** opens the New agent page, and each agent is a row with its tile and name, the grey ring while it works, the blue dot when it wrote to you, or "Paused" / "Draft". The five latest show, then "N more ›", which opens the Agents page with all of them. An unfinished New agent page shows as a "Draft" row at the top. Pinned agents stay in Pinned. |
 | CF28 | **An agent's page fills the content card.** The agents' list column beside it is gone; so is the Agents row under Home and Automations. |
-| CF29 | **The compose button is a menu:** New Conversation (⌘N) and New Agent (⌥⌘N, also in File and the command palette). Both open their start pages. With Agents turned off it stays a plain button. Projects are still made from the Projects +. |
+| CF29 | **The compose button is a menu:** New Conversation (⌘N) and New Agent (⌥⌘N, also in File and the command palette). Both open their start pages. With Agents turned off it stays a plain button. Projects are still made from the Projects +. *(Since CF31, §22, 2026-11-20: New is a round + beside Search, not the pencil, and New Project… joins its menu.)* |
 | CF30 | **piopio tries on jobs on the New agent page:** secretary, doctor, detective, chef, mail carrier, coach, one every 2.8 s with a hop and its line in a bubble ("Say ahh… peep!"), and the box's example follows the job. Clicking it moves to the next job. Picking a template dresses it for that template's job (a briefing is the secretary, a watcher the detective); a template or anything typed stops the cycle. |
 
 ## 22. New moves beside Search (2026-11-20)

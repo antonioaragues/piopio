@@ -4,7 +4,10 @@ Status: built 2026-10-25 (§8). The decisions are in §7. It changes the first-r
 adds a setting to General; the sidebar, Home, menus and the command palette follow it.
 
 > **2026-11-07:** [18-conversation-first §7](18-conversation-first.md#7-what-goes-away) drops the Chat switch
-> (conversations are always on); Build and Agents stay.
+> (conversations are always on); Build and Agents stay. The same day 18 §11 removed notebooks, and 18 replaced the
+> Folder lens with the Read only permission (CF3). ⇧⌘N is New project since 2026-11-08 (18 §13), not New Notebook.
+> So notebooks in §2's Chat row and §3's Chat card, the Folder lens, and the Notebooks section in §6's first line
+> are history.
 
 **The idea:** Piopio has three areas: **Build** (code), **Chat** (chats and notebooks) and **Agents**. Not everyone
 wants all three. On first run you say which ones you want, and the app shows only those. You can turn areas on and

@@ -1,6 +1,8 @@
 # 17 — Dispatch
 
-Written 2026-11-03. Planned; nothing built yet. "Dispatch" is a working name (DPQ1).
+Written 2026-11-03. Built 2026-11-17: non-blocking `task` (DP4, §9), the Watchdog's rules W1–W3 (DP1, §10) and PR
+events (DP5, with 05 §8). Not built: W6 (DP6). Dropped: Dispatch's own runtime (DP2, DP3; see the note below).
+"Dispatch" is a working name (DPQ1).
 
 > **Where this stands: decided with the user 2026-11-17 (26 CL11).** 19 TD2 made Dispatch the default team, and 26
 > has since removed teams, so Dispatch as written had no home. The separate router is dropped, and what it was for
@@ -14,14 +16,15 @@ Written 2026-11-03. Planned; nothing built yet. "Dispatch" is a working name (DP
 > - **Piopio still does small things itself,** at Home as anywhere (26 CL3). A one-line question about a project is
 >   answered, not handed out.
 > - **What stays from this spec:** the Watchdog (§4, DP1, DP6), non-blocking `task` (§3, DP4), PR events routed to the
->   conversation that owns the branch (§5, DP5), and §2.6's limits, which 24 already uses.
+>   conversation that owns the branch (§5, DP5), and, of §2.6's limits, the 4 running at once, which 24 already uses
+>   (the cost cap per started session has no owner, §10).
 > - **What goes:** DP2 and DP3 (Dispatch's own runtime, Main, sidebar row and board), and DPQ1–DPQ3.
 >
 > Why: a router that only classifies and hands out is the layer that one capable orchestrator no longer needs
 > (Anthropic, *When to fold subagents into your main agent loop*, 2026-10-22), and Piopio already has the two pieces
 > that do the job: side conversations for separate work and Piopio for everything else. The rest of the page is kept
-> as written: §3, §4, §5 and §2.6 still hold, and the parts about Dispatch's own runtime (§1, §2.1–§2.5, DP2, DP3,
-> DPQ1–DPQ3) are history.
+> as written: §3, §4, §5 and §2.6's limit of 4 running still hold (§10), and the parts about Dispatch's own runtime
+> (§1, §2.1–§2.5, DP2, DP3, DPQ1–DPQ3) are history.
 
 ## 0. Where this comes from
 
@@ -160,6 +163,8 @@ model second:
 - W1–W5 apply to every Build session and agent, with or without Dispatch. They are cheap and need no model.
 - W6 uses the utility model (on-device first, AQ7). When only the OpenRouter fallback is available, it says so in its
   setting and counts the cost.
+  > **Since 07 §1.3 (2026-11-07):** the utility model is the conversation's own provider by default; Apple's on-device
+  > model is an option and a last resort, not the first choice. W6 is not built (§10).
 - If Dispatch's own run fails, the engine retries once, then shows the error in Main. Reports keep queuing durably.
 
 ## 5. PR events go to their session

@@ -20,6 +20,7 @@ One native Mac home for working with AI agents, built on the pi harnesses and th
 3. **Pi-native, not pi-forked.** Use the upstream packages as-is. Anything we need goes into **pi extensions** that also work in the pi CLI where possible. Never patch pi internals.
 4. **Transparent.** Every tool call, routing decision, memory write, scheduled run and dollar spent is visible and inspectable. No hidden prompt injection.
 5. **Your data, your accounts.** Local files in open formats. Cloud resources live in the user's own Cloudflare account. No telemetry.
+   Since 33 (decided 2026-11-21, PS1): or on a Piopio Server, a machine the user rents or already has.
 6. **Portable sessions.** A session's location (local or cloud) is an attribute, not a separate product.
 7. **Solo-maintainable.** Prefer boring, few dependencies. Every phase ends with something usable every day.
 
@@ -27,18 +28,18 @@ One native Mac home for working with AI agents, built on the pi harnesses and th
 
 | Term | Meaning |
 |---|---|
-| **Engine** | A TypeScript process that hosts pi runtimes and speaks the Engine Protocol. **Local Engine** = Node sidecar on the Mac. **Cloud Engine** = Cloudflare Worker + Durable Objects. |
-| **Project** | A folder on disk (usually a git repo). Shared by Build and Chat (folder lens). |
+| **Engine** | A TypeScript process that hosts pi runtimes and speaks the Engine Protocol. **Local Engine** = Node sidecar on the Mac. **Cloud Engine** = Cloudflare Worker + Durable Objects. *(Since 33, decided 2026-11-21, not built: Cloud as a place is a Cloudflare Worker or a Piopio Server, the engine headless on a machine you choose.)* |
+| **Project** | A folder on disk (usually a git repo). Shared by Build and Chat (folder lens). *(Since 18 CF3 and CF4, 2026-11-07: there are no lenses; a project is always a folder, and Read only replaces the Chat lens.)* |
 | **Session** | A unit of agent work with its own history. Its kind decides the runtime (see below). |
 | **Build session** | A `pi-coding-agent` session inside a Project. Stored as a pi JSONL session file. |
 | **Thread** | A free-standing chat. Since 2026-11-15 a `pi-coding-agent` session in a folder of its own, with a chat's tools (docs/spec/18 §15); before, one `pi-durable` session. |
-| **Space** | A Chat container backed by **one** `pi-durable` session. Has a **Main** conversation (front door) where the **Organizer** routes messages to **Topics** (other conversations in the same session). |
-| **Topic** | A conversation inside a Space about one subject. |
-| **Agent** | A persistent persona defined by an **Agent Definition**, running on pi-durable, reachable through **Channels**, with memory, schedules and triggers. |
+| **Space** | A Chat container backed by **one** `pi-durable` session. Has a **Main** conversation (front door) where the **Organizer** routes messages to **Topics** (other conversations in the same session). *(Since 18 §3 and CF4, 2026-11-07: Space leaves the app; a notebook is a project.)* |
+| **Topic** | A conversation inside a Space about one subject. *(Since 18 §3, 2026-11-07: Topic and the Organizer leave the app with Spaces.)* |
+| **Agent** | A persistent persona defined by an **Agent Definition**, running on pi-durable, reachable through **Channels**, with memory, schedules and triggers. *(Since 27, draft 2026-11-18, built the same day and not yet confirmed: on the Mac, schedules and triggers are automations, objects of their own; the cloud keeps `schedule` and `watch` for now.)* |
 | **Channel** | A transport through which people talk to an Agent: In-app, Telegram, WhatsApp, and more later. |
 | **Contact** | A person allowed to talk to an Agent. The **Owner** is the user. |
 | **Run** | One autonomous execution (scheduled task, trigger, heartbeat, agent-to-agent request). |
-| **Lens** | A UI presentation of a Project: Build lens (code, diffs, terminal) or Chat lens (docs, chat-first). |
+| **Lens** | A UI presentation of a Project: Build lens (code, diffs, terminal) or Chat lens (docs, chat-first). *(Since 18 §3, 2026-11-07: Lens leaves the app.)* |
 | **Approval** | A pending yes/no from the user before a tool runs. |
 | **Checkpoint** | A snapshot of a Project's working tree taken before an agent turn modifies it. |
 
@@ -52,12 +53,17 @@ One native Mac home for working with AI agents, built on the pi harnesses and th
 | Space | `pi-durable` | one SQLite file per space | Later |
 | Agent | `pi-durable` | Local: SQLite file. Cloud: Durable Object SQLite | **Yes (primary)** |
 
+> **Since 18 (2026-11-07):** the Chat-lens session and Space rows are history. Read only replaces the Chat lens (CF3),
+> and the Space runtime and the organizer were removed with notebooks (§11).
+
 Rule of thumb (since 2026-11-15): **a conversation → pi-coding-agent, with a project or without one. An agent (long-lived, cloud-portable) → pi-durable.**
 
 ## 6. Scope
 
 ### In scope (across all phases)
 - The three modes described in docs 04–06.
+  Since 18 (2026-11-07) every conversation starts the same way, with a project or without one, and since 15
+  Build and Agents are areas you turn on and off.
 - OpenRouter as the model gateway, with a provider abstraction ready for more.
 - Local engine bundled in the app. Cloud engine deployable to the user's Cloudflare account.
 - Open-source repo, MIT license, notarized DMG releases.

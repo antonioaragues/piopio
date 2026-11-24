@@ -2,6 +2,10 @@
 
 Personal agents that are **proactive**, **live inside your messaging apps**, **run on schedules**, and **talk to each other** (decision A1). Authored on the Mac, running 24/7 on the user's Cloudflare account.
 
+> **Since 30 CT1 (decided 2026-11-19; K1 built the same day, 30 §13):** new agents start on this Mac and run there,
+> even with a cloud connected. You put one in your cloud with Keep it always on in its header, and bring it back
+> with Move to This Mac (§11's note).
+
 ## 1. Concepts
 
 ```
@@ -59,11 +63,19 @@ A folder that is a git repo (auto-committed on every save → history, diff, rol
 }
 ```
 
+> **Since 27 §6 (built on the Mac 2026-11-18; 27 is a draft, not yet confirmed):** on the Mac, agent definitions lose
+> `schedules`, `heartbeat` and `triggers`; they became automations, objects of their own (27 §5), and a template's
+> schedule (AD4) shows as the automation it will make (21 §10's note). The cloud keeps them for now (27 §10).
+
 - **AD1** Two ways to author, both writing the same files: a **form editor** (tabs: Persona, Model, Tools, Contacts, Channels, Schedules, Policies), and the **Agent Builder** (a chat with a built-in agent that edits the definition through tools and shows a diff before applying).
 - **AD2** Secrets are referenced as `secret:NAME` and never stored in the folder. Values live in Keychain locally and in encrypted storage in the cloud.
 - **AD3** Validation on save (JSON Schema + semantic checks: cron syntax, contact channel IDs, referenced agents exist). Errors show inline.
 - **AD4** Templates: "Personal assistant", "Daily briefing", "Habit coach", "Family helper", "Research watcher". Their avatars are line icons (`symbol:<SF Symbol>`), not emoji. `agents.templates` also returns each template's instructions and first schedule, and `agents.create` takes `instructions` and `schedule` (a cron, or null for none) so the start page can set them (2026-11-03).
 - **AD5** **The Builder interviews first** (from the Grok Bot review, docs/research/grok-bot.md). A new agent opens in the Builder chat, which introduces the agent and asks two or three question cards (UI7) before writing anything: what it's for, which apps and people it works with, and how it should reach you. It then shows the drafted definition as a diff to apply. A template only fills the first answers. The form editor stays the place for later edits and for people who prefer it.
+
+> **Since 19 §9 (built 2026-11-10):** an empty agent interviews you itself. An agent created with no instructions and
+> no template opens its own chat with a greeting, asks at most three short questions, then calls `set_up` (21 §10 has
+> the app's side). Where AD1 and AD5 put a new agent's interview in the Builder chat, that is history.
 
 ## 3. Runtime (shared Node/Workers code in `@piopio/runtime`)
 
@@ -100,6 +112,10 @@ Custom entries: `piopio.channel-in` / `piopio.channel-out` (delivery metadata), 
 | MCP tools | From remote MCP servers in the definition. |
 | `apple_*`, `shortcuts_run` | Apple apps on the user's Mac (§4.1). Local agents directly; cloud agents through the Mac Bridge (§10). |
 | `mac_*` (later, Mac Bridge) | Local tools when the Mac is online (§10). |
+
+> **Since 27 §5 (built on the Mac 2026-11-18; 27 is a draft, not yet confirmed):** on the Mac, `automate`,
+> `list_automations`, `change_automation` and `cancel_automation` replace the agent's `schedule`, `watch`,
+> `list_schedules` and `cancel_schedule`. The cloud keeps `schedule` and `watch` for now (27 §10).
 
 Actions that change something return a **result card** with Undo (§4.2).
 
@@ -143,6 +159,9 @@ Agents act on the user's behalf, so every action that changes something shows **
 
 ## 5. Channels (v1: In-app, Telegram, WhatsApp)
 
+> **Since 30 (decided 2026-11-19):** Telegram, WhatsApp, Slack and the rest are add-ons: extra ways an agent can
+> reach you or other people, not the way you use Piopio away from the Mac. They come any time after K1 (30 §10).
+
 ### 5.1 Common adapter interface
 ```ts
 interface ChannelAdapter {
@@ -156,12 +175,16 @@ interface ChannelAdapter {
 - **CH1** Inbound flow: webhook → verify → `RegistryDO` resolves `(channel, botId/phoneId)` → agent, and `(channel, senderId)` → contact → `AgentDO.submit(person:<id>, input, whenBusy:"followUp", requestId = channel message id)`. Idempotent, because platforms retry webhooks.
 - **CH2** Outbound: long replies are split to fit channel limits. Markdown is converted per channel. Typing indicators are sent while generating (Telegram `sendChatAction`, WhatsApp typing indicator where available).
 - **CH3** Media: inbound images/voice/docs are stored in R2 and passed as attachments. Voice notes are transcribed (OpenRouter audio-capable model or a configured STT). Images go to vision models.
+  42 §6 and §8 (decided 2026-11-23, not built) would change this: a voice note is transcribed on the Mac and given to the agent as your message, and the audio isn't kept.
 - **CH4** Unknown senders: per `policies.unknownSenders`. With `ask_owner`, the owner gets "Unknown +34… wrote 'hi', allow?" with buttons.
 
 ### 5.2 Telegram
 - One **bot per agent** (via @BotFather). The user pastes the token. Piopio calls `setWebhook` with a secret token.
 - Supports inline keyboards (used for approvals and quick replies), edits (live-updating a message while streaming is optional and rate-limited), and groups (later).
 - **The recommended primary proactive channel** (no messaging window restrictions).
+
+> **Since 19 CH-T0 (built 2026-11-10):** the webhook is the cloud's. On the Mac the engine polls Telegram
+> (`getUpdates`) for each local agent's bot while the Mac is awake, so no webhook or public address is needed.
 
 ### 5.3 WhatsApp (official Cloud API)
 - Requires a Meta developer app, a WhatsApp Business account, and a dedicated phone number. Piopio provides a **guided setup checklist** (and validates each step with a test call).
@@ -179,8 +202,9 @@ Email (Cloudflare Email Routing in, Email Workers/Resend out), Slack, Discord, S
 
 ## 6. Proactivity & scheduling
 
-> 27 (draft 2026-11-18) proposes moving schedules, the heartbeat, triggers, reminders and watches out of the agent into
-> automations, objects of their own that run as an agent or as Piopio. PR4 and PR5 stay with the agent.
+> 27 (a draft of 2026-11-18, built on the Mac: A1–A2 2026-11-18; not yet confirmed) moves schedules, the heartbeat,
+> triggers, reminders and watches out of the agent into automations, objects of their own that run as an agent or as
+> Piopio. PR4 and PR5 stay with the agent.
 
 - **PR1** **Schedules:** cron + timezone, defined in the definition or created by the agent at runtime. Each fire creates a `run:<id>` conversation with the prompt + relevant memory. The run may call `send_message`, or decide not to (it records "nothing to report").
 - **PR2** **Heartbeat:** optional periodic wake during active hours, with the heartbeat prompt plus a digest of recent activity. Cost-capped (skipped when the budget is above 80%).
@@ -199,6 +223,7 @@ Email (Cloudflare Email Routing in, Email Workers/Resend out), Slack, Discord, S
 - **AA5** **Visibility:** the app shows agent-to-agent traffic as `agent_msg` items in both agents, plus a **trace view** (a tree of hops with cost) for any conversation that triggered delegation.
 - **AA6** **Shared memory:** none by default. An agent can expose read-only memory partitions to specific peers (`shareMemory: {agt_x: ["shared"]}`).
 - **AA7** Local ↔ cloud: in v1, both agents must be in the same engine (both local or both cloud).
+  30 §4 (decided 2026-11-19; K5, not built) would change this: a cloud agent asks a Mac agent through the Mac.
 - **AA8** (4.6) Locally the engine routes messages in-process between agents' runtimes; each agent keeps a log of what it sent and answered, and the trace view joins them. A message nested in a trace that B's conversation with A is still answering (A asks B, B asks A, A asks B again) goes to a side conversation, so it doesn't wait behind itself. In an agent's conversation with another agent, memory tools use only the `shared` partition. Policies `agentMessagesPerHour` and `traceBudgetUsd` change the AA4 defaults; contacts can't make an agent reach other agents (AS2).
 - **Later:** **rooms**: a multi-agent conversation the owner can watch and join (and a Telegram group with several agent bots).
 
@@ -217,6 +242,7 @@ Email (Cloudflare Email Routing in, Email Workers/Resend out), Slack, Discord, S
 
 - **ME1** A memory item is `{id, partition, text, source: {conversationId, itemId}, createdBy: agent|user, at, expiresAt?}`.
 - **ME2** Retrieval goes through the memory provider (07-shared §5.1). Each partition is its own bank (`<agent>/owner`, `<agent>/shared`, `<agent>/contacts/<id>`), so a contact's memory can't leak into another's (AS2): isolation comes from the storage, not from filtering. Each turn's system section gets the most relevant memory within a token budget (`recall` over the conversation's banks), plus the provider's standing answers when it has them. The rest is reachable through the `recall` tool. With the built-in provider, retrieval is recency + keyword. With Hindsight, it is semantic, keyword, graph and time.
+  **Since 38 R3 (built 2026-11-22):** what a message recalls no longer goes in the system section. `AgentCore` writes it as an entry of its own just before the message, and the `agent-memory` section keeps only how to use memory and the pinned records.
 - **ME2a** What gets retained: the owner's and contacts' messages, and the agent's final answers and run outcomes (schedules, triggers). Tool output is not retained. Retaining happens after the turn and never delays the reply. A provider's extracted facts appear in the memory view as "learned", with their source message; deleting one forgets it.
 - **ME2b** Cloud agents need a provider reachable from Cloudflare: the built-in one (Durable Object SQLite) or a remote Hindsight URL. A local Hindsight daemon only serves local agents. Moving an agent to the cloud with Hindsight local asks to export its banks, or to switch providers.
 - **ME3** The app's memory view per agent: browse by partition, edit, delete, pin. Each item shows where it came from.
@@ -240,7 +266,15 @@ Email (Cloudflare Email Routing in, Email Workers/Resend out), Slack, Discord, S
 ## 10. Mac Bridge (later)
 While the Mac is online, the Local Engine keeps a WebSocket open to the Cloud Engine and registers **bridge tools**: the Apple app tools of §4.1 (served by the Mac app), `mac_files`, `mac_imessage_send`, and `mac_shell` with mandatory approval. Cloud agents see these tools only while the bridge is connected. Otherwise the tool returns "Mac offline". The agent header says where an agent runs ("Cloud", "This Mac", or another of the user's Macs once multi-Mac exists).
 
+> 30 §5 (decided 2026-11-19; K5, not built) would change this: when the Mac is off or asleep, the bridge's tools stay
+> listed with `needs your Mac`, and a call returns at once with that.
+
 ## 11. Lifecycle: author → test → deploy
+
+> **Since 30 CT1 and §13 (decided 2026-11-19, K1 built the same day):** new agents start on this Mac and run there;
+> an agent isn't a local test copy waiting for a deploy. The agent's header has Keep it always on, or Always on once
+> it's up there, whose menu has Move to This Mac. The definition still goes up as data (`agents.deploy`). The flow
+> below is the earlier design.
 
 ```
 [Create] → local dev agent (Local Engine, pi-durable on Node SQLite)
@@ -262,20 +296,28 @@ While the Mac is online, the Local Engine keeps a WebSocket open to the Cloud En
 
 ## 12. Agents UI
 
+> **Since 21 (D2 and D3 built 2026-11-11):** the sidebar is 21 §8's, with no Inbox row: Home's "Waiting on you" lists
+> what waits. The agent page has two tabs, Chat · Setup (21 §9). Each tool is Off · Asks · Allowed, in place of
+> UI1's one approval mode and its badge (21 AD6).
+
 - Sidebar: **Inbox** (count badge) at the top, then **Pinned** agents and the rest (status dot: live/paused/error; local/cloud badge; unread; last activity time), and Archived. Each agent has an **avatar** (generated or chosen).
 - Agent page tabs: **Chat** (owner conversation) · **Conversations** (per person/agent, read-only except owner) · **Runs** (schedule/trigger/heartbeat log with outcomes and cost) · **Memory** · **Definition** (form/JSON/instructions editor + history) · **Channels** (setup wizards, health) · **Costs**.
 - **Inbox** (the name stays "Inbox"): pending approvals, questions and agent messages to the owner across agents (docs/design 4d). Its count also shows as a badge in the toolbar, the menu bar extra and the Dock.
 - **UI1 Agent header:** avatar, name, model (and fast mode), the approval mode as a badge (e.g. "Auto", "Asks first"), and where it runs (Cloud / This Mac). The header's menu switches model and mode.
 - **UI2 Compact progress:** in agent conversations (and Chat), a turn's tool calls collapse into one line, "Worked 18s · 2 steps" with the tools' icons, and thinking into "Thought for 6s". Clicking expands the steps. Result cards (§4.2) stay visible. Build keeps its detailed tool cards.
 - **UI3 Side by side:** open several agents (and Chat threads) in columns of the same window, each with its own composer, to watch one agent while talking to another. Columns close individually; a toolbar button collapses the extra ones. Pinned agents get keyboard shortcuts (⌥⌘1, ⌥⌘2…; ⌘1–3 stay the mode switcher).
+  **Since the one sidebar (15 §1, 2026-10-25; 18):** there is no mode switcher, so the ⌘1–3 part is history.
 - **UI4 Links and files:** links in messages get a preview card (title, site, image, summary) with Open / Copy / Share. A side panel lists a conversation's links and files ("3 links · 2 files").
 - **UI5 Voice:** dictation in every composer (on-device speech recognition), and voice notes sent as audio and transcribed like channel voice notes (CH3). A hands-free voice mode comes later.
+  42 (decided 2026-11-23, not built) is the spec for voice now: a voice note is transcribed on the Mac (42 §6) and the audio isn't kept (42 §8).
 - **UI6 Quick entry to an agent:** Quick Chat (04-chat §4) can address an agent ("@Cobot remind me…"), so the request goes to that agent instead of a new thread.
 - **UI7 Question cards in the transcript:** an `ask_user` question is a card in the conversation, not a sheet above the composer. It shows the question, lettered options (A, B, C…) that wrap, and a last "Something else" row that takes a typed answer. While it's open, the composer placeholder reads "Answer, or talk about something else", and typing there answers "Something else". Once answered, the card shrinks to the question and the chosen answer (as Build's S1 does). The Inbox shows open questions with the same card.
 - **UI8 Sections list what exists:** the agent page's Schedules, Skills and Files sections list what the agent has. When a section is empty it says what to ask instead of showing a blank form: "No routines yet. Ask {agent} to set one up", or "No skills yet. Ask {agent} to save one". Each item opens the agent's chat with the item quoted, so you can ask for changes. Editing the raw definition stays in the Definition tab.
+  **Since 27 AU12 (built on the Mac 2026-11-18; 27 is a draft, not yet confirmed):** the app says "automation", not "routine".
 - **UI9 Library:** one list per agent of every file, page and link it produced, across all its conversations and runs, grouped by time (Today, This week, Earlier). Each item has Open, Reveal in Finder, Share and a link back to the message that made it. UI4's per-conversation panel is the same list, filtered to one conversation.
 - **UI10 Agent color:** each agent has a tint, picked from its avatar or chosen. The tint is used for the avatar ring, the send button and the header in that agent's pages and columns, so side-by-side agents (UI3) are easy to tell apart. The rest of the app keeps the grey style (docs/design/grey).
 - **UI11 Spend at a glance:** a single line in the Agents sidebar footer, such as "This month · $4.10 of $40", sums the agents' budgets (AS3). Clicking it opens Costs. It turns amber at 80%.
+  **Since 34 OV1 (decided 2026-11-22, built 2026-11-23):** the page is Overview. It opens from the chart button beside Settings in the sidebar footer (OV8, 2026-11-24) and ⌘K; the sidebar shows no money.
 
 ## 12.1 Agent boards (later)
 

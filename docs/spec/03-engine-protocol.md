@@ -17,6 +17,7 @@ The single contract between clients (Mac app, later the iOS app) and engines (Lo
 
 - **IDs:** ULIDs, with a type prefix: `prj_`, `ses_`, `thr_`, `spc_`, `top_`, `agt_`, `apr_`, `run_`, `itm_`.
 - **Container reference:** `ContainerRef = { kind: "build" | "thread" | "space" | "agent", id }`. A Space topic is `{kind:"space", id, conversationId}`.
+  **Since 18 §11 (2026-11-07):** notebooks and `spaces.*` are gone; `ContainerKind` keeps `space` only to read old refs.
 - **Idempotency:** every mutating call accepts `clientRequestId`. It maps onto pi-durable `requestId` / `operationId`.
 - **Errors:** JSON-RPC error codes plus a `data.code` string (`NOT_FOUND`, `BUSY`, `AUTH`, `ENGINE_UNAVAILABLE`, `MODEL_ERROR`, `INVALID`, `CONFLICT`, `QUOTA`).
 - **Time:** ISO-8601 UTC strings.
@@ -38,8 +39,12 @@ The single contract between clients (Mac app, later the iOS app) and engines (Lo
 | `catalog.pin / rename / archive / delete({ref})` | Housekeeping |
 | `catalog.subscribe()` | Notifications `catalog.changed` (upserts/removals) |
 
+> **As built:** there is no `catalog.list`. The sidebar's data comes from `sessions.list` and `projects.list` (`packages/protocol/src/index.ts`; no later spec names them). `catalog.search` and `catalog.changed` stand.
+
 ### 3.3 Projects (Build + Chat lens)
 `projects.add({path})`, `projects.remove`, `projects.get`, `projects.setLens({lens:"build"|"chat"})`, `projects.files.tree({path, depth})`, `projects.files.read({path})`, `projects.files.write({path, content})` (user quick edit), `projects.openIn({editor})`.
+
+> **Since 18 §10 (2026-11-07):** lenses are gone, and `projects.setLens` with them. Read only is an approval mode (`ProjectInfo.approvalMode` gained `read_only`), and `lenses` is dropped from `projects.json`.
 
 ### 3.4 Sessions (common to all containers)
 | Method | Purpose |
@@ -62,6 +67,8 @@ The single contract between clients (Mac app, later the iOS app) and engines (Lo
 | `approvals.list()` | Pending approvals across all containers |
 | `approvals.respond({approvalId, decision:"allow"\|"deny"\|"allowAlways", scope?, note?})` | `allowAlways` adds a rule (per project/agent) |
 
+> **Since 12 C1 (2026-10-23):** an approval is answered with `sessions.decide`; `approvals.respond` is history.
+
 ### 3.6 Models
 `models.list({refresh?})` → OpenRouter catalog with `{id, name, contextLength, pricing, supports:{tools, vision, reasoning, files}}`. `models.favorites.set`, `models.defaults.get/set({mode})`.
 
@@ -71,11 +78,17 @@ The single contract between clients (Mac app, later the iOS app) and engines (Lo
 ### 3.8 Spaces
 `spaces.topics.list`, `spaces.topics.rename/archive/merge`, `spaces.memory.get/set`, `spaces.files.add/remove/list`, `spaces.reroute({routingItemId, toTopicId})`.
 
+> **Since 18 §11 (2026-11-07):** notebooks were removed, and `spaces.*` with the Space runtime, the organizer and routing. This section is history.
+
 ### 3.9 Agents
 `agents.list/get/create/update/delete`, `agents.definition.diff/history/rollback`, `agents.deploy({agentId, target:"local"|"cloud"})`, `agents.undeploy`, `agents.contacts.*`, `agents.channels.*` (connect/test/disconnect), `agents.memory.get/set`, `agents.schedules.list/pause/resume/runNow`, `agents.runs.list/get`, `agents.simulate({agentId, as: contactId, channel, text})`.
 
+> **Since 30 §13 (K1 built 2026-11-19):** `agents.deploy` is what the Mac's engine sends the cloud (the agent as data, no Worker redeploy), and it takes no `target`. `agents.export` then `agents.retire` bring an agent back; there is no `agents.undeploy`. The app asks for either move with `agents.move` (in `packages/protocol/src/index.ts`; 30 doesn't name it). **Since 27 §5 (built on the Mac 2026-11-18):** an agent's schedules are automations (`automations.list`, `.get`, `.add`, `.update`, `.remove`, `.run`, `.runs`), so `agents.schedules.*` is history on the Mac.
+
 ### 3.10 Cloud (Local Engine only)
 `cloud.setup({cfAccountId, cfApiToken})`, `cloud.status`, `cloud.upgrade`, `cloud.rotateToken`, `cloud.teardown`. Once set up, the Local Engine **proxies** cloud containers to the app, so the app can use a single connection (direct connection is used later for iOS).
+
+> **Since 30 §13 (K1 built 2026-11-19):** `cloud.setup` takes one Cloudflare API token, and `cloud.update` uploads this version's Worker (it replaces `cloud.upgrade`). Disconnect is refused while an agent runs there. Piopio makes the owner token itself (Keychain only, never shown). 30 names no method for `cloud.rotateToken` or `cloud.teardown`, and neither is in the protocol as built.
 
 ### 3.11 Secrets (engine → app, reverse request)
 `secrets.get({name, purpose})` is sent by the engine to the app. The app reads the Keychain and may prompt. `secrets.set` goes the other way during onboarding.
@@ -83,9 +96,12 @@ The single contract between clients (Mac app, later the iOS app) and engines (Lo
 ### 3.12 App services (engine → app, reverse requests)
 Things only the Mac app can do, asked for by the engine the same way:
 - `app.tool({name, args, agentId})` → `{result, card?, undo?}`: Apple app tools (06-agents §4.1: EventKit, Contacts, Notes, Music, Shortcuts). The app checks the agent's allowed tool groups and runs the call with the user's permissions. `undo` describes how to reverse a change (06-agents §4.2).
+  **Since 22 §8 and §14 (W1 built 2026-11-15):** `app.tool` takes who is asking as a `ref` (any conversation or agent; `agent` is optional) with `groups`, and its result gains `images` (`[{mimeType, data}]`) next to `output`. `browser` and `computer` are new groups.
 - `app.utility({task, input})` → `{output}`: the on-device model (Apple Foundation Models) for utility work (07-shared-resources §1.3). The engine falls back to its OpenRouter utility model when the app is closed or the model is unavailable.
+  **Since 07 §1.3 (2026-11-07):** Apple's model runs through `piopio-fm`, a helper the engine starts directly, so it doesn't go through the app and also works in background mode. It is an option and a last resort, not the first choice.
 - With no app connected (background mode, app closed), these return `unavailable` and the tools say so.
 - A client says which of these it answers in `engine.hello` (`services: ["app.tool"]`); only those clients are asked, newest first.
+  **Since 22 §8:** `engine.hello` also says which groups this client serves, so the engine only offers tools the app can run.
 
 ## 4. Timeline model (normalized)
 

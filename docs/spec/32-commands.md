@@ -59,9 +59,9 @@ them when built.
 
 - **Row:** SF Symbol (11 pt, fg3), the name in the body font (13, fg), the description (12, fg3), one line,
   truncated. 30 pt high, radius 8, the highlighted row on `dsChip`, as today.
-- **Groups:** Piopio's commands first, in a fixed order by use (plan, goal, side, automation, grill-me, compact,
-  review, commit, model, new, …), then **Skills**, then **Templates** and extension commands, each after a small fg3
-  label. Groups are hidden while filtering leaves one.
+- **Groups:** Piopio's commands first, in a fixed order by use (goal, side, automation, grill-me, compact, review,
+  commit, model, new, …; no plan, which is a mode only, §7), then **Skills**, then **Templates** and extension commands,
+  each after a small fg3 label. Groups are hidden while filtering leaves one.
 - **Scroll:** about 8 rows visible; ↑/↓ keep the highlighted row in view. No 12-row cap.
 - **Matching, the same for every kind:** name prefix, then name substring, then keywords and description words.
   Keywords are per command ("btw" for side, "schedule", "timer", "remind", "every" for automation).
@@ -85,7 +85,7 @@ them when built.
 - **Nothing new is sent.** The message still goes out as `/name words`; the chip is how the composer shows a
   leading command. A saved draft ([ComposerDraft](../../apps/mac/Sources/PiopioKit/ComposerDraft.swift)) keeps the
   text, and the chip comes back from it.
-- Commands that act on their own (model, compact, review, commit, new, plan's toggle) run when picked, as today.
+- Commands that act on their own (model, compact, review, commit, new) run when picked, as today.
 
 ### 4.3 Where each runs
 

@@ -24,6 +24,8 @@ CHAT
 ### 1.1 Definition
 A free-standing conversation. Backed by **one pi-durable session** (`threads/<id>.sqlite`) whose root conversation is the thread. Forks become extra conversations in the same session.
 
+> **Since 18 §15 (2026-11-15):** a chat is a pi SDK session (BuildRuntime with a chat profile), its file in `<home>/chats/`, run in `<home>/scratch/<id>/`; the app still knows it as a `thread`. So the pi-durable backing here, T5's pi-durable forks and T12's SQLite file are history. **Since 18 §11 (2026-11-07):** notebooks are gone, so T13's "Move to Space" and Q3's "a Space's Main" target are history too; a conversation moves to a project with "Continue in" (18 §13).
+
 ### 1.2 Requirements
 - **T1** New thread: ⌘N in Chat, or Quick Chat (§4). It opens instantly with the per-mode default model.
 - **T2** Streaming responses with markdown, code blocks (copy, language label), tables, LaTeX (inline/block), images.

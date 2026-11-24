@@ -63,7 +63,7 @@ the Mac can do while the Mac is off, or want it on their own machine.
 
 | | Option | What you do | What you need | Simple? | Verdict |
 |---|---|---|---|---|---|
-| **A** | **Rent one from the app** | Settings › Cloud › Server › **Rent one…**: pick a provider, paste its API token (an Open button goes to the token page), keep the suggested region and size, wait. The app creates the machine, which installs itself on first boot (cloud-init), gets a certificate (§5) and pairs. | An account with a VPS provider; a few euros a month (to check) | **Most:** the same shape as the Cloudflare connect the user already knows | **The default.** Hetzner Cloud first (cheap, EU regions), DigitalOcean second |
+| **A** | **Rent one from the app** | Settings › This Mac & cloud › Cloud › Server › **Rent one…**: pick a provider, paste its API token (an Open button goes to the token page), keep the suggested region and size, wait. The app creates the machine, which installs itself on first boot (cloud-init), gets a certificate (§5) and pairs. | An account with a VPS provider; a few euros a month (to check) | **Most:** the same shape as the Cloudflare connect the user already knows | **The default.** Hetzner Cloud first (cheap, EU regions), DigitalOcean second |
 | **B** | **Use a machine you have, over SSH** | **Add a machine…**: its address and user. The app uses your SSH keys (`~/.ssh`, the agent), checks the system, asks before installing Docker if it's missing, starts the image as a service and pairs. On a Mac it installs the engine natively with a launch agent. | A Linux box or a Mac you reach by SSH with a key; root or passwordless sudo | High for people who have a server; needs SSH | **Second.** Covers VPSs anywhere, VMs on AWS, Google and Azure, a home server, a Mac mini |
 | **C** | **One command** | Copy the command the app shows (`docker run …` with the volume and ports), run it anywhere. The server prints a **pairing code and a QR code**; Connect a server › paste the address and the code. | Docker | Medium: one terminal step | **The base.** A and B use exactly this; it's also the path for NAS boxes (Synology, Unraid), PaaS and anything else |
 | D | One-click PaaS templates (Railway, Render, Fly, DigitalOcean App Platform) | A Deploy button in the README | An account on that platform | High, but each platform differs: volumes, always-on pricing, some sleep when idle (which breaks "always on"), no shell for Build's toolchains | **Later**, and only if asked for. Each template is one more thing to keep working |
@@ -88,6 +88,8 @@ server and no domain. B follows for people who already run a machine.
    runs there, and **Update**, **Back up** and **Remove**.
 6. **Remove:** brings the agents and conversations back to the Mac first (like 30 §9's Disconnect), then deletes
    the machine, so the bill stops. The confirmation names the machine and says it can't be undone.
+   *(30 §13 as built: Disconnect doesn't bring anything back; it is refused while an agent runs there. 30 §9's
+   "Bring everything back to this Mac" is the target, not built.)*
 
 ### 4.2 What the other paths share
 

@@ -2,7 +2,11 @@
 
 Draft, 2026-11-09; the choices are decided (§8). Nothing here is built unless it says so. **Since 2026-11-17, 26
 (agents, clarified) replaces teams as something you make:** TD1, TD2, TD6 and TD7 give way to helpers Piopio makes,
-a project's way of working and playbooks; the board, worktrees, review and merging stay. It ties together 06-agents (personal
+a project's way of working and playbooks; the board, worktrees, review and merging stay. **26 also replaces these
+places outside those IDs:** S1's sentence on teams and S5 (CL2, CL5); T1 (CL1); T2, T6 and T7 (CL4: helpers are
+Piopio's, made for a task, with no "keep it" as one of your agents); T4 (20 PT5, CL3); and what §0's "Personal team"
+example, CH-T1 and CH-T2 say about a channel reaching a team or a front agent routing work (CL12: the front agent
+answers and asks, and doesn't hand out work). It ties together 06-agents (personal
 agents), 13-cloud-engine (Durable Objects, Telegram, WhatsApp), 17-dispatch (a coordinator for Build) and 18 phase 3
 (turn a conversation into an agent), which today are four separate ideas.
 
@@ -30,6 +34,8 @@ Teams are a layer on top. What you get without asking for any of it stays as sim
 
 - **S1 An agent is a contact.** Agents are a list like a messaging app's: avatar, name, last line, unread dot. Each
   has one conversation with you. A team is an agent too; its board is one more tab on its page.
+  **Since 26 CL2, CL5 and CL12 (2026-11-17):** teams stop being something you make, so a team isn't an agent, and an
+  agent's page has no board; a board of tasks is a project's. S5's "once an agent leads a team" goes with it.
 - **S2 You set it up by talking.** A new agent interviews you with two or three question cards and drafts itself
   (AD5). The definition and forms are for later edits, never the first step.
 - **S3 Proactive by asking.** "Every weekday at 8, …", "When an email from my bank arrives, …", "If nothing happened
@@ -68,7 +74,7 @@ Teams are a layer on top. What you get without asking for any of it stays as sim
 | Debate: author + reviewer until they agree | 16-debate | Built, removed 2026-11-15 |
 | Dispatch: a router for Build sessions, non-blocking subagents, Watchdog | 17-dispatch | Planned |
 | Agent in a Durable Object (alarms, eviction, memory) | `packages/cloud`, spike S7 | Spike passed; nothing deployed |
-| Telegram, WhatsApp | 13 §5.3, §5.5 | Planned |
+| Telegram, WhatsApp | 13 5.3, 5.5 | Planned |
 | Agent boards (a task board per team of agents) | 06 §12.1 | Later |
 
 **The gap:** these use **two runtimes**.
@@ -92,6 +98,8 @@ Five things, each with one job:
 **Rules of the model**
 - **T1 One kind of agent.** A specialist, a lead and a personal assistant are all agents. They differ in their role,
   their tools and whether they lead a team. There's no separate "subagent" type.
+  **Since 26 CL1 (2026-11-17):** an agent is what exists when you're not talking to it. Whatever exists only to get a
+  piece of work done is a helper, not an agent.
 - **T2 Saved or temporary.** A lead can **hire** a helper for one task from a **role card** (a template: researcher,
   writer, designer, builder, reviewer, tester). The helper has no memory beyond the task, and it's gone when the
   task closes unless you **keep it**, which saves it as an agent (T6).
@@ -103,6 +111,8 @@ Five things, each with one job:
 - **T4 Leads don't do the work** (17 §1). A lead plans, writes briefs, assigns, reviews and reports. It has the board
   and messaging tools, not the shell. That keeps it cheap and its context clean, and it's what Dispatch already
   says.
+  **Since 20 PT5 (built 2026-11-10) and 26 CL3 (2026-11-17):** the lead does small things itself and delegates the
+  rest, and it may edit. Since 26 that lead is always Piopio.
 - **T5 Dispatch is a team.** Dispatch (17) is the default team in Build: its lead is Dispatch, and its members are
   Build sessions. Teams generalize it to any lead, any members and any workplace.
 
@@ -180,12 +190,12 @@ You ─▶ Lead ── plan ──▶ Board (tasks) ──▶ members work in pa
 |---|---|---|
 | Runtime | pi-durable on SQLite (built) | AgentDO on DO SQLite (spike passed) |
 | Always on | Only while the Mac is awake | Yes |
-| Channels | The app (Telegram through a tunnel) | The app, Telegram, WhatsApp, webhooks |
-| Doing work in folders | Yes, through Build sessions | Through the Mac Bridge, when the Mac is awake |
+| Channels | The app, and Telegram by polling (S4, CH-T0) | The app, Telegram, WhatsApp, webhooks |
+| Doing work in folders | Yes, through Build sessions | Through the Mac Bridge, when the Mac is awake *(30 CT3, decided 2026-11-19, K7 not built, would change this: a cloud machine with the project's GitHub repo cloned. 33, decided 2026-11-21, not built, adds Build sessions on a Piopio Server: PS3, ordered by PS8.)* |
 | Apple apps (Calendar, Reminders…) | Yes (4.1) | Through the Mac Bridge |
-| Models | Every provider, subscriptions included | API-key providers (13 §5.1) |
+| Models | Every provider, subscriptions included | API-key providers (13 5.1) |
 
-- **R1 One switch per agent:** "Runs on: This Mac | Cloud". Deploying moves its definition and memory, as in 13 §5.2.
+- **R1 One switch per agent:** "Runs on: This Mac | Cloud". Deploying moves its definition and memory, as in 13 5.2.
   A team's members can run in different places. The lead usually goes to the cloud so it's always reachable, and
   builders stay on the Mac.
 - **R2 Cross-engine messages.** 06 AA7 limits agent-to-agent calls to one engine. Teams need local ↔ cloud: the Mac
@@ -204,7 +214,7 @@ You ─▶ Lead ── plan ──▶ Board (tasks) ──▶ members work in pa
   one front agent (AQ2), which routes to agents and teams with `ask_agent` or by opening a task.
 - **CH-T3 Long work in chat apps.** Over a channel, the lead answers within seconds with a plan line ("On it: 3
   tasks, about 20 min"). It sends the result as one message with a link (a preview page, a PR, a file), and sends
-  approvals as buttons (13 §5.3, §5.5).
+  approvals as buttons (13 5.3, 5.5).
 
 ## 7. Phases
 
@@ -216,7 +226,7 @@ Each phase ends with something usable every day.
 | **T1 · Teams on this Mac** | Teams, the board as a kanban (TC1, TD5), non-blocking tasks (TC2), reports (TC3), hire and keep (T2, T6, TD6), guards (TC5), the team folder (TD7), the team page. "Make a team for this". | A Research team runs a weekly brief from a routine; a Writing team turns notes into a post with a review loop. |
 | **T2 · Teams that build** | Tasks with a folder workplace run as Build sessions in worktrees (T3). Dispatch becomes the default team (T5, TD2), with 17's Watchdog and PR events. | Build a small feature with a lead, a builder and a reviewer; merge from the result card. |
 | **T3 · In the cloud** | 13's milestones 5.1–5.4: deploy agents and teams, Telegram by webhook from the cloud (always on), the Mac Bridge for build tasks and Apple apps, cross-engine messages (R2). | A Telegram agent answers with the Mac off; a cloud lead takes a build task and finishes it when the Mac wakes. |
-| **T4 · WhatsApp** | 13 §5.5, with teams reachable through their lead (§6). | The landing-page example (§0), end to end, from WhatsApp. |
+| **T4 · WhatsApp** | 13 5.5, with teams reachable through their lead (§6). | The landing-page example (§0), end to end, from WhatsApp. |
 | **T5 · Later** | Cloud sandboxes (R3), rooms where several agents and you talk (06 §7 Later), side-by-side agents (UI3). | — |
 
 ## 8. Decisions
@@ -227,7 +237,7 @@ All decided with the user on 2026-11-09.
 |---|---|
 | TD1 | **Specialists are helpers by default** (T2): hired from a role card for one task, and kept as a saved agent only when you say so. |
 | TD2 | **Dispatch is the default team** (T5): one coordination model for Build and Agents. 17-dispatch is built as phase T2 of this spec. |
-| TD3 | **Builders wait for the Mac** (R2): a cloud lead's build task waits as "Waiting for the Mac". Cloud sandboxes (R3) are later. |
+| TD3 | **Builders wait for the Mac** (R2): a cloud lead's build task waits as "Waiting for the Mac". Cloud sandboxes (R3) are later. *(30 CT3, decided 2026-11-19, K7 not built, would change this: Build in the cloud clones the project's GitHub repo, works on a branch and opens a PR; 33 PS8, decided 2026-11-21, puts a Piopio Server before it.)* |
 | TD4 | **Telegram first**, then WhatsApp (§6). Telegram arrives in T0 from the Mac and in T3 from the cloud; WhatsApp in T4. |
 | TD5 | **The board is a real kanban** you see and edit (06 §12.1): columns To do, Doing, Review, Done; you can add, reorder and reassign cards. |
 | TD6 | **A lead hires helpers on its own**, within the team's budget and from existing role cards. A new kind of role asks you first. |

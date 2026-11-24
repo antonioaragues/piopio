@@ -79,9 +79,9 @@ piopio/
 ### 4.3 Internal modules
 | Module | Responsibility |
 |---|---|
-| `catalog` | SQLite DB (`catalog.db`): projects, threads, spaces, agents, session index, settings, model cache, cost ledger, FTS5 index |
+| `catalog` | SQLite DB (`catalog.db`): projects, threads, spaces, agents, session index, settings, model cache, cost ledger, FTS5 index *(Since 34 §13, 2026-11-23: the cost ledger is `usage.db`, one row per request. Projects are in `projects.json` (18 §10, 39 §2), and spaces are gone (18 §11).)* |
 | `runtimes/build` | Wraps `createAgentSession` per Build session. Event normalization. Approval bridging. |
-| `runtimes/thread`, `runtimes/space` | Open/close pi-durable harnesses lazily, with an LRU of open harnesses (default max 16) |
+| `runtimes/thread`, `runtimes/space` | Open/close pi-durable harnesses lazily, with an LRU of open harnesses (default max 16) *(Since 18 §11, 2026-11-07: the Space runtime is gone. Since 18 §15, 2026-11-15: a chat is a pi SDK session run by BuildRuntime with a chat profile, not a pi-durable harness.)* |
 | `runtimes/agent` | Same `@piopio/runtime` agent code the cloud uses, on Node SQLite storage; local "simulator" channel |
 | `approvals` | Central queue of pending approvals across all runtimes. Policy evaluation. |
 | `models` | OpenRouter catalog fetch/cache, pricing, capability flags, key access |
@@ -110,6 +110,7 @@ pi-coding-agent and pi-durable emit different event shapes. The engine maps both
 
 ### 5.2 Deploy model
 - **Infrastructure deploy** (rare: first setup and app updates). The app uses the Cloudflare API with a user-provided API token (scopes: Workers Scripts edit, Durable Objects, R2, Workers Routes optional) to upload the Worker bundle, migrations and bindings, and to set secrets (`OWNER_TOKEN`, `MASTER_KEY`, `OPENROUTER_API_KEY`).
+  **Since 30 §13 (K1 built 2026-11-19):** it is one Cloudflare API token, made in the dashboard from the "Edit Cloudflare Workers" template; the scope list here is history.
 - **Agent deploy** (frequent). Agent definitions are **data, not code**: pushing an agent is an authenticated RPC (`agents.deploy`) to the Worker. No Worker redeploy.
 - Custom agent tooling is limited to what can run safely without redeploying code: built-in tools, remote MCP servers, HTTP tool, codemode (sandboxed JS). See 06-agents.
 
@@ -137,13 +138,17 @@ pi-coding-agent and pi-durable emit different event shapes. The engine maps both
 ~/Piopio/Agents/<slug>/            (optional, user-visible) agent definitions as files, git-versioned
 ```
 
+> **Since 18 §15 (2026-11-15):** a chat is a pi SDK session, its file in `chats/` and run in `scratch/<id>/`, not a pi-durable session in `threads/`. **Since 18 §11 (2026-11-07):** notebooks were removed, so the two `spaces/` lines are history; files already in `spaces/` stay on disk. **Since 34 §13 (2026-11-23):** the cost ledger is `usage.db` in this folder, and projects are kept in `projects.json` (39 §2).
+
 All formats are SQLite or JSONL/JSON/Markdown, so everything stays inspectable and exportable.
 
 ## 7. Security model
 
 - **Secrets** live in the **macOS Keychain**, owned by the app: the data protection keychain when the build is signed by the team (its own access group, no password prompts, this device only), the login keychain for ad hoc builds (docs/releasing.md). The engine asks for them over the protocol (`secrets.get`, scoped and cached in memory only). Inherited env vars are never logged. For the cloud, secrets are pushed as Worker secrets or encrypted (AES-GCM, `MASTER_KEY`) in RegistryDO.
 - **Local tool execution** (Build) runs as the user, with approval modes (05-build §6). OS sandboxing (Seatbelt profiles) is later.
+  **Since 05 AP5 (built 2026-11-08) and 39 (built 2026-11-23):** in Ask and Auto-edit, `bash` runs in macOS's sandbox. It keeps writes in the project and hides Piopio's data, sign-ins, credential files, SSH private keys and the Keychain tool (39 §1); a project you haven't trusted also gets a filtered network (39 §2).
 - **Cloud auth:** a single owner token (256-bit), generated at infra deploy and stored in Keychain. Rotatable. A future iOS app pairs by QR code with the owner token.
+  30 §6 (decided 2026-11-19, the phone app not built) changes this: the phone gets its own device token, which you can revoke; the owner token never leaves the Mac.
 - **Channel security:** verify every webhook signature. Contacts are allowlisted: unknown senders get a configurable reply ("I don't talk to strangers") and are logged for the owner to approve.
 - **Prompt-injection posture:** content from channels, the web and email is untrusted. Sensitive tools need approval regardless of who asked (06-agents §9).
 

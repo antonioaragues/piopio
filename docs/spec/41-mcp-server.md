@@ -68,6 +68,10 @@ tool takes and returns JSON. IDs are Piopio's own (`prj_`, `ses_`, `agt_`, 03 §
 | `recall_memory` | Recall from the memory you allow this client to read (About me, a project's NOTES.md, an agent's memory if listed), with its source | the memory provider (07 §5.1) |
 | `list_agents` | Your agents (26) the grant allows: name, what they do, whether they're on This Mac or in the cloud | `agents.list` |
 
+> The "Maps to" names here and in §4.2 follow 03 §3, which predates the built protocol (`catalog.list` and
+> `agents.list`, for example, aren't in `packages/protocol/src/index.ts`). The column is to be redone against the
+> built protocol when MS0 is built.
+
 ### 4.2 Work (Supervised and Full)
 
 | Tool | Does | Maps to |
@@ -76,7 +80,7 @@ tool takes and returns JSON. IDs are Piopio's own (`prj_`, `ses_`, `agt_`, 03 §
 | `send` | Sends another message to a conversation this client started (or any allowed one with Full). `when_busy`: `queue` (default) or `steer` (T4) | `sessions.submit` |
 | `wait` | Waits up to `timeout_s` (default 50, at most 300) for the conversation to stop working. Returns its status and, when done, the last answer. While waiting it sends MCP progress notifications with the conversation's progress line ("Worked 40s · 6 steps"). `needs_you` comes back with what Piopio is waiting for ("Approve `git push` in Piopio"), never with a way to approve it | `session.events`, `progress-line.ts` |
 | `stop` | Stops the current turn of a conversation this client started | `sessions.abort` |
-| `ask_agent` | Asks one of your agents a question and waits for its answer, as `@agent` does inside Piopio (26 CL9). The agent sees who's asking ("Claude Code, on your behalf") | `consult.ts` (`ask_agent`) |
+| `ask_agent` | Asks one of your agents a question and waits for its answer, as `@agent` does inside Piopio (26 CL8). The agent sees who's asking ("Claude Code, on your behalf") | `consult.ts` (`ask_agent`) |
 
 ### 4.3 Not exposed, on purpose
 

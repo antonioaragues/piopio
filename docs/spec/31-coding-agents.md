@@ -60,11 +60,13 @@ covered by Antigravity plans. So the Google agent is Antigravity CLI, phase A3.
   ("Claude Code · Opus 5.5"), the placeholder says "Message Claude Code…", the toolbar subtitle reads "runs in Claude
   Code", and each answer's footer says the model and the agent.
 - **CA4 Approvals go to the tray.** The agent's permission requests become Piopio's pending prompts (the composer tray,
-  Needs you, notifications). Piopio's approval modes map onto the agent's own: Read only → plan, Ask before edits →
-  default, Auto-edit → acceptEdits, Full auto → bypass permissions. A conversation without a project (a chat) runs in
-  its own folder in Auto-edit.
+  Needs you, notifications). Piopio's approval modes map onto the agent's own: Read only → plan, Ask → default,
+  Auto-edit → acceptEdits, Full auto → bypass permissions. A conversation without a project (a chat) runs in its own
+  folder in Auto-edit.
 - **CA5 No other provider needed.** Titles, follow-up suggestions and commit messages for a conversation on an agent are
   asked from that agent as a one-off question on its smallest model, so a Mac with only Claude Code works.
+  *(§9: this holds for Claude Code only. For Antigravity CLI and Codex they come from another connected provider or
+  Apple's on-device model, because ACP has no one-off question.)*
 - **CA6 Plan, not spending.** Usage is shown, but an agent's reported cost isn't counted as spending (as AP7 already does
   for Claude Code tasks). Its billing line is the plan ("Claude Pro plan"). **Except on an API key** (2026-11-23): when
   Claude Code's `init` says its `apiKeySource` is a key (anything but `none` or `oauth`), what each result's
@@ -173,6 +175,7 @@ Decided 2026-11-20 with the user on [picker.html](../design/agent-runtimes/picke
   asking (spec 29).
 - Notebooks' heading organizer is Piopio's own: does it keep running on a model while the conversation runs on an
   agent?
+  *(Since 18 §11, 2026-11-07: notebooks and the organizer were removed, so this question no longer applies.)*
 - **CA11–CA14 (decided 2026-11-23):** to check before A5: which sandbox setting the Claude Agent SDK takes and
   whether it covers Bash only or every tool; what Antigravity CLI offers besides its modes; whether a side conversation
   on a coding agent can be unattended in Ask mode, as `task` runs are today (CA14), or must ask through the tray; and

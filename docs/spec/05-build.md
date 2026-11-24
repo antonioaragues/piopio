@@ -39,17 +39,19 @@ Session status icons: running ⏳, waiting for you ⚠ (approval/question), done
 
 Default state for new sessions: **approvals, checkpoints, todos, notify and subagents ON. Plan mode OFF** (`/plan` is always available on demand).
 
+> **Since 32 §7 (2026-11-21):** Plan is a mode only: no /plan command and no chip. It lives in the mode selector.
+
 | Extension | Purpose |
 |---|---|
 | `piopio-approvals` | Approval modes (§6). Intercepts tool calls and asks the user via the UI bridge (`ctx.ui.confirm`-style request → `approval.requested`). |
 | `piopio-checkpoints` | Snapshot before each turn that writes files (§7). |
 | `piopio-plan` | Plan mode: read-only tools until the user approves a plan. Plan rendered as a checklist card. |
 | `piopio-todos` | Todo list tool: each step a short title and an optional one-sentence detail. Shown in the inspector as a timeline (docs/design/plan-timeline) and as a progress card. |
-| `piopio-subagents` | `task` tool to spawn child sessions (shown as nested `task` items, openable). Children inherit the parent's approval mode and count toward its cost. Default max 3 concurrent children per session. Blocks its parent today; non-blocking is 17 §3 (DP4). Since 2026-11-17 it's one of three uses of one child-session mechanism, for a read-only piece of the turn that would flood its context (26 §7.1). |
+| `piopio-subagents` | `task` tool to spawn child sessions (shown as nested `task` items, openable). Children inherit the parent's approval mode and count toward its cost. Default max 3 concurrent children per session. Blocks its parent today; non-blocking is 17 §3 (DP4). *(Since 17 §9, built 2026-11-17: `task` returns at once by default; `wait: true` keeps the blocking call, and Claude Code / Codex tasks always wait. Since 37 SB2 and SB4, built 2026-11-22: each subagent is one live row in the transcript and opens in the right column, not a nested item.)* Since 2026-11-17 it's one of three uses of one child-session mechanism, for a read-only piece of the turn that would flood its context (26 §7.1). |
 | `piopio-notify` | `notify_user(message)` / `ask_user(question, options)` for agent-initiated questions. Surfaced as a "waiting for you" state. |
 | `piopio-sandbox` | Runs `bash` inside macOS's sandbox (AP5). Built 2026-11-08. |
 | `piopio-present` | `present_files(files)`: the files the agent made for you, as a card per file that opens in the viewer. Kept out of the folded activity line. Built 2026-11-08. |
-| `piopio-goal` | `/goal <what done looks like>`: the session gets another turn ("round") each time it finishes until the agent calls `update_goal` with "done" or "blocked", up to 25 rounds. Stop pauses it; `/goal continue` resumes (with more rounds when they ran out); `/goal off` clears it. Each round shows as "Goal · round n of 25". Kept in the session file. Built 2026-11-08. |
+| `piopio-goal` | `/goal <what done looks like>`: the session gets another turn ("round") each time it finishes until the agent calls `update_goal` with "done" or "blocked", up to 25 rounds. Stop pauses it; `/goal continue` resumes (with more rounds when they ran out); `/goal off` clears it. Each round shows as "Goal · round n of 25". Kept in the session file. Built 2026-11-08. *(Since 32 §8, 2026-11-23: up to 25 rounds or $5.00, and chats have /goal too.)* |
 
 | `piopio-diagnostics` | The project's check after the agent's edits ("Diagnostics" below). Built 2026-11-21. |
 
@@ -60,6 +62,7 @@ Default state for new sessions: **approvals, checkpoints, todos, notify and suba
   `check` script (with its package manager), `tsc --noEmit` when the project has TypeScript installed, `cargo check`,
   `go vet`, `pyright` or `mypy`. On the project page, **Check after edits**: Automatic (what was detected), a command
   of the user's, or Off. Chat projects and review sessions don't run it.
+  **Since 18 CF3 (2026-11-07):** the Chat lens is gone, replaced by the Read only permission, so "Chat projects" is not a kind any more.
 - **DG3 Feedback.** Only the problems in the files the agent changed go back (errors elsewhere were there before),
   with a line or two of context, at most 60 lines. The run goes on with them as a message ("fix them, then finish; if
   one is wrong, say so"), shown in the transcript as "Checked with <command>: N problems in files it changed". At most
@@ -89,6 +92,7 @@ All of them SHOULD also work in the pi CLI (graceful TUI fallback), so they can 
 - **BR3** **Comment-on-diff:** select lines in the diff → "Ask agent about this" or "Request change" → sends a follow-up with the file/line reference.
 - **BR4** **File viewer:** read-only, highlighted, with a quick-edit mode (small changes, saved via `projects.files.write`). "Open in <Editor>" (configured: Xcode, VS Code, Cursor, Zed, Sublime, …).
 - **BR5** **@-mentions** in the composer: fuzzy file/folder search (respects .gitignore). **/commands**: pi prompt templates, skills (`/skill:name`), and Piopio commands (`/plan`, `/compact`, `/model`, `/fork`, `/worktree`).
+  **Since 32 §7 and §4.1 (2026-11-21):** there is no /plan command (Plan is a mode only, §7), and skills are listed by their name, without `skill:`.
 - **BR6** Fork/branch navigation follows pi's session tree (`/tree` equivalent as a popover).
 - **BR7** Context meter: tokens used / model context window, in the inspector footer. Click → the **context popover**:
   - The total (pi's count: the provider's last reported usage plus an estimate for what came after it), the window, the percentage and what's free, on one grey bar.
@@ -107,13 +111,18 @@ Three modes, set per session (default per project; global default = **Auto-edit*
 | **Auto-edit** | auto | auto | ask (unless allow-listed) | auto | ask |
 | **Full auto** | auto | auto | auto | auto | ask |
 
+> **Since 18 §10 (built 2026-11-07):** `read_only` is a fourth approval mode, and Plan is a fifth choice in the selector (18 CF3). The default is the project's own: a folder without code markers starts in Read only, a code repository in Auto-edit (18 §4).
+
 - **AP1** Approval card inline in the transcript + global badge + notification when the window isn't focused. Actions: **Allow**, **Deny (with note to agent)**, **Always allow** → a rule.
 - **AP2** Rules: command prefix patterns (`npm test`, `git status`, `swift build`), tool names, path globs. Stored per project in `catalog.db` and exportable to `.pi/` if the user wants them shared with the CLI.
+  **As built:** a project's rules are kept with the project in `projects.json` (`packages/engine/src/projects.ts`; 39 §2 names the file), not in `catalog.db`.
 - **AP3** Built-in **deny-list** that always asks even in Full auto: `rm -rf` outside worktree, `git push --force`, `sudo`, writes to `~/.ssh`, `~/.aws`, keychain tools, `curl … | sh`.
 - **AP4** Approvals time out? **No** by default. The session waits ("waiting for you").
 - **AP5** **Sandbox** (built 2026-11-08, Settings › Approvals, default on): in Ask and Auto-edit, `bash` runs through `sandbox-exec` with a Seatbelt profile that allows everything except writes outside the project (or worktree, plus the repository's git folder), temporary folders, `/dev` and package/build caches (`~/Library/Caches`, `~/.npm`, `~/.cargo/registry`, DerivedData, …). Reads and the network are not restricted. A blocked write tells the model it can run the command again with `outside_project: true`, which always asks (deny-list rules and Always allow don't skip it). If the sandbox can't start, nothing runs. macOS refuses a sandbox inside a sandbox, so confined commands find `swift` and `xcodebuild` through wrappers that turn their own manifest, plugin and script sandboxes off (`SHIMS` in `sandbox.ts`); another tool that tries gets a hint to look for its flag, not the `outside_project` one. Full auto runs commands unconfined, as before. Not covered: `edit`/`write` (they keep the path checks above), MCP servers and the terminal tab.
+  **Since 39 (built 2026-11-23):** "Reads and the network are not restricted" no longer holds. The sandbox hides Piopio's data, sign-ins, credential files, SSH private keys and the Keychain tool (39 §1), and a project you add or clone is filtered until you trust it: its commands reach this Mac, the built-in sites and the sites you allowed (39 §2, §3). Project trust is defined there (39 §2) and, for coding agents, in 31 CA13; a filtered project can't be in Full auto (39 NF3).
 - **AP6** **Auto review** (built 2026-11-08, Settings › Approvals, default off): in Auto-edit, a command that would ask is first judged by the session's own model (`REVIEW_SYSTEM` in `review.ts`). "allow" runs it (sandboxed); "ask" shows the usual card with "Auto review: reason". Deny-list commands, writes outside the project and `outside_project` never go to the reviewer. Costs one request per reviewed command. Allowed commands carry the reason on their card ("auto-reviewed"; `ToolItem.review`, kept in the session file), not as a note between steps. The reviewer judges the command alone: a later step the user asked for (a push) is reviewed when its own command comes.
 - **AP7** A `task` for Claude Code or Codex asks first in Ask mode ("Hand a task to Claude Code"), since they change files without asking; in the other modes their own permission setting follows the session's mode (external-agents.ts). On a Claude plan, Claude Code's reported cost isn't counted as spending.
+  31 CA14 (decided 2026-11-23, not built) would change this: a `task` handed to Claude Code or Codex becomes a side conversation on that agent's runtime (24), with its approvals in the tray.
 
 ## 7. Checkpoints (B5)
 
@@ -195,11 +204,13 @@ Three modes, set per session (default per project; global default = **Auto-edit*
 
 ## 10. Later
 - **Cloud build sessions:** run the coding agent in Cloudflare Sandbox/Containers or over SSH on a devbox. Session kind stays `build` with `location: remote`.
+  30 §8 (decided 2026-11-19, cloud Build sessions not built) would name this differently: `location: "cloud"` on the ref, where K1 as built marks a cloud agent's catalog entry with `cloud` (30 §13). Build in the cloud needs a GitHub repo (30 CT3).
 - **Web preview:** an embedded preview with a dev-server launcher (from `package.json` scripts) and console capture sent to the agent.
 - **iOS Simulator** integration for Swift projects.
 - **Pi-durable for Build:** pi-durable ships `read/write/edit/bash` tools itself. Once it stabilizes, re-evaluate unifying Build onto pi-durable (gains crash recovery and cloud portability, loses CLI session interop).
 
 ## 11. Resolved questions (Build)
 - **BQ1** Default approval mode → **Auto-edit**.
+  **Since 18 §4 (2026-11-07):** a folder without code markers starts in Read only; a code repository still starts in Auto-edit.
 - **BQ2** Worktree location → **app support folder** (`~/Library/Application Support/Piopio/worktrees/…`). Sessions offer "Reveal in Finder" and "Open terminal here".
 - **BQ3** Default-on extensions → **todos, notify, subagents**. Plan mode is off by default.

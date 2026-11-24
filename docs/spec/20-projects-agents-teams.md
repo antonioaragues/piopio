@@ -1,6 +1,7 @@
 # 20 · Projects, agents and teams: who works where
 
-Status: decided with the user 2026-11-10; nothing here is built yet. **Since 2026-11-17, 26 (agents, clarified)
+Status: decided with the user 2026-11-10; P1–P4 built the same day (§10–§13), with a first trial with real models
+(§14). **Since 2026-11-17, 26 (agents, clarified)
 replaces PT1, PT3, PT4, PT7 and PT8:** there are no teams, every project conversation is with Piopio, and PT5–PT6
 hold with Piopio as the lead. It reorganizes what 19 built (teams, the board,
 team per project, merging, routines) around one idea, and replaces 19 §4.2 ("where teams show up") and the team page
@@ -45,6 +46,10 @@ Team      a lead and members: agents in roles (lead, write, review, integrate);
 Project   a folder: AGENTS.md, NOTES.md, its files; its conversations, its board, its routines;
           who works here: Piopio, an agent, or a team
 ```
+
+> **Since 21 AD4 (2026-11-10) and 26 CL2 (2026-11-17):** agents are never assigned to a project and never join a
+> team, and since 26 there are no teams to assign. Every project conversation is with Piopio, and "who works here"
+> became the project's way of working (26 §4).
 
 - **A team is reused across projects.** The same Development team works in five projects: the same members, roles and
   team memory; each project has its own board, branch and conversations.
@@ -102,6 +107,10 @@ Teams
   agent, role, model), TEAM.md, the team's notes, and see where it works.
 - **New project** offers "Who works here", the same choice as Settings.
 
+> **Since 26 (C2 built 2026-11-17, 26 §12):** the Teams section, the team page, Who works here and the team picker on
+> New project are gone. The project's settings have "How work is done here" (26 §4), and an agent is never a
+> project's worker (21 AD4, 26 CL2).
+
 ## 6. Customizing teams (after the move)
 
 - **Edit a team:** add or remove members, change a member's agent, role or model, its instructions and "done".
@@ -147,6 +156,7 @@ folder becomes a project at that folder. Boards, branches and routines move with
 ## 9. Open questions
 
 - **An agent as "who works here"** (one agent, no team): the same pattern with no board. Worth it from P2, or later?
+  **Answered by 21 AD4 (2026-11-10) and 26 CL2 (2026-11-17):** no. Agents are never assigned to a project.
 - **Cost guard:** a lead per conversation means more lead sessions; budgets per project or per team (19, "Not yet")
   may be needed sooner.
 

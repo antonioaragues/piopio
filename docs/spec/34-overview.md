@@ -7,6 +7,10 @@ agents, cloud and so on, and other numbers worth seeing), and a read of what Pio
 the sidebar footer in [MainSidebar.swift](../../apps/mac/App/Piopio/MainSidebar.swift)). Mockup:
 [docs/design/overview/Overview.html](../design/overview/Overview.html).
 
+> **28 and 29 are drafts (2026-11-18), not built.** Where this spec uses 29's order and routes (§1, §5.3's Model
+> grouping, §6.1's "in your order", §7's Reliability row, the ledger's `route`) and 28's roles (§6.1, the ledger's
+> `role`), those parts wait for them. §13 says so for the ledger: `route` and `role` stay empty.
+
 ## 1. Why
 
 Piopio now runs in many places at once: conversations and Build sessions on the Mac, agents that start there and move
@@ -28,9 +32,9 @@ One page answers them. It reads what Piopio already stores; it never sends anyth
 | A conversation's cost and tokens | pi's `Usage` on each assistant message (input, output, cache read, cache write, USD), summed in `ThreadState.usage` | Inspector footer; CostDetails popover |
 | Utility requests and web search | `extra_costs` (at, scope, kind, model, usd or null), per conversation or `app` | CostDetails ("Additional requests") |
 | What the provider billed | `usage.summary`: the OpenRouter key's today / month / total, cached a minute; includes other apps on that key | Sidebar footer "This Mac · $0.91 today" |
-| An agent's month | Agent `status.spendUsd` against `budgetUsd` (AS3) | Agent info panel footer |
+| An agent's month | Agent `status.spendUsd` against `budgetUsd` (AS3) | Agent info panel footer *(Since 21 §9: the agent page is Chat · Setup and the info panel is gone; the agent's month is in its Setup, §4.)* |
 | Automations and jobs | `budgetPerRunUsd`, `work.job` (a conversation's helpers against `budgetPerJob`) | Automation page, the way of working |
-| Cloud usage | Planned for Settings › Cloud (30 §7): requests, duration, browser hours, machine time | Not built |
+| Cloud usage | Planned for Settings › This Mac & cloud › Cloud (30 §7): requests, duration, browser hours, machine time | Not built |
 
 The honest-numbers rule already lives in CostDetails and stays the law here: **an estimate and a provider's bill are
 different scopes and are never added together**; unknown prices are counted, never shown as $0; a subscription is
@@ -58,8 +62,8 @@ approvals, and how much disk it all takes. Every number is a link to the things 
 - **Not a sidebar row.** It's a page you open a few times a week, not a place you work (OV1).
 - **No cost on the main screens** (OV8): not in the sidebar, not on Home. A conversation's own cost stays in its
   inspector, and an agent's month in its setup, since they're about that one thing.
-- **Links in:** an agent's "$0.31 this month" opens Spend filtered to that agent; Settings › Cloud's usage opens
-  Spend filtered to the cloud; an automation's budget line opens its runs.
+- **Links in:** an agent's "$0.31 this month" opens Spend filtered to that agent; Settings › This Mac & cloud › Cloud's
+  usage opens Spend filtered to the cloud; an automation's budget line opens its runs.
 
 Layout: the Settings page template (43b953e) in the content card, one centered column (max 760, wider than
 Settings' 640 for charts), title 20 bold, the tab control under it (neutral segmented, grey 9a), a range selector on
@@ -108,6 +112,9 @@ the page. Plus one new budget: **Piopio this month** (OV3), off until you set it
 background work (automations, agents' own runs) waits for your yes in Needs you, and your own conversations keep
 going with a composer notice. It never stops a conversation you're in.
 
+> 07 CO3 already named an "Optional global monthly budget with alerts". It was never built (§2 lists no such budget),
+> so OV3's is the first one; built in §14.
+
 ### 5.5 Cheaper next time
 
 At most three plain suggestions under the list, only when the numbers support them, each with the saving it's based
@@ -131,8 +138,8 @@ One diagram, three columns, drawn by the app (not a canvas you edit):
   providers it uses. Hover a node and its lines go `fg2`, the rest fade: "what does Rita touch?" in one glance.
 - **Needs you:** a node with a problem gets the blue 6pt dot and its line says why (`key rejected`, `Mac Bridge off ·
   2 steps waiting`, `plan limit until 18:00`). That's grey's needs-you dot, used for what it's for.
-- **Click** a node: its page or its Settings pane (an agent opens the agent, a provider opens Settings › Providers at
-  it, Cloud opens Settings › This Mac & cloud).
+- **Click** a node: its page or its Settings pane (an agent opens the agent, a provider opens Settings › Models at it,
+  Cloud opens Settings › This Mac & cloud).
 - **Off or unused** things are drawn in `fg3` with a dashed border: a connected provider nothing uses, an agent with
   no automations and no channel, a skill never used in 30 days. The map is also a cleanup list.
 
@@ -140,7 +147,7 @@ One diagram, three columns, drawn by the app (not a canvas you edit):
 
 Under the map, the same facts as a table for reading: each agent, automation and cloud conversation with **Runs on**
 (This Mac / Cloud), **Model**, **Reaches you in**, **Next run**, **This month**. This is the "what runs where" list
-Settings › Cloud planned (30 §7); Settings links here instead of keeping its own copy.
+Settings › This Mac & cloud › Cloud planned (30 §7); Settings links here instead of keeping its own copy.
 
 ### 6.3 Not in v1
 
@@ -223,7 +230,7 @@ the project); no new tracking beyond the ledger.
 |---|---|---|
 | **OV0** · the ledger | `usage_ledger`, written per request, backfill from sessions and `extra_costs`, `stats.spend` | A month of past usage appears grouped by day and model, matching the conversations' own totals |
 | **OV1** · Spend | The page, the headline, by day, by what, budgets, the footer link, CSV | This month's estimate is within 2% of OpenRouter's bill when nothing else uses the key (09 Phase 1's bar) |
-| **OV2** · Setup | `stats.setup`, the map, What runs where, Settings › Cloud links here | A broken provider key shows as a dot on the map with its reason, and the click opens the fix |
+| **OV2** · Setup | `stats.setup`, the map, What runs where, Settings › This Mac & cloud › Cloud links here | A broken provider key shows as a dot on the map with its reason, and the click opens the fix |
 | **OV3** · Activity and Storage | The groups, the year of days, Disk with cleanups | Cleaning merged worktrees frees the space it said |
 | **OV4** · Budgets and suggestions | Piopio this month (§5.4), Cheaper next time (§5.5), cloud rows pulled into the ledger | Background work waits at 100% and resumes on your yes |
 | **Later** | Overview on the phone, editing on the map, other providers' billing APIs, EUR display | |
