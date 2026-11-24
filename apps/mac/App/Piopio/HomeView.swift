@@ -23,6 +23,10 @@ struct HomeView: View {
     /// What a notification or the menu bar's Inbox pointed at: Home opens that row.
     @AppStorage("inboxFocus") private var focus = ""
     @State private var height: CGFloat = 0
+    /// The box is a temporary chat (docs/spec/14 M4), turned on by the corner button.
+    @State private var temporary = false
+    /// The box's target: the corner button shows with no project only.
+    @AppStorage("homeTarget") private var targetRaw = "chat"
     private let piopio = Piopio.shared
 
     enum Tab: Hashable, CaseIterable {
@@ -45,6 +49,7 @@ struct HomeView: View {
                 if isEmpty { empty } else { normal }
             }
             .coordinateSpace(.named(Self.space))
+            .temporaryCorner($temporary, shown: targetRaw == "chat")
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0 }
             .onContinuousHover(coordinateSpace: .named(Self.space)) { phase in
                 if case .active(let point) = phase { piopio.pointer(point) }
@@ -122,7 +127,7 @@ struct HomeView: View {
                 Text(Date.now.formatted(.dateTime.weekday(.wide).day().month(.wide))).font(.system(size: 13)).foregroundStyle(Color.dsFg3)
                 Text(piopio.mood.greeting(name: Self.firstName, date: .now)).font(.system(size: 32, weight: .semibold)).tracking(-0.8).foregroundStyle(Color.dsFg)
             }
-            AskBox(engine: engine, item: $item, perch: perch)
+            AskBox(engine: engine, item: $item, perch: perch, temporary: $temporary)
         }
     }
 
@@ -441,9 +446,10 @@ struct AskBox: View {
         var top: CGFloat
     }
 
-    init(engine: EngineController, item: Binding<SidebarItem>, projectId: String? = nil, showsWhere: Bool = true, prominent: Bool = false, perch: Perch? = nil) {
+    init(engine: EngineController, item: Binding<SidebarItem>, projectId: String? = nil, showsWhere: Bool = true, prominent: Bool = false, perch: Perch? = nil, temporary: Binding<Bool> = .constant(false)) {
         self.engine = engine
         _item = item
+        temporaryBinding = temporary
         self.projectId = projectId
         self.showsWhere = showsWhere
         self.prominent = prominent
@@ -462,8 +468,13 @@ struct AskBox: View {
     @State private var picking = false
     /// Start in Plan: the agent proposes a plan before it changes anything (folder projects).
     @State private var plan = false
-    /// A temporary chat (docs/spec/14 M4): no project only, for this one chat; New Temporary Chat (⌃⌘N) turns it on.
-    @State private var temporary = false
+    /// A temporary chat (docs/spec/14 M4): no project only, for this one chat. The page owns it (its corner button, the
+    /// TemporaryCornerButton); New Temporary Chat (⌃⌘N) turns it on through the box.
+    private let temporaryBinding: Binding<Bool>
+    private var temporary: Bool {
+        get { temporaryBinding.wrappedValue }
+        nonmutating set { temporaryBinding.wrappedValue = newValue }
+    }
     /// Set by New Temporary Chat before the start page shows, so the box it opens starts temporary.
     @MainActor static var nextIsTemporary = false
     private var target: Target {
@@ -533,7 +544,6 @@ struct AskBox: View {
                 HStack(spacing: 8) {
                     if agent == nil { AttachButton(pick: attach, help: "Add files, photos or PDFs (⌘U)", size: 28) }
                     targetMenu
-                    if target == .chat, agent == nil { temporaryChip }
                     if project != nil {
                         if buildOn { permissionsMenu } else { Text(ApprovalMode.readOnly.title).font(.system(size: 13)).foregroundStyle(Color.dsFg3).padding(.horizontal, 6) }
                     }
@@ -613,16 +623,6 @@ struct AskBox: View {
     }
 
     // MARK: Temporary (docs/spec/14 M4)
-
-    private var temporaryChip: some View {
-        Button { temporary.toggle(); focused = true } label: {
-            Label("Temporary", systemImage: "timer")
-        }
-        .buttonStyle(TemporaryChipStyle(on: temporary))
-        .help(temporary ? "Temporary: deleted 24 hours after your last message unless you keep it" : "Make this a temporary chat (⌃⌘N)")
-        .accessibilityLabel("Temporary chat")
-        .accessibilityValue(temporary ? "On" : "Off")
-    }
 
     private var temporaryLine: String {
         "deleted 24 hours after your last message unless you keep it. Not searched by other conversations, and nothing goes to About me. \(modelLabel)'s provider still receives what you send."
@@ -1038,16 +1038,41 @@ extension String {
 }
 
 
-/// The Temporary chip in the box (docs/spec/14 M4): plain like the other chips when off, tinted when on.
-struct TemporaryChipStyle: ButtonStyle {
-    var on: Bool
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .labelStyle(.titleAndIcon)
-            .font(.system(size: 12.5, weight: on ? .medium : .regular))
-            .foregroundStyle(on ? Color.dsTemporary : Color.dsFg2)
-            .padding(.horizontal, 9).frame(height: 26)
-            .background(Capsule().fill(on ? Color.dsTemporaryTint : (configuration.isPressed ? Color.dsChip : Color.clear)))
-            .contentShape(Capsule())
+/// Temporary chat, the page's corner button (docs/spec/14 M4, docs/design/temporary-chat round 2 option 1): top right of
+/// Home and of the New conversation page, the usual place for it. Grey like a toolbar icon while off; tinted while on.
+/// Only with no project: a temporary chat is never in one.
+struct TemporaryCornerButton: View {
+    @Binding var on: Bool
+    @State private var hovering = false
+
+    var body: some View {
+        Button { on.toggle(); NotificationCenter.default.post(name: .focusHome, object: nil) } label: {
+            Image(systemName: "timer")
+                .font(.system(size: 14, weight: on ? .medium : .regular))
+                .foregroundStyle(on ? Color.dsTemporary : hovering ? Color.dsFg : Color.dsFg2)
+                .frame(width: 28, height: 28)
+                .background(on ? Color.dsTemporaryTint : hovering ? Color.dsChip : .clear, in: RoundedRectangle(cornerRadius: DS.Radius.selector, style: .continuous))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help(on ? "Temporary chat: deleted 24 hours after your last message unless you keep it. Click to turn it off" : "Temporary chat (⌃⌘N)")
+        .accessibilityLabel("Temporary chat")
+        .accessibilityValue(on ? "On" : "Off")
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+}
+
+extension View {
+    /// The page's top bar, right side: the corner button in a bar as tall as a page header, so it lines up with a
+    /// conversation's toolbar icons.
+    func temporaryCorner(_ on: Binding<Bool>, shown: Bool) -> some View {
+        overlay(alignment: .topTrailing) {
+            if shown {
+                TemporaryCornerButton(on: on)
+                    .padding(.trailing, 10)
+                    .frame(height: Shell.cardBarHeight)
+            }
+        }
     }
 }

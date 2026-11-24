@@ -296,11 +296,15 @@ added, after Q1:
 - **Tests:** `harness-ideas.test.ts` (the card's details, the local rule with a model switched mid-way, the off
   switch with `@conversation` still working); `ToolCardTests.swift` (decoding, the row, Open).
 
-**The temporary chat (built 2026-11-24, design A of [docs/design/temporary-chat](../design/temporary-chat/Options.html))**
-- **Turning it on:** a Temporary chip in the box, on Home and on the New conversation page, shown when there's no
-  project (a temporary chat is a chat; a project's conversations aren't). On, the line under the box says what it
-  means, including that the model's provider still receives what you send. It's for that one chat: the next starts
-  normal. New Temporary Chat (⌃⌘N, ⇧⌘N being New Project) is in the File menu and the sidebar's + menu.
+**The temporary chat (built 2026-11-24, design A of [docs/design/temporary-chat](../design/temporary-chat/Options.html);
+turning it on changed 2026-11-25 to round 2's option 1)**
+- **Turning it on:** a timer button in the page's top-right corner, on Home and on the New conversation page, the
+  place people know it from in other chat apps. It shows when there's no project (a temporary chat is a chat; a
+  project's conversations aren't). Grey while off; tinted while on, when the New conversation page's mark turns into
+  the timer and its heading reads "Temporary chat". On, the line under the box says what it means, including that the
+  model's provider still receives what you send. It's for that one chat: the next starts normal. New Temporary Chat
+  (⌃⌘N, ⇧⌘N being New Project) is in the File menu and the sidebar's + menu. *(Until 2026-11-25 this was a chip in
+  the box.)*
 - **What it doesn't do:** it isn't indexed (search, the Library, the providers record), it can't search or read other
   conversations, and it neither reads nor adds to About me. Spend still counts in Overview: that's money, not content.
 - **How long:** deleted 24 hours after your last message (`temporary.expiresAt`, pushed on each message), checked
@@ -310,7 +314,7 @@ added, after Q1:
   reads "Temporary chat". Coming back to it, a strip under the toolbar says when it goes and what it doesn't do, with
   Keep and ×; × hides it until the next return. Keep (also in the row's menu, `sessions.keep`) makes it a normal chat,
   indexed from then, with About me and earlier conversations from its next message.
-- **Not built:** the temporary chip in a project's box; Keep from Quick Chat.
+- **Not built:** Keep from Quick Chat.
 
 **Not built yet**
 - Each title in a search's card isn't a link of its own: card bodies are plain text. Only the one read opens.

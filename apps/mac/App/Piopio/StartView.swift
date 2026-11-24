@@ -198,6 +198,8 @@ struct ConversationStart: View {
     /// The box's own target ("chat", "project:<id>", "agent:<id>"), so the header and the sidebar follow the chip.
     @AppStorage("homeTarget") private var targetRaw = "chat"
     @Environment(\.startBack) private var back
+    /// A temporary chat (docs/spec/14 M4): the corner button, or New Temporary Chat (⌃⌘N) through the box.
+    @State private var temporary = false
 
     private var project: ProjectInfo? {
         guard targetRaw.hasPrefix("project:") else { return nil }
@@ -217,7 +219,7 @@ struct ConversationStart: View {
                     title
                         .multilineTextAlignment(.center)
                         .padding(.bottom, 26)
-                    AskBox(engine: engine, item: $item, showsWhere: false, prominent: true)
+                    AskBox(engine: engine, item: $item, showsWhere: false, prominent: true, temporary: $temporary)
                     pills.padding(.top, 18)
                     // A project just made in the sidebar (docs/spec/18 §17): its instructions are written here, or later.
                     if let project, ProjectNaming.shared.fresh.contains(project.id), engine.sessions(in: project).isEmpty {
@@ -232,6 +234,7 @@ struct ConversationStart: View {
                 .frame(maxWidth: .infinity)
             }
         }
+        .temporaryCorner($temporary, shown: targetRaw == "chat")
         .onExitCommand { back?() }
         // The sidebar marks where it goes: the project's row, or Conversations. Not once it has started (the box
         // resets its chip to no project as it opens the new conversation).
@@ -242,18 +245,20 @@ struct ConversationStart: View {
         }
     }
 
-    /// The place's mark: a folder, or a conversation.
+    /// The place's mark: a folder, or a conversation; a temporary chat's timer, tinted.
     private var mark: some View {
-        Image(systemName: project != nil ? "folder" : "bubble.left")
+        let temp = temporary && project == nil
+        return Image(systemName: temp ? "timer" : project != nil ? "folder" : "bubble.left")
             .font(.system(size: 19, weight: .light))
-            .foregroundStyle(Color.dsFg2)
+            .foregroundStyle(temp ? Color.dsTemporary : Color.dsFg2)
             .frame(width: 44, height: 44)
-            .background(Color.dsChip, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .background(temp ? Color.dsTemporaryTint : Color.dsChip, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .accessibilityHidden(true)
     }
 
-    /// "What's next in Tesis?", the place's name in grey; "What's on your mind?" with no project.
+    /// "What's next in Tesis?", the place's name in grey; "What's on your mind?" with no project; "Temporary chat".
     private var title: Text {
+        if temporary, project == nil { return Text("Temporary chat").font(.system(size: 30, weight: .semibold)) }
         guard let name = project?.name else { return Text("What's on your mind?").font(.system(size: 30, weight: .semibold)) }
         return (Text("What's next in ") + Text(name).foregroundColor(Color.dsFg3) + Text("?")).font(.system(size: 30, weight: .semibold))
     }
