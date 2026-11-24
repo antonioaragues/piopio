@@ -159,3 +159,15 @@ private let idleState = #"{"status":"idle","queue":[],"usage":{"inputTokens":0,"
     let older: ProjectInfo = try decode(#"{"id":"prj_2","path":"/q","name":"q","addedAt":"x","piConfig":false,"approvalMode":"ask","rules":[],"trust":"trusted","needsTrust":false,"lenses":["build"]}"#)
     #expect(older.network == nil)
 }
+
+@Test func aTemporaryChatSaysHowManyHoursItHasLeft() throws {
+    // docs/spec/14 M4: the sidebar's "23h" and the strip's "Deleted in 23 hours".
+    let json = #"{"ref":{"kind":"thread","id":"t1"},"title":"Symptoms","createdAt":"2026-11-24T10:00:00.000Z","updatedAt":"2026-11-24T10:00:00.000Z","temporary":{"expiresAt":"2026-11-25T10:00:00.000Z"}}"#
+    let s = try JSONDecoder().decode(SessionSummary.self, from: Data(json.utf8))
+    let at = { (iso: String) in ISO8601DateFormatter().date(from: iso)! }
+    #expect(s.hoursLeft(now: at("2026-11-24T10:30:00Z")) == 24)
+    #expect(s.hoursLeft(now: at("2026-11-25T08:00:00Z")) == 2)
+    #expect(s.hoursLeft(now: at("2026-11-25T09:59:00Z")) == 1)
+    let normal = try JSONDecoder().decode(SessionSummary.self, from: Data(json.replacingOccurrences(of: #","temporary":{"expiresAt":"2026-11-25T10:00:00.000Z"}"#, with: "").utf8))
+    #expect(normal.temporary == nil && normal.hoursLeft() == nil)
+}

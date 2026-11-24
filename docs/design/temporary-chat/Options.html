@@ -1,0 +1,356 @@
+<title>Temporary chats</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: three app windows side by side (sidebar + the chat as you find it when you come back), stacking on narrow screens. Piopio's grey ink tokens. */
+:root {
+  --win:#fcfcfb; --side:#f4f4f2; --fg:#1f1f1e; --fg2:#6b6b67; --fg3:#9b9b96; --line:rgba(0,0,0,.09);
+  --field:#ebebe8; --chip:rgba(0,0,0,.06); --inv:#1f1f1e; --invfg:#fff; --accent:#2f6fde; --page:#e9e9e6;
+  --bubble:#f0f0ed; --card:#ffffff; --temp:#7a6a3a; --temps:#f6efd9; --shadow:0 20px 50px rgba(0,0,0,.12);
+  --font:-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+  --mono:ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --win:#1e1e1d; --side:#191918; --fg:#ececea; --fg2:#a6a6a1; --fg3:#77776f; --line:rgba(255,255,255,.1);
+  --field:#252524; --chip:rgba(255,255,255,.08); --inv:#ececea; --invfg:#1e1e1d; --accent:#6ea0ff; --page:#121211;
+  --bubble:#2b2b29; --card:#252524; --temp:#d9c48a; --temps:rgba(217,196,138,.12); --shadow:0 20px 50px rgba(0,0,0,.45); color-scheme:dark;
+} }
+:root[data-theme="dark"] {
+  --win:#1e1e1d; --side:#191918; --fg:#ececea; --fg2:#a6a6a1; --fg3:#77776f; --line:rgba(255,255,255,.1);
+  --field:#252524; --chip:rgba(255,255,255,.08); --inv:#ececea; --invfg:#1e1e1d; --accent:#6ea0ff; --page:#121211;
+  --bubble:#2b2b29; --card:#252524; --temp:#d9c48a; --temps:rgba(217,196,138,.12); --shadow:0 20px 50px rgba(0,0,0,.45); color-scheme:dark;
+}
+* { box-sizing:border-box; }
+body { margin:0; background:var(--page); color:var(--fg); font:13px/1.45 var(--font); -webkit-font-smoothing:antialiased; }
+main { max-width:1440px; margin:0 auto; padding-block:40px 80px; padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px)); }
+header.doc { display:flex; gap:20px; align-items:flex-start; margin-bottom:30px; flex-wrap:wrap; }
+header.doc > div { flex:1; min-width:0; }
+header.doc h1 { font-size:22px; font-weight:600; margin:0 0 6px; text-wrap:balance; }
+header.doc p { color:var(--fg2); margin:0 0 4px; max-width:860px; }
+.theme { color:var(--fg2); cursor:pointer; padding:3px 8px; border-radius:6px; user-select:none; white-space:nowrap; border:0; background:none; font:inherit; }
+.theme:hover, .theme:focus-visible { background:var(--chip); color:var(--fg); outline:none; }
+
+.grid { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:28px; }
+@media (max-width:1180px) { .grid { grid-template-columns:minmax(0, 1fr); max-width:720px; } }
+.label { display:flex; gap:10px; align-items:baseline; margin:0 0 12px; }
+.label b { font-size:12px; color:var(--fg3); font-weight:600; }
+.label h2 { font-size:15px; margin:0; font-weight:600; }
+.note { color:var(--fg2); margin:14px 0 0; padding-left:18px; }
+.note li { margin:4px 0; }
+
+/* window */
+.scroll { overflow-x:auto; border-radius:12px; }
+.win { background:var(--side); border-radius:12px; box-shadow:0 0 0 .5px var(--line), var(--shadow); overflow:hidden; display:flex; height:640px; min-width:440px; position:relative; }
+.side { width:196px; flex:none; display:flex; flex-direction:column; }
+.top { height:52px; display:flex; align-items:center; padding:0 14px; }
+.lights i { display:inline-block; width:11px; height:11px; border-radius:50%; margin-right:6px; }
+.lights i:nth-child(1){background:#ec6a5e}.lights i:nth-child(2){background:#f4bf4f}.lights i:nth-child(3){background:#61c554}
+.top .tog { margin-left:auto; color:var(--fg2); }
+.rows { padding:0 8px; flex:1; overflow:hidden; }
+.search { display:flex; gap:8px; margin-bottom:6px; }
+.pill { flex:1; display:flex; align-items:center; gap:8px; height:30px; padding:0 11px; background:var(--field); border-radius:15px; color:var(--fg2); min-width:0; }
+.new { width:30px; height:30px; border-radius:50%; background:var(--inv); color:var(--invfg); display:grid; place-items:center; flex:none; }
+.row { display:flex; align-items:center; gap:9px; height:28px; padding:0 8px; border-radius:7px; white-space:nowrap; overflow:hidden; }
+.row.on { background:var(--chip); }
+.row .g { width:16px; display:grid; place-items:center; color:var(--fg2); flex:none; }
+.row .t { overflow:hidden; text-overflow:ellipsis; min-width:0; }
+.row .r { margin-left:auto; color:var(--fg3); font-size:11px; font-family:var(--mono); flex:none; }
+.row.temp .g { color:var(--temp); }
+.row.more { color:var(--fg3); font-size:12.5px; }
+h4 { font-size:12px; color:var(--fg3); font-weight:500; margin:14px 8px 4px; display:flex; justify-content:space-between; align-items:center; }
+h4 .c { font-family:var(--mono); font-size:11px; font-weight:400; }
+.av { width:16px; height:16px; border-radius:5px; background:#b79cf2; color:#fff; font-size:9px; font-weight:600; display:grid; place-items:center; }
+.foot { height:50px; display:flex; align-items:center; gap:9px; padding:0 14px; }
+.foot .circle { width:24px; height:24px; border-radius:50%; background:var(--chip); color:var(--fg2); font-size:11px; display:grid; place-items:center; }
+.foot .sp { flex:1; }
+.foot .btn { color:var(--fg2); }
+
+/* content card: the chat */
+.page { flex:1; background:var(--win); border-radius:10px; margin:8px 8px 8px 0; box-shadow:0 0 0 .5px var(--line); display:flex; flex-direction:column; min-width:0; overflow:hidden; position:relative; }
+.page.dashed { box-shadow:none; outline:1.5px dashed color-mix(in srgb, var(--temp) 55%, transparent); outline-offset:-1.5px; }
+.bar { height:44px; flex:none; display:flex; align-items:center; gap:8px; padding:0 14px; border-bottom:.5px solid var(--line); min-width:0; }
+.bar .title { font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+.bar .sp { flex:1; }
+.bar .ic { color:var(--fg3); flex:none; }
+.tag { display:inline-flex; align-items:center; gap:5px; height:20px; padding:0 8px; border-radius:10px; background:var(--temps); color:var(--temp); font-size:11.5px; font-weight:500; flex:none; white-space:nowrap; }
+.strip { flex:none; display:flex; align-items:center; gap:10px; padding:8px 14px; background:var(--temps); color:var(--fg); font-size:12px; border-bottom:.5px solid var(--line); }
+.strip .g { color:var(--temp); flex:none; display:grid; }
+.strip .tx { flex:1; min-width:0; }
+.strip .tx span { color:var(--fg2); }
+.btnk { flex:none; height:24px; padding:0 10px; border-radius:12px; background:var(--inv); color:var(--invfg); font-size:12px; font-weight:500; display:inline-flex; align-items:center; white-space:nowrap; }
+.btnq { flex:none; height:24px; padding:0 10px; border-radius:12px; background:var(--chip); color:var(--fg); font-size:12px; font-weight:500; display:inline-flex; align-items:center; white-space:nowrap; }
+.x { color:var(--fg3); flex:none; font-size:14px; line-height:1; }
+
+.chat { flex:1; overflow:hidden; padding:18px 20px 0; display:flex; flex-direction:column; gap:14px; min-height:0; }
+.notice { align-self:center; text-align:center; max-width:300px; color:var(--fg2); font-size:12px; display:flex; flex-direction:column; align-items:center; gap:6px; padding:12px 14px; border-radius:10px; border:.5px dashed color-mix(in srgb, var(--temp) 60%, transparent); }
+.notice b { color:var(--fg); font-weight:600; font-size:12.5px; display:flex; align-items:center; gap:6px; }
+.notice b .g { color:var(--temp); display:grid; }
+.you { align-self:flex-end; background:var(--bubble); padding:7px 11px; border-radius:14px; max-width:80%; }
+.ans { color:var(--fg); max-width:94%; }
+.ans p { margin:0 0 7px; }
+.ans .faint { color:var(--fg3); }
+.comp-wrap { flex:none; padding:10px 14px 14px; display:flex; flex-direction:column; gap:8px; }
+.keepcard { display:flex; align-items:flex-start; gap:10px; padding:10px 12px; border-radius:10px; background:var(--card); box-shadow:0 0 0 .5px var(--line), 0 2px 8px rgba(0,0,0,.05); font-size:12px; }
+.keepcard .g { color:var(--temp); flex:none; display:grid; margin-top:1px; }
+.keepcard .tx { flex:1; min-width:0; }
+.keepcard .tx div { font-weight:600; font-size:12.5px; }
+.keepcard .tx span { color:var(--fg2); }
+.keepcard .acts { display:flex; flex-direction:column; gap:6px; align-items:flex-end; flex:none; }
+.composer { min-height:64px; border-radius:14px; background:var(--card); box-shadow:0 0 0 .5px var(--line), 0 2px 10px rgba(0,0,0,.05); padding:10px 12px; display:flex; flex-direction:column; gap:10px; color:var(--fg3); }
+.composer .chips { display:flex; gap:6px; align-items:center; }
+.composer .chips .m { font-size:11.5px; color:var(--fg2); }
+.composer .chips .send { margin-left:auto; width:22px; height:22px; border-radius:50%; background:var(--chip); }
+
+/* starting one: Home's box */
+.start { margin-top:48px; display:grid; grid-template-columns:minmax(0, 1fr) minmax(0, 1fr); gap:28px; align-items:start; }
+@media (max-width:900px) { .start { grid-template-columns:minmax(0, 1fr); } }
+.start h2, .cmp h2 { font-size:15px; font-weight:600; margin:0 0 6px; }
+.start p { color:var(--fg2); margin:0 0 12px; max-width:560px; }
+.home { background:var(--win); border-radius:12px; box-shadow:0 0 0 .5px var(--line), var(--shadow); padding:28px 26px; display:flex; flex-direction:column; gap:12px; }
+.home .greet { font-size:20px; font-weight:600; text-align:center; }
+.home .box { border-radius:14px; background:var(--card); box-shadow:0 0 0 .5px var(--line), 0 2px 10px rgba(0,0,0,.05); padding:12px 14px; display:flex; flex-direction:column; gap:12px; }
+.home .box .ph { color:var(--fg3); }
+.home .box .chips { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+.chip { height:24px; padding:0 9px; border-radius:12px; background:var(--chip); color:var(--fg2); font-size:12px; display:inline-flex; align-items:center; gap:5px; white-space:nowrap; }
+.chip.ontemp { background:var(--temps); color:var(--temp); font-weight:500; }
+.home .line { font-size:11.5px; color:var(--fg2); text-align:center; }
+.home .line b { color:var(--fg); font-weight:500; }
+
+.cmp { margin-top:48px; max-width:980px; }
+.cmp .tw { overflow-x:auto; }
+.cmp table { border-collapse:collapse; width:100%; min-width:560px; }
+.cmp td, .cmp th { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+.cmp th { color:var(--fg3); font-weight:500; font-size:12px; }
+.cmp td:first-child { font-weight:500; white-space:nowrap; }
+.same { margin-top:36px; max-width:860px; color:var(--fg2); }
+.same h2 { color:var(--fg); font-size:15px; font-weight:600; margin:0 0 6px; }
+.same li { margin:4px 0; }
+
+/* start pages: Home and New conversation, content card only */
+.pair { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:18px; }
+@media (max-width:900px) { .pair { grid-template-columns:minmax(0, 1fr); } }
+.cap { font-size:12px; color:var(--fg3); margin:0 0 6px; }
+.sp-page { background:var(--win); border-radius:10px; box-shadow:0 0 0 .5px var(--line), var(--shadow); height:330px; position:relative; overflow:hidden; display:flex; flex-direction:column; }
+.sp-bar { height:40px; flex:none; display:flex; align-items:center; justify-content:flex-end; gap:8px; padding:0 12px; }
+.corner { width:28px; height:28px; border-radius:7px; display:grid; place-items:center; color:var(--fg2); }
+.corner.on { background:var(--temps); color:var(--temp); }
+.sp-body { flex:1; display:flex; flex-direction:column; justify-content:center; padding:0 28px 30px; gap:10px; min-width:0; }
+.sp-date { color:var(--fg3); font-size:11.5px; display:flex; align-items:center; }
+.sp-date .sw { margin-left:auto; }
+.sp-greet { font-size:21px; font-weight:700; letter-spacing:-.2px; }
+.sp-tile { width:34px; height:34px; border-radius:9px; background:var(--chip); color:var(--fg2); display:grid; place-items:center; align-self:center; }
+.sp-tile.on { background:var(--temps); color:var(--temp); outline:1px dashed color-mix(in srgb, var(--temp) 60%, transparent); }
+.sp-q { font-size:19px; font-weight:700; text-align:center; letter-spacing:-.2px; }
+.sp-box { border-radius:12px; background:var(--card); box-shadow:0 0 0 .5px var(--line), 0 2px 10px rgba(0,0,0,.05); padding:10px 12px; display:flex; flex-direction:column; gap:10px; position:relative; }
+.sp-box .ph { color:var(--fg3); }
+.sp-box .chips { display:flex; gap:6px; align-items:center; }
+.sp-box .plus { color:var(--fg2); width:20px; display:grid; place-items:center; }
+.sp-box .m { margin-left:auto; color:var(--fg2); font-size:11.5px; }
+.sp-box .send { width:22px; height:22px; border-radius:50%; background:var(--chip); }
+.sp-line { font-size:11.5px; color:var(--fg2); }
+.sp-line.temp { color:var(--fg); }
+.sp-line.temp .g { color:var(--temp); display:inline-grid; vertical-align:-2px; margin-right:4px; }
+.sp-line.temp span { color:var(--fg2); }
+.sp-or { display:flex; gap:6px; align-items:center; justify-content:center; color:var(--fg3); font-size:11.5px; flex-wrap:wrap; }
+.sp-or .p { height:22px; padding:0 8px; border-radius:11px; box-shadow:0 0 0 .5px var(--line); color:var(--fg2); display:inline-flex; align-items:center; }
+.lnk { color:var(--accent); font-size:11.5px; }
+.switch { display:inline-flex; align-items:center; gap:7px; color:var(--fg2); font-size:12px; }
+.switch i { width:26px; height:15px; border-radius:8px; background:var(--chip); position:relative; box-shadow:inset 0 0 0 .5px var(--line); }
+.switch i::after { content:""; position:absolute; top:2px; left:2px; width:11px; height:11px; border-radius:50%; background:var(--card); box-shadow:0 1px 2px rgba(0,0,0,.2); }
+.switch.on { color:var(--temp); font-weight:500; }
+.switch.on i { background:var(--temp); }
+.switch.on i::after { left:13px; }
+.tipx { position:absolute; top:40px; right:10px; background:var(--inv); color:var(--invfg); font-size:11px; padding:3px 7px; border-radius:5px; white-space:nowrap; }
+.pmenu { position:absolute; left:10px; top:40px; width:230px; background:var(--card); border-radius:10px; box-shadow:0 0 0 .5px var(--line), 0 10px 30px rgba(0,0,0,.18); padding:5px; z-index:2; font-size:12.5px; }
+.pmenu .it { display:flex; align-items:center; gap:9px; padding:5px 8px; border-radius:6px; }
+.pmenu .it .g { width:16px; display:grid; place-items:center; color:var(--fg2); }
+.pmenu .it .k { margin-left:auto; color:var(--fg3); font-size:11.5px; }
+.pmenu .it.hi { background:var(--accent); color:#fff; }
+.pmenu .it.hi .g, .pmenu .it.hi .k { color:#fff; }
+.pmenu .sep { height:1px; background:var(--line); margin:4px 8px; }
+.ways { display:flex; flex-direction:column; gap:44px; }
+.ways .label { margin-bottom:6px; }
+.ways p.lead { color:var(--fg2); margin:0 0 12px; max-width:820px; }
+.chosen { display:grid; grid-template-columns:minmax(0, 460px) minmax(0, 1fr); gap:28px; align-items:start; margin-bottom:56px; }
+@media (max-width:900px) { .chosen { grid-template-columns:minmax(0, 1fr); } }
+.chosen h2 { font-size:15px; font-weight:600; margin:0 0 6px; }
+.chosen p, .chosen li { color:var(--fg2); }
+svg { display:block; }
+@media (prefers-reduced-motion: reduce) { * { transition:none !important; } }
+</style>
+
+<main>
+<header class="doc">
+  <div>
+    <h1>Temporary chats</h1>
+    <p>A temporary chat is kept for 24 hours after your last message, then deleted, unless you keep it. While it lasts, other conversations can't search it and nothing from it goes to About me (spec 14 M4).</p>
+    <p>Round 2. You chose A for the chat itself. This round is about turning it on, the same way on Home and on the New conversation page that the compose button opens.</p>
+  </div>
+  <button class="theme" id="theme" type="button">Light / Dark</button>
+</header>
+
+<div class="chosen">
+  <div class="scroll"><div class="win" data-variant="a"></div></div>
+  <div>
+    <h2>Chosen: A</h2>
+    <ul class="note">
+      <li>In Conversations with the others, with a dashed bubble and the hours left.</li>
+      <li>Coming back to it, a strip under the toolbar says what happens to it, with Keep.</li>
+      <li>Before the first message, the draft row in the sidebar reads "Temporary chat" with the dashed bubble.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="ways">
+  <section>
+    <div class="label"><b>1</b><h2>A button in the page's corner</h2></div>
+    <p class="lead">A dashed bubble at the top right of Home and of New conversation. Click it and the page turns temporary: the bubble fills in, New conversation's heading reads "Temporary chat", and the line under the box says what that means. Click again to go back. Off the page, ⇧⌘N.</p>
+    <div class="pair"><div><p class="cap">Home · pointing at it</p><div class="sp-page" data-start="1-home"></div></div><div><p class="cap">New conversation · on</p><div class="sp-page" data-start="1-new"></div></div></div>
+  </section>
+  <section>
+    <div class="label"><b>2</b><h2>A switch above the box</h2></div>
+    <p class="lead">A labelled switch, "Temporary", on the right just above the box: beside the date on Home, under the heading on New conversation. It says what it does without a tooltip, and it's right where you're about to type.</p>
+    <div class="pair"><div><p class="cap">Home · off</p><div class="sp-page" data-start="2-home"></div></div><div><p class="cap">New conversation · on</p><div class="sp-page" data-start="2-new"></div></div></div>
+  </section>
+  <section>
+    <div class="label"><b>3</b><h2>In the box's + menu</h2></div>
+    <p class="lead">The + that adds files and folders gets "Temporary chat" with its shortcut. Nothing new on the page until you turn it on; then the line under the box says so, with Undo. The quietest of the three, and the hardest to find the first time.</p>
+    <div class="pair"><div><p class="cap">Home · the + menu open</p><div class="sp-page" data-start="3-home"></div></div><div><p class="cap">New conversation · on</p><div class="sp-page" data-start="3-new"></div></div></div>
+  </section>
+</div>
+
+<div class="cmp">
+  <h2>In short</h2>
+  <div class="tw"><table>
+    <tr><th></th><th>Found by</th><th>Clicks</th><th>New on the page while off</th></tr>
+    <tr><td>1 · Corner</td><td>The icon, then its tooltip</td><td>1</td><td>One icon, top right</td></tr>
+    <tr><td>2 · Switch</td><td>Reading it</td><td>1</td><td>A labelled switch above the box</td></tr>
+    <tr><td>3 · + menu</td><td>Opening the + menu</td><td>2</td><td>Nothing</td></tr>
+  </table></div>
+</div>
+
+<div class="same">
+  <h2>The same in all three</h2>
+  <ul>
+    <li>Turned on, the line under the box reads: deleted 24 hours after your last message unless you keep it, not searched, nothing to About me, and the model's provider still receives what you send.</li>
+    <li>It stays on for that one chat only. The next New conversation starts normal again.</li>
+    <li>⇧⌘N, and File › New Temporary Chat, start one from anywhere.</li>
+  </ul>
+</div>
+</main>
+
+<script>
+const I = {
+  house:'<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2.5 7.2 8 2.5l5.5 4.7V13.5h-3.7V9.6H6.2v3.9H2.5z" stroke-linejoin="round"/></svg>',
+  clock:'<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M3.2 5A5.5 5.5 0 1 1 2.5 8"/><path d="M2.6 2.6v2.7h2.7M8 5v3.2l2.2 1.4" stroke-linecap="round"/></svg>',
+  books:'<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2" y="3" width="3" height="10.5" rx=".6"/><rect x="5.5" y="2" width="3" height="11.5" rx=".6"/><path d="m9.8 3.6 2.8-.7 2 10-2.8.7z"/></svg>',
+  folder:'<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M1.8 4.2c0-.6.4-1 1-1h3.3l1.4 1.5h5.7c.6 0 1 .4 1 1v6.8c0 .6-.4 1-1 1H2.8c-.6 0-1-.4-1-1z" stroke-linejoin="round"/></svg>',
+  bubble:'<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2.3 3.3c0-.6.4-1 1-1h9.4c.6 0 1 .4 1 1v6.4c0 .6-.4 1-1 1H6.3L3.5 13v-2.3h-.2c-.6 0-1-.4-1-1z" stroke-linejoin="round"/></svg>',
+  dashed:'<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="2.2 1.8"><path d="M2.3 3.3c0-.6.4-1 1-1h9.4c.6 0 1 .4 1 1v6.4c0 .6-.4 1-1 1H6.3L3.5 13v-2.3h-.2c-.6 0-1-.4-1-1z" stroke-linejoin="round"/></svg>',
+  timer:'<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="9" r="5.2"/><path d="M8 6.2V9l1.8 1.2M6.4 1.8h3.2" stroke-linecap="round"/></svg>',
+  search:'<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="4.6"/><path d="m10.4 10.4 3.4 3.4" stroke-linecap="round"/></svg>',
+  plus:'<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2.5v11M2.5 8h11" stroke-linecap="round"/></svg>',
+  toggle:'<svg width="16" height="14" viewBox="0 0 18 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1.5" y="2" width="15" height="12" rx="2.5"/><path d="M6.5 2v12"/></svg>',
+  gear:'<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.6v1.8M8 12.6v1.8M1.6 8h1.8M12.6 8h1.8M3.5 3.5l1.3 1.3M11.2 11.2l1.3 1.3M3.5 12.5l1.3-1.3M11.2 4.8l1.3-1.3"/></svg>',
+  chev:'<svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.4"><path d="m2.5 4 2.5 2.5L7.5 4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  dots:'<svg width="14" height="4" viewBox="0 0 14 4" fill="currentColor"><circle cx="2" cy="2" r="1.3"/><circle cx="7" cy="2" r="1.3"/><circle cx="12" cy="2" r="1.3"/></svg>',
+  panel:'<svg width="15" height="14" viewBox="0 0 18 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1.5" y="2" width="15" height="12" rx="2.5"/><path d="M11.5 2v12"/></svg>',
+};
+const row = (g, t, o = {}) => `<div class="row ${o.on ? 'on' : ''} ${o.temp ? 'temp' : ''}"><span class="g">${g}</span><span class="t">${t}</span>${o.r ? `<span class="r">${o.r}</span>` : ''}</div>`;
+const TITLE = 'Symptoms after the new pills';
+const BANNER = 'Deleted in 23 hours unless you keep it. Other conversations can\'t search it, and nothing from it goes to About me.';
+
+function sidebar(v) {
+  const temps = v === 'b'
+    ? `<h4><span style="display:flex;align-items:center;gap:5px">Temporary ${I.chev}</span><span class="c">2</span></h4>
+       ${row(I.dashed, TITLE, { on: true, temp: true, r: '23h' })}
+       ${row(I.dashed, 'Rewrite my resignation…', { temp: true, r: '6h' })}
+       <h4>Conversations</h4>
+       ${row(I.bubble, 'Make me an app with my…')}
+       ${row(I.bubble, 'Spending (app)')}
+       ${row(I.bubble, 'cual es mi agenda esta s…')}`
+    : `<h4>Conversations</h4>
+       ${row(I.dashed, TITLE, { on: true, temp: true, r: '23h' })}
+       ${row(I.bubble, 'Make me an app with my…')}
+       ${row(I.dashed, 'Rewrite my resignation…', { temp: true, r: '6h' })}
+       ${row(I.bubble, 'Spending (app)')}
+       ${row(I.bubble, 'cual es mi agenda esta s…')}`;
+  return `<aside class="side">
+    <div class="top"><span class="lights"><i></i><i></i><i></i></span><span class="tog">${I.toggle}</span></div>
+    <div class="rows">
+      <div class="search"><div class="pill">${I.search}<span>Search</span></div><div class="new">${I.plus}</div></div>
+      ${row(I.house, 'Home')}${row(I.clock, 'Automations')}${row(I.books, 'Library')}
+      <h4>Agents</h4>
+      <div class="row"><span class="g"><span class="av">P</span></span><span class="t">Pinpin</span></div>
+      <h4>Projects</h4>
+      ${row(I.folder, 'piopio', { r: 'main' })}
+      ${row(I.folder, 'taller-…')}
+      ${temps}
+      <div class="row more"><span class="g">${I.dots}</span><span>5 earlier ›</span></div>
+    </div>
+    <div class="foot"><span class="circle">A</span><span>Antonio</span><span class="sp"></span><span class="btn">${I.gear}</span></div>
+  </aside>`;
+}
+
+const messages = `
+  <div class="you">I started the new blood pressure pills on Monday and I get dizzy when I stand up. Is that normal?</div>
+  <div class="ans">
+    <p>Feeling lightheaded when you stand up is a known effect of many blood pressure medicines in the first weeks, especially in the morning.</p>
+    <p>Stand up slowly, drink enough water, and tell your doctor or pharmacist, because the dose may need adjusting.</p>
+    <p class="faint">If you faint, have chest pain or the dizziness gets worse, get medical help right away.</p>
+  </div>`;
+const composer = `<div class="composer"><span>Reply…</span><div class="chips"><span class="chip ontemp">${I.timer} Temporary</span><span class="m">Claude Haiku 5.5</span><span class="send"></span></div></div>`;
+
+function page(v) {
+  const tag = `<span class="tag">${I.timer} Temporary ${I.chev}</span>`;
+  const bar = `<div class="bar"><span class="title">${TITLE}</span>${v === 'c' ? tag : ''}<span class="sp"></span><span class="ic">${I.panel}</span></div>`;
+  if (v === 'a') return `<div class="page">${bar}
+    <div class="strip"><span class="g">${I.timer}</span><span class="tx"><b>Temporary chat.</b> <span>${BANNER}</span></span><span class="btnk">Keep</span><span class="x" aria-hidden="true">×</span></div>
+    <div class="chat">${messages}</div>
+    <div class="comp-wrap">${composer}</div></div>`;
+  if (v === 'b') return `<div class="page">${bar}
+    <div class="chat">${messages}</div>
+    <div class="comp-wrap">
+      <div class="keepcard"><span class="g">${I.timer}</span><span class="tx"><div>This chat is temporary</div><span>${BANNER}</span></span><span class="acts"><span class="btnk">Keep</span><span class="btnq">Delete now</span></span></div>
+      ${composer}</div></div>`;
+  return `<div class="page dashed">${bar}
+    <div class="chat">
+      <div class="notice"><b><span class="g">${I.timer}</span>Temporary chat</b>${BANNER}<span class="btnk">Keep</span></div>
+      ${messages}</div>
+    <div class="comp-wrap">${composer}</div></div>`;
+}
+
+document.querySelectorAll('[data-variant]').forEach(el => { el.innerHTML = sidebar(el.dataset.variant) + page(el.dataset.variant); });
+
+
+const LINE_ON = `<div class="sp-line temp"><span class="g">${I.timer}</span>Temporary · <span>deleted 24 hours after your last message unless you keep it. Not searched, nothing goes to About me. Claude Haiku 5.5's provider still receives what you send.</span></div>`;
+const box = (plusOpen) => `<div class="sp-box"><span class="ph">Ask anything, or @ a project or an agent…</span><div class="chips"><span class="plus">${I.plus}</span><span class="chip">No project</span><span class="m">Claude Haiku 5.5</span><span class="send"></span></div></div>`;
+const orIn = `<div class="sp-or">Or in <span class="p">Tesis</span><span class="p">Kitchen</span><span class="p">BioGen</span></div>`;
+const menu3 = `<div class="pmenu"><div class="it"><span class="g">${I.plus}</span>Add files…</div><div class="it"><span class="g">${I.folder}</span>Add a folder…</div><div class="sep"></div><div class="it hi"><span class="g">${I.timer}</span>Temporary chat<span class="k">⇧⌘N</span></div></div>`;
+function start(key) {
+  const [opt, where] = key.split('-');
+  const on = where === 'new';
+  const corner = opt === '1' ? `<span class="corner ${on ? 'on' : ''}">${I.dashed}</span>` : '';
+  const bar = `<div class="sp-bar">${corner}</div>`;
+  const sw = opt === '2' ? `<span class="switch ${on ? 'on' : ''}"><i></i>Temporary</span>` : '';
+  if (where === 'home') {
+    return `${bar}${opt === '1' ? '<span class="tipx">Temporary chat ⇧⌘N</span>' : ''}<div class="sp-body" style="position:relative">
+      <div class="sp-date">Tuesday, 24 November${sw ? `<span class="sw">${sw}</span>` : ''}</div>
+      <div class="sp-greet">Good evening, Antonio</div>
+      <div style="position:relative">${box()}${opt === '3' ? menu3 : ''}</div>
+      <div class="sp-line">Not in a project · it can't see or change your files</div></div>`;
+  }
+  return `${bar}<div class="sp-body">
+    <span class="sp-tile on">${I.dashed}</span>
+    <div class="sp-q">Temporary chat</div>
+    ${sw ? `<div style="display:flex;justify-content:flex-end">${sw}</div>` : ''}
+    ${box()}
+    ${opt === '3' ? LINE_ON.replace('</span></div>', ' <a class="lnk">Undo</a></span></div>') : LINE_ON}</div>`;
+}
+document.querySelectorAll('[data-start]').forEach(el => { el.innerHTML = start(el.dataset.start); });
+
+document.getElementById('theme').addEventListener('click', () => {
+  const root = document.documentElement;
+  const dark = root.dataset.theme ? root.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+  root.dataset.theme = dark ? 'light' : 'dark';
+});
+</script>

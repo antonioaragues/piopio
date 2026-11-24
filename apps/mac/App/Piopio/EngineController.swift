@@ -597,10 +597,16 @@ final class EngineController {
         try? await refreshCatalog()
     }
 
-    /// A conversation with no folder.
-    func createThread(model: ModelRef? = nil) async -> ContainerRef? {
+    /// A conversation with no folder; `temporary`: deleted 24 hours after its last message unless kept (docs/spec/14 M4).
+    func createThread(model: ModelRef? = nil, temporary: Bool = false) async -> ContainerRef? {
         guard let client else { return nil }
-        return try? await client.call("sessions.create", CreateSessionParams(kind: .thread, model: model ?? preferredModel), as: CreateSessionResult.self).ref
+        return try? await client.call("sessions.create", CreateSessionParams(kind: .thread, model: model ?? preferredModel, temporary: temporary ? true : nil), as: CreateSessionResult.self).ref
+    }
+
+    /// A temporary chat becomes a normal one.
+    func keep(_ ref: ContainerRef) async throws {
+        _ = try await client?.call("sessions.keep", RefParams(ref: ref), as: Empty.self)
+        try? await refreshCatalog()
     }
 
     /// New project (docs/spec/18 CF4): a folder in ~/Piopio named after it, with AGENTS.md (`instructions`) and NOTES.md.

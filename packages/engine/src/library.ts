@@ -477,11 +477,13 @@ export class LibrarySearch extends SearchIndex {
 	}
 
 	override replaceSession(sessionId: string, title: string, at: string, items: readonly TimelineItem[]): void {
+		if (this.skips(sessionId)) return;
 		super.replaceSession(sessionId, title, at, items);
 		this.quietly(() => this.tap.replaced(sessionId, items));
 	}
 
 	override upsertItem(sessionId: string, item: TimelineItem, replacing?: string): void {
+		if (this.skips(sessionId)) return;
 		super.upsertItem(sessionId, item, replacing);
 		this.quietly(() => this.tap.item(sessionId, item));
 	}

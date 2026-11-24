@@ -971,6 +971,10 @@ export class Engine {
 				const p = params as Params<"sessions.create">;
 				return { ref: await this.sessions.create(p) } satisfies Result<"sessions.create">;
 			}
+			case "sessions.keep": {
+				await this.sessions.keep((params as Params<"sessions.keep">).ref);
+				return {} satisfies Result<"sessions.keep">;
+			}
 			case "sessions.open": {
 				const p = params as Params<"sessions.open">;
 				const snapshot = (await this.sessions.runtime(p.ref)).snapshot();

@@ -11,6 +11,8 @@ import SwiftUI
 /// What each start page holds while you write, saved under the engine home so it survives a relaunch.
 @MainActor @Observable final class StartDrafts {
     static let shared = StartDrafts()
+    /// The New conversation page's box is temporary (docs/spec/14 M4): its draft row says so.
+    var temporaryChat = false
 
     struct Draft: Codable, Equatable {
         /// The message (chat) or the instructions (agent).
@@ -80,6 +82,7 @@ import SwiftUI
 
     /// The draft row's title: the name typed so far, or the kind's.
     func title(_ kind: StartKind) -> String {
+        if kind == .chat, temporaryChat { return "Temporary chat" }
         let name = self[kind].name.trimmingCharacters(in: .whitespacesAndNewlines)
         return name.isEmpty ? kind.title : name
     }

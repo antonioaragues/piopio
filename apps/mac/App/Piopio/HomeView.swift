@@ -462,6 +462,10 @@ struct AskBox: View {
     @State private var picking = false
     /// Start in Plan: the agent proposes a plan before it changes anything (folder projects).
     @State private var plan = false
+    /// A temporary chat (docs/spec/14 M4): no project only, for this one chat; New Temporary Chat (⌃⌘N) turns it on.
+    @State private var temporary = false
+    /// Set by New Temporary Chat before the start page shows, so the box it opens starts temporary.
+    @MainActor static var nextIsTemporary = false
     private var target: Target {
         get {
             if targetRaw.hasPrefix("project:") { return .project(String(targetRaw.dropFirst(8))) }
@@ -529,6 +533,7 @@ struct AskBox: View {
                 HStack(spacing: 8) {
                     if agent == nil { AttachButton(pick: attach, help: "Add files, photos or PDFs (⌘U)", size: 28) }
                     targetMenu
+                    if target == .chat, agent == nil { temporaryChip }
                     if project != nil {
                         if buildOn { permissionsMenu } else { Text(ApprovalMode.readOnly.title).font(.system(size: 13)).foregroundStyle(Color.dsFg3).padding(.horizontal, 6) }
                     }
@@ -563,7 +568,12 @@ struct AskBox: View {
                 }
             }
             // Before Return: where it goes, and whether Piopio may change anything (18 §4). Nothing without a folder.
-            if showsWhere, let line = whereLine {
+            if temporary, target == .chat {
+                Label { Text("Temporary · ").foregroundStyle(Color.dsFg) + Text(temporaryLine) } icon: { Image(systemName: "timer").foregroundStyle(Color.dsTemporary) }
+                    .font(.system(size: 12)).foregroundStyle(Color.dsFg2)
+                    .padding(.top, 10).padding(.leading, 6)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if showsWhere, let line = whereLine {
                 Text(line).font(.system(size: 12)).foregroundStyle(Color.dsFg3)
                     .padding(.top, 10).padding(.leading, 6)
                     .accessibilityLabel(line)
@@ -573,7 +583,12 @@ struct AskBox: View {
             mention(t); saveHomeDraft()
             if restoring { restoring = false } else { perch?.model.typed(t) }
         }
-        .onChange(of: targetRaw) { _, _ in mode = nil; workOn = .folder; plan = false }
+        .onChange(of: targetRaw) { _, _ in mode = nil; workOn = .folder; plan = false; if target != .chat { temporary = false } }
+        .onChange(of: temporary) { _, on in if projectId == nil { StartDrafts.shared.temporaryChat = on } }
+        .onDisappear { if projectId == nil { StartDrafts.shared.temporaryChat = false } }
+        .onReceive(NotificationCenter.default.publisher(for: .newTemporaryChat)) { _ in
+            if projectId == nil { target = .chat; temporary = true; Self.nextIsTemporary = false; focused = true }
+        }
         .onAppear {
             // A project page's box starts in its project each time it opens.
             if let projectId { targetRaw = "project:" + projectId }
@@ -583,6 +598,7 @@ struct AskBox: View {
             }
             if case .project = target, project == nil { target = .chat }
             if case .agent = target, agent == nil { target = .chat }
+            if Self.nextIsTemporary, projectId == nil { target = .chat; temporary = true; Self.nextIsTemporary = false }
             focused = true
         }
         .onReceive(NotificationCenter.default.publisher(for: .focusHome)) { _ in focused = true }
@@ -590,6 +606,22 @@ struct AskBox: View {
             let known = Set(engine.projects.map(\.path))
             recent = await Task.detached { RecentFolder.scan().filter { !known.contains($0.url.path) } }.value
         }
+    }
+
+    // MARK: Temporary (docs/spec/14 M4)
+
+    private var temporaryChip: some View {
+        Button { temporary.toggle(); focused = true } label: {
+            Label("Temporary", systemImage: "timer")
+        }
+        .buttonStyle(TemporaryChipStyle(on: temporary))
+        .help(temporary ? "Temporary: deleted 24 hours after your last message unless you keep it" : "Make this a temporary chat (⌃⌘N)")
+        .accessibilityLabel("Temporary chat")
+        .accessibilityValue(temporary ? "On" : "Off")
+    }
+
+    private var temporaryLine: String {
+        "deleted 24 hours after your last message unless you keep it. Not searched by other conversations, and nothing goes to About me. \(modelLabel)'s provider still receives what you send."
     }
 
     // MARK: Where it goes
@@ -808,16 +840,17 @@ struct AskBox: View {
         Task {
             defer { sending = false }
             let destination: ContainerRef?
-            if let pendingChat { destination = pendingChat } else { destination = await engine.createThread(model: model) }
+            if let pendingChat { destination = pendingChat } else { destination = await engine.createThread(model: model, temporary: temporary) }
             guard let ref = destination else {
                 sendError = "Couldn't start a conversation. Your draft is saved; try again when the engine is connected."
                 return
             }
             pendingChat = ref; saveHomeDraft()
+            if temporary { ThreadView.justStarted.insert(ref.id) }
             let thread = engine.thread(ref)
             await thread.open()
             if await thread.send(message, attachments: attachments.map(\.attachment)) {
-                text = ""; attachments = []
+                text = ""; attachments = []; temporary = false
                 target = .chat // Home starts clean next time (docs/spec/18 §4); this also forgets the pending chat
                 saveHomeDraft()
                 try? await engine.refreshCatalog()
@@ -998,4 +1031,19 @@ struct SendButton: View {
 
 extension String {
     var capitalizedFirst: String { prefix(1).uppercased() + dropFirst() }
+}
+
+
+/// The Temporary chip in the box (docs/spec/14 M4): plain like the other chips when off, tinted when on.
+struct TemporaryChipStyle: ButtonStyle {
+    var on: Bool
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .labelStyle(.titleAndIcon)
+            .font(.system(size: 12.5, weight: on ? .medium : .regular))
+            .foregroundStyle(on ? Color.dsTemporary : Color.dsFg2)
+            .padding(.horizontal, 9).frame(height: 26)
+            .background(Capsule().fill(on ? Color.dsTemporaryTint : (configuration.isPressed ? Color.dsChip : Color.clear)))
+            .contentShape(Capsule())
+    }
 }

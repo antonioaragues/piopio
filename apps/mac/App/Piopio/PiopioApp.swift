@@ -48,6 +48,8 @@ struct PiopioApp: App {
                         .keyboardShortcut("n", modifiers: [.command, .option])
                 }
                 if areas.contains(.chat) {
+                    Button("New Temporary Chat") { startTemporaryChat() }
+                        .keyboardShortcut("n", modifiers: [.command, .control])
                     Button("New Project…") { NotificationCenter.default.post(name: .newProject, object: nil) }
                         .keyboardShortcut("n", modifiers: [.command, .shift])
                     Button("Turn Conversation into Agent…") { NotificationCenter.default.post(name: .turnIntoAgent, object: nil) }

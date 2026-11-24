@@ -33,6 +33,13 @@ extension Color {
     static let dsAccentSoft = Color(nsColor: DS.accentSoft)
     static let dsAccentLine = Color(nsColor: DS.accentLine)
     static let dsYolkSoft = Color(nsColor: DS.yolkSoft)
+    /// Temporary chats (docs/spec/14 M4): a muted ochre for the timer, its chip and the strip, never for anything else.
+    static let dsTemporary = Color(nsColor: NSColor(name: nil) { a in
+        a.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? NSColor(srgbRed: 0.85, green: 0.77, blue: 0.54, alpha: 1) : NSColor(srgbRed: 0.48, green: 0.42, blue: 0.23, alpha: 1)
+    })
+    static let dsTemporaryTint = Color(nsColor: NSColor(name: nil) { a in
+        a.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? NSColor(srgbRed: 0.85, green: 0.77, blue: 0.54, alpha: 0.12) : NSColor(srgbRed: 0.965, green: 0.937, blue: 0.851, alpha: 1)
+    })
 }
 
 /// The app icon's chick, cropped round (docs/design v2 · brand moments), with an optional yolkSoft ring.

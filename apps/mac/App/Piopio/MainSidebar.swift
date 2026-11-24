@@ -647,16 +647,24 @@ struct MainSidebar: View {
         let selected = item == .chat(thread.ref.id)
         return Button { item = .chat(thread.ref.id) } label: {
             HStack(spacing: 10) {
-                RowGlyph(symbol: "bubble.left")
+                // A temporary chat (docs/spec/14 M4): the timer and the hours it has left.
+                if thread.temporary != nil {
+                    Image(systemName: "timer").font(.system(size: 13)).foregroundStyle(Color.dsTemporary).frame(width: 18)
+                } else { RowGlyph(symbol: "bubble.left") }
                 Text(thread.title).font(.system(size: 13)).foregroundStyle(Color.dsFg).lineLimit(1)
                 Spacer(minLength: 4)
                 if engine.liveStatus[thread.ref.id] == .running { SidebarDot(status: .running) }
+                else if let hours = thread.hoursLeft() {
+                    Text("\(hours)h").font(.system(size: 11, design: .monospaced)).foregroundStyle(Color.dsFg3)
+                        .help("Temporary: deleted in \(hours) hour\(hours == 1 ? "" : "s") unless you keep it")
+                }
             }
             .rowChrome(selected: selected)
         }
         .buttonStyle(.plain)
         .contextMenu {
             Button("Rename…") { newTitle = thread.title; renaming = thread }
+            if thread.temporary != nil { Button("Keep Chat") { Task { try? await engine.keep(thread.ref) } } }
             pinButton(.chat(thread.ref.id))
             Divider()
             ContinueInMenu(engine: engine, ref: thread.ref) { Text("Continue in") }
@@ -679,7 +687,9 @@ struct MainSidebar: View {
         if selected || drafts.hasContent(kind) {
             Button { item = .start(kind) } label: {
                 HStack(spacing: 10) {
-                    RowGlyph(symbol: kind.symbol)
+                    if kind == .chat, drafts.temporaryChat {
+                        Image(systemName: "timer").font(.system(size: 13)).foregroundStyle(Color.dsTemporary).frame(width: 18)
+                    } else { RowGlyph(symbol: kind.symbol) }
                     Text(drafts.title(kind)).font(.system(size: 13)).foregroundStyle(Color.dsFg2).lineLimit(1)
                     Spacer(minLength: 4)
                     Text("Draft").font(.system(size: 11)).foregroundStyle(Color.dsFg3)
@@ -758,6 +768,10 @@ struct ComposeButton: View {
                     Label("New Conversation", systemImage: "bubble.left")
                 }
                 .keyboardShortcut("n")
+                Button { startTemporaryChat() } label: {
+                    Label("New Temporary Chat", systemImage: "timer")
+                }
+                .keyboardShortcut("n", modifiers: [.command, .control])
                 if areas.showsAgents {
                     Button { NotificationCenter.default.post(name: .newAgent, object: nil) } label: {
                         Label("New Agent", systemImage: "bird")
@@ -850,6 +864,8 @@ private struct RowChrome: ViewModifier {
 
 extension Notification.Name {
     static let newChat = Notification.Name("piopio.newChat")
+    /// New Temporary Chat (⌃⌘N, docs/spec/14 M4): the start page's box turns temporary.
+    static let newTemporaryChat = Notification.Name("piopio.newTemporaryChat")
 }
 
 /// A project row: folder, name, and a + that starts a session there (or a chat, in a folder you only chat about).
@@ -1078,4 +1094,12 @@ private struct NewProjectRow: View {
         // Clicking away from an empty name gives up, as Finder does with nothing typed.
         .onChange(of: focused) { _, on in if !on && trimmed.isEmpty && !busy { cancel() } }
     }
+}
+
+
+/// New Temporary Chat (docs/spec/14 M4): the New conversation page, its box already temporary.
+@MainActor func startTemporaryChat() {
+    AskBox.nextIsTemporary = true
+    NotificationCenter.default.post(name: .newChat, object: nil)
+    NotificationCenter.default.post(name: .newTemporaryChat, object: nil)
 }

@@ -128,6 +128,23 @@ public struct ToolItem: Codable, Sendable, Hashable {
 }
 
 /// What a tool card shows beyond the output (engine: timeline/tool-details.ts).
+extension SessionSummary {
+    /// Whole hours a temporary chat has left, at least 1 while it's still here ("23h").
+    public func hoursLeft(now: Date = Date()) -> Int? {
+        guard let temporary, let end = ISO8601DateFormatter.withFractions.date(from: temporary.expiresAt) ?? ISO8601DateFormatter().date(from: temporary.expiresAt) else { return nil }
+        return max(1, Int((end.timeIntervalSince(now) / 3600).rounded(.up)))
+    }
+}
+
+extension ISO8601DateFormatter {
+    /// The engine's timestamps ("2026-11-24T18:03:11.402Z").
+    nonisolated(unsafe) static let withFractions: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+}
+
 public enum ToolDetails: Sendable, Hashable {
     case diff(path: String, diff: String)
     case file(path: String, language: String?)
@@ -534,6 +551,9 @@ public struct SessionEventsNotification: Decodable, Sendable {
 
 public struct SessionSummary: Codable, Sendable, Hashable {
     public var ref: ContainerRef
+    /// A temporary chat (docs/spec/14 M4): deleted at `expiresAt`, 24 hours after its last message, unless kept.
+    public struct Temporary: Codable, Sendable, Hashable { public var expiresAt: String }
+    public var temporary: Temporary?
     /// A conversation about an app (docs/spec/35 §15): the app's file.
     public var app: String?
     public var title: String
@@ -1403,8 +1423,10 @@ public struct CreateSessionParams: Encodable, Sendable {
     public var planMode: Bool?
     public var approvalMode: ApprovalMode?
     public var profile: SessionSummary.Profile?
-    public init(kind: ContainerKind, cwd: String? = nil, model: ModelRef? = nil, thinking: String? = nil, title: String? = nil, workOn: WorkOn? = nil, planMode: Bool? = nil, approvalMode: ApprovalMode? = nil, profile: SessionSummary.Profile? = nil) {
-        self.kind = kind; self.cwd = cwd; self.model = model; self.thinking = thinking; self.title = title; self.workOn = workOn; self.planMode = planMode; self.approvalMode = approvalMode; self.profile = profile
+    /// A temporary chat (docs/spec/14 M4): threads with no project only.
+    public var temporary: Bool?
+    public init(kind: ContainerKind, cwd: String? = nil, model: ModelRef? = nil, thinking: String? = nil, title: String? = nil, workOn: WorkOn? = nil, planMode: Bool? = nil, approvalMode: ApprovalMode? = nil, profile: SessionSummary.Profile? = nil, temporary: Bool? = nil) {
+        self.kind = kind; self.cwd = cwd; self.model = model; self.thinking = thinking; self.title = title; self.workOn = workOn; self.planMode = planMode; self.approvalMode = approvalMode; self.profile = profile; self.temporary = temporary
     }
 }
 

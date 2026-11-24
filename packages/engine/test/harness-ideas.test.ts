@@ -212,6 +212,36 @@ describe("earlier conversations as background", () => {
 		expect((await bridge.search("sink", 8)).hits.map((h) => h.id)).toEqual([first.id]);
 	});
 
+	test("a temporary chat isn't searched, looks in no other, and goes after 24 hours unless kept (14 M4)", async () => {
+		const a = await start();
+		type Entry = { temporary?: { expiresAt: string }; cwd?: string };
+		const sessions = a.engine.sessions as unknown as { entries: Map<string, Entry>; historyBridge(e: unknown): unknown; find(q: string): Promise<{ ref: { id: string } }[]>; expireTemporary(now?: number): Promise<number> };
+		await expect(a.client.call("sessions.create", { kind: "build", cwd: a.home, temporary: true })).rejects.toMatchObject({ data: { code: "INVALID" } });
+		const temp = (await a.client.call("sessions.create", { kind: "thread", temporary: true })).ref;
+		await a.client.call("sessions.subscribe", { ref: temp });
+		const before = Date.now();
+		await a.client.call("sessions.submit", { ref: temp, input: { text: "The sink moves 40 cm left." } });
+		await idle(a, temp);
+		const listed = (await a.client.call("sessions.list", { kind: "thread" })).sessions.find((x: { ref: { id: string } }) => x.ref.id === temp.id);
+		const left = Date.parse(listed.temporary.expiresAt) - before;
+		expect(left).toBeGreaterThan(23.9 * 3600_000);
+		expect(left).toBeLessThan(24.1 * 3600_000);
+		// Not in search, and it can't look in others.
+		expect((await sessions.find("sink")).map((h) => h.ref.id)).not.toContain(temp.id);
+		expect(sessions.historyBridge(sessions.entries.get(temp.id))).toBeUndefined();
+		// Kept: a normal chat, found from then on.
+		await a.client.call("sessions.keep", { ref: temp });
+		expect(sessions.entries.get(temp.id)!.temporary).toBeUndefined();
+		expect((await sessions.find("sink")).map((h) => h.ref.id)).toContain(temp.id);
+		// Another one, past its time: deleted with its folder, not to the Trash.
+		const old = (await a.client.call("sessions.create", { kind: "thread", temporary: true })).ref;
+		const entry = sessions.entries.get(old.id)!;
+		expect(await sessions.expireTemporary()).toBe(0);
+		expect(await sessions.expireTemporary(Date.parse(entry.temporary!.expiresAt) + 1)).toBe(1);
+		expect(sessions.entries.has(old.id)).toBe(false);
+		expect(existsSync(entry.cwd!)).toBe(false);
+	});
+
 	test("Settings › Memory turns past conversations off: no tools, but @conversation still works", async () => {
 		const a = await start();
 		const first = (await a.client.call("sessions.create", { kind: "thread", title: "Kitchen plan" })).ref;

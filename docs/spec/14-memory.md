@@ -1,6 +1,6 @@
 # 14 · Memory (spike S8, 2026-10-24)
 
-**Status (2026-10-25):** M1 (hybrid recall) and M2 (learned facts for agents) are built, and M0 has measured them; see §7. Decisions: Q2 save and show with Undo; Q4 revised after use (2026-10-25): **search by words on this Mac is the default**, and search by meaning through OpenRouter is an explained opt-in in Settings › Memory. Q1 and Q3 decided 2026-11-24 (§6): **past chats on from day one, indexed on this Mac**, and **project lessons into `AGENTS.md`**. M4 and M5 are in the launch scope ([launch plan](../launch-plan.md) §3, wave 2). **M4 built 2026-11-24 except the temporary chat (§8).**
+**Status (2026-10-25):** M1 (hybrid recall) and M2 (learned facts for agents) are built, and M0 has measured them; see §7. Decisions: Q2 save and show with Undo; Q4 revised after use (2026-10-25): **search by words on this Mac is the default**, and search by meaning through OpenRouter is an explained opt-in in Settings › Memory. Q1 and Q3 decided 2026-11-24 (§6): **past chats on from day one, indexed on this Mac**, and **project lessons into `AGENTS.md`**. M4 and M5 are in the launch scope ([launch plan](../launch-plan.md) §3, wave 2). **M4 built 2026-11-24 (§8), the temporary chat included.**
 
 The question: how should Piopio's memory get better, where does a project like Hindsight fit, should memory have
 its own Settings section, and which kinds of memory belong in which part of the product (Chat, notebooks, agents,
@@ -296,9 +296,23 @@ added, after Q1:
 - **Tests:** `harness-ideas.test.ts` (the card's details, the local rule with a model switched mid-way, the off
   switch with `@conversation` still working); `ToolCardTests.swift` (decoding, the row, Open).
 
+**The temporary chat (built 2026-11-24, design A of [docs/design/temporary-chat](../design/temporary-chat/Options.html))**
+- **Turning it on:** a Temporary chip in the box, on Home and on the New conversation page, shown when there's no
+  project (a temporary chat is a chat; a project's conversations aren't). On, the line under the box says what it
+  means, including that the model's provider still receives what you send. It's for that one chat: the next starts
+  normal. New Temporary Chat (⌃⌘N, ⇧⌘N being New Project) is in the File menu and the sidebar's + menu.
+- **What it doesn't do:** it isn't indexed (search, the Library, the providers record), it can't search or read other
+  conversations, and it neither reads nor adds to About me. Spend still counts in Overview: that's money, not content.
+- **How long:** deleted 24 hours after your last message (`temporary.expiresAt`, pushed on each message), checked
+  every ten minutes and five seconds after the engine starts; not while it's answering. Deleted as chats are: gone,
+  not in the Trash.
+- **Where it shows:** in Conversations with the others, with a timer glyph and the hours left ("23h"); its draft row
+  reads "Temporary chat". Coming back to it, a strip under the toolbar says when it goes and what it doesn't do, with
+  Keep and ×; × hides it until the next return. Keep (also in the row's menu, `sessions.keep`) makes it a normal chat,
+  indexed from then, with About me and earlier conversations from its next message.
+- **Not built:** the temporary chip in a project's box; Keep from Quick Chat.
+
 **Not built yet**
-- **The temporary chat:** a chat that's never indexed, offers neither tool, learns nothing for About me and isn't
-  kept. It needs a place in the composer (Home's box) and a decision on how long it lives; next in M4.
 - Each title in a search's card isn't a link of its own: card bodies are plain text. Only the one read opens.
 - Branches a conversation left before this version were read for providers only as far as their active branch shows.
 

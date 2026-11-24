@@ -659,6 +659,8 @@ export const ReviewInfo = Type.Object({
 export type ReviewInfo = Static<typeof ReviewInfo>;
 
 export const SessionSummary = Type.Object({
+	/** A temporary chat (docs/spec/14 M4): when it's deleted, 24 hours after its last message, unless kept. */
+	temporary: Type.Optional(Type.Object({ expiresAt: Type.String() })),
 	/** A conversation about an app (docs/spec/35 §15): the app's file. */
 	app: Type.Optional(Type.String()),
 	ref: ContainerRef,
@@ -1402,8 +1404,18 @@ export const methods = {
 			model: Type.Optional(ModelRef),
 			thinking: Type.Optional(Type.String()),
 			title: Type.Optional(Type.String()),
+			/**
+			 * A temporary chat (docs/spec/14 M4): a thread with no project, never searched or added to the Library, with
+			 * no About me and no earlier conversations, deleted 24 hours after its last message unless kept.
+			 */
+			temporary: Type.Optional(Type.Boolean()),
 		}),
 		result: Type.Object({ ref: ContainerRef }),
+	},
+	/** A temporary chat becomes a normal one: searched from now on, with About me and earlier conversations. */
+	"sessions.keep": {
+		params: Type.Object({ ref: ContainerRef }),
+		result: Type.Object({}),
 	},
 	"sessions.open": {
 		/** `fold`: a turn's tool calls come as one `steps` item (the app's folded activity line, docs/design v2). */

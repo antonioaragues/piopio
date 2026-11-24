@@ -18,6 +18,8 @@ export class SearchIndex {
 	private readonly db: DatabaseSync;
 	private readonly insertRow: StatementSync;
 	private readonly deleteItemRow: StatementSync;
+	/** Conversations kept out of search and the Library (temporary chats, docs/spec/14 M4): nothing of theirs is written. */
+	private readonly skipped = new Set<string>();
 
 	constructor(file: string) {
 		this.db = new DatabaseSync(file);
@@ -49,6 +51,16 @@ export class SearchIndex {
 		}
 	}
 
+	/** Keeps a conversation (and an agent's conversations, "<id>/…") out of the index, or lets it in again. */
+	skip(sessionId: string, on: boolean): void {
+		if (on) this.skipped.add(sessionId);
+		else this.skipped.delete(sessionId);
+	}
+
+	skips(sessionId: string): boolean {
+		return this.skipped.size > 0 && this.skipped.has(sessionId.split("/")[0]!);
+	}
+
 	isIndexed(sessionId: string): boolean {
 		const row = this.db.prepare("SELECT version FROM indexed WHERE session_id = ?").get(sessionId) as { version: number } | undefined;
 		return row?.version === INDEX_VERSION;
@@ -56,6 +68,7 @@ export class SearchIndex {
 
 	/** Replaces everything indexed for a session (open, branch switch, backfill). */
 	replaceSession(sessionId: string, title: string, at: string, items: readonly TimelineItem[]): void {
+		if (this.skips(sessionId)) return;
 		this.transaction(() => {
 			this.db.prepare("DELETE FROM rows WHERE session_id = ?").run(sessionId);
 			this.insertRow.run(title, sessionId, null, "title", at);
@@ -65,6 +78,7 @@ export class SearchIndex {
 	}
 
 	upsertItem(sessionId: string, item: TimelineItem, replacing?: string): void {
+		if (this.skips(sessionId)) return;
 		this.transaction(() => {
 			this.deleteItemRow.run(sessionId, replacing ?? item.id);
 			if (replacing) this.deleteItemRow.run(sessionId, item.id);
@@ -77,6 +91,7 @@ export class SearchIndex {
 	}
 
 	setTitle(sessionId: string, title: string, at: string): void {
+		if (this.skips(sessionId)) return;
 		this.transaction(() => {
 			this.db.prepare("DELETE FROM rows WHERE session_id = ? AND kind = 'title'").run(sessionId);
 			this.insertRow.run(title, sessionId, null, "title", at);

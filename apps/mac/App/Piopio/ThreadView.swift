@@ -14,6 +14,10 @@ struct ThreadView: View {
     /// PIOPIO_DEMO_CHAT_SUMMARY=1: show the column without changing the saved choice (captures).
     private static let demoSummary = ProcessInfo.processInfo.environment["PIOPIO_DEMO_CHAT_SUMMARY"] == "1"
     @State private var showCosts = false
+    /// Temporary chats (docs/spec/14 M4): the strip shows each time you come back, until closed for that visit.
+    @State private var temporaryStrip = false
+    /// Temporary chats just started from a box: the first visit is the one you're in, not a return.
+    @MainActor static var justStarted: Set<String> = []
 
     var body: some View {
         conversation
@@ -85,6 +89,10 @@ struct ThreadView: View {
     private var chatColumn: some View {
         VStack(spacing: 0) {
             header
+            if temporaryStrip, let hours = summary.hoursLeft() {
+                TemporaryStrip(hours: hours, keep: { Task { try? await engine.keep(summary.ref); temporaryStrip = false } }, close: { withAnimation(.easeOut(duration: 0.15)) { temporaryStrip = false } })
+                    .transition(.opacity)
+            }
             if let next = summary.continuedIn { continuedBanner(next) }
             if let side = summary.side { SideStartedBar(engine: engine, side: side) }
             ZStack(alignment: .bottom) {
@@ -110,6 +118,9 @@ struct ThreadView: View {
         // "Ask next" sits in the thread after the last answer (chat v3, 14e).
         .onChange(of: summary.followUps) { _, items in thread.setFollowUps(items ?? Self.demoFollowUps) }
         .onAppear { thread.setFollowUps(summary.followUps ?? Self.demoFollowUps) }
+        .task(id: summary.ref.id) {
+            temporaryStrip = summary.temporary != nil && Self.justStarted.remove(summary.ref.id) == nil
+        }
         .alert("Error details", isPresented: Binding(get: { thread.errorDetail != nil }, set: { if !$0 { thread.errorDetail = nil } })) {
             Button("Copy") {
                 NSPasteboard.general.clearContents()
@@ -193,5 +204,32 @@ struct ThreadView: View {
         if files > 0 { parts.append(files == 1 ? "1 file" : "\(files) files") }
         if thread.state?.status == .running { parts.append("answering…") }
         return parts.joined(separator: " · ")
+    }
+}
+
+
+/// Coming back to a temporary chat (docs/spec/14 M4, design A): what happens to it, and Keep.
+struct TemporaryStrip: View {
+    let hours: Int
+    let keep: () -> Void
+    let close: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "timer").font(.system(size: 13)).foregroundStyle(Color.dsTemporary)
+            (Text("Temporary chat. ").fontWeight(.semibold).foregroundStyle(Color.dsFg)
+             + Text("Deleted in \(hours) hour\(hours == 1 ? "" : "s") unless you keep it. Other conversations can't search it, and nothing from it goes to About me.").foregroundStyle(Color.dsFg2))
+                .font(.system(size: 12))
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Button("Keep", action: keep).buttonStyle(PillStyle(kind: .strong, compact: true))
+            Button(action: close) { Image(systemName: "xmark").font(.system(size: 10, weight: .semibold)) }
+                .buttonStyle(.plain).foregroundStyle(Color.dsFg3)
+                .help("Hide until you come back")
+                .accessibilityLabel("Hide")
+        }
+        .padding(.horizontal, 14).padding(.vertical, 8)
+        .background(Color.dsTemporaryTint)
+        .overlay(alignment: .bottom) { Rectangle().fill(Color.dsLine).frame(height: 0.5) }
     }
 }

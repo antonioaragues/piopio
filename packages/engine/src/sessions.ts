@@ -121,6 +121,8 @@ type CatalogEntry = SessionSummary & {
 	prFailedSha?: string;
 };
 
+/** A temporary chat lasts this long after its last message (docs/spec/14 M4). */
+export const TEMPORARY_MS = 24 * 60 * 60_000;
 /** At most this many subagents run at once per session (docs/spec/05-build §4). */
 const MAX_SUBAGENTS = 3;
 /** Side conversations (docs/spec/24 §4–§5): at most this many of one parent run at once, and their notes wake it at most this many turns in a row without you. */
@@ -245,6 +247,10 @@ export class Sessions {
 			deleted: (id) => this.library?.forget(id),
 		});
 		this.checkpoints = new CheckpointStore(join(paths.home, "checkpoints"));
+		// Temporary chats past their 24 hours go, checked now and every ten minutes (docs/spec/14 M4).
+		this.expiry = setInterval(() => void this.expireTemporary(), 10 * 60_000);
+		this.expiry.unref();
+		setTimeout(() => void this.expireTemporary(), 5_000).unref();
 		if (existsSync(paths.catalogIndex)) {
 			for (const e of readJsonFile<CatalogEntry[]>(paths.catalogIndex, () => [])) {
 				// Chat-lens sessions are Read only now (docs/spec/18 §4): the profile follows the approval mode.
@@ -258,6 +264,8 @@ export class Sessions {
 				// A side conversation or subagent the engine stopped in the middle of (a quit, a crash) won't go on by itself.
 				if (e.side && (e.side.state === "working" || e.side.state === "queued")) e.side.state = "stopped";
 				if (e.parent?.state === "working" || e.parent?.state === "queued") e.parent.state = "stopped";
+				// Temporary chats (docs/spec/14 M4) stay out of search and the Library.
+				if (e.temporary) this.search.skip(e.ref.id, true);
 				this.entries.set(e.ref.id, e);
 			}
 		}
@@ -472,6 +480,39 @@ export class Sessions {
 		}
 	}
 
+	/** A temporary chat becomes a normal one (docs/spec/14 M4): searched from now on, with what it says so far. */
+	async keep(ref: ContainerRef): Promise<void> {
+		const entry = this.entry(ref);
+		if (!entry.temporary) return;
+		delete entry.temporary;
+		this.search.skip(ref.id, false);
+		this.save();
+		this.changed(entry);
+		// Its runtime was made without About me and earlier conversations: the next message opens it with them.
+		const runtime = this.open.get(ref.id);
+		if (runtime) {
+			const r = await runtime.catch(() => undefined);
+			if (r && r.snapshot().state.status !== "running") {
+				this.open.delete(ref.id);
+				await r.close();
+			}
+		}
+		await this.backfillSearch();
+	}
+
+	/** Deletes temporary chats whose 24 hours are up (not one that's answering right now). */
+	async expireTemporary(now = Date.now()): Promise<number> {
+		let gone = 0;
+		for (const entry of [...this.entries.values()]) {
+			if (!entry.temporary || Date.parse(entry.temporary.expiresAt) > now) continue;
+			const open = this.open.get(entry.ref.id);
+			const r = open ? await open.catch(() => undefined) : undefined;
+			if (r?.snapshot().state.status === "running") continue;
+			await this.delete(entry.ref).then(() => gone++, () => undefined);
+		}
+		return gone;
+	}
+
 	rename(ref: ContainerRef, title: string): void {
 		const entry = this.entry(ref);
 		entry.title = title.trim().slice(0, 120) || entry.title;
@@ -501,13 +542,14 @@ export class Sessions {
 		const scopeOf = (e: CatalogEntry) =>
 			e.ref.kind === "build" ? `project:${e.projectPath ?? e.cwd}` : e.ref.kind === "thread" ? (e.projectPath ? `project:${e.projectPath}` : "chats") : undefined;
 		const scope = scopeOf(entry);
-		if (!scope) return undefined;
+		// A temporary chat looks in no earlier conversation (docs/spec/14 M4); and none finds it, as it isn't indexed.
+		if (!scope || entry.temporary) return undefined;
 		// Off stops the tools (they aren't offered to a conversation that starts while it's off); the user's own
 		// @conversation still works.
 		const off = () => this.chat?.settings.get().memory.pastChats === false;
 		const mine = (id: string) => {
 			const e = this.entries.get(id);
-			return e && id !== entry.ref.id && scopeOf(e) === scope ? e : undefined;
+			return e && id !== entry.ref.id && !e.temporary && scopeOf(e) === scope ? e : undefined;
 		};
 		// This conversation's model now (it can change between turns), and whether another's content may reach it.
 		const here = () => (this.entries.get(entry.ref.id) ?? entry).model ?? this.hub.defaultModel;
@@ -819,6 +861,7 @@ export class Sessions {
 		// The files the chat made, so the branch's cards open its own copies (BuildRuntime's chatRelocate).
 		if (source.cwd && resolve(source.cwd).startsWith(`${resolve(this.paths.scratchDir)}/`) && existsSync(source.cwd)) cpSync(source.cwd, copy.cwd, { recursive: true });
 		copyAttachments(this.paths.home, ref.id, copy.ref.id);
+		if (copy.temporary) this.search.skip(copy.ref.id, true);
 		this.entries.set(copy.ref.id, copy);
 		this.save();
 		this.changed(copy);
@@ -909,7 +952,8 @@ export class Sessions {
 		return entry;
 	}
 
-	async create(params: { kind: "thread" | "build"; instructions?: string; app?: string; cwd?: string; model?: ModelRef; thinking?: string; title?: string; workOn?: WorkOn; approvalMode?: ApprovalMode; planMode?: boolean; profile?: "build" | "chat" }): Promise<ContainerRef> {
+	async create(params: { kind: "thread" | "build"; instructions?: string; app?: string; cwd?: string; model?: ModelRef; thinking?: string; title?: string; workOn?: WorkOn; approvalMode?: ApprovalMode; planMode?: boolean; profile?: "build" | "chat"; temporary?: boolean }): Promise<ContainerRef> {
+		if (params.temporary && (params.kind !== "thread" || params.app)) throw new EngineError("INVALID", "Only a chat with no project can be temporary.");
 		if (params.kind === "build" && !params.cwd) throw new EngineError("INVALID", "Build sessions need a cwd.");
 		if (params.planMode && params.kind !== "build") throw new EngineError("INVALID", "Only folder conversations support Plan mode.");
 		if (params.kind === "build" && !existsSync(params.cwd!)) throw new EngineError("INVALID", `No such folder: ${params.cwd}`);
@@ -943,7 +987,9 @@ export class Sessions {
 			// An app's conversation works where the app is (docs/spec/35 §15): its project, or its own folder.
 			...(params.kind === "thread" ? { cwd: params.app && params.cwd ? params.cwd : this.scratch(ref.id) } : {}),
 			...(params.app ? { app: params.app } : {}),
+			...(params.temporary ? { temporary: { expiresAt: new Date(Date.parse(now) + TEMPORARY_MS).toISOString() } } : {}),
 		};
+		if (entry.temporary) this.search.skip(ref.id, true);
 		this.entries.set(ref.id, entry);
 		this.save();
 		this.changed(entry);
@@ -2840,6 +2886,7 @@ export class Sessions {
 		if (!entry) return;
 		delete entry.followUps;
 		entry.updatedAt = new Date().toISOString();
+		if (entry.temporary) entry.temporary = { expiresAt: new Date(Date.parse(entry.updatedAt) + TEMPORARY_MS).toISOString() };
 		if (firstInput && (entry.title === "New thread" || entry.title === "New session")) {
 			entry.title = titleFrom(firstInput) || entry.title;
 			this.search.setTitle(ref.id, entry.title, entry.updatedAt);
@@ -2989,6 +3036,7 @@ export class Sessions {
 	}
 
 	async closeAll(): Promise<void> {
+		clearInterval(this.expiry);
 		this.watcher?.close();
 		const runtimes = await Promise.allSettled(this.open.values());
 		this.open.clear();
@@ -3304,7 +3352,8 @@ export class Sessions {
 					entry.web = on;
 					this.save();
 				},
-				...(this.aboutMeSdk || entry.app ? { extensions: [...(this.aboutMeSdk ? [this.aboutMeSdk] : []), ...(entry.app && this.apps ? [appConversationExtension(this.apps, entry.app)] : [])] } : {}),
+				// A temporary chat neither reads nor adds to About me (docs/spec/14 M4).
+				...((this.aboutMeSdk && !entry.temporary) || entry.app ? { extensions: [...(this.aboutMeSdk && !entry.temporary ? [this.aboutMeSdk] : []), ...(entry.app && this.apps ? [appConversationExtension(this.apps, entry.app)] : [])] } : {}),
 			},
 		});
 		if (runtime.sessionFile && runtime.sessionFile !== entry.sessionFile) {
@@ -3315,6 +3364,7 @@ export class Sessions {
 	}
 
 	private aboutMeSdk?: ReturnType<typeof aboutMeSdkExtension>;
+	private expiry: ReturnType<typeof setInterval>;
 	/** Piopio's tools by address, for coding agents that take MCP servers that way (docs/spec/31 CA8). */
 	private toolServer?: ToolServer;
 
@@ -3389,7 +3439,7 @@ export class Sessions {
 			codingVisualsExtension(visuals),
 			...(this.appsFor(entry).apps ? [codingAppsExtension(this.apps!, this.appsFor(entry).apps!.where, (callId, signal) => (request) => decision(request, callId, signal, false))] : []),
 			...(history && !history.off() ? [historySdkExtension(history)] : []),
-			...(entry.ref.kind === "thread" && this.aboutMeSdk ? [this.aboutMeSdk] : []),
+			...(entry.ref.kind === "thread" && this.aboutMeSdk && !entry.temporary ? [this.aboutMeSdk] : []),
 			// A review on a coding agent reports its findings the same way (05-build "Review by an agent").
 			...(entry.reviewFor ? [codeReviewExtension(this.reviewBridge(entry))] : []),
 		];
