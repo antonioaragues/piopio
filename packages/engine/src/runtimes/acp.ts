@@ -278,10 +278,17 @@ export class AcpRuntime implements Runtime {
 	 * (a command's title is the command, and "echo web_fetch && …" isn't web_fetch), and the name is the whole call
 	 * name or title, or the title as "mcp.piopio.search_conversations" (Codex) or "mcp_piopio_…" (Antigravity), with
 	 * nothing after it but its arguments in parentheses: a permission request may not say what kind of call it is.
+	 * Codex (codex-acp 2.7) sends an MCP call as kind "execute" with `rawInput` `{ server, tool, arguments }`: that
+	 * structure, naming Piopio's server and one of its tools, is a match whatever the kind (a command's `rawInput` is
+	 * its command line, never a server).
 	 */
-	private piopioName(call: Pick<AcpToolCall, "title" | "kind"> & { name?: string }): string | undefined {
-		if (!this.piopio || WRITES.has(call.kind ?? "")) return undefined;
-		const title = (call.title ?? "").trim();
+	private piopioName(call: Pick<AcpToolCall, "title" | "kind" | "rawInput"> & { name?: string }): string | undefined {
+		if (!this.piopio) return undefined;
+		const raw = call.rawInput as { server?: unknown; tool?: unknown } | undefined;
+		if (raw?.server === PIOPIO_MCP && typeof raw.tool === "string") return this.piopio.tools.find((t) => t.name === raw.tool)?.name;
+		if (WRITES.has(call.kind ?? "")) return undefined;
+		// Antigravity CLI 1.5 titles them "Run mcp_piopio_browser_open".
+		const title = (call.title ?? "").trim().replace(/^Run\s+(?=(?:mcp[._])?piopio)/, "");
 		return this.piopio.tools.find((t) => call.name === t.name || title === t.name || new RegExp(`^(?:mcp[._])?piopio(?:\\.|__|_)${t.name}(?:\\(|$)`).test(title))?.name;
 	}
 
@@ -485,8 +492,9 @@ export class AcpRuntime implements Runtime {
 	private toolCall(call: AcpToolCall): void {
 		if (this.tools.has(call.toolCallId)) return this.toolUpdate(call);
 		const own = this.piopioName(call as AcpToolCall & { name?: string });
-		// Codex wraps an MCP call's arguments: { server, tool, arguments }.
-		const ownArgs = (call.rawInput?.arguments && typeof call.rawInput.arguments === "object" ? call.rawInput.arguments : call.rawInput ?? {}) as Record<string, unknown>;
+		// Codex wraps an MCP call's arguments: { server, tool, arguments }. Antigravity adds its own `toolSummary`.
+		const { toolSummary: _summary, ...bare } = (call.rawInput ?? {}) as Record<string, unknown>;
+		const ownArgs = (call.rawInput?.arguments && typeof call.rawInput.arguments === "object" ? call.rawInput.arguments : bare) as Record<string, unknown>;
 		const tool = own ? { name: own, args: ownArgs } : acpTool(call);
 		if (own) this.piopioCalls.push({ id: call.toolCallId, name: own, input: JSON.stringify(ownArgs) });
 		const s = this.current ?? this.beginAssistant();
@@ -538,7 +546,8 @@ export class AcpRuntime implements Runtime {
 		const reject = { outcome: { outcome: "selected", optionId: pick("reject_once", "reject_always") } };
 		// Read only refuses changes outright (an agent's "read-only" may still ask).
 		if (!this.options.chat && this.options.approvalMode() === "read_only" && WRITES.has(call.kind ?? "")) return pick("reject_once", "reject_always") ? reject : { outcome: { outcome: "cancelled" } };
-		const tool = acpTool(call);
+		// Codex's request may name only the call: the card then shows the call as Piopio already has it.
+		const tool = known && !call.rawInput && !call.title ? { name: known.name, args: known.args } : acpTool(call);
 		const file = typeof tool.args.path === "string" ? tool.args.path.split("/").pop() : undefined;
 		const title = tool.name === "bash" ? "Run a command" : tool.name === "write" ? `Write ${file ?? "a file"}` : tool.name === "edit" ? `Edit ${file ?? "a file"}` : `Use ${call.title ?? tool.name}`;
 		const detail = tool.name === "bash" ? String(tool.args.command ?? "") : typeof tool.args.path === "string" ? tool.args.path : undefined;

@@ -255,8 +255,23 @@ export type PreviewOptions = { profile: string; ports: () => Promise<number[]> }
  */
 export type AgentBrowserOptions = { profile?: string; sites: () => string[] };
 
-/** Browser calls for one conversation, through the app. */
+/**
+ * Browser calls for one conversation, through the app. They run one at a time, in the order they were made: they share
+ * the conversation's tab, so a read made beside a `browser_open` would otherwise see the page before it (or none). pi
+ * runs the round in order already (`executionMode` below); this also holds for runtimes pi doesn't drive (Claude Code,
+ * Codex and Antigravity reach these tools over MCP).
+ */
 export function browserCaller(app: AppServices, ref: ContainerRef, options: { allowPrivate?: boolean; sites?: BrowserSites; preview?: PreviewOptions; agent?: AgentBrowserOptions } = {}): BrowserCall {
+	let queue: Promise<unknown> = Promise.resolve();
+	const call = browserCall(app, ref, options);
+	return (name, args, ask) => {
+		const result = queue.then(() => call(name, args, ask));
+		queue = result.catch(() => undefined);
+		return result;
+	};
+}
+
+function browserCall(app: AppServices, ref: ContainerRef, options: { allowPrivate?: boolean; sites?: BrowserSites; preview?: PreviewOptions; agent?: AgentBrowserOptions }): BrowserCall {
 	// Local addresses the user let this session open (besides its own commands' ports).
 	const granted = new Set<string>();
 	const preview = options.preview;
@@ -329,6 +344,7 @@ export function durableBrowserExtension(call: BrowserCall, askFor: (call: { conv
 			name: tool.name,
 			description: tool.description,
 			parameters: tool.parameters as never,
+			executionMode: "sequential",
 			execute: async (args, api, context) => {
 				const r = await call(tool.name, args as Record<string, unknown>, askFor({ conversationId: api.conversationId, callId: api.callId }, context));
 				return { output: [{ type: "text" as const, text: r.text }, ...r.images.map((i) => ({ type: "image" as const, data: i.data, mimeType: i.mimeType }))], ...(r.isError ? { isError: true } : {}) };
@@ -353,6 +369,8 @@ export function codingBrowserExtension(call: BrowserCall, askFor?: (callId: stri
 					description: tool.description,
 					promptSnippet: `${tool.name}: ${tool.label.toLowerCase()}`,
 					parameters: tool.parameters as never,
+					// One tab per conversation: a round with a browser call runs in order (see browserCaller).
+					executionMode: "sequential",
 					async execute(callId, params, signal) {
 						const r = await call(tool.name, params as Record<string, unknown>, askFor?.(callId, signal));
 						return {

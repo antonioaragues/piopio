@@ -145,6 +145,25 @@ describe("the project preview (docs/spec/22 §6, roadmap PAR3)", () => {
 		]);
 	});
 
+	// Found in the real-use pass (2026-11-24): a model opened the preview and read its console in one message, and the
+	// read ran before the page had loaded ("The project preview isn't open"; after an edit, the old page's errors).
+	test("browser calls made together run one at a time, in order, so a read sees the page browser_open loaded", { timeout: 40_000 }, async () => {
+		const log: string[] = [];
+		const a = await start(undefined, async (p) => {
+			log.push(`start ${p.name}`);
+			await new Promise((r) => setTimeout(r, p.name === "browser_open" ? 300 : 20));
+			log.push(`end ${p.name}`);
+			return { ok: true, output: `did ${p.name}` };
+		});
+		const { ref, sub } = await session(a, "full_auto");
+		await a.client.call("sessions.submit", { ref, input: { text: call("bash", { command: SERVER, background: true }) } });
+		await stateWhere(a, sub, (s) => s.status === "idle" && s.processes?.[0]?.urls.length === 1);
+		const before = states(a, sub).length;
+		await a.client.call("sessions.submit", { ref, input: { text: [call("browser_open", { url: "http://localhost:4321/" }), `& ${call("browser_console", {})}`, `& ${call("browser_requests", {})}`].join("\n") } });
+		await stateWhere(a, sub, (s) => s.status === "idle" && states(a, sub).length > before + 2 && log.length === 6);
+		expect(log).toEqual(["start browser_open", "end browser_open", "start browser_console", "end browser_console", "start browser_requests", "end browser_requests"]);
+	});
+
 	test("a chat has no preview tools", { timeout: 20_000 }, async () => {
 		const a = await start(undefined, (p) => ({ ok: true, output: `did ${p.name}` }));
 		const { ref } = await a.client.call("sessions.create", { kind: "thread" });

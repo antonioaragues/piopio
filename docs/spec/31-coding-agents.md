@@ -231,6 +231,12 @@ Decided 2026-11-20 with the user on [picker.html](../design/agent-runtimes/picke
   tray where they need to. Antigravity doesn't report an MCP tool's result, so the card shows what Piopio's tool
   answered. Tried for real: each found a fact in another conversation with `search_conversations` (Antigravity also
   read it with `read_conversation`). `PIOPIO_ACP_LOG=<folder>` keeps every ACP message for debugging.
+- **The agents changed shape (found 2026-11-24, [real-use pass](../research/par-pass-2026-11-24.md)):** Codex 0.170
+  with codex-acp 2.7 sends an MCP call as kind `execute` with `rawInput: { server, tool, arguments }`, and asks
+  permission naming only the call; Antigravity CLI 1.5 titles one "Run mcp_piopio_<tool>". Neither was recognized, so
+  each of Piopio's tools asked ("Run a command" with no detail, or "Use Run mcp_piopio_…") and its card was `bash` or
+  `Run`. Now the structure (Codex) and the title without "Run " (Antigravity) are matches, and the fake agent sends
+  both shapes. Still open: a long-running command on Codex or Antigravity ends as an error card while it serves (F7).
 
 - **Finishing touches (2026-11-21):**
   - **Undo:** after a switch, the session's state says who ran the conversation before (`state.handoff.from`) until the

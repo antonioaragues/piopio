@@ -75,12 +75,13 @@ export class TestClient {
 			delete this.secrets[m.params.name];
 			this.socket.write(`${JSON.stringify({ jsonrpc: "2.0", id: m.id, result: {} })}\n`);
 		} else if (m.method === "app.tool") {
-			try {
-				const result = this.appTool ? this.appTool(m.params) : { ok: false, output: "no handler" };
-				this.socket.write(`${JSON.stringify({ jsonrpc: "2.0", id: m.id, result })}\n`);
-			} catch (error) {
-				this.socket.write(`${JSON.stringify({ jsonrpc: "2.0", id: m.id, error: { code: -32000, message: (error as Error).message } })}\n`);
-			}
+			// The handler may answer later (a promise), as a page load does.
+			Promise.resolve()
+				.then(() => (this.appTool ? this.appTool(m.params) : { ok: false, output: "no handler" }))
+				.then(
+					(result) => this.socket.write(`${JSON.stringify({ jsonrpc: "2.0", id: m.id, result })}\n`),
+					(error: Error) => this.socket.write(`${JSON.stringify({ jsonrpc: "2.0", id: m.id, error: { code: -32000, message: error.message } })}\n`),
+				);
 		} else if ("id" in m) {
 			const w = this.waiters.get(m.id);
 			this.waiters.delete(m.id);

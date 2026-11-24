@@ -74,6 +74,9 @@ Default state for new sessions: **approvals, checkpoints, todos, notify and suba
   with its source), the live transcript taking messages pi adds at a boundary (`entry_appended`), and the project
   page's row. Not done: coding agents (Claude Code, Codex, Antigravity) run their own loop, so the check doesn't run
   for them; a language server's live diagnostics.
+- **Found in use (2026-11-24):** DG3's rule misses a break the agent causes in a file it didn't edit (a changed return
+  type broke a caller, and the check stayed silent). A baseline before the first edit would fix it, at one more check
+  per run; open, [the pass](../research/par-pass-2026-11-24.md) F3.
 
 The engine adds three more (not pi extensions of this package): the **context guards** (the model's clock and the repeated-call nudge, `tools/guards.ts`), **earlier conversations** (`search_conversations` / `read_conversation` and `@conversation:<id>` mentions, `tools/history.ts`), and **Claude Code / Codex** as `task` backends (`external-agents.ts`). See [docs/research/deepseek-harness.md § As built](../research/deepseek-harness.md#as-built-2026-11-08).
 

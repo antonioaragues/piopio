@@ -100,7 +100,34 @@ async function prompt(sessionId: string, blocks: any[]) {
 		if (call_) {
 			const toolCallId = `call_fake_${++counter}`;
 			const args = JSON.parse(call_[2]!);
-			update(sessionId, { sessionUpdate: "tool_call", toolCallId, kind: "other", title: `piopio/${call_[1]}`, name: call_[1], status: "in_progress", rawInput: args });
+			if (isCodex) {
+				// As Codex 0.170 with codex-acp 2.7 does: an MCP call is kind "execute" with its server, tool and arguments,
+				// and the permission request names only the call (unless the mode lets everything run).
+				update(sessionId, { sessionUpdate: "tool_call", toolCallId, kind: "execute", status: "pending", rawInput: { server: "piopio", tool: call_[1], arguments: args, command: `mcp.piopio.${call_[1]}` } });
+				if (setting(s, "mode") !== "agent-full-access") {
+					const answer = await ask("session/request_permission", { sessionId, toolCall: { toolCallId }, options: [{ optionId: "allow", name: "Allow", kind: "allow_once" }, { optionId: "deny", name: "Deny", kind: "reject_once" }] });
+					if (answer?.outcome?.optionId !== "allow") {
+						update(sessionId, { sessionUpdate: "tool_call_update", toolCallId, status: "failed", content: [{ type: "content", content: { type: "text", text: "Denied." } }] });
+						continue;
+					}
+				}
+			} else {
+				// As Antigravity CLI 1.5 does: "Run mcp_piopio_<tool>", its arguments with a summary of its own, a permission
+				// request for it unless the mode lets everything run, and no result in its update (Piopio shows its own).
+				const call = { toolCallId, kind: "other", title: `Run mcp_piopio_${call_[1]}`, status: "pending", rawInput: { ...args, toolSummary: "Doing it" } };
+				update(sessionId, { sessionUpdate: "tool_call", ...call });
+				if (setting(s, "mode") !== "auto") {
+					const answer = await ask("session/request_permission", { sessionId, toolCall: call, options: [{ optionId: "allow", name: "Allow", kind: "allow_once" }, { optionId: "deny", name: "Deny", kind: "reject_once" }] });
+					if (answer?.outcome?.optionId !== "allow") {
+						update(sessionId, { sessionUpdate: "tool_call_update", toolCallId, status: "failed" });
+						continue;
+					}
+				}
+				const server = s.mcp.find((m) => m.name === "piopio");
+				const r = server ? await callPiopio(server, call_[1]!, args) : { isError: true };
+				update(sessionId, { sessionUpdate: "tool_call_update", toolCallId, status: r?.isError ? "failed" : "completed" });
+				continue;
+			}
 			const server = s.mcp.find((m) => m.name === "piopio");
 			const r = server ? await callPiopio(server, call_[1]!, args) : { content: [{ type: "text", text: "No piopio server." }], isError: true };
 			update(sessionId, { sessionUpdate: "tool_call_update", toolCallId, status: r?.isError ? "failed" : "completed", content: (r?.content ?? []).map((c: any) => ({ type: "content", content: c })) });

@@ -189,6 +189,10 @@ as untrusted content. It never counts as an instruction from you, and it can't g
   in Piopio's browser in the project's profile.
 - **Not yet:** "pick an element", and a dev-server launcher from `package.json` scripts (the agent, or you in the
   terminal, starts the server).
+- **One call at a time (2026-11-24, real-use pass):** a conversation's browser calls run in the order they were made,
+  one at a time (pi's `executionMode: "sequential"`, and a queue in `browserCaller` for the coding agents). Before, a
+  read made beside `browser_open` saw the page before it, or none. A server a coding agent starts with its own background
+  command isn't one of the session's, so its address asks once ([the pass](../research/par-pass-2026-11-24.md), F4).
 
 ## 7. Sign-ins and profiles
 
