@@ -1,11 +1,11 @@
 # Current status — personal alpha
 
-Updated 2026-11-19. This is a personal-use application. Implementation milestones describe available code;
+Updated 2026-11-19; Build and its parity items (PAR2–PAR5, PAR8) updated 2026-11-24. This is a personal-use application. Implementation milestones describe available code;
 they do not establish that every provider, OS permission flow or production service has been validated.
 
 | Area | Implemented | Acceptance still pending |
 |---|---|---|
-| Build | Projects/CLI sessions, tools, approvals, plans, rewind, reviews, git/worktrees, terminal, MCP, subagents, sandboxed commands, `/goal`, auto review, Claude Code/Codex tasks | Daily real-model work on Piopio; large repositories; real OAuth MCP and project-skill combinations; cargo inside the sandbox; a real Codex task |
+| Build | Projects/CLI sessions, tools, approvals, plans, rewind, reviews, git/worktrees, terminal, MCP, subagents, sandboxed commands, `/goal`, auto review, Claude Code/Codex tasks; background commands with drawer tabs (PAR2), the project preview (PAR3), review by an agent with Fix and Dismiss (PAR4), the project's check after edits (PAR5), Claude Code, Codex and Antigravity running sessions with Piopio's tools (PAR8). A real-use pass with real models on all four runners, 2026-11-24: [par-pass-2026-11-24.md](research/par-pass-2026-11-24.md) | A week of daily real-model work on Piopio; large repositories; reviewing a real pull request; real OAuth MCP and project-skill combinations; cargo inside the sandbox; the eval scenarios the pass describes |
 | Chat | Streaming, attachments, branches, export, Quick Chat, New project makes a folder in ~/Piopio (AGENTS.md, shared NOTES.md), global search; since 2026-11-15 on the same engine as folder conversations (pi-coding-agent), old chats moved at start | A week of daily use; provider/web-search compatibility; a real project with several conversations; long conversation usability; moving a real set of old chats |
 | Local Agents | Definitions, conversations, memory, files kept in its folder (06 §14), schedules/reminders, approvals, budgets, Mac-app abilities, peers | Real schedules across sleep/wake; permission prompts and real Mac apps; paid-model budgets and peer behavior |
 | Reliability | Conservative command rules, private-address checks with DNS pinning, persistent drafts, input receipts, verified offline backup/restore | Extended failure/recovery soak and usability review with personal data |
@@ -25,8 +25,13 @@ tests use temporary engine data, but launch a real native window and require a l
 
 ## Latest local verification
 
-The TypeScript suite passes (212 tests, 2 opt-in tests skipped), as do Swift package tests (42 tests) and the app
-build. Three things only the Linux job caught are fixed: Build's commands run without the sandbox where
+2026-11-24: the engine suite passes (435 tests, 2 expected failures, 2 opt-in skipped; `github.test.ts`'s PR-events
+test is flaky under the full suite's load and passes alone), the extensions suite (57), the Swift package tests (57 and
+40) and the app build. The PAR2–PAR5 and PAR8 screens were checked in the app's own captures and by driving a test
+instance's window ([the pass](research/par-pass-2026-11-24.md)).
+
+2026-11-19: the TypeScript suite passed (212 tests, 2 opt-in tests skipped), as did Swift package tests (42 tests) and
+the app build. Three things only the Linux job caught are fixed: Build's commands run without the sandbox where
 `sandbox-exec` can't exist (instead of refusing every command there), `packages.remove`/`update` no longer resolve a
 relative local package against the wrong folder, and a git process closing its input early no longer crashes the
 engine (EPIPE).
@@ -34,6 +39,25 @@ The native app builds, and `scripts/recovery-smoke.sh` verifies failed-send draf
 restore across all three areas, restored topic search, external project preservation, and duplicate-free Build
 history discovery using a scripted model and scratch data. Compact Home/chat and dark agent layouts have also
 been captured and inspected. This does not replace the real-provider, OS-permission or VoiceOver checks below.
+
+## Build parity: what it doesn't do (2026-11-24)
+
+From the real-use pass and the roadmap's PAR rows; each is "Done" in [09-roadmap.md](spec/09-roadmap.md) with these limits.
+
+- **Background commands (PAR2):** 8 per session, the last 256 KB of output each; they stop when the session closes or
+  the engine quits. A coding agent's own background commands aren't in `process_list` or the drawer.
+- **Project preview (PAR3):** no "pick an element" and no dev-server launcher from `package.json` scripts. A server you
+  start in Terminal asks once before it opens; servers Piopio's agent or a coding agent started open without asking.
+- **Review by an agent (PAR4):** findings aren't posted to GitHub (RV4). Reviewing a pull request hasn't run against a
+  real remote. A finding is marked fixed when the turn Fix started finishes, not by checking the code.
+- **Diagnostics (PAR5):** the project's check, not a language server, and only for Piopio's agent (Claude Code, Codex and
+  Antigravity run their own loop). A check slower than 20 s gets no baseline, so only the edited files count. A passing
+  check shows nothing.
+- **Coding agents (PAR8):** no agents or automations on them (A4, left for later), no computer use. Titles and
+  follow-ups on Codex and Antigravity come from another provider. The shapes Codex 0.170 and Antigravity 1.5 send
+  for Piopio's tools are matched as found on 2026-11-24; a new version can change them.
+- **Transcript:** while an answer streams in a cramped layout (the drawer and the Review panel open), its last line sits
+  at the panel's edge.
 
 ## Personal acceptance checklist
 
