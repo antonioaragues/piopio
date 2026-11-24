@@ -108,6 +108,7 @@ struct ExtensionsPane: View {
                     .buttonStyle(PillStyle(kind: .toolbar))
                 AddButton(title: "Install") { installing = true }
             }
+            HooksCard(engine: engine).padding(.bottom, 22)
             YourSkillsCard(engine: engine).padding(.bottom, 22)
             CardTitle("What a package can add")
             ListCard {
@@ -142,6 +143,7 @@ struct ExtensionsPane: View {
                     .buttonStyle(PillStyle(kind: .toolbar))
                 AddButton(title: "Install") { installing = true }
             }
+            HooksCard(engine: engine).padding(.bottom, 22)
             YourSkillsCard(engine: engine).padding(.bottom, 22)
             CardTitle(title: "Installed") {
                 Button(working == "update" ? "Updating…" : "Update all") { updateAll() }

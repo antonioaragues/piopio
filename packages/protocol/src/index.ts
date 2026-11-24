@@ -80,6 +80,28 @@ export const LearnItem = Type.Object({
 });
 export type LearnItem = Static<typeof LearnItem>;
 
+/** One of your hooks (PAR6): what Piopio writes as a pi extension file from a sentence. */
+export const HookSpec = Type.Object({
+	when: literals("before", "after", "end"),
+	tools: Type.Optional(Type.Array(literals("edit", "write", "bash", "any"))),
+	files: Type.Optional(Type.String()),
+	command: Type.Optional(Type.String()),
+	run: Type.Optional(Type.String()),
+	stop: Type.Optional(Type.String()),
+});
+export type HookSpec = Static<typeof HookSpec>;
+export const HookInfo = Type.Object({
+	path: Type.String(),
+	name: Type.String(),
+	on: Type.Boolean(),
+	/** yours: ~/.pi/agent/extensions; project: the project's .pi/extensions (they run once it's trusted). */
+	where: literals("yours", "project"),
+	/** Piopio's own, unchanged: editable as a sentence. Absent: changed by hand, so it's code. */
+	spec: Type.Optional(HookSpec),
+	sentence: Type.String(),
+});
+export type HookInfo = Static<typeof HookInfo>;
+
 /** A skill pi loads (backlog D9): where it lives, and whether Piopio may change it. */
 export const SkillInfo = Type.Object({
 	name: Type.String(),
@@ -1482,6 +1504,34 @@ export const methods = {
 	"skills.save": {
 		params: Type.Object({ path: Type.Optional(Type.String()), project: Type.Optional(Type.String()), name: Type.String(), description: Type.String(), body: Type.String(), manual: Type.Optional(Type.Boolean()) }),
 		result: Type.Object({ path: Type.String() }),
+	},
+	/** Your hooks (PAR6), and a project's with `project`; `claude`: that project's Claude Code hooks, to import. */
+	"hooks.list": {
+		params: Type.Object({ project: Type.Optional(Type.String()) }),
+		result: Type.Object({ hooks: Type.Array(HookInfo), claude: Type.Array(Type.Object({ spec: HookSpec, sentence: Type.String() })) }),
+	},
+	/** A new hook (no `path`) or a change to one Piopio wrote; `project`: in that project's .pi/extensions. */
+	"hooks.save": {
+		params: Type.Object({ path: Type.Optional(Type.String()), project: Type.Optional(Type.String()), spec: HookSpec }),
+		result: Type.Object({ path: Type.String() }),
+	},
+	"hooks.toggle": {
+		params: Type.Object({ path: Type.String(), on: Type.Boolean() }),
+		result: Type.Object({ path: Type.String() }),
+	},
+	"hooks.delete": {
+		params: Type.Object({ path: Type.String() }),
+		result: Type.Object({}),
+	},
+	/** Runs a hook's command once, on a file it would match when there is one. */
+	"hooks.try": {
+		params: Type.Object({ spec: HookSpec, project: Type.Optional(Type.String()) }),
+		result: Type.Object({ code: Type.Number(), output: Type.String(), ms: Type.Number(), file: Type.Optional(Type.String()) }),
+	},
+	/** Writes a project's Claude Code hooks as pi extensions in its .pi/extensions. */
+	"hooks.importClaude": {
+		params: Type.Object({ project: Type.String() }),
+		result: Type.Object({ paths: Type.Array(Type.String()) }),
 	},
 	/** Moves one of your skills' folder to the Trash. */
 	"skills.delete": {

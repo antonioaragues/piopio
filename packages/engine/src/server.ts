@@ -1,7 +1,7 @@
 /** Local Engine: Engine Protocol over a Unix domain socket. */
 import { keepAttachments } from "./attachment-files.js";
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { appendFileSync, existsSync, mkdirSync, unlinkSync, chmodSync, statSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { createServer, type Server } from "node:net";
@@ -36,6 +36,7 @@ import { Settings } from "./settings.js";
 import { notInChat } from "./tools/mcp-chat.js";
 import { ChatResources, skillSource } from "./tools/chat-resources.js";
 import { editable, parseSkill, skillsRoot, writeSkill } from "./skills.js";
+import { claudeHooks, hookSentence, listHooks, sampleFile, toggleHook, writeHook } from "./user-hooks.js";
 import { Packages } from "./packages.js";
 import { exportMemory, MemoryProviders } from "./memory.js";
 import { AgentFiles } from "./agent-files.js";
@@ -44,7 +45,7 @@ import { groupSteps, StepsView } from "./timeline/steps.js";
 import { DeltaBatcher } from "./timeline/delta-batcher.js";
 import { replacedVisuals } from "./tools/visuals.js";
 import { fitCheck } from "./work/fit.js";
-import type { SkillInfo, SpendRange, SpendSuggestion, TimelineItem, ToolItem } from "@piopio/protocol";
+import type { HookSpec, SkillInfo, SpendRange, SpendSuggestion, TimelineItem, ToolItem } from "@piopio/protocol";
 
 /** Subagents keep their own card (it opens their session). */
 /** Tools that stay their own item when steps fold: subagent tasks, questions you answered, plans, files handed over, visuals and apps made (they read as part of the conversation). */
@@ -674,6 +675,48 @@ export class Engine {
 		}
 	}
 
+	/** Where hooks live (PAR6): pi's extension folders, yours or a project's. */
+	private hooksDir(project?: string): string {
+		return project ? join(project, ".pi", "extensions") : join(this.chatResources.agentDir, "extensions");
+	}
+
+	/** A hook file Piopio may change: a hook-*.ts in your extensions folder or a known project's. */
+	private ownHook(path: string): void {
+		const dir = resolve(dirname(path));
+		const name = basename(path);
+		const project = this.projectOf(path);
+		const allowed = [this.hooksDir(), ...(project ? [this.hooksDir(project)] : [])].map((d) => resolve(d));
+		if (!/^hook-.+\.ts(\.off)?$/.test(name) || !allowed.includes(dir) || !existsSync(path)) throw new EngineError("INVALID", "That isn't one of your hooks.");
+	}
+
+	/** Runs a hook's command once (PAR6 "Try it"), on a file it would match when the project has one. */
+	private async tryHook(spec: HookSpec, project?: string): Promise<{ code: number; output: string; ms: number; file?: string }> {
+		if (!spec.run?.trim()) return { code: 0, output: spec.stop ? `It stops the tool with: ${spec.stop}` : "", ms: 0 };
+		const cwd = project ?? homedir();
+		const file = spec.files && project ? sampleFile(project, spec.files) : undefined;
+		const started = Date.now();
+		const { spawn } = await import("node:child_process");
+		return await new Promise((done) => {
+			const child = spawn("/bin/sh", ["-c", spec.run!], { cwd, env: { ...process.env, ...(file ? { FILE: file } : {}), COMMAND: spec.command?.replace(/\*/g, "") ?? "" } });
+			let output = "";
+			const take = (b: Buffer) => {
+				if (output.length < 8000) output += b.toString();
+			};
+			child.stdout.on("data", take);
+			child.stderr.on("data", take);
+			const timer = setTimeout(() => child.kill("SIGKILL"), 60_000);
+			child.on("close", (code) => {
+				clearTimeout(timer);
+				done({ code: code ?? 1, output: output.trim(), ms: Date.now() - started, ...(file ? { file } : {}) });
+			});
+			child.on("error", (e) => {
+				clearTimeout(timer);
+				done({ code: 1, output: String(e), ms: Date.now() - started });
+			});
+			child.stdin.end(JSON.stringify({ try: true, ...(file ? { file } : {}) }));
+		});
+	}
+
 	/** Where your skills may be written: every project's folders, and one project's when given (backlog D9). */
 	private skillRoots(project?: string): string[] {
 		return [skillsRoot(this.chatResources.agentDir), join(homedir(), ".agents", "skills"), ...(project ? [skillsRoot(this.chatResources.agentDir, project), join(project, ".agents", "skills")] : [])];
@@ -1277,6 +1320,44 @@ export class Engine {
 				const p = params as Params<"packages.setResource">;
 				await this.packages.setResource(p.source, p.kind, p.path, p.enabled);
 				return {};
+			}
+			case "hooks.list": {
+				const p = params as Params<"hooks.list">;
+				const hooks = [
+					...listHooks(this.hooksDir()).map((h) => ({ ...h, where: "yours" as const })),
+					...(p.project ? listHooks(this.hooksDir(p.project)).map((h) => ({ ...h, where: "project" as const })) : []),
+				];
+				const claude = p.project ? claudeHooks(p.project).map((spec) => ({ spec, sentence: hookSentence(spec) })) : [];
+				return { hooks, claude } satisfies Result<"hooks.list">;
+			}
+			case "hooks.save": {
+				const p = params as Params<"hooks.save">;
+				if (p.path) this.ownHook(p.path);
+				const path = writeHook(p.path ? dirname(p.path) : this.hooksDir(p.project), p.spec, p.path);
+				await this.skillsChanged();
+				return { path } satisfies Result<"hooks.save">;
+			}
+			case "hooks.toggle": {
+				const p = params as Params<"hooks.toggle">;
+				this.ownHook(p.path);
+				const path = toggleHook(p.path, p.on);
+				await this.skillsChanged();
+				return { path } satisfies Result<"hooks.toggle">;
+			}
+			case "hooks.delete": {
+				const p = params as Params<"hooks.delete">;
+				this.ownHook(p.path);
+				moveToTrash(p.path, this.options.trashDir ?? join(homedir(), ".Trash"));
+				await this.skillsChanged();
+				return {} satisfies Result<"hooks.delete">;
+			}
+			case "hooks.try":
+				return (await this.tryHook((params as Params<"hooks.try">).spec, (params as Params<"hooks.try">).project)) satisfies Result<"hooks.try">;
+			case "hooks.importClaude": {
+				const p = params as Params<"hooks.importClaude">;
+				const paths = claudeHooks(p.project).map((spec) => writeHook(this.hooksDir(p.project), spec));
+				await this.skillsChanged();
+				return { paths } satisfies Result<"hooks.importClaude">;
 			}
 			case "skills.list":
 				return { skills: await this.skillList((params as Params<"skills.list">).project) } satisfies Result<"skills.list">;

@@ -172,6 +172,11 @@ enum DebugAutomation {
                                            ("monthly-invoices", "When asked for the monthly invoice report: totals by client from the bank CSV.", "1. Export the CSV.\n2. Sum by client.")] {
                     _ = try? await engine.client?.call("skills.save", SkillSaveParams(name: name, description: when, body: body), as: SkillSaveResult.self)
                 }
+                // Two hooks (PAR6) beside them.
+                for spec in [HookSpec(when: .after, tools: [.edit, .write], files: "*.swift", run: "swiftformat \"$FILE\""),
+                             HookSpec(when: .before, tools: [.bash], command: "git push --force*", stop: "Ask me before force-pushing.")] {
+                    _ = try? await engine.client?.call("hooks.save", HookSaveParams(spec: spec), as: HookPathResult.self)
+                }
                 UserDefaults.standard.set("Extensions", forKey: "settingsSection")
                 ThreadModel.openSettings()
             }

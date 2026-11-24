@@ -309,6 +309,8 @@ private struct ProjectApprovalsPage: View {
                     }
                 }
             }
+            // A project's hooks (PAR6): its .pi/extensions, run once it's trusted; Claude Code's offered for import.
+            HooksCard(engine: engine, project: project.path).padding(.bottom, 22)
             VStack(alignment: .leading, spacing: 0) {
                 CardTitle("Always allowed", detail: project.rules.isEmpty ? nil : "\(project.rules.count)")
                 if project.rules.isEmpty {

@@ -181,6 +181,46 @@ public struct LearnItem: Codable, Sendable, Hashable, Identifiable {
     }
 }
 
+/// One of your hooks (PAR6): what Piopio writes as a pi extension file from a sentence.
+public struct HookSpec: Codable, Sendable, Hashable {
+    public enum When: String, Codable, Sendable, CaseIterable { case before, after, end }
+    public enum Tool: String, Codable, Sendable, CaseIterable { case edit, write, bash, any }
+    public var when: When
+    public var tools: [Tool]?
+    public var files: String?
+    public var command: String?
+    public var run: String?
+    public var stop: String?
+    public init(when: When, tools: [Tool]? = nil, files: String? = nil, command: String? = nil, run: String? = nil, stop: String? = nil) {
+        self.when = when; self.tools = tools; self.files = files; self.command = command; self.run = run; self.stop = stop
+    }
+}
+public struct HookInfo: Codable, Sendable, Hashable, Identifiable {
+    public var path: String
+    public var name: String
+    public var on: Bool
+    public var `where`: String
+    /// Absent: changed by hand, so it's code.
+    public var spec: HookSpec?
+    public var sentence: String
+    public var id: String { path }
+}
+public struct HooksListParams: Encodable, Sendable { public var project: String?; public init(project: String? = nil) { self.project = project } }
+public struct HooksResult: Decodable, Sendable {
+    public struct Claude: Decodable, Sendable, Hashable { public var spec: HookSpec; public var sentence: String }
+    public var hooks: [HookInfo]; public var claude: [Claude]
+}
+public struct HookSaveParams: Encodable, Sendable {
+    public var path: String?; public var project: String?; public var spec: HookSpec
+    public init(path: String? = nil, project: String? = nil, spec: HookSpec) { self.path = path; self.project = project; self.spec = spec }
+}
+public struct HookPathResult: Decodable, Sendable { public var path: String }
+public struct HookToggleParams: Encodable, Sendable { public var path: String; public var on: Bool; public init(path: String, on: Bool) { self.path = path; self.on = on } }
+public struct HookTryParams: Encodable, Sendable { public var spec: HookSpec; public var project: String?; public init(spec: HookSpec, project: String? = nil) { self.spec = spec; self.project = project } }
+public struct HookTryResult: Decodable, Sendable { public var code: Int; public var output: String; public var ms: Double; public var file: String? }
+public struct HookImportParams: Encodable, Sendable { public var project: String; public init(project: String) { self.project = project } }
+public struct HookImportResult: Decodable, Sendable { public var paths: [String] }
+
 /// A skill pi loads (backlog D9): yours, a project's, or a package's (read-only).
 public struct SkillInfo: Codable, Sendable, Hashable, Identifiable {
     public enum Where: String, Codable, Sendable { case yours, project, package }

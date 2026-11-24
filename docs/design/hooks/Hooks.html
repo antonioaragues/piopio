@@ -1,0 +1,279 @@
+<title>Your hooks</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: a design document of app fragments (Settings and the transcript column) in Piopio's grey ink, two options side by side where there's a choice. */
+:root {
+  --win:#fcfcfb; --side:#f4f4f2; --fg:#1f1f1e; --fg2:#6b6b67; --fg3:#9b9b96; --line:rgba(0,0,0,.09);
+  --field:#ffffff; --chip:rgba(0,0,0,.06); --inv:#1f1f1e; --invfg:#fff; --accent:#2f6fde; --page:#e9e9e6;
+  --bubble:#f0f0ed; --ok:#3a8a55; --bad:#c2493f; --bads:rgba(194,73,63,.08); --menu:rgba(252,252,251,.97);
+  --shadow:0 18px 44px rgba(0,0,0,.11);
+  --font:-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+  --mono:ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --win:#1e1e1d; --side:#191918; --fg:#ececea; --fg2:#a6a6a1; --fg3:#77776f; --line:rgba(255,255,255,.1);
+  --field:#252524; --chip:rgba(255,255,255,.08); --inv:#ececea; --invfg:#1e1e1d; --accent:#6ea0ff; --page:#121211;
+  --bubble:#2b2b29; --ok:#6cc28a; --bad:#ef7d72; --bads:rgba(239,125,114,.12); --menu:rgba(44,44,42,.97);
+  --shadow:0 18px 44px rgba(0,0,0,.45); color-scheme:dark;
+} }
+:root[data-theme="dark"] {
+  --win:#1e1e1d; --side:#191918; --fg:#ececea; --fg2:#a6a6a1; --fg3:#77776f; --line:rgba(255,255,255,.1);
+  --field:#252524; --chip:rgba(255,255,255,.08); --inv:#ececea; --invfg:#1e1e1d; --accent:#6ea0ff; --page:#121211;
+  --bubble:#2b2b29; --ok:#6cc28a; --bad:#ef7d72; --bads:rgba(239,125,114,.12); --menu:rgba(44,44,42,.97);
+  --shadow:0 18px 44px rgba(0,0,0,.45); color-scheme:dark;
+}
+* { box-sizing:border-box; }
+body { margin:0; background:var(--page); color:var(--fg); font:13px/1.45 var(--font); -webkit-font-smoothing:antialiased; }
+main { max-width:1320px; margin:0 auto; padding-block:40px 90px; padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px)); }
+header.doc { display:flex; gap:20px; align-items:flex-start; flex-wrap:wrap; }
+header.doc > div { flex:1; min-width:0; }
+h1 { font-size:22px; font-weight:600; margin:0 0 6px; text-wrap:balance; }
+header.doc p { color:var(--fg2); margin:0 0 6px; max-width:880px; }
+.theme { color:var(--fg2); cursor:pointer; padding:3px 8px; border-radius:6px; border:0; background:none; font:inherit; white-space:nowrap; }
+.theme:hover, .theme:focus-visible { background:var(--chip); color:var(--fg); outline:none; }
+code, .mono { font-family:var(--mono); font-size:.92em; }
+.fg2 { color:var(--fg2); } .fg3 { color:var(--fg3); }
+h2.sec { font-size:17px; margin:52px 0 4px; text-wrap:balance; }
+p.sec { color:var(--fg2); margin:0 0 18px; max-width:880px; }
+.row2 { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:26px; }
+.row3 { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:22px; }
+@media (max-width:1100px) { .row2, .row3 { grid-template-columns:minmax(0, 1fr); max-width:700px; } }
+.label { display:flex; gap:10px; align-items:baseline; margin:0 0 10px; }
+.label b { font-size:12px; color:var(--fg3); font-weight:600; }
+.label h3 { font-size:14.5px; margin:0; font-weight:600; }
+ul.note { color:var(--fg2); margin:12px 0 0; padding-left:18px; }
+ul.note li { margin:4px 0; }
+
+.pane { background:var(--win); border-radius:12px; box-shadow:0 0 0 .5px var(--line), var(--shadow); overflow:hidden; position:relative; }
+.pad { padding:22px 24px; }
+.sh { display:flex; align-items:flex-start; gap:12px; margin-bottom:16px; }
+.sh h4 { font-size:20px; font-weight:700; margin:0 0 4px; letter-spacing:-.2px; }
+.sh p { margin:0; color:var(--fg2); max-width:440px; }
+.add { margin-left:auto; background:var(--inv); color:var(--invfg); border-radius:14px; height:28px; padding:0 12px; display:inline-flex; align-items:center; gap:6px; font-weight:500; white-space:nowrap; }
+.ct { display:flex; align-items:baseline; font-weight:600; margin:14px 0 6px; }
+.ct span { margin-left:auto; color:var(--fg3); font-weight:400; font-size:12px; }
+.card { border-radius:10px; box-shadow:0 0 0 .5px var(--line); background:var(--field); }
+.hrow { display:flex; align-items:center; gap:12px; padding:11px 14px; border-top:.5px solid var(--line); min-width:0; }
+.hrow:first-child { border-top:0; }
+.hrow .g { width:26px; height:26px; border-radius:7px; background:var(--chip); display:grid; place-items:center; color:var(--fg2); flex:none; font-size:12px; }
+.hrow .tx { flex:1; min-width:0; }
+.hrow .s { font-size:13px; }
+.hrow .s b { font-weight:600; }
+.hrow .s code { background:var(--chip); border-radius:4px; padding:0 4px; }
+.hrow .m { color:var(--fg3); font-size:11.5px; margin-top:2px; }
+.sw { width:28px; height:16px; border-radius:8px; background:var(--inv); position:relative; flex:none; }
+.sw::after { content:""; position:absolute; top:2px; left:14px; width:12px; height:12px; border-radius:50%; background:var(--invfg); }
+.sw.off { background:var(--chip); }
+.sw.off::after { left:2px; background:var(--field); box-shadow:0 1px 2px rgba(0,0,0,.2); }
+.fine { color:var(--fg3); font-size:12px; margin-top:10px; }
+
+/* sentence editor */
+.sent { margin-top:14px; border-radius:10px; box-shadow:0 0 0 .5px var(--line), 0 6px 20px rgba(0,0,0,.08); background:var(--field); padding:14px; }
+.sent .line { font-size:14px; line-height:2.1; }
+.tok { display:inline-flex; align-items:center; gap:4px; background:var(--chip); border-radius:7px; padding:1px 8px; font-weight:500; }
+.tok.code { font-family:var(--mono); font-size:12.5px; font-weight:400; }
+.tok.on { box-shadow:0 0 0 1.5px var(--accent); }
+.pop { position:relative; display:inline-block; }
+.pop .menu { position:absolute; left:0; top:30px; width:230px; background:var(--menu); border-radius:10px; box-shadow:0 0 0 .5px var(--line), 0 10px 30px rgba(0,0,0,.18); padding:5px; z-index:2; font-size:12.5px; line-height:1.45; font-weight:400; }
+.menu .it { padding:5px 8px; border-radius:6px; }
+.menu .it.hi { background:var(--accent); color:#fff; }
+.menu .sep { height:1px; background:var(--line); margin:4px 8px; }
+.sent .acts { display:flex; gap:14px; align-items:center; margin-top:10px; color:var(--fg2); font-size:12.5px; flex-wrap:wrap; }
+.sent .acts .ok { color:var(--ok); }
+.btn { background:var(--inv); color:var(--invfg); border-radius:12px; height:24px; padding:0 11px; display:inline-flex; align-items:center; font-weight:500; font-size:12px; white-space:nowrap; }
+
+/* table */
+.tbl { width:100%; border-collapse:collapse; font-size:12.5px; }
+.tbl th { text-align:left; font-weight:500; color:var(--fg3); font-size:11.5px; padding:8px 10px; border-bottom:.5px solid var(--line); }
+.tbl td { padding:9px 10px; border-bottom:.5px solid var(--line); vertical-align:top; }
+.tbl tr:last-child td { border-bottom:0; }
+.tbl td.c { font-family:var(--mono); font-size:11.5px; }
+.tw { overflow-x:auto; }
+.sheet { margin-top:14px; border-radius:10px; box-shadow:0 0 0 .5px var(--line), 0 6px 20px rgba(0,0,0,.08); background:var(--field); padding:14px; display:grid; grid-template-columns:110px minmax(0, 1fr); gap:9px 12px; align-items:center; font-size:12.5px; }
+.sheet .k { color:var(--fg2); }
+.sheet .v { border-radius:7px; box-shadow:0 0 0 .5px var(--line); padding:5px 8px; background:var(--win); min-width:0; }
+.sheet .v.code { font-family:var(--mono); font-size:11.5px; }
+.sheet .foot { grid-column:1 / -1; display:flex; gap:14px; align-items:center; justify-content:flex-end; color:var(--fg2); }
+
+/* transcript */
+.tx-col { padding:16px 18px; display:flex; flex-direction:column; gap:11px; min-width:0; }
+.you { align-self:flex-end; background:var(--bubble); padding:7px 11px; border-radius:14px; max-width:84%; }
+.ans { max-width:96%; }
+.act { color:var(--fg3); font-size:12.5px; display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
+.act .d { width:13px; height:13px; border-radius:50%; border:1.2px solid var(--fg3); display:inline-block; flex:none; }
+.act b { color:var(--fg2); font-weight:500; }
+.hk { color:var(--fg3); font-size:12px; display:flex; align-items:center; gap:7px; padding-left:20px; }
+.hk .h { font-family:var(--mono); font-size:11px; background:var(--chip); border-radius:4px; padding:0 5px; color:var(--fg2); }
+.blk { border-radius:10px; box-shadow:0 0 0 .5px var(--line); overflow:hidden; }
+.blk .hd { display:flex; gap:8px; align-items:center; padding:8px 12px; font-size:12.5px; }
+.blk .hd b { font-weight:600; }
+.blk .hd .x { margin-left:auto; color:var(--fg3); font-size:12px; }
+.blk .bd { background:var(--bads); padding:8px 12px; font-family:var(--mono); font-size:11.5px; color:var(--fg); white-space:pre-wrap; }
+.note-l { color:var(--fg2); font-size:12.5px; display:flex; gap:8px; align-items:flex-start; }
+.note-l .i { color:var(--bad); flex:none; }
+.trust { border-radius:10px; box-shadow:0 0 0 .5px var(--line); padding:12px 14px; background:var(--field); }
+.trust .t { font-weight:600; margin-bottom:4px; }
+.trust .l { color:var(--fg2); font-size:12.5px; }
+.trust .list { margin:8px 0; font-family:var(--mono); font-size:11.5px; color:var(--fg2); }
+.trust .acts { display:flex; gap:14px; align-items:center; justify-content:flex-end; color:var(--fg2); font-size:12.5px; }
+
+.same { margin-top:48px; max-width:900px; color:var(--fg2); }
+.same h2 { color:var(--fg); font-size:15px; font-weight:600; margin:0 0 6px; }
+.same li { margin:4px 0; }
+.fmt { margin-top:14px; border-radius:10px; box-shadow:0 0 0 .5px var(--line); background:var(--field); padding:12px 14px; font-family:var(--mono); font-size:11.5px; white-space:pre; overflow-x:auto; color:var(--fg2); max-width:900px; }
+@media (prefers-reduced-motion: reduce) { * { transition:none !important; } }
+</style>
+
+<main>
+<header class="doc">
+  <div>
+    <h1>Your hooks</h1>
+    <p>Commands Piopio runs at fixed moments, every time, without the model deciding: before a tool (and able to stop it), after a tool, and when a turn ends. A rule in AGENTS.md asks; a hook makes sure (PAR6).</p>
+    <p>Round 2, staying close to pi: in pi a hook <em>is</em> an extension (its docs list permission gates and path protection as extension examples). So each hook you make is a small pi extension file, written from a sentence. The pi CLI runs the same files; a project's travel in its <code>.pi/extensions/</code>. Claude Code's hooks come in by import, not as the format.</p>
+  </div>
+  <button class="theme" id="theme" type="button">Light / Dark</button>
+</header>
+
+<h2 class="sec">1 · Making one: a sentence that writes an extension</h2>
+<p class="sec">Settings › Extensions › Your hooks, beside Your skills. You fill in a sentence; Piopio writes the extension file pi loads, with the sentence on its first line so it can read it back.</p>
+<div class="row2">
+  <section>
+    <div class="label"><b>a</b><h3>Your hooks, and the sentence</h3></div>
+    <div class="pane pad">
+      <div class="sh"><div><h4>Extensions</h4><p>pi packages add skills and commands to any chat, and extensions to Build. Shared with the pi CLI.</p></div><span class="add">+ Install</span></div>
+      <div class="ct">Your hooks <span style="color:var(--accent)">New hook</span></div>
+      <div class="card">
+        <div class="hrow"><span class="g">↳</span><div class="tx"><div class="s">After Piopio <b>edits</b> a <code>*.swift</code> file, run <code>swiftformat "$FILE"</code></div><div class="m">hooks/swiftformat-after-edit.ts · ran 14 times today</div></div><span class="sw"></span></div>
+        <div class="hrow"><span class="g">⊘</span><div class="tx"><div class="s">Before Piopio <b>runs a command</b> matching <code>git push --force*</code>, <b>stop it</b>: "Ask me before force-pushing."</div><div class="m">hooks/no-force-push.ts · stopped 1 command this week</div></div><span class="sw"></span></div>
+        <div class="hrow"><span class="g">{}</span><div class="tx"><div class="s">auto-commit-on-exit.ts</div><div class="m">Written by hand: it's code, so it opens as a file, not as a sentence</div></div><span class="sw"></span></div>
+      </div>
+      <div class="sent">
+        <div class="line">
+          <span class="pop"><span class="tok on">After</span>
+            <span class="menu"><div class="it">Before (can stop it)</div><div class="it hi">After</div><div class="it">When a turn ends</div></span></span>
+          Piopio <span class="tok">edits or writes</span> a <span class="tok code">*.swift</span> file, run <span class="tok code">swiftformat "$FILE"</span>
+        </div>
+        <div class="acts"><span>Every project ▾</span><span class="ok">✓ Tried on ThreadView.swift · 0.3 s</span><span style="margin-left:auto">Show the file</span><span>Cancel</span><span class="btn">Add</span></div>
+      </div>
+      <div class="ct">Your skills <span style="color:var(--accent)">New skill</span></div>
+      <div class="card"><div class="hrow"><span class="g">▤</span><div class="tx"><div class="s">release-piopio</div><div class="m">When asked to cut, tag or publish a Piopio release.</div></div></div></div>
+    </div>
+    <ul class="note">
+      <li>Off moves the file aside (pi skips it); delete moves it to the Trash. On or off, the pi CLI sees the same.</li>
+      <li>"Try it" runs the command once on a real file before saving.</li>
+      <li>An extension you wrote by hand is listed too, as code: Piopio never rewrites what it didn't write.</li>
+    </ul>
+  </section>
+  <section>
+    <div class="label"><b>b</b><h3>The file it writes (sketch)</h3></div>
+    <div class="fmt" style="margin-top:0">// Piopio hook · After Piopio edits or writes a *.swift file, run swiftformat "$FILE"
+// Made in Piopio (Settings › Extensions › Your hooks). The line above is how Piopio reads it back;
+// change the code and it opens as code instead.
+import { execFile } from "node:child_process";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+
+const TOOLS = ["edit", "write"];
+const FILES = /\.swift$/;
+const COMMAND = 'swiftformat "$FILE"';
+
+export default function (pi: ExtensionAPI) {
+  pi.on("tool_result", async (event, ctx) =&gt; {
+    const file = String((event.input as { path?: string }).path ?? "");
+    if (!TOOLS.includes(event.toolName) || !FILES.test(file)) return;
+    const failed = await new Promise&lt;string | undefined&gt;((done) =&gt;
+      execFile("/bin/sh", ["-c", COMMAND], { cwd: ctx.cwd, timeout: 60_000, env: { ...process.env, FILE: file } },
+        (error, _out, err) =&gt; done(error ? err || String(error) : undefined)));
+    // Failed: the model is told, in the tool's result.
+    if (failed) return { content: [...event.content, { type: "text", text: `Your hook swiftformat failed:\n${failed}` }] };
+  });
+}</div>
+    <ul class="note">
+      <li>Three templates, one per moment: <b>before</b> (<code>tool_call</code>, can stop it), <b>after</b> (<code>tool_result</code>), <b>turn ends</b> (<code>turn_end</code>, can ask for another turn, three at most).</li>
+      <li>Self-contained: no Piopio package to install, so the pi CLI runs it on its own.</li>
+      <li>Saved as <code>~/.pi/agent/extensions/hooks/&lt;name&gt;.ts</code>, or the project's <code>.pi/extensions/hooks/</code>.</li>
+    </ul>
+  </section>
+</div>
+
+<h2 class="sec">2 · In the conversation</h2>
+<p class="sec">A hook that runs fine is quiet; one that stops something or fails says so where it happened, and Piopio sees the same words.</p>
+<div class="row3">
+  <section>
+    <div class="label"><b>a</b><h3>Ran fine: under its step</h3></div>
+    <div class="pane"><div class="tx-col">
+      <div class="you">Make the strip's Keep button black.</div>
+      <div class="act"><span class="d"></span><b>Edited</b> ThreadView.swift <span style="color:var(--ok)">+1 −1</span></div>
+      <div class="hk">↳ formatted by your hook <span class="h">swiftformat</span> · 0.3 s</div>
+      <div class="ans">Keep is now the black button; the × stays grey.</div>
+    </div></div>
+    <ul class="note"><li>Folded into the activity line like the step itself; opened, it shows the command and its output.</li></ul>
+  </section>
+  <section>
+    <div class="label"><b>b</b><h3>Stopped a tool</h3></div>
+    <div class="pane"><div class="tx-col">
+      <div class="you">Push it.</div>
+      <div class="blk"><div class="hd"><span>⊘</span><b>Stopped by your hook</b><span class="fg2">Before command</span><span class="x">git push --force</span></div><div class="bd">Ask me before force-pushing.</div></div>
+      <div class="ans">Your hook stops force pushes. The branch has diverged from origin; should I force-push anyway, or rebase onto origin/main first?</div>
+    </div></div>
+    <ul class="note"><li>The tool's card says who stopped it and why; the model gets the same message and asks or tries another way.</li></ul>
+  </section>
+  <section>
+    <div class="label"><b>c</b><h3>A turn's check failed</h3></div>
+    <div class="pane"><div class="tx-col">
+      <div class="ans">Done: the card answers itself now, with Save inside.</div>
+      <div class="note-l"><span class="i">●</span><span><b style="color:var(--fg)">Your hook <span class="mono">pnpm test:unit</span> failed</b> after this turn: 2 tests. Piopio is on it (1 of 3).</span></div>
+      <div class="act"><span class="d"></span><b>Read</b> learn.test.ts · <b>Edited</b> learn.ts</div>
+      <div class="hk">↳ <span class="h">pnpm test:unit</span> passed · 14 s</div>
+      <div class="ans">Fixed: the empty-section case. All 212 pass.</div>
+    </div></div>
+    <ul class="note"><li>A failing end-of-turn hook sends its output back and Piopio goes on, at most three times; then it stops and says so.</li></ul>
+  </section>
+</div>
+
+<h2 class="sec">3 · A project's hooks</h2>
+<p class="sec">A project's hooks are its <code>.pi/extensions/</code>, which pi already treats as project code: they run only once you trust the project, as Piopio asks today (spec 39). Claude Code's hooks come in by import.</p>
+<div class="row2">
+  <section>
+    <div class="label"><b>a</b><h3>The first time, asked once</h3></div>
+    <div class="pane"><div class="tx-col">
+      <div class="trust">
+        <div class="t">This project has 2 hooks</div>
+        <div class="l">In <code>.pi/extensions/hooks/</code>. They'd run on this Mac with your permissions, in every conversation here.</div>
+        <div class="list">After edit · *.ts → pnpm biome format "$FILE"<br>Turn ends → pnpm typecheck</div>
+        <div class="acts"><span>Not now</span><span class="btn">Trust and run them</span></div>
+      </div>
+      <div class="fine" style="margin-top:0">Part of trusting the project, not a second question: an untrusted project runs none of its extensions, hooks included.</div>
+    </div></div>
+  </section>
+  <section>
+    <div class="label"><b>b</b><h3>Claude Code's hooks, imported</h3></div>
+    <div class="pane"><div class="tx-col">
+      <div class="trust">
+        <div class="t">This project has Claude Code hooks</div>
+        <div class="l"><code>.claude/settings.json</code> has 3. Piopio can write them as pi extensions in <code>.pi/extensions/hooks/</code>, so Piopio and the pi CLI run them too.</div>
+        <div class="list">PostToolUse · Edit|Write → prettier --write<br>PreToolUse · Bash → ./scripts/guard.sh<br>Stop → npm test</div>
+        <div class="acts"><span>Not now</span><span class="btn">Import 3 hooks</span></div>
+      </div>
+      <div class="fine" style="margin-top:0">A one-time conversion, shown where you'd see the project's setup. Claude Code's file is read, never written; a later change there offers the import again.</div>
+    </div></div>
+  </section>
+</div>
+
+<div class="same">
+  <h2>The same whichever way</h2>
+  <ul>
+    <li>A command gets <code>$FILE</code> for the file and the call as JSON on its input; a Before hook whose command exits 2 stops the tool, and its message goes to Piopio.</li>
+    <li>Hooks run in Build sessions and chats with a project; never in agents' scheduled runs unless their project allows them.</li>
+    <li>A hook has 60 s by default; one that hangs is stopped and reported, never blocks the turn for good.</li>
+    <li>Later: /learn proposing "make this a hook" when you correct the same thing twice: the model writes the extension, as pi recommends.</li>
+  </ul>
+</div>
+</main>
+
+<script>
+document.getElementById('theme').addEventListener('click', () => {
+  const root = document.documentElement;
+  const dark = root.dataset.theme ? root.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+  root.dataset.theme = dark ? 'light' : 'dark';
+});
+</script>
