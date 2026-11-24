@@ -174,7 +174,8 @@ struct TerminalDrawer: View {
                     .help("New terminal")
                 Spacer()
                 if let p = process {
-                    if let url = p.urls.first.flatMap(URL.init(string:)) {
+                    // Only while it runs: a stopped server's page is gone.
+                    if p.status == .running, let url = p.urls.first.flatMap(URL.init(string:)) {
                         // The project preview (docs/spec/22 §6): in Piopio's browser, in the project's own profile.
                         Button(url.host.map { "Preview \($0)\(url.port.map { ":\($0)" } ?? "")" } ?? "Preview") {
                             BrowserCenter.shared.session(session.ref.id).openPreview(url, profile: previewProfile)

@@ -77,6 +77,10 @@ public final class TranscriptDocument {
         didSet { if oldValue != isFollowing { onFollowingChange?(isFollowing) } }
     }
     public var onFollowingChange: ((Bool) -> Void)?
+    /// The visible height last seen: a change is a resize (a panel opening above, the terminal drawer), not a scroll.
+    private var followHeight: CGFloat = 0
+    /// Set while the transcript scrolls itself to keep the end in view, so that scroll doesn't count as yours.
+    private var keepingEnd = false
     /// Where Remember this saves ("About me", "Daily briefing's memory"); nil hides it (Quick Chat).
     public var rememberDestination: String?
     /// Select and ask: the bar over selected text (Ask about this, Remember, Copy).
@@ -129,18 +133,18 @@ public final class TranscriptDocument {
         scrollView.contentView.postsBoundsChangedNotifications = true
         scrollView.contentView.postsFrameChangedNotifications = true
         frameObserver = NotificationCenter.default.addObserver(forName: NSView.frameDidChangeNotification, object: scrollView.contentView, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.layoutColumn() }
+            MainActor.assumeIsolated { self?.layoutColumn(); self?.keepEndAfterResize() }
         }
         // The scroll view itself can be resized (an inspector opening) without its clip view posting first.
         scrollView.postsFrameChangedNotifications = true
         scrollFrameObserver = NotificationCenter.default.addObserver(forName: NSView.frameDidChangeNotification, object: scrollView, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.layoutColumn() }
+            MainActor.assumeIsolated { self?.layoutColumn(); self?.keepEndAfterResize() }
         }
         textView.addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect], owner: hover, userInfo: nil))
         hover.document = self
         boundsObserver = NotificationCenter.default.addObserver(forName: NSView.boundsDidChangeNotification, object: scrollView.contentView, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated {
-                guard let self else { return }
+                guard let self, !self.keepingEnd else { return }
                 self.isFollowing = self.atBottom
                 self.loadOlderIfNeeded()
             }
@@ -322,6 +326,43 @@ public final class TranscriptDocument {
         for (item, r) in zip(page, rendered) { lengths[item.id] = r.length }
         windowStart = index
         prefetchOlder()
+    }
+
+    /// A panel opening above the transcript shrinks it by its frame, and no bounds change follows: if the end was in
+    /// view, it stays in view (above the composer) instead of sliding under it.
+    private func keepEndAfterResize() {
+        let height = scrollView.contentView.bounds.height
+        guard abs(height - followHeight) > 0.5 else { return }
+        followHeight = height
+        guard isFollowing else { return }
+        DispatchQueue.main.async { [weak self] in self?.showLastLine() }
+    }
+
+    /// The last line of text just above the composer. Not `scrollToEndOfDocument`: the text view keeps blank room
+    /// below its text, and in a short view (the terminal drawer open, a panel above) the end of the document is that
+    /// room alone, with the last line pushed out of sight.
+    private func showLastLine() {
+        var bottom: CGFloat?
+        // An answer's action row (copy, retry) shows on hover only: blank room, not a line to keep in view.
+        var looked = 0
+        layoutManager.enumerateTextLayoutFragments(from: layoutManager.documentRange.endLocation, options: [.reverse, .ensuresLayout]) { fragment in
+            looked += 1
+            let text = (fragment.textElement as? NSTextParagraph)?.attributedString
+            var actionsOnly = false
+            if let text, text.length > 0 {
+                actionsOnly = text.attribute(.attachment, at: 0, effectiveRange: nil) is ActionsAttachment
+            }
+            if actionsOnly, looked < 6 { return true }
+            bottom = fragment.layoutFragmentFrame.maxY
+            return false
+        }
+        guard let bottom else { return textView.scrollToEndOfDocument(nil) }
+        let clip = scrollView.contentView
+        keepingEnd = true
+        defer { keepingEnd = false }
+        let y = textView.textContainerOrigin.y + bottom + 16 + scrollView.contentInsets.bottom - clip.bounds.height
+        clip.scroll(to: NSPoint(x: clip.bounds.origin.x, y: min(max(-scrollView.contentInsets.top, y), textView.frame.height - clip.bounds.height + scrollView.contentInsets.bottom)))
+        scrollView.reflectScrolledClipView(clip)
     }
 
     public func scrollToLatest() {

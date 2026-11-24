@@ -186,8 +186,9 @@ Three modes, set per session (default per project; global default = **Auto-edit*
   (sends the finding to the session as a message, and marks it fixing) or **Dismiss**; **Fix all** sends the open ones
   together. While the review runs the panel says so, with a link to it.
 - **RV3 in captures (2026-11-24):** the panel is as tall as its findings, up to 260 points, then scrolls (it was 260
-  whatever it held). Open: with the terminal drawer open, the agent's last line ends under the composer when the panel
-  appears ([the pass](../research/par-pass-2026-11-24.md), UI2).
+  whatever it held). When it appears (or the drawer opens or closes) the transcript keeps its last line above the
+  composer (UI2, checked live). A fixed finding stays "Fixing": nothing marks it done yet
+  ([the pass](../research/par-pass-2026-11-24.md)).
 - **RV4** Posting the findings to GitHub as review comments is not built: it publishes on the user's behalf and needs
   its own confirmation design.
 - **As built (2026-11-21):** `code-review.ts` (the reviewer's message and `report_findings`, which never asks),
@@ -210,7 +211,7 @@ Three modes, set per session (default per project; global default = **Auto-edit*
   each keeps its last 256 KB of output. They stop when the session closes or the engine quits, never outliving
   Piopio. The session state lists them (`state.processes`: id, command, status, exit code, addresses), and the
   terminal drawer shows each as a tab next to your shells ("npm run dev · agent"), with its output as it comes,
-  **Stop**, and Send to agent; the app reads output with `sessions.processOutput` and stops one with
+  **Stop**, Send to agent, and Preview while it runs; the app reads output with `sessions.processOutput` and stops one with
   `sessions.processStop`. Claude Code, Codex and Antigravity have their own background commands (spec 31).
 
 ## 10. Later
