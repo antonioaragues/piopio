@@ -1,9 +1,10 @@
 /**
  * Approvals and safety (docs/spec/06-agents §9 AS1–AS4), result cards with Undo (§4.2 RC1–RC5) and the Inbox (§12).
  *
- * - A tool call matched by `policies.requireApproval` waits in the tool task's `beforeTool` hook until the owner
- *   approves (as is, or edited), denies, or 24 hours pass. The wait is durable in effect: the decision lives in the
- *   agent's state doc, and after a restart the tool task runs its hook again and finds it.
+ * - A tool call matched by `policies.requireApproval` is parked by the tool task's `beforeTool` hook (pi-durable's
+ *   gate: a sleep on a signal, with the 24 hours as its deadline) until the owner approves (as is, or edited) or
+ *   denies. No process waits meanwhile. The decision lives in the agent's state doc and is written in the commit that
+ *   delivers the signal; the woken call runs its hooks again and finds it.
  * - Contacts can't make the agent message third people (AS2).
  * - The month's spend comes from pi-durable's usage ledger. At 80% of the budget the owner is told; at 100% runs
  *   stop, tool calls are blocked and messages get a canned answer (AS3). Pausing stops everything at once (AS4).
@@ -11,7 +12,8 @@
  * - The Inbox: approvals, messages the agent sent the owner on its own, failed runs, budget and pause notes.
  */
 import { awaitWithContext, type Context } from "@earendil-works/chord/context";
-import type { ConversationId, Harness, JsonObject } from "@earendil-works/pi-durable";
+import { defineSignal, type ConversationId, type Harness, type HookApi, type JsonObject, type SignalResult } from "@earendil-works/pi-durable";
+import { Type } from "typebox";
 import { contactFor, type AgentDefinition, type Contact } from "./definition.js";
 
 export type ApprovalStatus = "pending" | "approved" | "denied" | "expired" | "cancelled";
@@ -19,6 +21,8 @@ export type Approval = {
 	id: string;
 	conversationId: string;
 	callId: string;
+	/** The tool task parked at its gate for this approval; absent when a tool asked in the middle of its call (`ask`). */
+	taskId?: string;
 	tool: string;
 	args: JsonObject;
 	/** "Send to María: “…”". */
@@ -82,6 +86,12 @@ export type SafetyState = {
 
 export type AgentStatus = { paused: boolean; spendUsd: number; budgetUsd?: number; inbox: number };
 
+/** Wakes a call parked for an approval, under the approval's id. The decision itself is in the state doc. */
+export const ApprovalDecided = defineSignal({ name: "piopio.approval-decided", version: 1, schema: Type.Object({}) });
+
+/** What the gate needs from the `beforeTool` hook's api. */
+export type GateApi = Pick<HookApi, "taskId" | "readSignal" | "conversationId">;
+
 const DAY = 24 * 3600_000;
 const MAX_KEPT = 300;
 /** setTimeout's limit. */
@@ -94,6 +104,11 @@ export interface SafetyHost {
 	now(): number;
 	read(): Promise<SafetyState>;
 	write(change: (state: SafetyState) => void): Promise<void>;
+	/**
+	 * Delivers `ApprovalDecided` to the parked call's task under `key` and applies `change` in the same commit, so a
+	 * decision is never stored without its wake. `change` gets what the delivery did.
+	 */
+	deliver(taskId: string, key: string, change: (state: SafetyState, result: SignalResult) => void): Promise<SignalResult>;
 	/** Who a conversation belongs to: a person, or a run (which acts for the owner). */
 	/** `runLabel`: the automation an automatic run belongs to, by name (docs/spec/27 §5). */
 	whose(conversationId: ConversationId | string): Promise<{ contact?: Contact; runId?: string; runLabel?: string; peerId?: string }>;
@@ -130,7 +145,7 @@ export class Safety {
 		return new Date(t).toISOString();
 	}
 
-	/** The engine is stopping: waits end without cancelling their approvals (they come back after the restart). */
+	/** The engine is stopping: `ask` waits end without cancelling their approvals. */
 	close(): void {
 		this.closing = true;
 	}
@@ -221,8 +236,12 @@ export class Safety {
 
 	// ── Approvals ──
 
-	/** The `beforeTool` hook: blocks what's paused, over budget or not allowed; waits for approval where required. */
-	async beforeTool(call: { id: string; name: string; arguments: unknown }, conversationId: ConversationId, context: Context): Promise<{ arguments?: JsonObject; block?: string } | undefined> {
+	/**
+	 * The `beforeTool` hook: blocks what's paused, over budget or not allowed; parks the call where approval is
+	 * required. pi-durable runs it again from the top on every wake (the decision, the deadline, a restart).
+	 */
+	async beforeTool(call: { id: string; name: string; arguments: unknown }, api: GateApi, context: Context): Promise<{ arguments?: JsonObject; block?: string; sleep?: { until: number; signals: ReturnType<typeof ApprovalDecided.key>[] } } | undefined> {
+		const conversationId = api.conversationId;
 		const gate = await this.gate();
 		if (!gate.ok) return { block: `${gate.message} Nothing was done.` };
 		let args = (call.arguments ?? {}) as JsonObject;
@@ -243,8 +262,16 @@ export class Safety {
 		}
 		const rule = (this.def.policies?.requireApproval ?? []).find((r) => matches(r, call.name, args, owner?.id ?? "owner"));
 		if (!rule) return undefined;
-		const approval = await this.obtain({ callId: call.id, tool: call.name, args, key: allowKey(call.name, args), rule }, conversationId, context);
-		if (!approval) return undefined;
+		const asked = await this.request({ callId: call.id, tool: call.name, args, key: allowKey(call.name, args), rule, taskId: String(api.taskId) }, conversationId);
+		if (!asked) return undefined;
+		let approval = asked;
+		if (approval.status === "pending") {
+			const woke = await api.readSignal(ApprovalDecided, approval.id, context);
+			if (woke === undefined && approval.expiresAt > this.host.now()) return { sleep: { signals: [ApprovalDecided.key(approval.id)], until: approval.expiresAt } };
+			// Woken by the deadline, or by a decision (stored with its signal, so the record already says which).
+			if (woke !== undefined && "value" in woke) approval = (await this.host.read()).approvals?.find((a) => a.id === asked.id) ?? asked;
+			else approval = await this.settle(approval.id, "expired");
+		}
 		switch (approval.status) {
 			case "approved":
 				return approval.editedArgs ? { arguments: approval.editedArgs } : undefined;
@@ -265,7 +292,8 @@ export class Safety {
 	async ask(request: { callId: string; tool: string; args: JsonObject; key: string }, conversationId: ConversationId, context: Context): Promise<{ approved: boolean; reason?: string }> {
 		const gate = await this.gate();
 		if (!gate.ok) return { approved: false, reason: gate.message };
-		const approval = await this.obtain({ ...request, rule: request.tool }, conversationId, context);
+		let approval = await this.request({ ...request, rule: request.tool }, conversationId);
+		if (approval?.status === "pending") approval = await this.wait(approval, context);
 		if (!approval || approval.status === "approved") return { approved: true };
 		if (approval.status === "denied") return { approved: false, ...(approval.reason ? { reason: approval.reason } : {}) };
 		return { approved: false, reason: approval.status === "expired" ? "no answer within 24 hours" : "the request was cancelled" };
@@ -276,8 +304,8 @@ export class Safety {
 		return (await this.host.read()).allowed?.includes(key) ?? false;
 	}
 
-	/** The approval for this call, asked (and waited on) if it wasn't yet; undefined when "Always allow" covers it. */
-	private async obtain(call: { callId: string; tool: string; args: JsonObject; key: string; rule: string }, conversationId: ConversationId, context: Context): Promise<Approval | undefined> {
+	/** The approval for this call, asked if it wasn't yet; undefined when "Always allow" covers it. */
+	private async request(call: { callId: string; tool: string; args: JsonObject; key: string; rule: string; taskId?: string }, conversationId: ConversationId): Promise<Approval | undefined> {
 		const { key, rule, args } = call;
 		const state = await this.host.read();
 		if (state.allowed?.includes(key)) return undefined;
@@ -289,6 +317,7 @@ export class Safety {
 				id: `apr_${now.toString(36)}${Math.random().toString(36).slice(2, 6)}`,
 				conversationId: String(conversationId),
 				callId: call.callId,
+				...(call.taskId ? { taskId: call.taskId } : {}),
 				tool: call.tool,
 				args,
 				title: describe(call.tool, args, this.def),
@@ -304,10 +333,10 @@ export class Safety {
 			this.host.onApproval?.(created);
 			approval = created;
 		}
-		if (approval.status === "pending") approval = await this.wait(approval, context);
 		return approval;
 	}
 
+	/** A tool's own question (`ask`) waits inside its call, in this process. */
 	private async wait(approval: Approval, context: Context): Promise<Approval> {
 		if (approval.expiresAt <= this.host.now()) return this.settle(approval.id, "expired");
 		const decided = new Promise<Approval>((resolve) => {
@@ -333,22 +362,41 @@ export class Safety {
 		if (!current) throw new Error(`No approval ${approvalId}.`);
 		if (current.status !== "pending") throw new Error(`That request was already ${current.status}.`);
 		if (decision.approve && decision.always) await this.host.write((s) => void (s.allowed = [...new Set([...(s.allowed ?? []), current.key])]));
-		return this.settle(approvalId, decision.approve ? "approved" : "denied", decision.args, decision.reason);
+		const status = decision.approve ? "approved" : "denied";
+		if (!current.taskId) return this.settle(approvalId, status, decision.args, decision.reason);
+		// A parked call: the decision and the signal that wakes it go in one commit. A call that's gone (stopped
+		// meanwhile) can't be answered.
+		let gone = false;
+		const settled = await this.settle(approvalId, status, decision.args, decision.reason, (apply) =>
+			this.host.deliver(current.taskId!, approvalId, (s, result) => {
+				gone = result !== "delivered" && result !== "duplicate";
+				apply(s, gone ? "cancelled" : status);
+			}),
+		);
+		if (gone) throw new Error("That request is no longer waiting: the call was stopped.");
+		return settled;
 	}
 
-	private async settle(id: string, status: ApprovalStatus, args?: JsonObject, reason?: string): Promise<Approval> {
+	/** A call ended without running (stopped while it waited): its pending approval goes too. */
+	async dropped(conversationId: ConversationId | string, callId: string): Promise<void> {
+		const pending = (await this.host.read()).approvals?.find((a) => a.conversationId === String(conversationId) && a.callId === callId && a.status === "pending");
+		if (pending) await this.settle(pending.id, "cancelled");
+	}
+
+	private async settle(id: string, status: ApprovalStatus, args?: JsonObject, reason?: string, commit?: (apply: (s: SafetyState, status: ApprovalStatus) => void) => Promise<unknown>): Promise<Approval> {
 		let settled: Approval | undefined;
-		await this.host.write((s) => {
+		const apply = (s: SafetyState, as: ApprovalStatus) => {
 			const a = s.approvals?.find((x) => x.id === id);
 			if (!a) return;
 			if (a.status === "pending") {
-				a.status = status;
+				a.status = as;
 				a.decidedAt = this.iso();
-				if (args) a.editedArgs = args;
-				if (reason) a.reason = reason;
+				if (args && as !== "cancelled") a.editedArgs = args;
+				if (reason && as !== "cancelled") a.reason = reason;
 			}
 			settled = JSON.parse(JSON.stringify(a)) as Approval;
-		});
+		};
+		await (commit ? commit(apply) : this.host.write((s) => apply(s, status)));
 		if (!settled) throw new Error(`No approval ${id}.`);
 		for (const resolve of this.waiters.get(id) ?? []) resolve(settled);
 		this.waiters.delete(id);

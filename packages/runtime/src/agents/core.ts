@@ -11,7 +11,7 @@ import { configure, defineDoc, defineExtension, defineTool, GenerationTask, hook
 import type { MemoryProvider, MemoryRecord } from "../memory/provider.js";
 import type { AgentDefinition, Contact } from "./definition.js";
 import { OUT_ENTRY, Proactivity, type AutomationsBridge, type ProactiveState, type Reminder, type RunRecord, type Watch } from "./proactive.js";
-import { Safety, type Approval, type ResultCard, type SafetyState, type UndoRecord } from "./safety.js";
+import { ApprovalDecided, Safety, type Approval, type ResultCard, type SafetyState, type UndoRecord } from "./safety.js";
 import { describeChange, learnFacts, unlearn, type Complete, type LearnedChange } from "../memory/learn.js";
 import { APPLE_TOOLS, AppUnavailable, appleTools, type AppToolResult } from "./apple.js";
 import { Peers, type Directory, type Envelope, type PeerState } from "./peers.js";
@@ -222,6 +222,13 @@ export class AgentCore {
 			now,
 			read,
 			write,
+			deliver: (taskId, key, change) =>
+				harness.commit(async (tx) => {
+					// The signal first: pi-durable delivers it before the commit's other writes.
+					const result = await tx.signal(Number(taskId) as never, ApprovalDecided, key, {});
+					change((await tx.doc(AgentStateDoc)) as never, result);
+					return result;
+				}, context),
 			whose: async (conversationId) => {
 				const contact = await this.contactOf(conversationId);
 				if (contact) return { contact };
@@ -792,9 +799,11 @@ export class AgentCore {
 						// A tool that kept failing the same way this turn (context/failures.ts).
 						const stopped = core.failures.before(String(api.conversationId), call);
 						if (stopped) return { block: stopped };
-						return core.safety.beforeTool(call, api.conversationId, context) as Promise<{ arguments?: JsonObject; block?: string } | undefined>;
+						return core.safety.beforeTool(call, api, context);
 					},
-					afterTool: (call, result, api) => {
+					afterTool: async (call, result, api) => {
+						// Stopped while it waited for an approval: the request goes too.
+						if (result.diagnostics?.some((d) => d.code === "aborted" || d.code === "abandoned")) await core.safety.dropped(api.conversationId, call.id).catch(() => undefined);
 						const guarded = core.failures.after(String(api.conversationId), call, result) ?? result;
 						return trimResult(guarded) ?? (guarded === result ? undefined : guarded);
 					},

@@ -160,7 +160,9 @@ verified in workerd via Miniflare with the faux model (`test/agent.test.ts`, 3 t
 
 **Gaps, for 5.1**
 - **More sleeps for `nextWake()`:**
-  - approval expiry (24 h);
+  - ~~approval expiry (24 h)~~: since 2026-11-26 a call waiting for approval is parked at pi-durable's gate with the
+    24 h as its `until`, so it is one of pi's own sleeps and reaches the alarm through `onWake` (not run on Cloudflare
+    yet);
   - `ask_agent` timeouts;
   - the heartbeat's budget check.
 - **Real traffic:** turns go through test routes here. The protocol (`agents.*` over the socket) and channel webhooks

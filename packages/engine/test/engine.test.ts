@@ -2154,6 +2154,31 @@ describe("Agents: approvals, budgets and the Inbox (milestone 4.4)", () => {
 		expect(box.items.find((i) => i.kind === "budget")).toMatchObject({ title: "Budget used up", needsYou: true });
 		expect((await owner()).some((i) => i.kind === "system" && i.text.startsWith("Helper used its budget"))).toBe(true);
 	}, 90_000);
+
+	test("a call waiting for approval holds no process (parked at pi-durable's gate); stopping the turn cancels the request", async () => {
+		const a = await start();
+		const { ref } = await a.client.call("agents.create", { name: "Helper", owner: "Antonio", model: { provider: "faux", id: "faux-1" } });
+		const got = await a.client.call("agents.get", { ref });
+		const def = got.definition as Record<string, unknown> & { contacts: object[] };
+		const definition = { ...def, tools: { builtin: ["send_message"] }, contacts: [...def.contacts, { id: "maria", name: "María", role: "contact" }], policies: { requireApproval: ["send_message:to_non_owner"] } };
+		expect(await a.client.call("agents.save", { ref, definition, instructions: got.instructions })).toEqual({ saved: true, errors: [] });
+		const owner = () => a.client.call("sessions.open", { ref }).then((s: Snapshot) => s.items);
+
+		await a.client.call("sessions.submit", { ref, input: { text: call("send_message", { to: "maria", text: "Dinner at 8?" }) } });
+		const asked = approvals(await until(owner, (xs) => approvals(xs)[0]?.status === "pending"))[0]!;
+		// The tool task sleeps on the approval's signal until its deadline: nothing runs, and a restart runs no code.
+		type Graph = { value: { tasks: Record<string, { state: { status: string } }> }; stop(): Promise<unknown> };
+		const { harness, context } = (await a.engine.sessions.agent(ref)).core.safety["host"] as unknown as { harness: { watchTaskGraph(context: unknown): Promise<Graph> }; context: unknown };
+		const graph = await harness.watchTaskGraph(context);
+		const parked = Object.values(graph.value.tasks).find((t) => t.state.status === "sleeping");
+		await graph.stop();
+		expect(parked?.state).toMatchObject({ status: "sleeping", signals: [{ signal: "piopio.approval-decided", key: asked.approvalId }] });
+
+		await a.client.call("sessions.abort", { ref });
+		expect(approvals(await until(owner, (xs) => approvals(xs)[0]?.status === "cancelled"))[0]).toMatchObject({ approvalId: asked.approvalId, status: "cancelled" });
+		await expect(a.client.call("agents.decide", { ref, approvalId: asked.approvalId, approve: true })).rejects.toThrow(/already cancelled/);
+		await stop(a);
+	}, 40_000);
 });
 
 describe("Agents: Apple apps as tools (milestone 4.5)", () => {
