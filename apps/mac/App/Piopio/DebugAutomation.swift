@@ -114,6 +114,26 @@ enum DebugAutomation {
                 NotificationCenter.default.post(name: .selectItem, object: raw)
             }
         }
+        // PIOPIO_DEMO_TEMPORARY=box|new|chat (docs/spec/14 M4): Home's box with Temporary on; the New conversation page from
+        // New Temporary Chat; or a temporary chat with one message, left and opened again (its strip).
+        if let what = env["PIOPIO_DEMO_TEMPORARY"] {
+            Task {
+                try? await Task.sleep(for: .seconds(3))
+                switch what {
+                case "box": NotificationCenter.default.post(name: .newTemporaryChat, object: "home")
+                case "new": startTemporaryChat()
+                default:
+                    guard let ref = await engine.createThread(temporary: true) else { return }
+                    let thread = engine.thread(ref)
+                    await thread.open()
+                    _ = await thread.send("I started the new blood pressure pills on Monday and I get dizzy when I stand up. Is that normal?")
+                    try? await engine.refreshCatalog()
+                    NotificationCenter.default.post(name: .selectItem, object: SidebarItem.home.raw)
+                    try? await Task.sleep(for: .seconds(1.5))
+                    NotificationCenter.default.post(name: .selectThread, object: ref.id)
+                }
+            }
+        }
         // PIOPIO_DEMO_LINK=<folder>[!],…: link these folders to the first project ("!": editable) after the item delay, then
         // open it (docs/spec/18 §18).
         if let spec = env["PIOPIO_DEMO_LINK"] {

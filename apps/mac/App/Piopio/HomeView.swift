@@ -585,9 +585,13 @@ struct AskBox: View {
         }
         .onChange(of: targetRaw) { _, _ in mode = nil; workOn = .folder; plan = false; if target != .chat { temporary = false } }
         .onChange(of: temporary) { _, on in if projectId == nil { StartDrafts.shared.temporaryChat = on } }
-        .onDisappear { if projectId == nil { StartDrafts.shared.temporaryChat = false } }
-        .onReceive(NotificationCenter.default.publisher(for: .newTemporaryChat)) { _ in
-            if projectId == nil { target = .chat; temporary = true; Self.nextIsTemporary = false; focused = true }
+        // Only the box that made it temporary clears it: Home's box disappears after the New conversation page appears.
+        .onDisappear { if projectId == nil, temporary { StartDrafts.shared.temporaryChat = false } }
+        // New Temporary Chat while the New conversation page is already open (it opens there otherwise: onAppear).
+        // Home's box only answers when asked by name (captures), so it can't take the flag the page is waiting for.
+        .onReceive(NotificationCenter.default.publisher(for: .newTemporaryChat)) { note in
+            guard projectId == nil, prominent || note.object as? String == "home" else { return }
+            target = .chat; temporary = true; Self.nextIsTemporary = false; focused = true
         }
         .onAppear {
             // A project page's box starts in its project each time it opens.
