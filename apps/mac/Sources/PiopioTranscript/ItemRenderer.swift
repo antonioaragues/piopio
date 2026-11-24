@@ -774,6 +774,17 @@ nonisolated struct ItemRenderer: Sendable {
             if trailing.isEmpty, !duration.isEmpty { trailing.append(duration) }
             card = DisclosureCard(tool: title, detail: detail, trailing: trailing.joined(separator: " · "), content: .text(t.output ?? ""))
             if let sessionId { card.action = ("Open", .openSession(sessionId)) }
+        case .conversations(let found, let withheld) where !failed:
+            // Earlier conversations (docs/spec/14 M4): what it looked in, shown, not hidden. Opened, the card lists what
+            // it found; the one it read (or a search's only match) opens from the header.
+            var trailing = [String]()
+            if t.tool == "search_conversations" { trailing.append(found.isEmpty ? "nothing found" : "\(found.count) found") }
+            if withheld > 0 { trailing.append("\(withheld) kept on this Mac") }
+            if !duration.isEmpty { trailing.append(duration) }
+            let lines = found.map { "\($0.kind == "build" ? "◇" : "○")  \($0.title)" }
+            let note = withheld > 0 ? "\(withheld == 1 ? "One more ran" : "\(withheld) more ran") only on models on this Mac, so this model doesn't see \(withheld == 1 ? "it" : "them"). Bring one in with @, or switch to a local model." : ""
+            card = DisclosureCard(tool: title, detail: t.tool == "read_conversation" ? (found.first?.title ?? detail) : detail, trailing: trailing.joined(separator: " · "), content: .text((lines + (note.isEmpty ? [] : ["", note])).joined(separator: "\n")))
+            if found.count == 1, let only = found.first { card.action = ("Open", .openConversation(only.id)) }
         case .terminal(_, let exitCode):
             let full = t.args?["command"]?.stringValue ?? raw
             let shown = displayCommand(full, root: root)

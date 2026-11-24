@@ -70,6 +70,7 @@ struct MemoryPane: View {
             }
             VStack(alignment: .leading, spacing: 0) { remembers }.padding(.bottom, 22)
             MemorySearchCard(engine: engine, tick: tick).padding(.bottom, 22)
+            VStack(alignment: .leading, spacing: 0) { pastConversations }.padding(.bottom, 22)
             VStack(alignment: .leading, spacing: 0) { learning }.padding(.bottom, 22)
             VStack(alignment: .leading, spacing: 0) { data }
             if let note { FinePrint(note).padding(.top, 8) }
@@ -132,6 +133,18 @@ struct MemoryPane: View {
 
     private func count(_ n: Int, _ noun: String, plural: String? = nil) -> String {
         "\(n.formatted()) \(n == 1 ? noun : plural ?? "\(noun)s")"
+    }
+
+    // MARK: Past conversations (docs/spec/14 M4, Q1)
+
+    @ViewBuilder private var pastConversations: some View {
+        CardTitle("Past conversations")
+        ListCard {
+            ToggleRow(title: "Look in your earlier conversations", subtitle: "When you mention something said elsewhere: chats with your other chats, a project with its own", last: true, isOn: Binding(get: { settings?.memory.pastChats ?? true }, set: { v in
+                Task { await engine.updateSettings(SettingsPatch(memory: .init(pastChats: v))) }
+            }))
+        }
+        FinePrint("Searched on this Mac, by words. Only what a conversation uses goes to its model, and it says which ones. One that ran only on models on this Mac is never shown to a cloud model. Takes effect in conversations you start after changing it.").padding(.top, 12)
     }
 
     // MARK: Learning

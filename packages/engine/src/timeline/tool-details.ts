@@ -54,6 +54,11 @@ export function endDetails(tool: string, args: unknown, result: PiToolResult | u
 		const d = (result?.details ?? {}) as { automation?: Extract<ToolDetails, { type: "automation" }>["automation"]; changed?: boolean };
 		return !isError && d.automation ? { type: "automation", automation: d.automation, ...(d.changed ? { changed: true } : {}) } : undefined;
 	}
+	if (tool === "search_conversations" || tool === "read_conversation") {
+		// The card (docs/spec/14 M4): the conversations it found or read, to open, and how many it held back.
+		const d = result?.details as Extract<ToolDetails, { type: "conversations" }> | undefined;
+		return d?.type === "conversations" && Array.isArray(d.conversations) ? { type: "conversations", conversations: d.conversations, ...(d.withheld ? { withheld: d.withheld } : {}) } : undefined;
+	}
 	const start = startDetails(tool, args);
 	if (!start) return undefined;
 	if (tool === "task") {

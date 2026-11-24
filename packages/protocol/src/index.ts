@@ -75,6 +75,15 @@ export const ToolDetails = Type.Union([
 		type: Type.Literal("files"),
 		files: Type.Array(Type.Object({ path: Type.String(), name: Type.String(), description: Type.Optional(Type.String()), size: Type.Optional(Type.Number()), missing: Type.Optional(Type.Boolean()) })),
 	}),
+	/**
+	 * Earlier conversations a turn searched or read (docs/spec/14 M4): which ones it found, to open from the card, and
+	 * how many it couldn't see from this model (they ran only on models on this Mac).
+	 */
+	Type.Object({
+		type: Type.Literal("conversations"),
+		conversations: Type.Array(Type.Object({ id: Type.String(), title: Type.String(), kind: literals("thread", "build") })),
+		withheld: Type.Optional(Type.Number()),
+	}),
 	/** A proposed plan (piopio-plan): what it says, and how you answered (approved, with your edits, or sent back). */
 	Type.Object({
 		type: Type.Literal("plan"),
@@ -519,6 +528,11 @@ export const EngineSettings = Type.Object({
 		semantic: Type.Optional(Type.Boolean()),
 		/** Older name for `semantic: false` (read, no longer written). */
 		localOnly: Type.Optional(Type.Boolean()),
+		/**
+		 * Past conversations (docs/spec/14 M4, Q1): a conversation may search and read your earlier ones
+		 * (`search_conversations`, `read_conversation`). On unless false.
+		 */
+		pastChats: Type.Optional(Type.Boolean()),
 		/** Another embedding endpoint than the default (OpenRouter, then the OpenAI API key): an OpenAI-compatible server. */
 		embeddings: Type.Optional(Type.Object({ baseUrl: Type.String(), model: Type.String(), dims: Type.Number(), provider: Type.Optional(Type.String()) })),
 	}),

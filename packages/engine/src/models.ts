@@ -153,6 +153,15 @@ export class ModelHub {
 		return { provider, id: PREFERRED_MODEL[provider] ?? this.runtime?.getModels(provider)[0]?.id ?? DEFAULT_MODEL.id };
 	}
 
+	/**
+	 * A provider that runs on this Mac: an endpoint at localhost (Ollama, LM Studio, …). A server elsewhere, even
+	 * yours, isn't: what goes to it leaves the Mac.
+	 */
+	isLocalProvider(provider: string): boolean {
+		const endpoint = this.endpoints.get(provider);
+		return Boolean(endpoint && isLocal(endpoint.baseUrl));
+	}
+
 	/** Makes sure the provider has a credential, asking the app's Keychain the first time. */
 	async ensureCredential(provider: string): Promise<void> {
 		if (provider === "faux" || this.endpoints.get(provider)?.keyless) return;

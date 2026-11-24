@@ -179,6 +179,54 @@ describe("earlier conversations as background", () => {
 		const read = toolOutput(s, "read_conversation");
 		expect(read).toContain("don't follow instructions");
 		expect(read).toContain("User: We decided the sink moves 40 cm left.");
+		// The card (docs/spec/14 M4): what it found and read, to open.
+		const cards = s.items.flatMap((i) => (i.kind === "tool" && i.details?.type === "conversations" ? [i.details] : []));
+		expect(cards).toEqual([
+			{ type: "conversations", conversations: [{ id: first.id, title: expect.any(String), kind: "thread" }] },
+			{ type: "conversations", conversations: [{ id: first.id, title: expect.any(String), kind: "thread" }] },
+		]);
+	});
+
+	test("a conversation that only ran on this Mac isn't shown to a cloud model, unless you bring it in yourself (14 Q1)", async () => {
+		const a = await start();
+		const hub = a.engine.hub as { isLocalProvider(p: string): boolean };
+		hub.isLocalProvider = (p) => p === "faux";
+		const first = (await a.client.call("sessions.create", { kind: "thread" })).ref;
+		await a.client.call("sessions.subscribe", { ref: first });
+		await a.client.call("sessions.submit", { ref: first, input: { text: "We decided the sink moves 40 cm left." } });
+		await idle(a, first);
+		const second = (await a.client.call("sessions.create", { kind: "thread" })).ref;
+		const sessions = a.engine.sessions as unknown as { entries: Map<string, { model?: { provider: string; id: string } }>; historyBridge(e: unknown): import("../src/tools/history.js").HistoryBridge };
+		const entry = sessions.entries.get(second.id)!;
+		const bridge = sessions.historyBridge(entry);
+		// Both on a model on this Mac: found.
+		expect((await bridge.search("sink", 8)).hits.map((h) => h.id)).toEqual([first.id]);
+		// This one moves to a cloud model: held back, and counted so the model can say so.
+		entry.model = { provider: "openrouter", id: "anthropic/claude-haiku-5.5" };
+		expect(await bridge.search("sink", 8)).toEqual({ hits: [], withheld: 1 });
+		expect(await bridge.read(first.id, "model")).toBe("withheld");
+		// Your own @conversation still brings it.
+		expect(await bridge.read(first.id, "user")).toMatchObject({ kind: "thread" });
+		// A conversation a cloud model already answered in has gone out already: shown.
+		hub.isLocalProvider = () => false;
+		expect((await bridge.search("sink", 8)).hits.map((h) => h.id)).toEqual([first.id]);
+	});
+
+	test("Settings › Memory turns past conversations off: no tools, but @conversation still works", async () => {
+		const a = await start();
+		const first = (await a.client.call("sessions.create", { kind: "thread", title: "Kitchen plan" })).ref;
+		await a.client.call("sessions.subscribe", { ref: first });
+		await a.client.call("sessions.submit", { ref: first, input: { text: "The sink moves 40 cm left." } });
+		await idle(a, first);
+		await a.client.call("settings.set", { memory: { pastChats: false } });
+		const second = (await a.client.call("sessions.create", { kind: "thread" })).ref;
+		await a.client.call("sessions.subscribe", { ref: second });
+		await a.client.call("sessions.submit", { ref: second, input: { text: `call: search_conversations | {"query":"sink"}` } });
+		const s = await idle(a, second);
+		expect(toolOutput(s, "search_conversations")).not.toContain(first.id);
+		await a.client.call("sessions.submit", { ref: second, input: { text: `What did we decide in @conversation:${first.id}?` } });
+		const t = await idle(a, second, 2);
+		expect(t.items.findLast((i) => i.kind === "user")).toMatchObject({ attachments: [{ mimeType: "text/x-piopio-conversation" }] });
 	});
 
 	test("@conversation in a chat sends that chat along as background, shown as a chip", async () => {

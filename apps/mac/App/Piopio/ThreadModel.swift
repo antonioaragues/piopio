@@ -335,6 +335,9 @@ final class ThreadModel {
             NotificationCenter.default.post(name: .openAgentRun, object: id)
         case .openSession(let id):
             NotificationCenter.default.post(name: .selectBuildSession, object: id)
+        case .openConversation(let id):
+            // An earlier conversation a turn found (docs/spec/14 M4): a chat or a Build session, wherever it lives.
+            NotificationCenter.default.post(name: .selectThread, object: id)
         case .openFile(let path, _) where ref.kind == .thread:
             // A chat has no files panel: the files it made open in the viewer sheet, as the files you sent do.
             NotificationCenter.default.post(name: .viewFile, object: URL(fileURLWithPath: path))

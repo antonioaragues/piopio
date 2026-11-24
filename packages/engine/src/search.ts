@@ -5,8 +5,8 @@
 import { DatabaseSync, type StatementSync } from "node:sqlite";
 import type { ContainerRef, TimelineItem } from "@piopio/protocol";
 
-/** Bump to rebuild every session's rows (e.g. when indexed text changes shape). */
-export const INDEX_VERSION = 1;
+/** Bump to rebuild every session's rows (e.g. when indexed text changes shape). 2: which providers answered. */
+export const INDEX_VERSION = 2;
 
 /** Highlight markers in snippets (clients turn them into bold). */
 export const MARK_START = "\u0002";
@@ -26,6 +26,9 @@ export class SearchIndex {
 			CREATE VIRTUAL TABLE IF NOT EXISTS rows USING fts5(text, session_id UNINDEXED, item_id UNINDEXED, kind UNINDEXED, at UNINDEXED, tokenize = 'unicode61 remove_diacritics 2');
 			CREATE TABLE IF NOT EXISTS destinations (id TEXT PRIMARY KEY, ref TEXT NOT NULL, title TEXT NOT NULL, at TEXT NOT NULL);
 			CREATE TABLE IF NOT EXISTS indexed (session_id TEXT PRIMARY KEY, version INTEGER NOT NULL);
+			-- Who answered in a session (docs/spec/14 M4): a provider once seen stays, even if its branch is left, because
+			-- what came before it was sent to it.
+			CREATE TABLE IF NOT EXISTS answered (session_id TEXT NOT NULL, provider TEXT NOT NULL, PRIMARY KEY (session_id, provider));
 		`);
 		this.insertRow = this.db.prepare("INSERT INTO rows (text, session_id, item_id, kind, at) VALUES (?, ?, ?, ?, ?)");
 		this.deleteItemRow = this.db.prepare("DELETE FROM rows WHERE session_id = ? AND item_id = ?");
@@ -83,6 +86,12 @@ export class SearchIndex {
 	deleteSession(sessionId: string): void {
 		this.db.prepare("DELETE FROM rows WHERE session_id = ?").run(sessionId);
 		this.db.prepare("DELETE FROM indexed WHERE session_id = ?").run(sessionId);
+		this.db.prepare("DELETE FROM answered WHERE session_id = ?").run(sessionId);
+	}
+
+	/** The providers that answered in a session ("openrouter", an endpoint's id, "faux"). */
+	providers(sessionId: string): string[] {
+		return (this.db.prepare("SELECT provider FROM answered WHERE session_id = ?").all(sessionId) as { provider: string }[]).map((r) => r.provider);
 	}
 
 	/** Every word must match (prefix match on each), best first. */
@@ -100,6 +109,8 @@ export class SearchIndex {
 	}
 
 	private insert(sessionId: string, item: TimelineItem): void {
+		const provider = item.kind === "assistant" && item.status !== "streaming" ? item.model?.split("/")[0] : undefined;
+		if (provider) this.db.prepare("INSERT OR IGNORE INTO answered (session_id, provider) VALUES (?, ?)").run(sessionId, provider);
 		const text = indexText(item);
 		if (text) this.insertRow.run(text, sessionId, item.id, item.kind, item.at);
 	}

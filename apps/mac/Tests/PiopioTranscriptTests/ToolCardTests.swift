@@ -255,3 +255,23 @@ func sideOfferModel(_ text: NSAttributedString) -> SideOfferModel? {
     #expect(thought.height(width: 600) == trailing.height(width: 600))
     #expect(thought.height(width: 600) < DisclosureCard.lineHeight + 30)
 }
+
+@Test func pastConversationsShowWhatWasFoundAndWhatStayedOnThisMac() {
+    // docs/spec/14 M4: a search lists what it found and how many it held back; a read opens its conversation.
+    let search = ToolItem(id: "t11", at: "", callId: "c11", tool: "search_conversations", args: .object(["query": .string("sink")]), status: .done,
+                          details: .object(["type": .string("conversations"), "conversations": .array([
+                              .object(["id": .string("ses_a"), "title": .string("Kitchen plan"), "kind": .string("thread")]),
+                              .object(["id": .string("ses_b"), "title": .string("Fix the tap"), "kind": .string("build")]),
+                          ]), "withheld": .number(1)]))
+    guard case .conversations(let found, let withheld)? = search.typedDetails else { Issue.record("no conversations"); return }
+    #expect(found.map(\.id) == ["ses_a", "ses_b"] && withheld == 1)
+    let card = ItemRenderer.toolCard(search)
+    #expect(card.trailing == "2 found · 1 kept on this Mac")
+    #expect(card.action == nil)
+    let read = ToolItem(id: "t12", at: "", callId: "c12", tool: "read_conversation", args: .object(["id": .string("ses_a")]), status: .done,
+                        details: .object(["type": .string("conversations"), "conversations": .array([.object(["id": .string("ses_a"), "title": .string("Kitchen plan"), "kind": .string("thread")])])]))
+    let opened = ItemRenderer.toolCard(read)
+    #expect(opened.detail == "Kitchen plan")
+    #expect(opened.action?.1 == .openConversation("ses_a"))
+    #expect(TranscriptAction(url: TranscriptAction.openConversation("ses_a").url) == .openConversation("ses_a"))
+}

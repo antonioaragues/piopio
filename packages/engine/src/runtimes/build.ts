@@ -327,7 +327,7 @@ export class BuildRuntime implements Runtime {
 						]
 					: []),
 				goalExtension(),
-				...(o.history ? [historySdkExtension(o.history)] : []),
+				...(o.history && !o.history.off() ? [historySdkExtension(o.history)] : []),
 				...(o.side ? [sideExtension(o.side)] : []),
 				...(o.automations ? [automationsExtension(o.automations)] : []),
 				planExtension({
@@ -643,8 +643,8 @@ export class BuildRuntime implements Runtime {
 		if (ids.length === 0 || !this.history) return text;
 		let out = text;
 		for (const id of ids) {
-			const c = await this.history.read(id).catch(() => undefined);
-			if (c) {
+			const c = await this.history.read(id, "user").catch(() => undefined);
+			if (c && c !== "withheld") {
 				await this.session.sendCustomMessage({ customType: "piopio.reference", content: formatConversation(id, c), display: true, details: { summary: `Included “${c.title}” as background` } }, { triggerTurn: false });
 				out = out.replaceAll(`@conversation:${id}`, `“${c.title}” (the conversation included above)`);
 			} else out = out.replaceAll(`@conversation:${id}`, `@conversation:${id} (not found in this project)`);
@@ -686,8 +686,8 @@ export class BuildRuntime implements Runtime {
 		const attachments: NonNullable<SubmitOptions["attachments"]> = [];
 		let out = text;
 		for (const id of ids) {
-			const c = await this.history.read(id).catch(() => undefined);
-			if (c) {
+			const c = await this.history.read(id, "user").catch(() => undefined);
+			if (c && c !== "withheld") {
 				attachments.push({ kind: "text", name: c.title, mimeType: CONVERSATION_MIME, text: formatConversation(id, c) });
 				out = out.replaceAll(`@conversation:${id}`, `“${c.title}”`);
 			} else out = out.replaceAll(`@conversation:${id}`, `@conversation:${id} (not found among your chats)`);

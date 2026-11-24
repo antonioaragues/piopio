@@ -52,7 +52,7 @@ import { exportTranscript, type ExportFormat } from "./export.js";
 import { SearchIndex } from "./search.js";
 import type { LedgerSource } from "./ledger.js";
 import { type Library, LibrarySearch, type LibraryOrigin, NOTE_PROMPT, noteRequest } from "./library.js";
-import type { HistoryBridge } from "./tools/history.js";
+import type { HistoryBridge, HistoryHit } from "./tools/history.js";
 import { AGENT_NAMES, findAgent, installedAgents, runExternalAgent, type ExternalAgent } from "./external-agents.js";
 import type { TelegramChannels } from "./channels/manager.js";
 import type { AgentWatchers } from "./watchers.js";
@@ -492,34 +492,54 @@ export class Sessions {
 	}
 
 	/**
-	 * What a conversation may look into with search_conversations / read_conversation (tools/history.ts): a Build
-	 * session, the other sessions of its project; a chat without a project, the other chats without one. Not agents.
+	 * What a conversation may look into with search_conversations / read_conversation (tools/history.ts, docs/spec/14
+	 * M4): in a project, its other conversations (Build sessions and chats); a chat without a project, the other chats
+	 * without one. Not agents. One that only ran on models on this Mac is held back from a conversation whose model
+	 * isn't on this Mac (14 Q1), unless the user brings it with @conversation.
 	 */
 	historyBridge(entry: CatalogEntry): HistoryBridge | undefined {
-		const scopeOf = (e: CatalogEntry) => (e.ref.kind === "build" ? `build:${e.projectPath ?? e.cwd}` : e.ref.kind === "thread" && !e.projectPath ? "chats" : undefined);
+		const scopeOf = (e: CatalogEntry) =>
+			e.ref.kind === "build" ? `project:${e.projectPath ?? e.cwd}` : e.ref.kind === "thread" ? (e.projectPath ? `project:${e.projectPath}` : "chats") : undefined;
 		const scope = scopeOf(entry);
 		if (!scope) return undefined;
+		// Off stops the tools (they aren't offered to a conversation that starts while it's off); the user's own
+		// @conversation still works.
+		const off = () => this.chat?.settings.get().memory.pastChats === false;
 		const mine = (id: string) => {
 			const e = this.entries.get(id);
 			return e && id !== entry.ref.id && scopeOf(e) === scope ? e : undefined;
 		};
+		// This conversation's model now (it can change between turns), and whether another's content may reach it.
+		const here = () => (this.entries.get(entry.ref.id) ?? entry).model ?? this.hub.defaultModel;
+		const allowed = (e: CatalogEntry) => this.hub.isLocalProvider(here().provider) || this.search.providers(e.ref.id).some((p) => !this.hub.isLocalProvider(p));
+		const kindOf = (e: CatalogEntry) => (e.ref.kind === "build" ? "build" : "thread") as "thread" | "build";
 		return {
-			scope: entry.ref.kind === "build" ? "this project" : "the user's other chats",
+			scope: scope === "chats" ? "the user's other chats" : "this project",
+			off,
 			search: async (query, limit) => {
 				const seen = new Set<string>();
-				const out: { id: string; title: string; at: string; snippet?: string }[] = [];
+				const hits: HistoryHit[] = [];
+				let withheld = 0;
 				for (const hit of await this.find(query, 100)) {
 					const e = !hit.ref.conversationId ? mine(hit.ref.id) : undefined;
 					if (!e || seen.has(e.ref.id)) continue;
 					seen.add(e.ref.id);
-					out.push({ id: e.ref.id, title: e.title, at: e.updatedAt, ...(hit.kind !== "title" ? { snippet: hit.snippet } : {}) });
-					if (out.length >= limit) break;
+					if (!allowed(e)) {
+						withheld++;
+						continue;
+					}
+					if (hits.length < limit) hits.push({ id: e.ref.id, title: e.title, at: e.updatedAt, kind: kindOf(e), ...(hit.kind !== "title" ? { snippet: hit.snippet } : {}) });
 				}
-				return out;
+				return { hits, withheld };
 			},
-			read: async (id) => {
+			read: async (id, by = "user") => {
 				const e = mine(id);
-				return e ? { title: e.title, at: e.updatedAt, items: await this.itemsOf(e) } : undefined;
+				if (!e) return undefined;
+				if (by === "model") {
+					await this.backfillSearch();
+					if (!allowed(e)) return "withheld";
+				}
+				return { title: e.title, at: e.updatedAt, kind: kindOf(e), items: await this.itemsOf(e) };
 			},
 		};
 	}
@@ -3368,7 +3388,7 @@ export class Sessions {
 			...(this.connectors ? [codingConnectorsExtension(this.connectors, (callId, signal) => (request) => decision(request, callId, signal, request.canAllowAlways), (id) => off().includes(`connector:${id}`))] : []),
 			codingVisualsExtension(visuals),
 			...(this.appsFor(entry).apps ? [codingAppsExtension(this.apps!, this.appsFor(entry).apps!.where, (callId, signal) => (request) => decision(request, callId, signal, false))] : []),
-			...(history ? [historySdkExtension(history)] : []),
+			...(history && !history.off() ? [historySdkExtension(history)] : []),
 			...(entry.ref.kind === "thread" && this.aboutMeSdk ? [this.aboutMeSdk] : []),
 			// A review on a coding agent reports its findings the same way (05-build "Review by an agent").
 			...(entry.reviewFor ? [codeReviewExtension(this.reviewBridge(entry))] : []),

@@ -139,6 +139,16 @@ public enum ToolDetails: Sendable, Hashable {
     case plan(PlanDetails)
     /// Files the agent handed over (piopio-present).
     case files([PresentedFile])
+    /// Earlier conversations a turn searched or read (docs/spec/14 M4), and how many it held back from a cloud model.
+    case conversations([PastConversation], withheld: Int)
+}
+
+/// An earlier conversation a search found or a turn read: opens from the card.
+public struct PastConversation: Sendable, Hashable {
+    public var id: String
+    public var title: String
+    /// "thread" or "build".
+    public var kind: String
 }
 
 /// A file the agent handed over: where it is, what it is, and whether it was there.
@@ -211,6 +221,14 @@ extension ToolItem {
                 if case .bool(let m)? = f["missing"] { missing = m }
                 return PresentedFile(path: path, name: f["name"]?.stringValue ?? (path as NSString).lastPathComponent, description: f["description"]?.stringValue, size: size, missing: missing)
             })
+        case "conversations":
+            guard case .array(let items)? = d["conversations"] else { return nil }
+            var withheld = 0
+            if case .number(let n)? = d["withheld"] { withheld = Int(n) }
+            return .conversations(items.compactMap { c in
+                guard let id = c["id"]?.stringValue else { return nil }
+                return PastConversation(id: id, title: c["title"]?.stringValue ?? "Untitled", kind: c["kind"]?.stringValue ?? "thread")
+            }, withheld: withheld)
         case "terminal":
             guard let command = d["command"]?.stringValue else { return nil }
             if case .number(let code)? = d["exitCode"] { return .terminal(command: command, exitCode: Int(code)) }
@@ -1227,6 +1245,8 @@ public struct EngineSettings: Codable, Sendable, Hashable {
         /// Search by meaning through OpenRouter (off: by words, on this Mac).
         public var semantic: Bool?
         public var localOnly: Bool?
+        /// Conversations may search and read your earlier ones (docs/spec/14 M4); on unless false.
+        public var pastChats: Bool?
         public var searchesByMeaning: Bool { localOnly != true && (semantic ?? false) }
     }
     /// Build sessions: the sandbox for commands (default on) and auto review (default off).
@@ -1314,7 +1334,8 @@ public struct SettingsPatch: Encodable, Sendable {
         public var providers: [McpMemoryProvider]?
         public var semantic: Bool?
         public var localOnly: Bool?
-        public init(providers: [McpMemoryProvider]? = nil, semantic: Bool? = nil, localOnly: Bool? = nil) { self.providers = providers; self.semantic = semantic; self.localOnly = localOnly }
+        public var pastChats: Bool?
+        public init(providers: [McpMemoryProvider]? = nil, semantic: Bool? = nil, localOnly: Bool? = nil, pastChats: Bool? = nil) { self.providers = providers; self.semantic = semantic; self.localOnly = localOnly; self.pastChats = pastChats }
     }
     public var models: EngineSettings.Models?
     public var build: EngineSettings.Build?
