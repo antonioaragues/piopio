@@ -10,3 +10,11 @@ The numbers are made up but add up (the days sum to the month, the rows to the t
   touches, the blue dot for what needs you, dashed for unused; then What runs where.
 - **C** · Activity: a year of days, counts by area against the range before, Disk with cleanups.
 - **D** · The way in: the sidebar footer's cost line, its hover summary, and a click to Spend.
+
+## Redesign options (2026-11-24)
+
+`Redesign.html`: after using the built page, the user found it too grey and wordy. Three directions per tab (Spend,
+Setup, Activity) and two for Disk, each keeping Piopio's surfaces, type and tokens but letting numbers lead and color
+carry data: one validated five-color data palette (light and dark), one blue scale for amounts, Home's status tones
+for state only, yolk and the chick for Piopio's one remark per page. Made-up numbers; hover the charts. Nothing here
+is decided.

@@ -374,6 +374,48 @@ struct EmptyState<Actions: View>: View {
     }
 }
 
+/// Overview's colours (docs/design/overview/Redesign.html, options A·A·A; spec 34 §16): colour carries data there and
+/// nowhere else. A five-hue data palette (validated for colour blindness on the light and dark surfaces; always shown
+/// with its label), one blue scale for amounts, and yolk for Piopio's own (its budget, its one remark). State stays
+/// `StatusTone`: never a data colour for state, never a status colour for data.
+enum DataColor {
+    /// The data palette in its fixed order (identity follows the thing, not its rank).
+    static let series: [Color] = [
+        dynamic(0x2A78D6, 0x3987E5), dynamic(0x1BAF7A, 0x199E70), dynamic(0x6250D6, 0x9085E9),
+        dynamic(0xEDA100, 0xC98500), dynamic(0xE87BA4, 0xD55181),
+    ]
+    /// Each hue's soft tint, for tiles behind a glyph.
+    static let tints: [Color] = [
+        dynamic(0xE3EEFB, 0x3987E5, darkAlpha: 0.2), dynamic(0xDCF4EA, 0x199E70, darkAlpha: 0.22), dynamic(0xE9E6FA, 0x9085E9, darkAlpha: 0.2),
+        dynamic(0xFCEFD2, 0xC98500, darkAlpha: 0.22), dynamic(0xFBE7EF, 0xD55181, darkAlpha: 0.2),
+    ]
+    static func series(_ i: Int) -> Color { series[i % series.count] }
+    static func tint(_ i: Int) -> Color { tints[i % tints.count] }
+    /// Amounts, light to dark: 0 is the track (nothing), then four steps.
+    static let seq: [Color] = [Color.dsTrack, dynamic(0xB7D3F6, 0x1C3F6B), dynamic(0x6DA7EC, 0x256ABF), dynamic(0x2A78D6, 0x3987E5), dynamic(0x184F95, 0x86B6EF)]
+    /// Piopio's own: its budget, its one remark per page.
+    static let yolk = dynamic(0xF5C542, 0xF5C542)
+    static let yolkSoft = dynamic(0xFFF4CF, 0xF5C542, darkAlpha: 0.16)
+
+    /// The amount scale for a share of the peak (bars): the three darker steps, so a small bar still reads.
+    static func amount(_ share: Double) -> Color { share > 0.66 ? seq[4] : share > 0.33 ? seq[3] : seq[2] }
+
+    private static func dynamic(_ light: UInt32, _ dark: UInt32, darkAlpha: CGFloat = 1) -> Color {
+        func rgb(_ hex: UInt32, _ alpha: CGFloat) -> NSColor {
+            NSColor(srgbRed: CGFloat((hex >> 16) & 0xFF) / 255, green: CGFloat((hex >> 8) & 0xFF) / 255, blue: CGFloat(hex & 0xFF) / 255, alpha: alpha)
+        }
+        return Color(nsColor: NSColor(name: nil) { a in a.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? rgb(dark, darkAlpha) : rgb(light, 1) })
+    }
+}
+
+/// A small "ⓘ" whose tooltip says what the line beside it doesn't (Overview moves its explanations here).
+struct InfoMark: View {
+    let text: String
+    var body: some View {
+        Image(systemName: "info.circle").font(.system(size: 11)).foregroundStyle(Color.dsFg3).help(text).accessibilityLabel(text)
+    }
+}
+
 /// Home's status tiles (docs/design/home): a tinted 28pt tile with an 8pt dot. Orange asks first, red failed, green is
 /// ready; everything else follows the system accent. Tints are the dot at low strength in dark mode.
 enum StatusTone {

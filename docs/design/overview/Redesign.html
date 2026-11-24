@@ -1,0 +1,562 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Overview redesign · options</title>
+<style>
+:root {
+  --win:#fcfcfb; --side:#f4f4f2; --fg:#1f1f1e; --fg2:#6b6b67; --fg3:#9b9b96; --line:rgba(0,0,0,.09);
+  --bubble:#f0f0ed; --field:#ffffff; --track:rgba(0,0,0,.06); --seg:#fff; --inv:#1f1f1e; --invfg:#fff;
+  --accent:#2f6fde; --sel:rgba(0,0,0,.05); --page:#e9e9e6;
+  /* Data colors (validated: dataviz validator, light surface #fcfcfb; labels always beside them). */
+  --c1:#2a78d6; --c2:#1baf7a; --c3:#6250d6; --c4:#eda100; --c5:#e87ba4;
+  --c1s:#e3eefb; --c2s:#dcf4ea; --c3s:#e9e6fa; --c4s:#fcefd2; --c5s:#fbe7ef;
+  /* Status (Home's StatusTone): orange asks first, red failed, green ready. Never used for a series. */
+  --ok:#4fa866; --oks:#dcf7e1; --ask:#e87f25; --asks:#ffe8d6; --bad:#da534f; --bads:#ffe7e4;
+  --yolk:#f5c542; --yolks:#fff4cf;
+  --seq0:rgba(0,0,0,.05); --seq1:#b7d3f6; --seq2:#6da7ec; --seq3:#2a78d6; --seq4:#184f95;
+  --shadow:0 1px 2px rgba(0,0,0,.04), 0 4px 16px rgba(0,0,0,.05);
+}
+:root[data-theme="dark"] {
+  --win:#1e1e1d; --side:#191918; --fg:#ececea; --fg2:#a6a6a1; --fg3:#77776f; --line:rgba(255,255,255,.1);
+  --bubble:#2b2b29; --field:#252524; --track:rgba(255,255,255,.07); --seg:#3a3a38; --inv:#ececea; --invfg:#1e1e1d;
+  --accent:#6ea0ff; --sel:rgba(255,255,255,.07); --page:#121211;
+  /* Dark steps of the same hues (validated on #1e1e1d). */
+  --c1:#3987e5; --c2:#199e70; --c3:#9085e9; --c4:#c98500; --c5:#d55181;
+  --c1s:rgba(57,135,229,.18); --c2s:rgba(25,158,112,.2); --c3s:rgba(144,133,233,.2); --c4s:rgba(201,133,0,.22); --c5s:rgba(213,81,129,.2);
+  --ok:#6cc28a; --oks:rgba(108,194,138,.18); --ask:#f0954a; --asks:rgba(240,149,74,.18); --bad:#ef7d72; --bads:rgba(239,125,114,.18);
+  --yolk:#f5c542; --yolks:rgba(245,197,66,.16);
+  --seq0:rgba(255,255,255,.06); --seq1:#1c3f6b; --seq2:#256abf; --seq3:#3987e5; --seq4:#86b6ef;
+  --shadow:0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.25);
+}
+* { box-sizing:border-box; }
+body { margin:0; background:var(--page); color:var(--fg); font:13px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif; -webkit-font-smoothing:antialiased; }
+main { max-width:1180px; margin:0 auto; padding:40px 20px 90px; }
+header.doc { display:flex; gap:20px; align-items:flex-start; }
+header.doc h1 { font-size:22px; font-weight:600; margin:0 0 6px; }
+header.doc p { color:var(--fg2); margin:0 0 6px; max-width:820px; }
+.theme { margin-left:auto; color:var(--fg2); cursor:pointer; padding:3px 8px; border-radius:6px; user-select:none; white-space:nowrap; }
+.theme:hover { background:var(--sel); color:var(--fg); }
+nav.toc { display:flex; gap:6px; flex-wrap:wrap; margin:16px 0 36px; }
+nav.toc a { color:var(--fg2); text-decoration:none; padding:3px 8px; border-radius:6px; }
+nav.toc a:hover { background:var(--sel); color:var(--fg); }
+h2.sec { font-size:17px; margin:46px 0 4px; }
+p.sec { color:var(--fg2); margin:0 0 18px; max-width:860px; }
+.opt { margin:0 0 34px; }
+.opt .head { display:flex; gap:10px; align-items:baseline; margin:0 0 10px; flex-wrap:wrap; }
+.opt .head b { font-size:12px; color:var(--fg3); font-weight:600; }
+.opt .head h3 { font-size:15px; margin:0; font-weight:600; }
+.opt .head span { color:var(--fg2); }
+.notes { color:var(--fg2); margin:12px 0 0; padding-left:18px; max-width:900px; }
+.notes li { margin:3px 0; }
+.notes b { color:var(--fg); font-weight:600; }
+
+/* The page card (Overview's content card). */
+.card { background:var(--win); border-radius:12px; box-shadow:0 0 0 .5px var(--line), 0 18px 44px rgba(0,0,0,.10); overflow:hidden; }
+.page { max-width:820px; margin:0 auto; padding:30px 34px 34px; }
+.top { display:flex; align-items:center; gap:12px; margin-bottom:18px; }
+.top h4 { font-size:20px; margin:0; font-weight:700; }
+.tabs { display:inline-flex; background:var(--track); border-radius:8px; padding:2px; }
+.tabs span { padding:3px 12px; border-radius:6px; color:var(--fg2); font-size:12.5px; }
+.tabs span.on { background:var(--seg); color:var(--fg); box-shadow:0 0 0 .5px var(--line); }
+.range { margin-left:auto; color:var(--fg2); padding:3px 7px; border-radius:6px; }
+.range:hover { background:var(--sel); }
+.muted { color:var(--fg3); } .fg2 { color:var(--fg2); }
+.num { font-variant-numeric:tabular-nums; }
+.label { font-size:12px; color:var(--fg3); }
+.h { font-size:13px; font-weight:600; margin:0 0 10px; }
+.box { background:var(--field); border-radius:12px; box-shadow:0 0 0 .5px var(--line); padding:16px 18px; }
+.raised { background:var(--field); border-radius:14px; box-shadow:var(--shadow), 0 0 0 .5px var(--line); }
+.tile { width:28px; height:28px; border-radius:8px; display:grid; place-items:center; flex:none; font-size:14px; }
+.dot { width:8px; height:8px; border-radius:50%; display:inline-block; flex:none; }
+.btn { display:inline-block; background:var(--inv); color:var(--invfg); border-radius:8px; padding:5px 11px; font-size:12.5px; font-weight:500; }
+.link { color:var(--accent); }
+.pill { display:inline-flex; align-items:center; gap:4px; border-radius:999px; padding:1px 8px; font-size:11.5px; font-weight:500; }
+.row { display:flex; align-items:center; gap:10px; }
+.grid2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.grid3 { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+.grid4 { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+.sp { height:16px; } .sp2 { height:26px; }
+
+/* Charts */
+.bars { display:flex; align-items:flex-end; gap:3px; height:140px; position:relative; }
+.bars i { flex:1; border-radius:4px 4px 0 0; min-height:2px; position:relative; display:flex; flex-direction:column-reverse; overflow:hidden; }
+.bars i b { display:block; width:100%; }
+.bars i b + b { border-top:2px solid var(--win); }
+.bars i.future { background:var(--track) !important; height:4px !important; }
+.bars i.today { outline:1.5px solid var(--fg2); outline-offset:1px; }
+.axis { display:flex; justify-content:space-between; font-size:11px; color:var(--fg3); margin-top:6px; }
+.strip { display:flex; height:14px; border-radius:7px; overflow:hidden; gap:2px; }
+.strip i { display:block; height:100%; }
+.legend { display:flex; gap:14px; flex-wrap:wrap; font-size:12px; color:var(--fg2); margin-top:8px; }
+.legend span { display:inline-flex; align-items:center; gap:6px; }
+.meter { height:6px; border-radius:3px; background:var(--track); overflow:hidden; }
+.meter i { display:block; height:100%; border-radius:3px; }
+.spark { display:flex; align-items:flex-end; gap:1.5px; height:26px; }
+.spark i { flex:1; min-height:1px; border-radius:2px 2px 0 0; }
+.year { display:grid; grid-auto-flow:column; grid-template-rows:repeat(7,14px); grid-auto-columns:14px; justify-content:start; gap:4px; }
+.year i { width:14px; height:14px; border-radius:4px; background:var(--seq0); }
+.tip { position:fixed; pointer-events:none; background:var(--field); color:var(--fg); box-shadow:var(--shadow), 0 0 0 .5px var(--line); border-radius:10px; padding:8px 10px; font-size:12px; z-index:9; display:none; min-width:150px; }
+.tip b { font-weight:600; }
+.tip .r { display:flex; justify-content:space-between; gap:14px; color:var(--fg2); }
+
+/* Setup */
+.node { background:var(--field); border-radius:12px; box-shadow:0 0 0 .5px var(--line); padding:10px 12px; display:flex; gap:10px; align-items:center; }
+.node .t { font-weight:500; }
+.node .s { font-size:12px; color:var(--fg3); }
+.node.needs { box-shadow:0 0 0 1px var(--ask); }
+.node.unused { box-shadow:none; border:1px dashed var(--line); background:transparent; opacity:.75; }
+.col h5 { font-size:12px; color:var(--fg3); font-weight:500; margin:0 0 8px; }
+.col { display:flex; flex-direction:column; gap:8px; }
+.chick { width:58px; height:58px; border-radius:50%; background:var(--yolks); display:grid; place-items:center; font-size:30px; box-shadow:0 0 0 6px var(--yolks); }
+</style>
+</head>
+<body>
+<main>
+<header class="doc">
+  <div>
+    <h1>Overview: redesign options</h1>
+    <p>Three directions for each tab of Overview (spec 34). The built page follows grey ink to the letter: one ink, hairlines, everything said in words. Here every option keeps Piopio's surfaces, type and tokens but lets <b>numbers lead and color carry data</b>, so the page reads in a glance instead of a paragraph.</p>
+    <p>Made-up numbers that add up. Colors: one validated data palette (blue, aqua, violet, yellow, pink; checked for color blindness in light and dark), Home's status tones kept for state only (orange asks first, red failed, green ready), and yolk for Piopio's own moments. Hover the charts.</p>
+  </div>
+  <div class="theme" id="themeBtn" onclick="setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark')">◐ Dark</div>
+</header>
+<nav class="toc">
+  <a href="#spend">Spend · A B C</a><a href="#setup">Setup · A B C</a><a href="#activity">Activity · A B C</a><a href="#disk">Disk · A B</a><a href="#shared">What every option changes</a>
+</nav>
+
+<!-- ═══════════════════════ SPEND ═══════════════════════ -->
+<h2 class="sec" id="spend">Spend</h2>
+<p class="sec">Today: four figures in a row, a grey chart, a list, then budgets, each with a sentence. The options differ in how much the page tells a story vs. shows a dashboard.</p>
+
+<div class="opt">
+  <div class="head"><b>SPEND · A</b><h3>One sentence, one chart</h3><span>Closest to grey: calm, but it reads in two seconds.</span></div>
+  <div class="card"><div class="page">
+    <div class="top"><h4>Overview</h4><div class="tabs"><span class="on">Spend</span><span>Setup</span><span>Activity</span></div><span class="range">This month</span></div>
+    <div style="font-size:30px;font-weight:650;letter-spacing:-.4px;line-height:1.2">$18.42 <span style="color:var(--fg3);font-weight:500">so far in November</span></div>
+    <div class="fg2" style="margin-top:6px">About <b class="num" style="color:var(--fg)">$24</b> by the 30th · OpenRouter billed <b class="num" style="color:var(--fg)">$21.06</b> <span class="muted" title="Includes other apps on this key">ⓘ</span></div>
+    <div class="sp2"></div>
+    <div class="bars" id="spA"></div>
+    <div class="axis"><span>1 Nov</span><span>15</span><span>30 Nov</span></div>
+    <div class="sp2"></div>
+    <div class="row" style="justify-content:space-between;margin-bottom:10px"><div class="h" style="margin:0">Where it went</div><span class="fg2">by what</span></div>
+    <div id="rowsA"></div>
+    <div class="sp2"></div>
+    <div class="row" style="gap:14px">
+      <div style="flex:1"><div class="row" style="justify-content:space-between"><span>Piopio this month</span><span class="num fg2">$18.42 of $25</span></div><div class="meter" style="margin-top:6px"><i style="width:74%;background:var(--yolk)"></i></div></div>
+      <div style="flex:1"><div class="row" style="justify-content:space-between"><span>Rita</span><span class="num fg2">$3.10 of $5</span></div><div class="meter" style="margin-top:6px"><i style="width:62%;background:var(--fg2)"></i></div></div>
+    </div>
+  </div></div>
+  <ul class="notes">
+    <li><b>The headline is a sentence</b> at 30pt; the bill and forecast are a second line. No four-figure row.</li>
+    <li><b>One color for the data</b> (blue, light→dark by amount), so the chart is the first thing you see. Mac/Cloud lives in the tooltip.</li>
+    <li><b>Every explanation becomes ⓘ</b> ("includes other apps", "12 requests had no price"); the page itself carries numbers, not paragraphs.</li>
+    <li>Budgets are meters: yolk for Piopio's own, grey for an agent; amber only past 80%.</li>
+  </ul>
+</div>
+
+<div class="opt">
+  <div class="head"><b>SPEND · B</b><h3>Tiles</h3><span>Home's warmth: tinted tiles, each figure in its own card.</span></div>
+  <div class="card"><div class="page">
+    <div class="top"><h4>Overview</h4><div class="tabs"><span class="on">Spend</span><span>Setup</span><span>Activity</span></div><span class="range">This month</span></div>
+    <div class="grid4">
+      <div class="raised" style="padding:14px"><div class="tile" style="background:var(--c1s);color:var(--c1)">$</div><div class="num" style="font-size:22px;font-weight:650;margin-top:10px">$18.42</div><div class="label">Piopio's estimate</div></div>
+      <div class="raised" style="padding:14px"><div class="tile" style="background:var(--c2s);color:var(--c2)">↗</div><div class="num" style="font-size:22px;font-weight:650;margin-top:10px">~$24</div><div class="label">by 30 Nov</div></div>
+      <div class="raised" style="padding:14px"><div class="tile" style="background:var(--bubble);color:var(--fg2)">◎</div><div class="num" style="font-size:22px;font-weight:650;margin-top:10px">$21.06</div><div class="label">OpenRouter billed ⓘ</div></div>
+      <div class="raised" style="padding:14px;display:flex;gap:12px;align-items:center">
+        <svg width="56" height="56" viewBox="0 0 56 56"><circle cx="28" cy="28" r="23" fill="none" stroke="var(--track)" stroke-width="6"/><circle cx="28" cy="28" r="23" fill="none" stroke="var(--yolk)" stroke-width="6" stroke-linecap="round" stroke-dasharray="107 145" transform="rotate(-90 28 28)"/><text x="28" y="32" text-anchor="middle" font-size="12" font-weight="600" fill="var(--fg)">74%</text></svg>
+        <div><div style="font-weight:600">Budget</div><div class="label">$18.42 of $25</div></div>
+      </div>
+    </div>
+    <div class="sp"></div>
+    <div class="raised" style="padding:16px 18px">
+      <div class="row" style="justify-content:space-between"><div class="h" style="margin:0">Each day</div><div class="legend" id="legB" style="margin:0"></div></div>
+      <div class="sp"></div>
+      <div class="bars" id="spB" style="height:130px"></div>
+      <div class="axis"><span>1 Nov</span><span>15</span><span>30 Nov</span></div>
+    </div>
+    <div class="sp"></div>
+    <div class="grid2">
+      <div class="raised" style="padding:14px 16px" id="rowsB"></div>
+      <div class="raised" style="padding:14px 16px;background:var(--yolks);box-shadow:none">
+        <div class="row" style="gap:8px"><span style="font-size:18px">🐥</span><b>Cheaper next time</b></div>
+        <div style="margin-top:8px">Morning briefing spent <b>$4.10</b> on Opus 5.5. Haiku 5.5 would have been about <b>$0.80</b>.</div>
+        <div style="margin-top:10px"><span class="btn">Change model</span></div>
+      </div>
+    </div>
+  </div></div>
+  <ul class="notes">
+    <li><b>Four tiles</b> with Home's tinted icon tiles; the budget is a ring that fills yolk, amber past 80%.</li>
+    <li><b>The daily chart is colored by what spent it</b> (Build, agents, automations…), stacked, with a legend. Mac/Cloud moves to a filter.</li>
+    <li><b>Cheaper next time is a card</b> in yolk with the chick: the one place Piopio speaks up on this page.</li>
+    <li>Most "dashboard" of the three. Risk: it competes with Home for warmth, and five cards on one page.</li>
+  </ul>
+</div>
+
+<div class="opt">
+  <div class="head"><b>SPEND · C</b><h3>Where it goes</h3><span>Category first: the split is the headline, days are secondary.</span></div>
+  <div class="card"><div class="page">
+    <div class="top"><h4>Overview</h4><div class="tabs"><span class="on">Spend</span><span>Setup</span><span>Activity</span></div><span class="range">This month</span></div>
+    <div class="row" style="align-items:flex-end;gap:26px">
+      <div><div class="label">November so far</div><div class="num" style="font-size:34px;font-weight:700;letter-spacing:-.6px">$18.42</div></div>
+      <div class="fg2" style="padding-bottom:7px">≈ $24 by the 30th</div>
+      <div class="fg2" style="padding-bottom:7px">OpenRouter billed $21.06 ⓘ</div>
+    </div>
+    <div class="sp"></div>
+    <div class="strip" id="stripC" style="height:22px;border-radius:8px"></div>
+    <div id="stripLabels" class="row" style="gap:0;margin-top:8px;font-size:12px"></div>
+    <div class="sp2"></div>
+    <div id="rowsC"></div>
+    <div class="sp2"></div>
+    <div class="row" style="justify-content:space-between"><div class="h" style="margin:0">Each day</div><span class="label">stacked the same way</span></div>
+    <div class="sp"></div>
+    <div class="bars" id="spC" style="height:90px"></div>
+    <div class="axis"><span>1 Nov</span><span>15</span><span>30 Nov</span></div>
+  </div></div>
+  <ul class="notes">
+    <li><b>A 100% strip</b> answers "on what?" first: one bar, five colors, direct labels underneath.</li>
+    <li><b>Each row carries its own 30-day sparkline</b> in its color, so a spike in one automation is visible without opening anything.</li>
+    <li>The daily chart shrinks to a supporting role, stacked in the same colors.</li>
+    <li>Best when spend is spread across many things; with one dominant row (Build at 90%) the strip says little.</li>
+  </ul>
+</div>
+
+<!-- ═══════════════════════ SETUP ═══════════════════════ -->
+<h2 class="sec" id="setup">Setup</h2>
+<p class="sec">Today: three columns of hairline boxes and grey curves. Correct, but nothing tells you whether things are fine. The options differ in whether the map stays.</p>
+
+<div class="opt">
+  <div class="head"><b>SETUP · A</b><h3>The map, with a verdict on top</h3><span>Keep the map; give nodes Home's tiles and a summary line.</span></div>
+  <div class="card"><div class="page">
+    <div class="top"><h4>Overview</h4><div class="tabs"><span>Spend</span><span class="on">Setup</span><span>Activity</span></div></div>
+    <div class="row" style="gap:8px;margin-bottom:18px">
+      <span class="pill" style="background:var(--asks);color:var(--ask)">● 2 need you</span>
+      <span class="pill" style="background:var(--oks);color:var(--ok)">● 9 working</span>
+      <span class="pill" style="background:var(--bubble);color:var(--fg2)">3 unused</span>
+    </div>
+    <div style="position:relative">
+      <svg id="mapLines" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible"></svg>
+      <div class="grid3" style="gap:44px;position:relative">
+        <div class="col"><h5>You</h5>
+          <div class="node" id="nYou"><div class="tile" style="background:var(--bubble)">💻</div><div><div class="t">This Mac</div><div class="s">the app</div></div></div>
+          <div class="node" id="nTg"><div class="tile" style="background:var(--c1s);color:var(--c1)">✈︎</div><div><div class="t">Telegram</div><div class="s">reaches Rita</div></div></div>
+        </div>
+        <div class="col"><h5>Piopio</h5>
+          <div class="node" id="nMac" style="flex-direction:column;align-items:stretch">
+            <div class="row"><div class="tile" style="background:var(--oks);color:var(--ok)">⌘</div><div><div class="t">This Mac</div><div class="s">4 projects · 3 automations</div></div></div>
+            <div class="row" style="padding-left:38px;gap:6px"><span class="pill" style="background:var(--yolks);color:var(--fg)">☀️ Rita</span><span class="pill" style="background:var(--bubble);color:var(--fg2)">Atlas</span></div>
+          </div>
+          <div class="node needs" id="nCloud"><div class="tile" style="background:var(--asks);color:var(--ask)">☁︎</div><div style="flex:1"><div class="t">Cloud</div><div class="s" style="color:var(--ask)">not answering since 14:02</div></div><span class="link" style="font-size:12px">Fix</span></div>
+        </div>
+        <div class="col"><h5>Uses</h5>
+          <div class="node" id="nOR"><div class="tile" style="background:var(--oks);color:var(--ok)">◆</div><div><div class="t">OpenRouter</div><div class="s">default · Sonnet 5.5</div></div></div>
+          <div class="node needs" id="nOA"><div class="tile" style="background:var(--asks);color:var(--ask)">◆</div><div style="flex:1"><div class="t">OpenAI</div><div class="s" style="color:var(--ask)">key rejected</div></div><span class="link" style="font-size:12px">Fix</span></div>
+          <div class="node" id="nCal"><div class="tile" style="background:var(--oks);color:var(--ok)">▦</div><div><div class="t">Google Calendar</div><div class="s">signed in</div></div></div>
+          <div class="node unused" id="nX"><div class="tile" style="background:transparent;color:var(--fg3)">◆</div><div><div class="t">xAI</div><div class="s">unused for 30 days · Disconnect</div></div></div>
+        </div>
+      </div>
+    </div>
+  </div></div>
+  <ul class="notes">
+    <li><b>A verdict first</b>: "2 need you · 9 working · 3 unused", the same counts the map draws.</li>
+    <li><b>Nodes get Home's tiles</b>: green when fine, orange when it needs you (with <b>Fix</b> right there), none when unused.</li>
+    <li>Lines stay grey; hover still lights one node's lines. What runs where stays below the map, as today.</li>
+  </ul>
+</div>
+
+<div class="opt">
+  <div class="head"><b>SETUP · B</b><h3>Health check</h3><span>No map: what needs you, what's running, what's idle.</span></div>
+  <div class="card"><div class="page">
+    <div class="top"><h4>Overview</h4><div class="tabs"><span>Spend</span><span class="on">Setup</span><span>Activity</span></div></div>
+    <div class="row" style="gap:14px;margin-bottom:18px">
+      <div class="tile" style="width:44px;height:44px;border-radius:12px;background:var(--asks);color:var(--ask);font-size:20px">!</div>
+      <div><div style="font-size:18px;font-weight:650">2 things need you</div><div class="fg2">Everything else is working: 2 agents, 3 automations, 4 projects.</div></div>
+    </div>
+    <div class="col" style="gap:8px">
+      <div class="node needs"><div class="tile" style="background:var(--asks);color:var(--ask)">☁︎</div><div style="flex:1"><div class="t">Your cloud isn't answering</div><div class="s">Rita's runs there wait · since 14:02</div></div><span class="btn">Check</span></div>
+      <div class="node needs"><div class="tile" style="background:var(--asks);color:var(--ask)">◆</div><div style="flex:1"><div class="t">OpenAI rejected its key</div><div class="s">nothing uses it by default</div></div><span class="link">Update key</span></div>
+    </div>
+    <div class="sp2"></div>
+    <div class="h">Running</div>
+    <div class="grid2" style="gap:10px">
+      <div class="node"><div class="tile" style="background:var(--yolks)">☀️</div><div style="flex:1"><div class="t">Rita</div><div class="s">This Mac · Telegram · next 7:00</div></div><span class="num fg2">$3.10</span></div>
+      <div class="node"><div class="tile" style="background:var(--c3s);color:var(--c3)">⟳</div><div style="flex:1"><div class="t">Morning briefing</div><div class="s">Rita · daily 7:00</div></div><span class="num fg2">$4.10</span></div>
+      <div class="node"><div class="tile" style="background:var(--oks);color:var(--ok)">◆</div><div style="flex:1"><div class="t">OpenRouter</div><div class="s">default · Sonnet 5.5</div></div><span class="num fg2">$17.9</span></div>
+      <div class="node"><div class="tile" style="background:var(--oks);color:var(--ok)">▦</div><div style="flex:1"><div class="t">Google Calendar</div><div class="s">read by 2 apps</div></div></div>
+    </div>
+    <div class="sp2"></div>
+    <div class="row muted" style="gap:6px"><span>▸</span><span>3 unused for 30 days: xAI, Linear MCP, Atlas</span><span class="link" style="margin-left:auto">Review</span></div>
+  </div></div>
+  <ul class="notes">
+    <li><b>Answers "is everything OK?"</b> in one line, with a status tile (orange / green).</li>
+    <li>Needs-you items become actionable rows with their button; running things are a compact grid with this month's cost.</li>
+    <li>Unused things fold into one line: a cleanup list you open when you want it.</li>
+    <li>Loses the "where does each piece run" picture; What runs where (the table) would carry it.</li>
+  </ul>
+</div>
+
+<div class="opt">
+  <div class="head"><b>SETUP · C</b><h3>Piopio in the middle</h3><span>A brand moment: the chick as the hub, everything around it.</span></div>
+  <div class="card"><div class="page">
+    <div class="top"><h4>Overview</h4><div class="tabs"><span>Spend</span><span class="on">Setup</span><span>Activity</span></div></div>
+    <svg viewBox="0 0 760 360" width="100%" style="display:block">
+      <defs><radialGradient id="glow"><stop offset="0" stop-color="var(--yolk)" stop-opacity=".28"/><stop offset="1" stop-color="var(--yolk)" stop-opacity="0"/></radialGradient></defs>
+      <circle cx="380" cy="180" r="150" fill="none" stroke="var(--line)" stroke-dasharray="3 5"/>
+      <circle cx="380" cy="180" r="92" fill="url(#glow)"/>
+      <g stroke="var(--line)" stroke-width="1.2" fill="none">
+        <path d="M380 180 L180 70"/><path d="M380 180 L150 190"/><path d="M380 180 L200 300"/>
+        <path d="M380 180 L580 70"/><path d="M380 180 L615 180"/><path d="M380 180 L580 295"/>
+      </g>
+      <path d="M380 180 L580 295" stroke="var(--ask)" stroke-width="1.5" stroke-dasharray="4 4" fill="none"/>
+      <path d="M380 180 L615 180" stroke="var(--ask)" stroke-width="1.5" stroke-dasharray="4 4" fill="none"/>
+      <text x="380" y="196" text-anchor="middle" font-size="44">🐥</text>
+      <text x="380" y="236" text-anchor="middle" font-size="12" fill="var(--fg2)">This Mac</text>
+      <g font-size="12.5" fill="var(--fg)">
+        <g transform="translate(120 48)"><rect width="120" height="44" rx="12" fill="var(--field)" stroke="var(--line)"/><text x="14" y="19">☀️ Rita</text><text x="14" y="34" font-size="11" fill="var(--fg3)">Telegram · 7:00</text></g>
+        <g transform="translate(84 168)"><rect width="120" height="44" rx="12" fill="var(--field)" stroke="var(--line)"/><text x="14" y="19">Atlas</text><text x="14" y="34" font-size="11" fill="var(--fg3)">idle</text></g>
+        <g transform="translate(140 278)"><rect width="130" height="44" rx="12" fill="var(--field)" stroke="var(--line)"/><text x="14" y="19">4 projects</text><text x="14" y="34" font-size="11" fill="var(--fg3)">3 automations</text></g>
+        <g transform="translate(520 48)"><rect width="140" height="44" rx="12" fill="var(--field)" stroke="var(--line)"/><text x="14" y="19">OpenRouter</text><text x="14" y="34" font-size="11" fill="var(--fg3)">default · Sonnet 5.5</text></g>
+        <g transform="translate(560 158)"><rect width="140" height="44" rx="12" fill="var(--asks)" stroke="var(--ask)"/><text x="14" y="19">OpenAI</text><text x="14" y="34" font-size="11" fill="var(--ask)">key rejected · Fix</text></g>
+        <g transform="translate(520 273)"><rect width="150" height="44" rx="12" fill="var(--asks)" stroke="var(--ask)"/><text x="14" y="19">☁︎ Cloud</text><text x="14" y="34" font-size="11" fill="var(--ask)">not answering · Check</text></g>
+      </g>
+    </svg>
+  </div></div>
+  <ul class="notes">
+    <li><b>Piopio is the hub</b> (the chick with a yolk glow); what you have orbits it, left what's yours, right what it uses.</li>
+    <li>Problems are orange with a dashed line to the hub; everything else is calm.</li>
+    <li>Most personality, least information density; would need care with many agents (a second ring, or grouping).</li>
+  </ul>
+</div>
+
+<!-- ═══════════════════════ ACTIVITY ═══════════════════════ -->
+<h2 class="sec" id="activity">Activity</h2>
+<p class="sec">Today: a tiny grid and six groups of "label · number" rows. All true, nothing stands out. The options differ in what gets promoted.</p>
+
+<div class="opt">
+  <div class="head"><b>ACTIVITY · A</b><h3>Highlights first</h3><span>Three big numbers, one sentence, the year, then the rest folded.</span></div>
+  <div class="card"><div class="page">
+    <div class="top"><h4>Overview</h4><div class="tabs"><span>Spend</span><span>Setup</span><span class="on">Activity</span></div><span class="range">This month</span></div>
+    <div class="grid3">
+      <div class="raised" style="padding:16px"><div class="tile" style="background:var(--c1s);color:var(--c1)">💬</div><div class="num" style="font-size:28px;font-weight:700;margin-top:10px">76</div><div class="fg2">messages you sent</div><div class="label">+18 vs October</div></div>
+      <div class="raised" style="padding:16px"><div class="tile" style="background:var(--c2s);color:var(--c2)">✎</div><div class="num" style="font-size:28px;font-weight:700;margin-top:10px">38</div><div class="fg2">files Piopio changed</div><div class="label">in 15 Build sessions</div></div>
+      <div class="raised" style="padding:16px"><div class="tile" style="background:var(--c3s);color:var(--c3)">⟳</div><div class="num" style="font-size:28px;font-weight:700;margin-top:10px">31</div><div class="fg2">automation runs</div><div class="label">2 failed · Morning briefing</div></div>
+    </div>
+    <div class="sp2"></div>
+    <div class="row" style="gap:10px"><span style="font-size:18px">🐥</span><span>Your busiest day was <b>Saturday 22 Nov</b>: 194 messages and requests, most of it in <b>piopio</b>.</span></div>
+    <div class="sp2"></div>
+    <div class="year" id="yearA"></div>
+    <div class="legend"><span class="muted">less</span><span class="dot" style="background:var(--seq1);border-radius:3px"></span><span class="dot" style="background:var(--seq2);border-radius:3px"></span><span class="dot" style="background:var(--seq3);border-radius:3px"></span><span class="dot" style="background:var(--seq4);border-radius:3px"></span><span class="muted">more</span></div>
+    <div class="sp2"></div>
+    <div class="row fg2" style="gap:6px;border-top:.5px solid var(--line);padding-top:12px"><span>▸</span><span>All numbers: conversations, Build, agents, automations, you and Piopio, reliability</span></div>
+  </div></div>
+  <ul class="notes">
+    <li><b>Three numbers worth a glance</b>, picked from the groups (the biggest movers of the range), in tinted tiles.</li>
+    <li><b>One sentence from Piopio</b> about the busiest day; facts only (no scores or streaks, OV5).</li>
+    <li>The year of days in a single blue scale, bigger squares, with a less→more key; until there's a year of history it shows the last three months, so it isn't a wall of empty squares. The full tables fold behind one line.</li>
+  </ul>
+</div>
+
+<div class="opt">
+  <div class="head"><b>ACTIVITY · B</b><h3>Week by week</h3><span>A short journal: each week a card with its days and three facts.</span></div>
+  <div class="card"><div class="page">
+    <div class="top"><h4>Overview</h4><div class="tabs"><span>Spend</span><span>Setup</span><span class="on">Activity</span></div><span class="range">This month</span></div>
+    <div class="col" style="gap:12px" id="weeksB"></div>
+  </div></div>
+  <ul class="notes">
+    <li><b>Time is the spine</b>: newest week first, its seven days as small bars (messages in blue, runs in violet).</li>
+    <li>Each week says three things in words: "4 Build sessions, 21 files", "Rita ran 7 times", "2 runs failed".</li>
+    <li>Feels like a log you scroll; weaker for "how does this month compare", which moves into each card's delta.</li>
+  </ul>
+</div>
+
+<div class="opt">
+  <div class="head"><b>ACTIVITY · C</b><h3>Small multiples</h3><span>Every number gets a sparkline and its change.</span></div>
+  <div class="card"><div class="page">
+    <div class="top"><h4>Overview</h4><div class="tabs"><span>Spend</span><span>Setup</span><span class="on">Activity</span></div><span class="range">This month</span></div>
+    <div class="grid3" id="multC"></div>
+  </div></div>
+  <ul class="notes">
+    <li><b>A grid of cards</b>: number, its last 30 days as a sparkline in its group's color, the change vs last month as a neutral pill (↑ ↓, never green/red: more isn't better).</li>
+    <li>Groups become colors (conversations blue, Build aqua, agents violet, automations yellow, reliability pink) shared with Spend · C.</li>
+    <li>Dense and scannable; the year of days sits above it as in A.</li>
+  </ul>
+</div>
+
+<!-- ═══════════════════════ DISK ═══════════════════════ -->
+<h2 class="sec" id="disk">Disk</h2>
+<p class="sec">The end of Activity. Today: a list of sizes in grey.</p>
+<div class="grid2">
+  <div class="opt">
+    <div class="head"><b>DISK · A</b><h3>One bar</h3></div>
+    <div class="card"><div class="page" style="padding:24px">
+      <div class="row" style="justify-content:space-between"><div class="h" style="margin:0">Disk</div><span class="num" style="font-weight:600">1.4 GB</span></div>
+      <div class="sp"></div>
+      <div class="strip" id="diskA" style="height:16px"></div>
+      <div class="legend" id="diskLeg"></div>
+      <div class="sp"></div>
+      <div class="row" style="justify-content:space-between;background:var(--bubble);border-radius:10px;padding:10px 12px"><span>3 worktrees nothing uses</span><span class="btn">Free 1.1 GB</span></div>
+    </div></div>
+  </div>
+  <div class="opt">
+    <div class="head"><b>DISK · B</b><h3>Ring and one action</h3></div>
+    <div class="card"><div class="page" style="padding:24px;display:flex;gap:22px;align-items:center">
+      <svg width="120" height="120" viewBox="0 0 120 120" id="diskRing"></svg>
+      <div style="flex:1">
+        <div class="num" style="font-size:24px;font-weight:700">1.4 GB</div><div class="fg2">in Piopio's folder</div>
+        <div class="sp"></div>
+        <div>Worktrees take <b>78%</b>. 3 of them aren't used by any conversation.</div>
+        <div style="margin-top:10px"><span class="btn">Clean up · frees 1.1 GB</span></div>
+      </div>
+    </div></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ SHARED ═══════════════════════ -->
+<h2 class="sec" id="shared">What every option changes</h2>
+<ul class="notes" style="max-width:900px">
+  <li><b>Color carries data, never chrome.</b> A validated five-color palette for categories (same hue = same thing across Spend and Activity), one blue scale for amounts, Home's status tones for state. Text stays in ink; a color always has its label next to it.</li>
+  <li><b>Numbers lead, words follow.</b> Explanations move into ⓘ tooltips; a section says at most one sentence.</li>
+  <li><b>Piopio's voice in one place per page</b> (yolk + the chick): Cheaper next time on Spend, the busiest day on Activity. Never more.</li>
+  <li><b>Grey ink stays for the rest of the app.</b> This loosens it for Overview only, as Home did.</li>
+  <li>Mixing is fine: e.g. Spend A + Setup A + Activity A is the calmest set; B·B·B the warmest; C·C·C the most analytical.</li>
+</ul>
+</main>
+<div class="tip" id="tip"></div>
+
+<script>
+function setTheme(t) { document.documentElement.dataset.theme = t; themeBtn.textContent = t === 'dark' ? '◐ Light' : '◐ Dark'; }
+if (matchMedia('(prefers-color-scheme: dark)').matches) setTheme('dark');
+const $ = (id) => document.getElementById(id);
+const money = (n) => '$' + (n < 10 ? n.toFixed(2) : n.toFixed(1));
+
+// Made-up November, 23 days in: five things that spend, by day (they add up to $18.42).
+const WHAT = [
+  { id: 'build', label: 'Build sessions', c: 'var(--c1)', s: 'var(--c1s)', glyph: '⌘' },
+  { id: 'brief', label: 'Morning briefing', c: 'var(--c3)', s: 'var(--c3s)', glyph: '⟳' },
+  { id: 'rita', label: 'Rita', c: 'var(--c4)', s: 'var(--c4s)', glyph: '☀︎' },
+  { id: 'chat', label: 'Conversations', c: 'var(--c2)', s: 'var(--c2s)', glyph: '💬' },
+  { id: 'own', label: "Piopio's own work", c: 'var(--c5)', s: 'var(--c5s)', glyph: '✦' },
+];
+const seed = (i, k) => Math.abs(Math.sin(i * 12.9898 + k * 78.233) * 43758.5453) % 1;
+const days = [];
+for (let d = 1; d <= 30; d++) {
+  if (d > 23) { days.push(null); continue; }
+  const busy = [9, 16, 19, 20, 22].includes(d) ? 2.6 : 1;
+  days.push({ d, build: +(seed(d, 1) * 0.9 * busy).toFixed(2), brief: d % 7 === 6 ? 0 : +(0.12 + seed(d, 2) * 0.12).toFixed(2), rita: +(seed(d, 3) * 0.2).toFixed(2), chat: +(seed(d, 4) * 0.12).toFixed(2), own: +(0.005 + seed(d, 5) * 0.04).toFixed(3) });
+}
+const totals = Object.fromEntries(WHAT.map((w) => [w.id, days.filter(Boolean).reduce((n, x) => n + x[w.id], 0)]));
+const sum = Object.values(totals).reduce((a, b) => a + b, 0);
+const scale = 18.42 / sum;
+for (const x of days) if (x) for (const w of WHAT) x[w.id] = +(x[w.id] * scale).toFixed(3);
+for (const w of WHAT) totals[w.id] *= scale;
+const dayTotal = (x) => WHAT.reduce((n, w) => n + x[w.id], 0);
+const peak = Math.max(...days.filter(Boolean).map(dayTotal));
+const ordered = [...WHAT].sort((a, b) => totals[b.id] - totals[a.id]);
+
+// Tooltip
+const tip = $('tip');
+function hover(el, html) {
+  el.addEventListener('mousemove', (e) => { tip.innerHTML = html(); tip.style.display = 'block'; tip.style.left = e.clientX + 14 + 'px'; tip.style.top = e.clientY + 14 + 'px'; });
+  el.addEventListener('mouseleave', () => (tip.style.display = 'none'));
+}
+const dayTip = (x) => () => `<b>${x.d} Nov · ${money(dayTotal(x))}</b>` + ordered.slice(0, 3).map((w) => `<div class="r"><span>${w.label}</span><span>${money(x[w.id])}</span></div>`).join('');
+
+function barsChart(el, mode, height) {
+  for (const x of days) {
+    const i = document.createElement('i');
+    if (!x) { i.className = 'future'; el.appendChild(i); continue; }
+    if (x.d === 23) i.className = 'today';
+    i.style.height = Math.max(2, (dayTotal(x) / peak) * 100) + '%';
+    if (mode === 'single') {
+      const v = dayTotal(x) / peak;
+      i.style.background = v > 0.66 ? 'var(--seq4)' : v > 0.33 ? 'var(--seq3)' : 'var(--seq2)';
+    } else {
+      for (const w of ordered) { const b = document.createElement('b'); b.style.height = (x[w.id] / dayTotal(x)) * 100 + '%'; b.style.background = w.c; i.appendChild(b); }
+    }
+    hover(i, dayTip(x));
+    el.appendChild(i);
+  }
+}
+barsChart($('spA'), 'single');
+barsChart($('spB'), 'stack');
+barsChart($('spC'), 'stack');
+
+// Spend A: rows with one blue
+$('rowsA').innerHTML = ordered.map((w) => `<div class="row" style="margin:9px 0"><span style="width:170px">${w.label}</span><div class="meter" style="flex:1"><i style="width:${(totals[w.id] / totals[ordered[0].id]) * 100}%;background:var(--seq3)"></i></div><span class="num" style="width:60px;text-align:right">${money(totals[w.id])}</span><span class="num muted" style="width:40px;text-align:right">${Math.round((totals[w.id] / 18.42) * 100)}%</span></div>`).join('');
+
+// Spend B: legend + rows with dots
+$('legB').innerHTML = ordered.map((w) => `<span><i class="dot" style="background:${w.c}"></i>${w.label}</span>`).join('');
+$('rowsB').innerHTML = '<div class="h">By what</div>' + ordered.map((w) => `<div class="row" style="margin:8px 0"><div class="tile" style="width:24px;height:24px;border-radius:7px;background:${w.s};color:${w.c};font-size:12px">${w.glyph}</div><span style="flex:1">${w.label}</span><span class="num">${money(totals[w.id])}</span></div>`).join('');
+
+// Spend C: strip, labels, rows with sparklines
+$('stripC').innerHTML = ordered.map((w) => `<i style="width:${(totals[w.id] / 18.42) * 100}%;background:${w.c}"></i>`).join('');
+$('stripLabels').innerHTML = ordered.slice(0, 3).map((w) => `<span style="width:${Math.max(16, (totals[w.id] / 18.42) * 100)}%;color:var(--fg2)">${w.label} <b class="num" style="color:var(--fg)">${Math.round((totals[w.id] / 18.42) * 100)}%</b></span>`).join('');
+[...$('stripC').children].forEach((el, k) => hover(el, () => `<b>${ordered[k].label}</b><div class="r"><span>this month</span><span>${money(totals[ordered[k].id])}</span></div>`));
+$('rowsC').innerHTML = ordered.map((w) => {
+  const pk = Math.max(...days.filter(Boolean).map((x) => x[w.id]), 0.001);
+  const spark = days.map((x) => `<i style="height:${x ? Math.max(4, (x[w.id] / pk) * 100) : 4}%;background:${x ? w.c : 'var(--track)'}"></i>`).join('');
+  return `<div class="row" style="padding:9px 0;border-bottom:.5px solid var(--line)"><i class="dot" style="background:${w.c}"></i><span style="width:160px">${w.label}</span><div class="spark" style="flex:1">${spark}</div><span class="num" style="width:64px;text-align:right">${money(totals[w.id])}</span></div>`;
+}).join('');
+
+// Setup A: lines between nodes
+function drawMap() {
+  const svg = $('mapLines'); const box = svg.getBoundingClientRect();
+  const c = (id, side) => { const r = $(id).getBoundingClientRect(); return [side === 'r' ? r.right - box.left : r.left - box.left, r.top - box.top + r.height / 2]; };
+  const links = [['nYou', 'nMac'], ['nTg', 'nMac'], ['nMac', 'nOR'], ['nMac', 'nOA'], ['nMac', 'nCal'], ['nCloud', 'nOR']];
+  svg.innerHTML = links.map(([a, b]) => { const [x1, y1] = c(a, 'r'), [x2, y2] = c(b, 'l'); const mx = (x1 + x2) / 2; const warn = a === 'nCloud' || b === 'nOA'; return `<path d="M${x1} ${y1} C${mx} ${y1} ${mx} ${y2} ${x2} ${y2}" stroke="${warn ? 'var(--ask)' : 'var(--line)'}" stroke-width="${warn ? 1.4 : 1.2}" ${warn ? 'stroke-dasharray="4 4"' : ''} fill="none"/>`; }).join('');
+}
+addEventListener('load', drawMap); addEventListener('resize', drawMap);
+
+// Activity A: a year of days (starts 8 Nov), blue scale
+(function () {
+  // Until there's a year of history, the last three months (a year of mostly empty squares reads as "nothing").
+  const el = $('yearA'); const start = new Date(2026, 7, 31); const first = new Date(2026, 10, 8); const today = new Date(2026, 10, 23);
+  for (let t = new Date(start); t <= new Date(2026, 10, 29); t.setDate(t.getDate() + 1)) {
+    const i = document.createElement('i');
+    if (t >= first && t <= today) {
+      const v = seed(t.getDate(), 9) * ([16, 19, 22].includes(t.getDate()) ? 1 : 0.7);
+      i.style.background = v > 0.75 ? 'var(--seq4)' : v > 0.5 ? 'var(--seq3)' : v > 0.25 ? 'var(--seq2)' : 'var(--seq1)';
+      const d = t.getDate(); hover(i, () => `<b>${d} Nov</b><div class="r"><span>messages and requests</span><span>${Math.round(v * 194)}</span></div>`);
+    }
+    if (+t === +today) i.style.outline = '1.5px solid var(--fg2)';
+    el.appendChild(i);
+  }
+})();
+
+// Activity B: weeks
+$('weeksB').innerHTML = [
+  { w: '17–23 Nov', facts: ['<b>9</b> Build sessions, <b>21</b> files', 'Rita ran <b>7</b> times', '<b>2</b> runs failed'], d: [5, 9, 3, 11, 6, 14, 8], r: [1, 1, 1, 1, 1, 1, 1], delta: 'busiest week' },
+  { w: '10–16 Nov', facts: ['<b>5</b> Build sessions, <b>13</b> files', '<b>31</b> messages to you', 'no failures'], d: [2, 6, 4, 0, 3, 7, 12], r: [1, 1, 1, 1, 1, 1, 0], delta: '' },
+  { w: '3–9 Nov', facts: ['your first week', '<b>4</b> conversations', 'Rita set up'], d: [0, 0, 0, 0, 0, 2, 5], r: [0, 0, 0, 0, 0, 0, 1], delta: '' },
+].map((k) => {
+  const pk = 14;
+  const bars = k.d.map((v, j) => `<i style="height:${Math.max(3, (v / pk) * 100)}%;background:var(--c1)"></i>${k.r[j] ? '' : ''}`).join('');
+  return `<div class="raised" style="padding:14px 16px;display:flex;gap:18px;align-items:center"><div style="width:96px"><div style="font-weight:600">${k.w}</div><div class="label">${k.delta}</div></div><div class="spark" style="width:130px;height:44px;gap:4px">${bars}</div><div style="flex:1;display:flex;gap:18px;flex-wrap:wrap" class="fg2">${k.facts.map((f) => `<span>${f}</span>`).join('')}</div></div>`;
+}).join('');
+
+// Activity C: small multiples
+$('multC').innerHTML = [
+  ['Messages you sent', 76, '+18', 'var(--c1)'], ['Conversations started', 11, '+4', 'var(--c1)'], ['Files changed', 38, '+21', 'var(--c2)'],
+  ['Build sessions', 15, '+6', 'var(--c2)'], ['Agent runs', 24, '−3', 'var(--c3)'], ['Automation runs', 31, '+9', 'var(--c4)'],
+  ['Tool calls', 1054, '+390', 'var(--c2)'], ['Tools that failed', 44, '+12', 'var(--c5)'], ['Provider errors', 1, '−2', 'var(--c5)'],
+].map(([label, n, d, c], k) => {
+  const spark = Array.from({ length: 30 }, (_, j) => `<i style="height:${j > 22 ? 4 : Math.max(6, seed(j, k + 3) * 100)}%;background:${j > 22 ? 'var(--track)' : c}"></i>`).join('');
+  return `<div class="raised" style="padding:12px 14px"><div class="row" style="justify-content:space-between"><span class="fg2">${label}</span><span class="pill" style="background:var(--bubble);color:var(--fg2)">${d.startsWith('−') ? '↓' : '↑'} ${d.replace(/[+−]/, '')}</span></div><div class="num" style="font-size:22px;font-weight:650;margin:4px 0 6px">${n.toLocaleString('en')}</div><div class="spark">${spark}</div></div>`;
+}).join('');
+
+// Disk
+const DISK = [['Worktrees', 1.09, 'var(--c1)'], ['Conversations', 0.17, 'var(--c2)'], ['Checkpoints', 0.08, 'var(--c3)'], ['Library and apps', 0.04, 'var(--c4)'], ['Everything else', 0.02, 'var(--c5)']];
+const dt = DISK.reduce((n, d) => n + d[1], 0);
+$('diskA').innerHTML = DISK.map(([l, g, c]) => `<i style="width:${(g / dt) * 100}%;background:${c}" title="${l}"></i>`).join('');
+$('diskLeg').innerHTML = DISK.map(([l, g, c]) => `<span><i class="dot" style="background:${c}"></i>${l} <b class="num" style="color:var(--fg)">${g >= 1 ? g.toFixed(1) + ' GB' : Math.round(g * 1000) + ' MB'}</b></span>`).join('');
+(function () {
+  let a = -Math.PI / 2; const r = 46, cx = 60, cy = 60;
+  $('diskRing').innerHTML = DISK.map(([l, g, c]) => {
+    const da = (g / dt) * Math.PI * 2 - 0.04; const x1 = cx + r * Math.cos(a), y1 = cy + r * Math.sin(a); a += da; const x2 = cx + r * Math.cos(a), y2 = cy + r * Math.sin(a); a += 0.04;
+    return `<path d="M${x1} ${y1} A${r} ${r} 0 ${da > Math.PI ? 1 : 0} 1 ${x2} ${y2}" stroke="${c}" stroke-width="14" fill="none" stroke-linecap="butt"><title>${l}</title></path>`;
+  }).join('') + `<text x="60" y="64" text-anchor="middle" font-size="13" font-weight="600" fill="var(--fg)">78%</text>`;
+})();
+</script>
+</body>
+</html>

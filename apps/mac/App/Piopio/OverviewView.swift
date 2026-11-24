@@ -88,10 +88,11 @@ struct OverviewPage: View {
                         empty(spend)
                     } else {
                         headline(spend)
-                        section("By day", trailing: { Text("Where it ran").foregroundStyle(Color.dsFg3) }) { byDay(spend) }
+                        byDay(spend).padding(.top, 26)
                         groupsSection(spend)
-                        if agent == nil, let suggestions = spend.suggestions, !suggestions.isEmpty { section("Cheaper next time") { suggestionRows(Array(suggestions.prefix(3))) } }
-                        if agent == nil { section("Budgets") { budgetRows } }
+                        // Piopio's one remark on the page (docs/design/overview Redesign, A): in yolk, with the chick.
+                        if agent == nil, let suggestions = spend.suggestions, !suggestions.isEmpty { cheaper(Array(suggestions.prefix(3))).padding(.top, 26) }
+                        if agent == nil { plainSection("Budgets") { budgetGrid } }
                     }
                     if spend.backfilling == true {
                         FinePrint("Reading past conversations… the numbers fill in as it goes.").padding(.top, 14)
@@ -154,45 +155,71 @@ struct OverviewPage: View {
         }
     }
 
+    /// "$18.42 so far in November", then "About $24 by the 30th · OpenRouter billed $21.06 ⓘ". Every explanation is a
+    /// tooltip; the page carries numbers (Redesign A).
     private func headline(_ s: SpendResult) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top, spacing: 18) {
-                figure(money(s.knownUsd), "Piopio's estimate · \(rangeLabel(s))", sub: estimateSub(s))
-                if let forecast = s.forecastUsd {
-                    figure("about \(money(forecast))", "on track for \(monthName(s.from))", sub: nil)
-                }
-                if let billed {
-                    figure(money(billed), "OpenRouter billed \(range == .today ? "today" : "this month")", sub: engine.usage?.keyHint.map { "key \($0)" })
-                        .help("Includes other apps on this key")
-                }
-                if s.planCalls > 0 {
-                    figure(Self.tokens(s.planTokens), "on your plan", sub: "\(s.planCalls) request\(s.planCalls == 1 ? "" : "s")")
-                        .help("Requests billed to a subscription plan are shown as tokens, never as dollars.")
+        VStack(alignment: .leading, spacing: 7) {
+            (Text(money(s.knownUsd)).foregroundStyle(Color.dsFg) + Text(" \(phrase(s))").foregroundStyle(Color.dsFg3).fontWeight(.medium))
+                .font(.system(size: 30, weight: .semibold)).tracking(-0.4).monospacedDigit()
+                .lineLimit(1).minimumScaleFactor(0.7)
+                .accessibilityLabel("Piopio's estimate: \(money(s.knownUsd)) \(phrase(s))")
+            HStack(spacing: 5) {
+                ForEach(Array(facts(s).enumerated()), id: \.offset) { i, fact in
+                    if i > 0 { Text("·").foregroundStyle(Color.dsFg3) }
+                    HStack(spacing: 4) {
+                        fact.text
+                        if let info = fact.info { InfoMark(text: info) }
+                    }
                 }
             }
-            if let why = why(s) { Text(why).font(.system(size: 12)).foregroundStyle(Color.dsFg3).fixedSize(horizontal: false, vertical: true) }
+            .font(.system(size: 13)).foregroundStyle(Color.dsFg2)
             if let asOf = s.cloudAsOf.flatMap(Self.date) {
                 Text("Cloud usage up to \(asOf.formatted(Calendar.current.isDateInToday(asOf) ? .dateTime.hour().minute() : .dateTime.day().month(.abbreviated).hour().minute()))")
                     .font(.system(size: 12)).foregroundStyle(Color.dsFg3)
                     .help("Your cloud couldn't be reached since then; what it spent after isn't counted yet.")
             }
         }
-        .padding(.bottom, 4)
     }
 
-    private func figure(_ value: String, _ label: String, sub: String?) -> some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Text(value).font(.system(size: 20, weight: .semibold)).tracking(-0.2).monospacedDigit()
-            Text(label).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1)
-            if let sub { Text(sub).font(.system(size: 12)).foregroundStyle(Color.dsFg2).lineLimit(1).padding(.top, 1) }
+    /// "so far in November", "today", "these 7 days", "in October", "these 12 months".
+    private func phrase(_ s: SpendResult) -> String {
+        switch range {
+        case .today: "today"
+        case .sevenDays: "these 7 days"
+        case .month: "so far in \(monthName(s.from))"
+        case .lastMonth: "in \(monthName(s.from))"
+        case .twelveMonths: "these 12 months"
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func estimateSub(_ s: SpendResult) -> String? {
-        if s.unknownCalls > 0 { return "\(s.unknownCalls) request\(s.unknownCalls == 1 ? "" : "s") without a price" }
-        if range == .month || range == .sevenDays, let today = s.days.first(where: { $0.day == Self.dayKey(Date()) }) { return "\(money(today.macUsd + today.cloudUsd)) today" }
-        return nil
+    /// The second line's parts: the forecast, the bill, what has no price, what a plan paid; each with its ⓘ.
+    private func facts(_ s: SpendResult) -> [(text: Text, info: String?)] {
+        var out: [(text: Text, info: String?)] = []
+        let strong = { (v: String) in Text(v).foregroundStyle(Color.dsFg).fontWeight(.semibold) }
+        if let forecast = s.forecastUsd {
+            out.append((Text("About ") + strong(money(forecast)) + Text(" by the \(lastDay(s))"), "Straight-line from the days so far. An estimate, not a bill."))
+        } else if range == .month || range == .sevenDays, let today = s.days.first(where: { $0.day == Self.dayKey(Date()) }), today.macUsd + today.cloudUsd > 0 {
+            out.append((strong(money(today.macUsd + today.cloudUsd)) + Text(" today"), nil))
+        }
+        if let billed {
+            let why = why(s).map { " \($0)" } ?? ""
+            out.append((Text("OpenRouter billed ") + strong(money(billed)), "OpenRouter's own number for this key\(engine.usage?.keyHint.map { " (\($0))" } ?? ""). It includes other apps that use the key, and the two are never added.\(why)"))
+        }
+        if s.unknownCalls > 0 {
+            out.append((Text("\(s.unknownCalls) without a price"), "\(s.unknownCalls) request\(s.unknownCalls == 1 ? "" : "s") had no price, so \(s.unknownCalls == 1 ? "it isn't" : "they aren't") in the estimate. Never counted as $0."))
+        }
+        if s.planCalls > 0 {
+            out.append((Text("\(Self.tokens(s.planTokens)) on your plan"), "\(s.planCalls) request\(s.planCalls == 1 ? "" : "s") billed to a subscription plan: shown as tokens, never as dollars."))
+        }
+        return out
+    }
+
+    /// "30th": the range's last day, as an ordinal.
+    private func lastDay(_ s: SpendResult) -> String {
+        guard let to = Self.date(s.to) else { return "end of the month" }
+        let f = NumberFormatter()
+        f.numberStyle = .ordinal
+        return f.string(from: NSNumber(value: Calendar.current.component(.day, from: to.addingTimeInterval(-1)))) ?? "end of the month"
     }
 
     /// One line on why the bill and the estimate differ by more than 10%. They're never added.
@@ -245,33 +272,29 @@ struct OverviewPage: View {
                 Text(axisLabel(keys.last)).frame(maxWidth: .infinity, alignment: .trailing)
             }
             .font(.system(size: 11)).foregroundStyle(Color.dsFg3)
-            HStack(spacing: 16) {
-                legend(Color.dsFg2, "This Mac \(money(mac))")
-                if cloud > 0 { legend(Color.dsFg3, "Cloud \(money(cloud))") }
-                Spacer()
-                if keys.contains(todayKey) { Text(range == .twelveMonths ? "This month is outlined until it ends" : "Today is outlined until the day ends") }
-            }
-            .font(.system(size: 12)).foregroundStyle(Color.dsFg3)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Each \(range == .twelveMonths ? "month" : "day"): This Mac \(money(mac))\(cloud > 0 ? ", cloud \(money(cloud))" : "")")
     }
 
     private func bar(_ day: SpendDay?, key: String, today: Bool, future: Bool, peak: Double, height: CGFloat) -> some View {
         let mac = day?.macUsd ?? 0, cloud = day?.cloudUsd ?? 0
         let h = max(CGFloat((mac + cloud) / peak) * height, future ? 3 : (mac + cloud > 0 ? 2 : 0))
-        let macH = mac + cloud > 0 ? h * CGFloat(mac / (mac + cloud)) : 0
         return VStack(spacing: 0) {
             Spacer(minLength: 0)
             if future {
                 Rectangle().fill(Color.dsTrack).frame(height: 3)
             } else {
-                VStack(spacing: 0) {
-                    Rectangle().fill(Color.dsFg3).frame(height: h - macH)
-                    Rectangle().fill(hovered == key ? Color.dsFg : Color.dsFg2).frame(height: macH)
-                }
-                .opacity(today ? 0.35 : 1)
-                .frame(height: h)
-                .overlay { if today { UnevenRoundedRectangle(topLeadingRadius: 3, topTrailingRadius: 3).stroke(Color.dsFg2, lineWidth: 1) } }
-                .clipShape(UnevenRoundedRectangle(topLeadingRadius: 3, topTrailingRadius: 3))
+                // One colour, by amount (Redesign A): the bar's share of the peak picks the step. Mac and cloud are in
+                // the tooltip.
+                let share = (mac + cloud) / peak
+                Rectangle()
+                    .fill(hovered == key ? DataColor.seq[4] : DataColor.amount(share))
+                    .opacity(today ? 0.45 : 1)
+                    .frame(height: h)
+                    .clipShape(UnevenRoundedRectangle(topLeadingRadius: 4, topTrailingRadius: 4))
+                    .overlay { if today { UnevenRoundedRectangle(topLeadingRadius: 4, topTrailingRadius: 4).stroke(Color.dsFg2, lineWidth: 1.2).padding(-1.5) } }
+                    .help(today ? (range == .twelveMonths ? "This month, outlined until it ends" : "Today, outlined until the day ends") : "")
             }
         }
         .frame(maxWidth: .infinity)
@@ -285,6 +308,9 @@ struct OverviewPage: View {
     private func tip(_ day: SpendDay) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text("\(axisLabel(day.day, long: true)) · \(money(day.macUsd + day.cloudUsd))").font(.system(size: 12, weight: .semibold))
+            if day.cloudUsd > 0 {
+                Text("This Mac \(money(day.macUsd)) · Cloud \(money(day.cloudUsd))").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
+            }
             ForEach(day.top, id: \.label) { t in
                 HStack { Text(t.label).lineLimit(1); Spacer(); Text(money(t.usd)).monospacedDigit() }
                     .font(.system(size: 12)).foregroundStyle(Color.dsFg2)
@@ -302,42 +328,32 @@ struct OverviewPage: View {
         .allowsHitTesting(false)
     }
 
-    private func legend(_ color: Color, _ text: String) -> some View {
-        HStack(spacing: 6) { RoundedRectangle(cornerRadius: 2).fill(color).frame(width: 8, height: 8); Text(text) }
-    }
-
     // MARK: By what (§5.3)
 
     private func groupsSection(_ s: SpendResult) -> some View {
         let shown = showsAll ? s.groups : Array(s.groups.prefix(8))
         let rest = s.groups.dropFirst(8)
         let biggest = max(s.groups.map { $0.plan ? 0 : $0.usd }.max() ?? 0, 0.000_001)
-        return titledSection(title: {
-            HStack(spacing: 0) {
-                Text("By ").foregroundStyle(Color.dsFg3)
-                Menu {
-                    ForEach(SpendGroupBy.allCases, id: \.self) { g in
-                        Button { groupRaw = g.rawValue; showsAll = false } label: { if g == groupBy { Label(Self.groupName(g), systemImage: "checkmark") } else { Text(Self.groupName(g)) } }
-                    }
-                } label: { Text(Self.groupName(groupBy)).font(.system(size: 12, weight: .medium)).foregroundStyle(Color.dsFg2) }
-                    .menuStyle(.button).buttonStyle(SelectorStyle()).menuIndicator(.hidden).fixedSize()
-            }
+        return plainSection("Where it went", trailing: {
+            Menu {
+                ForEach(SpendGroupBy.allCases, id: \.self) { g in
+                    Button { groupRaw = g.rawValue; showsAll = false } label: { if g == groupBy { Label(Self.groupName(g), systemImage: "checkmark") } else { Text(Self.groupName(g)) } }
+                }
+            } label: { Text("by \(Self.groupName(groupBy).lowercased())").font(.system(size: 12.5)).foregroundStyle(Color.dsFg2) }
+                .menuStyle(.button).buttonStyle(SelectorStyle()).menuIndicator(.hidden).fixedSize()
         }) {
             VStack(alignment: .leading, spacing: 0) {
                 if s.groups.isEmpty {
                     FinePrint("Nothing spent in this range.").padding(.vertical, 6)
                 }
-                ForEach(Array(shown.enumerated()), id: \.element.id) { i, g in
-                    groupRow(g, biggest: biggest)
-                    if i < shown.count - 1 { Rectangle().fill(Color.dsLine).frame(height: 0.5) }
-                }
+                ForEach(shown) { g in groupRow(g, biggest: biggest) }
                 if !showsAll && !rest.isEmpty {
                     let known = rest.reduce(0) { $0 + $1.usd }, unknown = rest.reduce(0) { $0 + $1.unknownCalls }
                     Button { showsAll = true } label: {
                         Text("\(rest.count) more · \(money(known)) known\(unknown > 0 ? ", \(unknown) without a price" : "")")
                     }
                     .buttonStyle(SelectorStyle()).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
-                    .padding(.leading, 22).padding(.top, 4)
+                    .padding(.top, 4)
                 }
             }
         }
@@ -345,25 +361,18 @@ struct OverviewPage: View {
 
     private func groupRow(_ g: SpendGroup, biggest: Double) -> some View {
         Button { opened = g } label: {
-            HStack(spacing: 10) {
-                Image(systemName: glyph(g)).font(.system(size: 12)).foregroundStyle(Color.dsFg2).frame(width: 18)
+            HStack(spacing: 12) {
                 HStack(spacing: 6) {
                     Text(g.label).lineLimit(1).truncationMode(.tail)
                     if let note = note(g) { Text(note).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1) }
                 }
-                .frame(width: 280, alignment: .leading)
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(Color.dsTrack)
-                        Capsule().fill(Color.dsFg2).frame(width: g.plan ? 0 : geo.size.width * CGFloat(g.usd / biggest))
-                    }
-                }
-                .frame(height: 3)
+                .frame(width: 250, alignment: .leading)
+                Meter(value: g.plan ? 0 : g.usd / biggest, fill: DataColor.seq[3])
                 Text(g.plan ? Self.tokens(g.tokens) : money(g.usd)).monospacedDigit().frame(width: 76, alignment: .trailing)
                 Text(g.plan ? "plan" : "\(Int((g.share * 100).rounded()))%").font(.system(size: 12)).foregroundStyle(Color.dsFg3).monospacedDigit().frame(width: 38, alignment: .trailing)
             }
             .font(.system(size: 13))
-            .padding(.vertical, 6)
+            .padding(.vertical, 7)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -381,22 +390,6 @@ struct OverviewPage: View {
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
-    private func glyph(_ g: SpendGroup) -> String {
-        switch groupBy {
-        case .what:
-            if g.id == "conversations" { return "bubble.left" }
-            if g.id == "build" { return "hammer" }
-            if g.id == "piopio" { return "sparkle" }
-            if g.id.hasPrefix("agent:") { return "bird" }
-            if g.id.hasPrefix("automation:") { return "clock.arrow.circlepath" }
-            return "circle"
-        case .model: return "cpu"
-        case .provider: return "server.rack"
-        case .project: return "folder"
-        case .where: return g.id == "mac" ? "laptopcomputer" : "cloud"
-        }
-    }
-
     static func groupName(_ g: SpendGroupBy) -> String {
         switch g {
         case .what: "What"
@@ -409,58 +402,59 @@ struct OverviewPage: View {
 
     // MARK: Budgets (§5.4)
 
-    private var budgetRows: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            piopioBudgetRow
-            ForEach(budgets) { b in
-                Rectangle().fill(Color.dsLine).frame(height: 0.5)
-                budgetRow(b)
-            }
+    /// Every budget as a meter, two to a row (Redesign A): Piopio's own in yolk first, then agents' and automations'
+    /// in grey. Past 80% a meter turns amber, the page's warning.
+    private var budgetGrid: some View {
+        LazyVGrid(columns: [GridItem(.flexible(), spacing: 28), GridItem(.flexible(), spacing: 28)], alignment: .leading, spacing: 18) {
+            piopioBudgetCell
+            ForEach(budgets) { b in budgetCell(b) }
         }
     }
 
     /// Piopio this month (OV3): off until you set it; amber past 80%; at 100% background work waits for your OK.
-    @ViewBuilder private var piopioBudgetRow: some View {
+    @ViewBuilder private var piopioBudgetCell: some View {
         let b = engine.piopioBudget
         let limit = b?.limitUsd
         let used = (limit ?? 0) > 0 ? (b?.spentUsd ?? 0) / limit! : 0
         let warn = b?.state == .near || b?.state == .over || (b?.state == .allowed)
-        HStack(spacing: 14) {
+        VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
-                Text("Piopio this month").lineLimit(1).fixedSize()
-                if limit == nil { Text("no budget").font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1).fixedSize() }
-            }
-            .help("Everything Piopio spends on this Mac and in your cloud. Past it, automations wait for your OK; your conversations keep going.")
-            .frame(maxWidth: .infinity, alignment: .leading)
-            if let limit, let b {
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(Color.dsTrack)
-                        Capsule().fill(warn ? Color.dsWarn : Color.dsFg2).frame(width: geo.size.width * CGFloat(min(used, 1)))
-                    }
+                Text("Piopio this month").lineLimit(1)
+                InfoMark(text: "Everything Piopio spends on this Mac and in your cloud. At 80% you're told once; at 100% automations wait for your OK, and your conversations keep going.")
+                Spacer(minLength: 8)
+                if let limit, let b {
+                    Text("\(money(b.spentUsd)) of \(money(limit))").foregroundStyle(warn ? Color.dsWarn : Color.dsFg2).monospacedDigit().lineLimit(1)
+                } else {
+                    Text("no budget").foregroundStyle(Color.dsFg3)
                 }
-                .frame(width: 160, height: 3)
-                Text(piopioBudgetLine(b, limit: limit)).font(.system(size: 12.5)).foregroundStyle(warn ? Color.dsWarn : Color.dsFg2).monospacedDigit()
-                    .lineLimit(1).fixedSize()
-                Button("Change…") { budgetText = String(format: "%.0f", limit); editingBudget = true }
-                    .buttonStyle(SelectorStyle()).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
-                    .popover(isPresented: $editingBudget, arrowEdge: .bottom) { budgetEditor }
-                Button("Turn off") { setBudget(nil) }.buttonStyle(SelectorStyle()).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
-            } else {
-                Button("Set a budget…") { budgetText = ""; editingBudget = true }
-                    .buttonStyle(SelectorStyle()).font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
-                    .popover(isPresented: $editingBudget, arrowEdge: .bottom) { budgetEditor }
             }
+            Meter(value: limit == nil ? 0 : used, fill: warn ? Color.dsWarn : DataColor.yolk)
+            HStack(spacing: 2) {
+                if let limit, let b {
+                    Text(piopioBudgetLine(b, limit: limit)).foregroundStyle(warn ? Color.dsWarn : Color.dsFg3).lineLimit(1)
+                    Spacer(minLength: 6)
+                    Button("Change…") { budgetText = String(format: "%.0f", limit); editingBudget = true }
+                        .buttonStyle(SelectorStyle()).foregroundStyle(Color.dsFg2)
+                        .popover(isPresented: $editingBudget, arrowEdge: .bottom) { budgetEditor }
+                    Button("Turn off") { setBudget(nil) }.buttonStyle(SelectorStyle()).foregroundStyle(Color.dsFg2)
+                } else {
+                    Text("Off until you set one").foregroundStyle(Color.dsFg3)
+                    Spacer(minLength: 6)
+                    Button("Set a budget…") { budgetText = ""; editingBudget = true }
+                        .buttonStyle(SelectorStyle()).foregroundStyle(Color.dsFg2)
+                        .popover(isPresented: $editingBudget, arrowEdge: .bottom) { budgetEditor }
+                }
+            }
+            .font(.system(size: 12))
         }
         .font(.system(size: 13))
-        .padding(.vertical, 7)
     }
 
     private func piopioBudgetLine(_ b: PiopioBudget, limit: Double) -> String {
-        var line = "\(money(b.spentUsd)) of \(money(limit))"
-        if let resets = Self.date(b.resets) { line += " · resets \(resets.formatted(.dateTime.day().month(.abbreviated)))" }
-        if b.state == .allowed { line += " · going on this month at your OK" }
-        return line
+        var parts: [String] = []
+        if let resets = Self.date(b.resets) { parts.append("resets \(resets.formatted(.dateTime.day().month(.abbreviated)))") }
+        if b.state == .allowed { parts.append("going on at your OK") }
+        return parts.joined(separator: " · ")
     }
 
     /// A dollar amount: at 80% you're told once; at 100% automations wait for your OK. Your conversations never stop.
@@ -504,23 +498,29 @@ struct OverviewPage: View {
 
     // MARK: Cheaper next time (§5.5)
 
-    /// At most three, each the number it's based on and one plain-text action.
-    private func suggestionRows(_ list: [SpendSuggestion]) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ForEach(list) { s in
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Text(s.text).font(.system(size: 13)).foregroundStyle(Color.dsFg2)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    if let action = s.action {
-                        Button(action.label) { perform(action) }
-                            .buttonStyle(SelectorStyle()).font(.system(size: 12.5)).foregroundStyle(Color.dsFg)
-                            .fixedSize()
+    /// At most three, each the number it's based on and one action: Piopio's one remark on the page, in soft yolk.
+    private func cheaper(_ list: [SpendSuggestion]) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Chick(size: 26)
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Cheaper next time").font(.system(size: 13, weight: .semibold))
+                ForEach(list) { s in
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        Text(s.text).font(.system(size: 13)).foregroundStyle(Color.dsFg)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        if let action = s.action {
+                            Button(action.label) { perform(action) }
+                                .buttonStyle(PillStyle(kind: .primary, compact: true))
+                                .fixedSize()
+                        }
                     }
                 }
             }
         }
-        .padding(.vertical, 2)
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(DataColor.yolkSoft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     private func perform(_ action: SpendSuggestion.Action) {
@@ -537,40 +537,31 @@ struct OverviewPage: View {
         }
     }
 
-    private func budgetRow(_ b: Budget) -> some View {
+    private func budgetCell(_ b: Budget) -> some View {
         let used = b.limitUsd > 0 ? b.spentUsd / b.limitUsd : 0
-        // Past 80% is the page's only colour (34 §5.4, §10).
+        // Past 80% is the warning (34 §5.4).
         let warn = used >= 0.8
-        let tone = warn ? Color.dsWarn : Color.dsFg2
         return Button { open(b) } label: {
-            HStack(spacing: 14) {
+            VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
                     Text(b.name).lineLimit(1)
-                    Text("\(b.kind == .agent ? "agent" : "automation") · \(b.period == .month ? "this month" : "per run")").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                    Spacer(minLength: 8)
+                    Text("\(money(b.spentUsd)) of \(money(b.limitUsd))").foregroundStyle(warn ? Color.dsWarn : Color.dsFg2).monospacedDigit().lineLimit(1)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(Color.dsTrack)
-                        Capsule().fill(tone).frame(width: geo.size.width * CGFloat(min(used, 1)))
-                    }
-                }
-                .frame(width: 160, height: 3)
-                Text(budgetLine(b)).font(.system(size: 12.5)).foregroundStyle(warn ? Color.dsWarn : Color.dsFg2).monospacedDigit()
-                    .frame(width: 210, alignment: .trailing)
+                Meter(value: used, fill: warn ? Color.dsWarn : Color.dsFg2)
+                Text(budgetLine(b)).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1)
             }
             .font(.system(size: 13))
-            .padding(.vertical, 7)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
 
     private func budgetLine(_ b: Budget) -> String {
-        let amounts = "\(money(b.spentUsd)) of \(money(b.limitUsd))"
-        if b.period == .run { return "latest run \(amounts)" }
-        if let resets = b.resets.flatMap(Self.date) { return "\(amounts) · resets \(resets.formatted(.dateTime.day().month(.abbreviated)))" }
-        return amounts
+        let kind = b.kind == .agent ? "agent" : "automation"
+        if b.period == .run { return "\(kind) · its latest run" }
+        if let resets = b.resets.flatMap(Self.date) { return "\(kind) · resets \(resets.formatted(.dateTime.day().month(.abbreviated)))" }
+        return kind
     }
 
     private func open(_ b: Budget) {
@@ -605,24 +596,17 @@ struct OverviewPage: View {
 
     // MARK: Parts
 
-    private func section<Trailing: View, Content: View>(_ title: String?, @ViewBuilder trailing: () -> Trailing = { EmptyView() }, @ViewBuilder content: () -> Content) -> some View {
-        titledSection(title: { Text(title ?? "").foregroundStyle(Color.dsFg3) }, trailing: trailing, content: content)
-    }
-
-    private func titledSection<Title: View, Trailing: View, Content: View>(@ViewBuilder title: () -> Title, @ViewBuilder trailing: () -> Trailing = { EmptyView() }, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+    /// A 13pt title (and something on the right), then its content; space above, no hairline (Redesign A).
+    private func plainSection<Trailing: View, Content: View>(_ title: String, @ViewBuilder trailing: () -> Trailing = { EmptyView() }, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
-                title()
+                Text(title).font(.system(size: 13, weight: .semibold))
                 Spacer()
                 trailing()
             }
-            .font(.system(size: 12, weight: .medium))
             content()
         }
-        .padding(.top, 16)
-        .padding(.bottom, 4)
-        .overlay(alignment: .top) { Rectangle().fill(Color.dsLine).frame(height: 0.5) }
-        .padding(.top, 14)
+        .padding(.top, 28)
     }
 
     private func load() async {
@@ -799,6 +783,24 @@ enum OverviewTab: String, CaseIterable {
     @MainActor func open() {
         UserDefaults.standard.set(rawValue, forKey: Self.key)
         NotificationCenter.default.post(name: .selectItem, object: SidebarItem.overview(nil).raw)
+    }
+}
+
+/// A bar of 6pt that fills to `value` (0…1): Overview's meters (where it went, budgets).
+struct Meter: View {
+    let value: Double
+    let fill: Color
+    var height: CGFloat = 6
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color.dsTrack)
+                Capsule().fill(fill).frame(width: max(value > 0 ? height : 0, geo.size.width * CGFloat(min(max(value, 0), 1))))
+            }
+        }
+        .frame(height: height)
+        .accessibilityHidden(true)
     }
 }
 

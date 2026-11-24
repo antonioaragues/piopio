@@ -389,3 +389,15 @@ you, next run and this month. Settings › This Mac & cloud doesn't link here ye
 
 **Not in Setup yet:** the iPhone (K3), WhatsApp, the Mac Bridge, the provider order and roles (29, 28), skills,
 the browser and computer use as nodes.
+
+## 16. Redesign (2026-11-24)
+
+After using the built page, the user found it too grey and wordy ("sad and hard to digest"). Options in
+[docs/design/overview/Redesign.html](../design/overview/Redesign.html); the user chose **A for every tab**: Spend ·
+one sentence, one chart; Setup · the map with a verdict on top; Activity · highlights first; Disk · one bar.
+
+| ID | Decision |
+|---|---|
+| OV8 | **Overview uses color for data**, as Home does for status: grey ink stays for the rest of the app. A data palette of five hues (blue, aqua, violet, yellow, pink; validated for color blindness in light and dark, always labeled), one blue scale for amounts, Home's status tones for state only, yolk for Piopio's own (its budget, its one remark per page). This replaces §10's "no colour except amber and the blue dot" for Overview |
+| OV9 | **Numbers lead, words follow:** each tab opens with its answer (a sentence, a verdict, three highlights); explanations move into ⓘ; the full Activity tables fold behind one line |
+| OV10 | **The grid of days shows the last three months** until there's a year of history (OV5 stands: no streaks or scores) |
