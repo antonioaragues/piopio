@@ -1,0 +1,367 @@
+<title>One /learn</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: a design document of app fragments (a 600pt transcript column with its composer), in Piopio's grey ink. */
+:root {
+  --win:#fcfcfb; --side:#f4f4f2; --fg:#1f1f1e; --fg2:#6b6b67; --fg3:#9b9b96; --line:rgba(0,0,0,.09);
+  --field:#ffffff; --chip:rgba(0,0,0,.06); --inv:#1f1f1e; --invfg:#fff; --accent:#2f6fde; --page:#e9e9e6;
+  --bubble:#f0f0ed; --add:#1f7a4a; --adds:rgba(40,160,90,.10); --ask:#e87f25; --menu:rgba(252,252,251,.97);
+  --shadow:0 18px 44px rgba(0,0,0,.11);
+  --font:-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+  --mono:ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --win:#1e1e1d; --side:#191918; --fg:#ececea; --fg2:#a6a6a1; --fg3:#77776f; --line:rgba(255,255,255,.1);
+  --field:#252524; --chip:rgba(255,255,255,.08); --inv:#ececea; --invfg:#1e1e1d; --accent:#6ea0ff; --page:#121211;
+  --bubble:#2b2b29; --add:#7fd3a2; --adds:rgba(90,200,130,.13); --ask:#f0954a; --menu:rgba(44,44,42,.97);
+  --shadow:0 18px 44px rgba(0,0,0,.45); color-scheme:dark;
+} }
+:root[data-theme="dark"] {
+  --win:#1e1e1d; --side:#191918; --fg:#ececea; --fg2:#a6a6a1; --fg3:#77776f; --line:rgba(255,255,255,.1);
+  --field:#252524; --chip:rgba(255,255,255,.08); --inv:#ececea; --invfg:#1e1e1d; --accent:#6ea0ff; --page:#121211;
+  --bubble:#2b2b29; --add:#7fd3a2; --adds:rgba(90,200,130,.13); --ask:#f0954a; --menu:rgba(44,44,42,.97);
+  --shadow:0 18px 44px rgba(0,0,0,.45); color-scheme:dark;
+}
+* { box-sizing:border-box; }
+body { margin:0; background:var(--page); color:var(--fg); font:13px/1.45 var(--font); -webkit-font-smoothing:antialiased; }
+main { max-width:1320px; margin:0 auto; padding-block:40px 90px; padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px)); }
+header.doc { display:flex; gap:20px; align-items:flex-start; flex-wrap:wrap; }
+header.doc > div { flex:1; min-width:0; }
+h1 { font-size:22px; font-weight:600; margin:0 0 6px; text-wrap:balance; }
+header.doc p { color:var(--fg2); margin:0 0 6px; max-width:860px; }
+.theme { color:var(--fg2); cursor:pointer; padding:3px 8px; border-radius:6px; border:0; background:none; font:inherit; white-space:nowrap; }
+.theme:hover, .theme:focus-visible { background:var(--chip); color:var(--fg); outline:none; }
+code, .mono { font-family:var(--mono); font-size:.92em; }
+.fg2 { color:var(--fg2); } .fg3 { color:var(--fg3); }
+
+.where { margin:22px 0 8px; overflow-x:auto; }
+.where table { border-collapse:collapse; min-width:640px; width:100%; max-width:980px; }
+.where td, .where th { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+.where th { color:var(--fg3); font-weight:500; font-size:12px; }
+.where td:first-child { font-weight:500; white-space:nowrap; }
+
+h2.sec { font-size:17px; margin:52px 0 4px; text-wrap:balance; }
+p.sec { color:var(--fg2); margin:0 0 18px; max-width:860px; }
+.row3 { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:22px; }
+.row2 { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:26px; }
+@media (max-width:1100px) { .row3 { grid-template-columns:minmax(0, 1fr); max-width:640px; } .row2 { grid-template-columns:minmax(0, 1fr); max-width:680px; } }
+.label { display:flex; gap:10px; align-items:baseline; margin:0 0 10px; }
+.label b { font-size:12px; color:var(--fg3); font-weight:600; }
+.label h3 { font-size:14.5px; margin:0; font-weight:600; }
+ul.note { color:var(--fg2); margin:12px 0 0; padding-left:18px; }
+ul.note li { margin:4px 0; }
+
+/* a piece of the app: the content card */
+.pane { background:var(--win); border-radius:12px; box-shadow:0 0 0 .5px var(--line), var(--shadow); overflow:hidden; display:flex; flex-direction:column; position:relative; }
+.bar { height:40px; flex:none; display:flex; align-items:center; gap:8px; padding:0 14px; border-bottom:.5px solid var(--line); min-width:0; }
+.bar .t { font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+.bar .k { color:var(--fg3); white-space:nowrap; }
+.tx { padding:16px 18px 8px; display:flex; flex-direction:column; gap:12px; min-width:0; }
+.you { align-self:flex-end; background:var(--bubble); padding:7px 11px; border-radius:14px; max-width:84%; }
+.ans { max-width:96%; }
+.ans p { margin:0 0 6px; }
+.steps { color:var(--fg3); font-size:12px; display:flex; align-items:center; gap:6px; }
+.steps i { width:12px; height:12px; border-radius:50%; border:1.2px solid var(--fg3); display:inline-block; position:relative; }
+.offer { display:flex; align-items:center; gap:8px; color:var(--fg2); font-size:12.5px; padding:6px 0 2px; }
+.offer .g { color:var(--fg3); display:grid; }
+.offer a { color:var(--accent); text-decoration:none; }
+.offer .x { margin-left:auto; color:var(--fg3); }
+
+/* composer and tray */
+.comp { margin:8px 14px 14px; background:var(--field); border-radius:14px; box-shadow:0 0 0 .5px var(--line), 0 2px 10px rgba(0,0,0,.05); overflow:visible; position:relative; }
+.comp .in { padding:10px 12px; display:flex; flex-direction:column; gap:10px; }
+.comp .ph { color:var(--fg3); }
+.comp .typed { color:var(--fg); }
+.comp .typed .cmd { background:var(--chip); border-radius:5px; padding:0 4px; font-weight:500; }
+.comp .crow { display:flex; align-items:center; gap:8px; color:var(--fg2); font-size:12px; }
+.comp .crow .send { margin-left:auto; width:22px; height:22px; border-radius:50%; background:var(--chip); }
+.comp .crow .send.on { background:var(--inv); }
+.tray { border-bottom:.5px solid var(--line); padding:10px 12px; border-radius:14px 14px 0 0; }
+.tray .tt { display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; }
+.tray .tt b { font-weight:600; }
+.tray .acts { display:flex; align-items:center; gap:14px; margin-top:9px; color:var(--fg2); font-size:12.5px; flex-wrap:wrap; }
+.btn { background:var(--inv); color:var(--invfg); border-radius:12px; height:24px; padding:0 11px; display:inline-flex; align-items:center; font-weight:500; font-size:12px; white-space:nowrap; }
+.dot { width:7px; height:7px; border-radius:50%; background:var(--ask); display:inline-block; }
+.menu { position:absolute; left:10px; bottom:calc(100% + 6px); width:min(330px, calc(100% - 20px)); background:var(--menu); border-radius:10px; box-shadow:0 0 0 .5px var(--line), 0 10px 30px rgba(0,0,0,.18); padding:5px; z-index:2; }
+.menu .hd { font-size:11px; color:var(--fg3); padding:4px 8px 2px; }
+.menu .it { display:flex; gap:9px; padding:5px 8px; border-radius:6px; align-items:baseline; }
+.menu .it b { font-weight:500; white-space:nowrap; }
+.menu .it span { color:var(--fg3); font-size:12px; min-width:0; }
+.menu .it.hi { background:var(--accent); color:#fff; }
+.menu .it.hi span { color:rgba(255,255,255,.85); }
+
+/* the learn card */
+.lc { border:.5px solid var(--line); border-radius:12px; padding:12px 14px; background:var(--win); }
+.lc .ph { display:flex; align-items:baseline; gap:8px; font-size:12px; color:var(--fg3); margin-bottom:8px; }
+.lc .ph .t { color:var(--fg2); font-weight:600; }
+.lc .ph .r { margin-left:auto; display:flex; align-items:center; gap:5px; white-space:nowrap; }
+.grp { padding:8px 0; border-top:.5px solid var(--line); }
+.grp:first-of-type { border-top:0; padding-top:2px; }
+.gh { display:flex; align-items:center; gap:7px; font-size:12px; color:var(--fg2); margin-bottom:6px; }
+.gh .g { display:grid; color:var(--fg3); }
+.gh b { color:var(--fg); font-weight:600; }
+.gh .m { margin-left:auto; color:var(--fg3); }
+.diff { font-family:var(--mono); font-size:11.5px; line-height:1.55; border-radius:7px; overflow:hidden; }
+.diff div { padding:0 8px; white-space:pre-wrap; word-break:break-word; }
+.diff .c { color:var(--fg3); }
+.diff .a { background:var(--adds); color:var(--add); }
+.skill .nm { font-weight:600; }
+.skill .wh { color:var(--fg2); font-size:12.5px; margin:2px 0 4px; }
+.skill ol { margin:0; padding-left:20px; color:var(--fg); font-size:12.5px; }
+.skill ol li { margin:1px 0; }
+.skill ol li::marker { color:var(--fg3); }
+.fact { font-size:12.5px; }
+.why { color:var(--fg3); font-size:11.5px; margin-top:4px; }
+
+/* variant B rows */
+.item { display:grid; grid-template-columns:18px minmax(0, 1fr); gap:8px; padding:8px 0; border-top:.5px solid var(--line); }
+.item:first-of-type { border-top:0; padding-top:2px; }
+.cb { width:15px; height:15px; border-radius:4px; border:1.2px solid var(--fg3); margin-top:2px; display:grid; place-items:center; }
+.cb.on { background:var(--inv); border-color:var(--inv); color:var(--invfg); }
+.item .tx2 { font-size:12.8px; }
+.item.off .tx2 { color:var(--fg3); text-decoration:line-through; text-decoration-color:var(--fg3); }
+.dest { display:inline-flex; align-items:center; gap:5px; height:21px; padding:0 8px; border-radius:11px; background:var(--chip); color:var(--fg2); font-size:11.5px; margin-top:5px; white-space:nowrap; }
+.dest .g { display:grid; }
+.item .ed { color:var(--fg3); font-size:11.5px; margin-left:8px; }
+.destmenu { position:absolute; width:220px; background:var(--menu); border-radius:10px; box-shadow:0 0 0 .5px var(--line), 0 10px 30px rgba(0,0,0,.18); padding:5px; z-index:2; font-size:12.5px; }
+.destmenu .it { display:flex; align-items:center; gap:8px; padding:4px 8px; border-radius:6px; }
+.destmenu .it .g { width:16px; display:grid; place-items:center; color:var(--fg2); }
+.destmenu .it.hi { background:var(--accent); color:#fff; }
+.destmenu .it.hi .g { color:#fff; }
+.destmenu .sep { height:1px; background:var(--line); margin:4px 8px; }
+
+/* the card's own footer: choices as text, Save in black (as the side-conversation offer) */
+.lfoot { display:flex; align-items:center; gap:16px; margin-top:6px; padding-top:10px; border-top:.5px solid var(--line); color:var(--fg2); font-size:12.5px; flex-wrap:wrap; }
+.lfoot .sp { flex:1; }
+.more { color:var(--fg3); font-size:12px; padding:2px 0 0 8px; }
+
+/* folded */
+.fold { border:.5px solid var(--line); border-radius:12px; padding:9px 14px; display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--fg2); flex-wrap:wrap; }
+.fold b { color:var(--fg); font-weight:600; }
+.fold .lk { color:var(--accent); }
+.fold .r { margin-left:auto; color:var(--fg3); }
+
+/* skill sheet */
+.sheet { padding:16px 18px; display:flex; flex-direction:column; gap:12px; }
+.sheet .seg { display:inline-flex; background:var(--chip); border-radius:8px; padding:2px; gap:2px; font-size:12px; }
+.sheet .seg span { padding:3px 10px; border-radius:6px; color:var(--fg2); }
+.sheet .seg span.on { background:var(--win); color:var(--fg); box-shadow:0 0 0 .5px var(--line); }
+.fl { font-size:11.5px; color:var(--fg3); margin-bottom:3px; }
+.fv { border:.5px solid var(--line); border-radius:8px; padding:7px 10px; background:var(--field); }
+.sheet .foot { display:flex; align-items:center; gap:14px; justify-content:flex-end; color:var(--fg2); font-size:12.5px; border-top:.5px solid var(--line); padding-top:12px; }
+
+.same { margin-top:48px; max-width:900px; color:var(--fg2); }
+.same h2 { color:var(--fg); font-size:15px; font-weight:600; margin:0 0 6px; }
+.same li { margin:4px 0; }
+svg { display:block; }
+@media (prefers-reduced-motion: reduce) { * { transition:none !important; } }
+</style>
+
+<main>
+<header class="doc">
+  <div>
+    <h1>One /learn</h1>
+    <p>Project lessons (spec 14 M5), <code>/learn</code> (32) and skills from how you work (40 SH0) become one thing: Piopio looks back at what happened and proposes what to keep. Each thing goes where it belongs, and nothing is saved until you say so.</p>
+    <p>The example is a Build session in the <b>piopio</b> project where you corrected the agent twice and showed it how a release is made.</p>
+  </div>
+  <button class="theme" id="theme" type="button">Light / Dark</button>
+</header>
+
+<div class="where"><table>
+  <tr><th>What it learned</th><th>Where it goes</th><th>Used</th><th>Built in</th></tr>
+  <tr><td>A rule about this project</td><td><code>AGENTS.md</code> in the project</td><td>Always, in that folder. Claude Code and Codex read it too</td><td>M5 (now)</td></tr>
+  <tr><td>How to do a kind of job</td><td>A skill (<code>SKILL.md</code>, pi's skills folder)</td><td>When a task calls for it, in any project</td><td>SH0 (next)</td></tr>
+  <tr><td>Something about you</td><td>About me</td><td>In every chat</td><td>Exists</td></tr>
+</table></div>
+
+<h2 class="sec">1 · Three ways in</h2>
+<p class="sec">You ask for it, you tell it exactly what to keep, or Piopio offers after you've corrected it. All three end in the same card. Decided 2026-11-24: design A, with its choices in the card.</p>
+<div class="row3">
+  <section>
+    <div class="label"><b>a</b><h3><code>/learn</code>: look back at this conversation</h3></div>
+    <div class="pane" id="in-a"></div>
+    <ul class="note"><li>Reads the conversation's corrections, what worked, and what you showed it, then proposes one card.</li><li>In chats too: there it can only propose skills and About me.</li></ul>
+  </section>
+  <section>
+    <div class="label"><b>b</b><h3><code>/learn</code> with words: keep exactly this</h3></div>
+    <div class="pane" id="in-b"></div>
+    <ul class="note"><li>Replaces spec 14's <code>/remember</code>: one command, not two.</li><li>Piopio only decides where it goes and how to word it; the card shows one item.</li></ul>
+  </section>
+  <section>
+    <div class="label"><b>c</b><h3>After you correct it, an offer</h3></div>
+    <div class="pane" id="in-c"></div>
+    <ul class="note"><li>After a turn where you denied a command with a note or said "no, use…", one quiet line under the answer.</li><li>At most once per session; × hides it. Settings › Memory can turn offers off.</li></ul>
+  </section>
+</div>
+
+<h2 class="sec">2 · The card answers itself</h2>
+<p class="sec">Design A, with its choices at the bottom of the card instead of in the composer's tray. A proposal doesn't stop the agent, so nothing waits on the composer: the tray stays for what does (plans, questions, approvals), as side-conversation offers already do.</p>
+<div class="row2">
+  <section>
+    <div class="label"><b>a</b><h3>Waiting for you</h3></div>
+    <div class="pane" id="card-a"></div>
+    <ul class="note">
+      <li>Grouped by where it goes, shown as it will be written. Each block shows a few lines; the rest opens in place (“2 more lines”, “4 steps”).</li>
+      <li>Not now and Edit… as text, Save in black: the view's one black button while the composer is empty.</li>
+      <li>Edit… opens one sheet to change, move or drop items. Saving part of it is done there.</li>
+    </ul>
+  </section>
+  <section>
+    <div class="label"><b>b</b><h3>You kept writing without answering</h3></div>
+    <div class="pane" id="card-later"></div>
+    <ul class="note">
+      <li>Sending another message folds the card to one line: “not saved”, with Review to open it again where it is.</li>
+      <li>Nothing is lost and it takes no room. It stays unsaved until you choose; it never saves by itself.</li>
+      <li>Not now folds it the same way; Dismiss (in Edit…, or the line's ×) removes it.</li>
+    </ul>
+  </section>
+</div>
+
+<h2 class="sec">3 · Afterwards</h2>
+<p class="sec">Opening the skill before saving it, and what stays in the conversation once it's saved.</p>
+<div class="row2">
+  <section>
+    <div class="label"><b>a</b><h3>A skill, opened</h3></div>
+    <div class="pane" id="skill"></div>
+    <ul class="note">
+      <li>New skill, or merged into one you have (then shown as a diff of that skill).</li>
+      <li>When it's used is the skill's description: what the model reads to decide to load it.</li>
+      <li>Saved where pi looks: <code>~/.pi/agent/skills/</code>, or the project's <code>.pi/skills/</code> if it's only for this project.</li>
+    </ul>
+  </section>
+  <section>
+    <div class="label"><b>b</b><h3>Saved: one line that stays</h3></div>
+    <div class="pane" id="saved"></div>
+    <ul class="note">
+      <li>The card folds to one line with links to each place it wrote, and Undo for the whole save.</li>
+      <li>AGENTS.md shows in the session's Changes like any other edit: you commit it or not.</li>
+      <li>Skills list in Settings › Skills (PAR12) and in the Library.</li>
+    </ul>
+  </section>
+</div>
+
+<div class="same">
+  <h2>Throughout</h2>
+  <ul>
+    <li>Nothing is written until Save. Undo on the saved line takes the whole save back.</li>
+    <li>Every item says why, in a few words ("you corrected this twice"), so you can judge it.</li>
+    <li>Secrets and personal details from the conversation are never proposed for AGENTS.md or a skill.</li>
+    <li>A temporary chat never offers and its <code>/learn</code> can't write About me.</li>
+  </ul>
+</div>
+</main>
+
+<script>
+const I = {
+  file:'<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M4 1.8h5.2L12.5 5v9.2H4z" stroke-linejoin="round"/><path d="M9 1.8V5h3.5"/></svg>',
+  skill:'<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M3 3.2h10v9.6H3z" stroke-linejoin="round"/><path d="M5.5 6h5M5.5 8.4h5M5.5 10.8h3" stroke-linecap="round"/></svg>',
+  person:'<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="5.4" r="2.6"/><path d="M2.8 14c.6-2.8 2.7-4.2 5.2-4.2s4.6 1.4 5.2 4.2" stroke-linecap="round"/></svg>',
+  spark:'<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 1.8v3M8 11.2v3M1.8 8h3M11.2 8h3M3.6 3.6l2 2M10.4 10.4l2 2M3.6 12.4l2-2M10.4 5.6l2-2" stroke-linecap="round"/></svg>',
+  check:'<svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m2 5.2 2 2 4-4.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  chev:'<svg width="8" height="8" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.4"><path d="m2.5 4 2.5 2.5L7.5 4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+};
+const bar = (t, k = 'piopio · main') => `<div class="bar"><span class="t">${t}</span><span class="k">${k}</span></div>`;
+const comp = (inner, opts = {}) => `<div class="comp">${opts.menu || ''}${opts.tray || ''}<div class="in">${inner}<div class="crow"><span>+</span><span>Auto-edit</span><span style="margin-left:auto">Sonnet 5.5</span><span class="send ${opts.on ? 'on' : ''}" style="margin-left:0"></span></div></div></div>`;
+const convo = `
+  <div class="you">Run the tests before you commit.</div>
+  <div class="steps"><i></i>Ran npm test · stopped by you</div>
+  <div class="you">No, <code>npm test</code> runs the whole suite, six minutes. Use <code>pnpm test:unit</code>.</div>
+  <div class="ans"><p>Got it. <code>pnpm test:unit</code> passes, 212 tests in 14 s. Committed.</p></div>`;
+
+document.getElementById('in-a').innerHTML = bar('Fix the release script') + `<div class="tx">${convo}</div>` + comp(
+  `<div class="typed"><span class="cmd">/learn</span></div>`,
+  { menu: `<div class="menu"><div class="hd">Piopio</div>
+      <div class="it hi"><b>/learn</b><span>Keep what this conversation taught: a project rule, a skill, or something about you</span></div>
+      <div class="it"><b>/goal</b><span>Keep going until a goal is met</span></div>
+      <div class="it"><b>/grill-me</b><span>Pressure-test an idea</span></div></div>`, on: true });
+
+document.getElementById('in-b').innerHTML = bar('Fix the release script') + `<div class="tx">${convo}</div>` + comp(
+  `<div class="typed"><span class="cmd">/learn</span> never edit anything in apps/mac/App/build, it's generated</div>`, { on: true });
+
+document.getElementById('in-c').innerHTML = bar('Fix the release script') + `<div class="tx">${convo}
+  <div class="offer"><span class="g">${I.spark}</span>You corrected how tests run here. <a>Learn from it</a><span class="x">×</span></div></div>` + comp(`<div class="ph">Reply…</div>`);
+
+const groupAgents = `<div class="grp">
+    <div class="gh"><span class="g">${I.file}</span><b>AGENTS.md</b><span>in piopio</span><span class="m">+3 lines</span></div>
+    <div class="diff">
+      <div class="c">## Testing</div>
+      <div class="a">+ Run unit tests with \`pnpm test:unit\` (14 s). \`npm test\` runs the whole suite (6 min): only before a release.</div>
+      <div class="a">+ Never edit \`apps/mac/App/build/\`: it's generated by \`scripts/build-app.sh\`.</div>
+      <div class="c">## Releases</div>
+      <div class="a">+ To cut a release, use the "Release Piopio" skill.</div>
+    </div>
+    <div class="why">You corrected the test command; you said the build folder is generated.</div>
+  </div>`;
+const groupSkill = `<div class="grp skill">
+    <div class="gh"><span class="g">${I.skill}</span><b>New skill</b><span>for every project</span><span class="m">4 steps ›</span></div>
+    <div class="nm">Release Piopio</div>
+    <div class="wh">When you're asked to cut, tag or publish a Piopio release.</div>
+    <ol><li>Bump the version in <code>apps/mac/App/project.yml</code></li><li>Write the notes in <code>build/release/updates/</code></li><li>Run <code>scripts/release.sh &lt;version&gt;</code> with the signing variables</li><li>Upload the DMG, deltas and <code>appcast.xml</code></li></ol>
+    <div class="why">You walked it through a release from start to finish.</div>
+  </div>`;
+const groupMe = `<div class="grp">
+    <div class="gh"><span class="g">${I.person}</span><b>About me</b><span class="m">+1</span></div>
+    <div class="fact">Writes commit messages in English, without emoji.</div>
+    <div class="why">You rewrote two commit messages this way.</div>
+  </div>`;
+const head = (n, label) => `<div class="ph"><span class="t">Learned · ${n}</span><span>${label}</span><span class="r"><span class="dot"></span>Waiting for you</span></div>`;
+
+const groupAgentsShort = `<div class="grp">
+    <div class="gh"><span class="g">${I.file}</span><b>AGENTS.md</b><span>in piopio</span><span class="m">+3 lines</span></div>
+    <div class="diff">
+      <div class="c">## Testing</div>
+      <div class="a">+ Run unit tests with \`pnpm test:unit\` (14 s). \`npm test\` runs the whole suite (6 min): only before a release.</div>
+      <div class="a">+ Never edit \`apps/mac/App/build/\`: it's generated by \`scripts/build-app.sh\`.</div>
+    </div>
+    <div class="more">1 more line ›</div>
+    <div class="why">You corrected the test command; you said the build folder is generated.</div>
+  </div>`;
+const groupSkillShort = `<div class="grp skill">
+    <div class="gh"><span class="g">${I.skill}</span><b>New skill</b><span>for every project</span></div>
+    <div class="nm">Release Piopio</div>
+    <div class="wh">When you're asked to cut, tag or publish a Piopio release.</div>
+    <ol><li>Bump the version in <code>apps/mac/App/project.yml</code></li><li>Write the notes in <code>build/release/updates/</code></li></ol>
+    <div class="more">2 more steps ›</div>
+    <div class="why">You walked it through a release from start to finish.</div>
+  </div>`;
+document.getElementById('card-a').innerHTML = bar('Fix the release script') + `<div class="tx">
+  <div class="you" style="opacity:.55">/learn</div>
+  <div class="lc">${head('4 things', 'from this session')}${groupAgentsShort}${groupSkillShort}${groupMe}
+    <div class="lfoot"><span>Not now</span><span>Edit…</span><span class="sp"></span><span class="btn">Save</span></div>
+  </div></div>` + comp(`<div class="ph">Reply…</div>`);
+
+document.getElementById('card-later').innerHTML = bar('Fix the release script') + `<div class="tx">
+  <div class="you" style="opacity:.55">/learn</div>
+  <div class="fold"><span class="fg3">${I.spark}</span><b>Learned · 4 things</b><span>·</span><span>not saved</span><span class="r"><span class="lk">Review ›</span>&nbsp;&nbsp;×</span></div>
+  <div class="you">Now update the changelog for 0.1.0.</div>
+  <div class="steps"><i></i>Read CHANGELOG.md</div>
+  <div class="ans"><p>Added a 0.1.0 section with the four changes since the last tag.</p></div>
+</div>` + comp(`<div class="ph">Reply…</div>`);
+
+document.getElementById('skill').innerHTML = bar('New skill', 'from Fix the release script') + `<div class="sheet">
+  <div class="seg"><span class="on">New skill</span><span>Add to an existing one</span></div>
+  <div><div class="fl">Name</div><div class="fv">Release Piopio</div></div>
+  <div><div class="fl">Used when</div><div class="fv">You're asked to cut, tag or publish a Piopio release.</div></div>
+  <div><div class="fl">Steps</div><div class="fv" style="padding-left:6px"><ol style="margin:0; padding-left:22px">
+    <li>Bump <code>CFBundleShortVersionString</code> in <code>apps/mac/App/project.yml</code>.</li>
+    <li>Write the release notes in <code>apps/mac/App/build/release/updates/Piopio-&lt;version&gt;.md</code>.</li>
+    <li>Run <code>scripts/release.sh &lt;version&gt;</code> with <code>PIOPIO_SIGN_IDENTITY</code> and <code>PIOPIO_NOTARY_PROFILE</code>. Stop if notarization fails.</li>
+    <li>Upload the DMG, the <code>.delta</code> files and <code>appcast.xml</code> to the GitHub release.</li></ol></div></div>
+  <div><div class="fl">Kept for</div><div class="seg"><span class="on">Every project</span><span>Only piopio</span></div></div>
+  <div class="fg3" style="font-size:11.5px">Saved as <code>~/.pi/agent/skills/release-piopio/SKILL.md</code>. Try it on the next release: it asks before each step the first time.</div>
+  <div class="foot"><span>Cancel</span><span class="btn">Done</span></div></div>`;
+
+document.getElementById('saved').innerHTML = bar('Fix the release script') + `<div class="tx">
+  <div class="you" style="opacity:.55">/learn</div>
+  <div class="fold"><span class="fg3">${I.spark}</span><b>Learned</b><span>·</span><span class="lk">AGENTS.md +3</span><span>·</span><span class="lk">skill Release Piopio</span><span>·</span><span class="lk">About me +1</span><span class="r">Undo ›</span></div>
+  <div class="you">Now cut 0.1.0.</div>
+  <div class="steps"><i></i>Loaded skill Release Piopio</div>
+  <div class="ans"><p>Following “Release Piopio”. First step: bump the version in <code>project.yml</code> to 0.1.0. Go ahead?</p></div>
+</div>` + comp(`<div class="ph">Reply…</div>`);
+
+document.getElementById('theme').addEventListener('click', () => {
+  const root = document.documentElement;
+  const dark = root.dataset.theme ? root.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+  root.dataset.theme = dark ? 'light' : 'dark';
+});
+</script>

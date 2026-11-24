@@ -4,8 +4,9 @@
  * hint. A template of the same name in the user's pi folder or a package wins.
  */
 import type { PromptTemplate } from "@earendil-works/pi-coding-agent";
+import { LEARN_PROMPT } from "../tools/learn.js";
 
-type Bundled = { name: string; description: string; hint: string; content: string; needs?: "browser" | "automations" };
+type Bundled = { name: string; description: string; hint: string; content: string; needs?: "browser" | "automations" | "learn" };
 
 export const PIOPIO_PROMPTS: readonly Bundled[] = [
 	{
@@ -16,6 +17,13 @@ export const PIOPIO_PROMPTS: readonly Bundled[] = [
 		content: `Make an automation for this: $ARGUMENTS
 
 Use the automate tool. If what it should do, when it should start or where the result goes isn't clear from what I wrote, ask me first with ask_user, one question at a time. Then make it and say in one line what you set.`,
+	},
+	{
+		name: "learn",
+		description: "Keep what this conversation taught: a rule for this project, or something about you",
+		hint: "<what to keep, or nothing to look back>",
+		needs: "learn",
+		content: LEARN_PROMPT,
 	},
 	{
 		name: "grill-me",
@@ -37,9 +45,9 @@ Use the browser tools even if you could answer another way. When a page asks me 
 ];
 
 /** pi's templates plus Piopio's (those whose tools this session has), unless one of pi's has the name. */
-export function withPiopioPrompts(prompts: PromptTemplate[], has: { browser: boolean; automations: boolean }): PromptTemplate[] {
+export function withPiopioPrompts(prompts: PromptTemplate[], has: { browser: boolean; automations: boolean; learn?: boolean }): PromptTemplate[] {
 	const taken = new Set(prompts.map((p) => p.name));
-	const own = PIOPIO_PROMPTS.filter((p) => !taken.has(p.name) && (!p.needs || has[p.needs])).map(
+	const own = PIOPIO_PROMPTS.filter((p) => !taken.has(p.name) && (!p.needs || has[p.needs] === true)).map(
 		(p): PromptTemplate => ({
 			name: p.name,
 			description: p.description,

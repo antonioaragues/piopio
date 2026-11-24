@@ -275,3 +275,18 @@ func sideOfferModel(_ text: NSAttributedString) -> SideOfferModel? {
     #expect(opened.action?.1 == .openConversation("ses_a"))
     #expect(TranscriptAction(url: TranscriptAction.openConversation("ses_a").url) == .openConversation("ses_a"))
 }
+
+@Test func aLearnCardGroupsRulesBySectionAndFoldsOnceAnswered() {
+    // docs/spec/14 M5: the card while it waits; one line once saved.
+    let t = ToolItem(id: "t13", at: "", callId: "c13", tool: "propose_learnings", args: .object([:]), status: .done,
+                     details: .object(["type": .string("learn"), "file": .string("AGENTS.md"), "items": .array([
+                         .object(["to": .string("project"), "text": .string("Use pnpm test:unit."), "section": .string("Testing"), "why": .string("you corrected it")]),
+                         .object(["to": .string("project"), "text": .string("Never edit build/."), "section": .string("testing")]),
+                         .object(["to": .string("about_me"), "text": .string("Writes commits in English.")]),
+                     ])]))
+    guard case .learn(let file, let items)? = t.typedDetails else { Issue.record("no learn"); return }
+    #expect(file == "AGENTS.md" && items.count == 3)
+    let sections = LearnCardModel.sections(items)
+    #expect(sections.map(\.0) == ["Testing"] && sections[0].1.count == 2)
+    #expect(LearnCardModel(.card(callId: "c13", file: file, items: items)).height(width: 560) > LearnCardModel.rowHeight * 3)
+}

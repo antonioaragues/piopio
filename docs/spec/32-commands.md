@@ -152,5 +152,5 @@ CM1 and CM2 are app-only and change nothing in the protocol. CM3 adds three temp
   Build only).
 - **Checked:** an engine test (`goal-budget.test.ts`): a chat lists `goal`, and a goal set there gets a second round
   on its own and ends when the model calls `update_goal`. Not yet with a real model.
-- **Still waiting:** /learn needs skill writing (PAR12, spec 40 SH0); /parallel waits for real use of the board (CM-Q3).
+- **Still waiting:** /learn's skill destination needs skill writing (PAR12, spec 40 SH0); /parallel waits for real use of the board (CM-Q3). **/learn built 2026-11-24** for project rules and About me (14 §9).
 

@@ -15,6 +15,8 @@ public enum TranscriptAction: Equatable, Sendable {
     case openSession(String)
     /// Opens one of your conversations, a chat or a Build session (an earlier one a turn found, docs/spec/14 M4).
     case openConversation(String)
+    /// A /learn card's choice (docs/spec/14 M5): save, later, dismiss, undo, edit, or review (the document's own).
+    case learn(kind: String, callId: String)
     /// Opens a file of the session's folder in the viewer, at a line.
     case openFile(path: String, line: Int?)
     /// A path chip in an answer: shows the file in the inspector's Files tab.
@@ -79,6 +81,7 @@ public enum TranscriptAction: Equatable, Sendable {
         case .restoreCheckpoint(let id): c.host = "restore"; c.queryItems = [URLQueryItem(name: "item", value: id)]
         case .openSession(let id): c.host = "session"; c.queryItems = [URLQueryItem(name: "id", value: id)]
         case .openConversation(let id): c.host = "conversation"; c.queryItems = [URLQueryItem(name: "id", value: id)]
+        case .learn(let kind, let callId): c.host = "learn"; c.queryItems = [URLQueryItem(name: "kind", value: kind), URLQueryItem(name: "call", value: callId)]
         case .revealFile(let path): c.host = "reveal"; c.queryItems = [URLQueryItem(name: "path", value: path)]
         case .openFile(let path, let line): c.host = "file"; c.queryItems = [URLQueryItem(name: "path", value: path)] + (line.map { [URLQueryItem(name: "line", value: "\($0)")] } ?? [])
         case .decideApproval(let id, let approve): c.host = "approval"; c.queryItems = [URLQueryItem(name: "id", value: id), URLQueryItem(name: "approve", value: approve ? "1" : "0")]
@@ -121,6 +124,7 @@ public enum TranscriptAction: Equatable, Sendable {
         case "restore": guard let id = q("item") else { return nil }; self = .restoreCheckpoint(itemId: id)
         case "session": guard let id = q("id") else { return nil }; self = .openSession(id)
         case "conversation": guard let id = q("id") else { return nil }; self = .openConversation(id)
+        case "learn": guard let kind = q("kind"), let call = q("call") else { return nil }; self = .learn(kind: kind, callId: call)
         case "file": guard let path = q("path") else { return nil }; self = .openFile(path: path, line: q("line").flatMap(Int.init))
         case "reveal": guard let path = q("path") else { return nil }; self = .revealFile(path: path)
         case "approval": guard let id = q("id") else { return nil }; self = .decideApproval(approvalId: id, approve: q("approve") == "1")

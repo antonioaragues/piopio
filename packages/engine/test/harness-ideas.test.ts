@@ -212,6 +212,47 @@ describe("earlier conversations as background", () => {
 		expect((await bridge.search("sink", 8)).hits.map((h) => h.id)).toEqual([first.id]);
 	});
 
+	test("/learn: a card that waits, folds when you write past it, saves to AGENTS.md and About me, and undoes (14 M5)", async () => {
+		const a = await start();
+		const folder = realpathSync(mkdtempSync(join(tmpdir(), "piopio-learn-")));
+		writeFileSync(join(folder, "package.json"), "{}");
+		await a.client.call("projects.add", { path: folder });
+		const ref = (await a.client.call("sessions.create", { kind: "build", cwd: folder })).ref;
+		await a.client.call("sessions.subscribe", { ref });
+		const items = [
+			{ to: "project", text: "Run unit tests with `pnpm test:unit`.", why: "you corrected the test command", section: "Testing" },
+			{ to: "about_me", text: "Writes commit messages in English.", why: "you rewrote two" },
+		];
+		await a.client.call("sessions.submit", { ref, input: { text: `call: propose_learnings | ${JSON.stringify({ items })}` } });
+		const s = await idle(a, ref);
+		const tool = s.items.find((i) => i.kind === "tool" && i.tool === "propose_learnings");
+		expect(tool && tool.kind === "tool" && tool.details).toEqual({ type: "learn", file: "AGENTS.md", items });
+		const callId = tool!.kind === "tool" ? tool!.callId : "";
+		const learned = async () => (await a.client.call("sessions.list", { kind: "build" })).sessions.find((x: { ref: { id: string } }) => x.ref.id === ref.id).learned[callId];
+		expect(await learned()).toEqual({ status: "pending" });
+		// Nothing written yet; writing past it folds it.
+		expect(existsSync(join(folder, "AGENTS.md"))).toBe(false);
+		await a.client.call("sessions.submit", { ref, input: { text: "Now update the changelog." } });
+		await idle(a, ref, 2);
+		expect(await learned()).toEqual({ status: "later" });
+		// Saved: the rule under Testing in a new AGENTS.md, the fact in About me.
+		expect(await a.client.call("learn.save", { ref, callId })).toEqual({ file: "AGENTS.md", project: 1, aboutMe: 1 });
+		expect(readFileSync(join(folder, "AGENTS.md"), "utf8")).toBe("## Testing\n\n- Run unit tests with `pnpm test:unit`.\n");
+		expect((await a.client.call("aboutMe.get", {})).text).toContain("Writes commit messages in English.");
+		expect(await learned()).toEqual({ status: "saved", file: "AGENTS.md", aboutMe: 1 });
+		// Undo: the file it made goes, the fact goes, and the card waits again.
+		await a.client.call("learn.answer", { ref, callId, choice: "undo" });
+		expect(existsSync(join(folder, "AGENTS.md"))).toBe(false);
+		expect((await a.client.call("aboutMe.get", {})).text).not.toContain("Writes commit messages in English.");
+		expect(await learned()).toEqual({ status: "pending" });
+		// A chat has no project: only facts about you can be proposed.
+		const chat = (await a.client.call("sessions.create", { kind: "thread" })).ref;
+		await a.client.call("sessions.subscribe", { ref: chat });
+		await a.client.call("sessions.submit", { ref: chat, input: { text: `call: propose_learnings | ${JSON.stringify({ items: [items[0]] })}` } });
+		const c = await idle(a, chat);
+		expect(c.items.find((i) => i.kind === "tool" && i.tool === "propose_learnings")).toMatchObject({ status: "error" });
+	}, 30_000);
+
 	test("a temporary chat isn't searched, looks in no other, and goes after 24 hours unless kept (14 M4)", async () => {
 		const a = await start();
 		type Entry = { temporary?: { expiresAt: string }; cwd?: string };

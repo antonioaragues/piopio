@@ -61,6 +61,15 @@ export const AutomationSummary = Type.Object({
 });
 export type AutomationSummary = Static<typeof AutomationSummary>;
 
+/** One thing /learn proposes to keep (docs/spec/14 M5): a project rule (under a section of AGENTS.md) or a fact about you. */
+export const LearnItem = Type.Object({
+	to: literals("project", "about_me"),
+	text: Type.String(),
+	why: Type.Optional(Type.String()),
+	section: Type.Optional(Type.String()),
+});
+export type LearnItem = Static<typeof LearnItem>;
+
 export const ToolDetails = Type.Union([
 	Type.Object({ type: Type.Literal("diff"), path: Type.String(), diff: Type.String() }),
 	Type.Object({ type: Type.Literal("file"), path: Type.String(), language: Type.Optional(Type.String()) }),
@@ -83,6 +92,17 @@ export const ToolDetails = Type.Union([
 		type: Type.Literal("conversations"),
 		conversations: Type.Array(Type.Object({ id: Type.String(), title: Type.String(), kind: literals("thread", "build") })),
 		withheld: Type.Optional(Type.Number()),
+	}),
+	/**
+	 * What a conversation learned (docs/spec/14 M5, /learn): rules for the project's instructions file and facts for
+	 * About me, each with why. Saving is the user's, from the card (`learn.save`); where it stands is the session's
+	 * `learned`.
+	 */
+	Type.Object({
+		type: Type.Literal("learn"),
+		/** The project's instructions file it would go into ("AGENTS.md", or "CLAUDE.md" when that's the one there). */
+		file: Type.Optional(Type.String()),
+		items: Type.Array(LearnItem),
 	}),
 	/** A proposed plan (piopio-plan): what it says, and how you answered (approved, with your edits, or sent back). */
 	Type.Object({
@@ -662,6 +682,11 @@ export type ReviewInfo = Static<typeof ReviewInfo>;
 export const SessionSummary = Type.Object({
 	/** A temporary chat (docs/spec/14 M4): when it's deleted, 24 hours after its last message, unless kept. */
 	temporary: Type.Optional(Type.Object({ expiresAt: Type.String() })),
+	/**
+	 * Its /learn cards (docs/spec/14 M5), by tool call: "pending" until answered, "later" once you wrote again without
+	 * answering (or chose Not now), "saved" (and where), "dismissed".
+	 */
+	learned: Type.Optional(Type.Record(Type.String(), Type.Object({ status: literals("pending", "later", "saved", "dismissed"), file: Type.Optional(Type.String()), aboutMe: Type.Optional(Type.Number()) }))),
 	/** A conversation about an app (docs/spec/35 §15): the app's file. */
 	app: Type.Optional(Type.String()),
 	ref: ContainerRef,
@@ -1412,6 +1437,16 @@ export const methods = {
 			temporary: Type.Optional(Type.Boolean()),
 		}),
 		result: Type.Object({ ref: ContainerRef }),
+	},
+	/** Saves a /learn card (docs/spec/14 M5): its items, or the ones you edited; writes the instructions file and About me. */
+	"learn.save": {
+		params: Type.Object({ ref: ContainerRef, callId: Type.String(), items: Type.Optional(Type.Array(LearnItem)) }),
+		result: Type.Object({ file: Type.Optional(Type.String()), project: Type.Number(), aboutMe: Type.Number() }),
+	},
+	/** Not now (folds it), Dismiss, or Undo a save (it's back to waiting). */
+	"learn.answer": {
+		params: Type.Object({ ref: ContainerRef, callId: Type.String(), choice: literals("later", "dismiss", "undo") }),
+		result: Type.Object({}),
 	},
 	/** A temporary chat becomes a normal one: searched from now on, with About me and earlier conversations. */
 	"sessions.keep": {

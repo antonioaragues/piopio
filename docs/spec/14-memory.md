@@ -1,6 +1,6 @@
 # 14 · Memory (spike S8, 2026-10-24)
 
-**Status (2026-10-25):** M1 (hybrid recall) and M2 (learned facts for agents) are built, and M0 has measured them; see §7. Decisions: Q2 save and show with Undo; Q4 revised after use (2026-10-25): **search by words on this Mac is the default**, and search by meaning through OpenRouter is an explained opt-in in Settings › Memory. Q1 and Q3 decided 2026-11-24 (§6): **past chats on from day one, indexed on this Mac**, and **project lessons into `AGENTS.md`**. M4 and M5 are in the launch scope ([launch plan](../launch-plan.md) §3, wave 2). **M4 built 2026-11-24 (§8), the temporary chat included.**
+**Status (2026-10-25):** M1 (hybrid recall) and M2 (learned facts for agents) are built, and M0 has measured them; see §7. Decisions: Q2 save and show with Undo; Q4 revised after use (2026-10-25): **search by words on this Mac is the default**, and search by meaning through OpenRouter is an explained opt-in in Settings › Memory. Q1 and Q3 decided 2026-11-24 (§6): **past chats on from day one, indexed on this Mac**, and **project lessons into `AGENTS.md`**. M4 and M5 are in the launch scope ([launch plan](../launch-plan.md) §3, wave 2). **M4 built 2026-11-24 (§8), the temporary chat included. M5 built 2026-11-24 as `/learn` (§9).**
 
 The question: how should Piopio's memory get better, where does a project like Hindsight fit, should memory have
 its own Settings section, and which kinds of memory belong in which part of the product (Chat, notebooks, agents,
@@ -315,6 +315,38 @@ added, after Q1:
 **Not built yet**
 - Each title in a search's card isn't a link of its own: card bodies are plain text. Only the one read opens.
 - Branches a conversation left before this version were read for providers only as far as their active branch shows.
+
+## 9. M5 as built: one /learn (2026-11-24)
+
+Project lessons, spec 32's `/learn` and spec 40's SH0 are one thing: Piopio looks back at a conversation and proposes
+what to keep, each where it belongs. M5 builds two destinations; SH0 adds skills to the same card. Design:
+[docs/design/learn](../design/learn/Learn.html) (card A, answered in the card).
+
+- **Ways in.** `/learn` (a Piopio prompt template) looks back at the conversation; `/learn <words>` keeps exactly that
+  (it replaces this spec's `/remember`). After you corrected the agent, a line above "Ask next" offers it: "You
+  corrected how it works here. Learn from it ×". A correction is a step you denied with a note, or a message that
+  starts by correcting (no, don't, instead, wrong… in English and Spanish) after a turn that used tools. Build sessions
+  only, not once the conversation has a /learn card, and × hides it for that conversation. The app draws it; it isn't
+  part of the conversation, so the model never sees it.
+- **The tool.** `propose_learnings` (tools/learn.ts) takes up to eight items, each a project rule (with its section)
+  or a fact about you, with why. It writes nothing and waits for nothing: the card answers itself. Rules need a
+  project (Build sessions; in a chat only facts are possible); facts need About me (never in a temporary chat).
+- **The card** (LearnCard.swift): grouped by where it goes and shown as it will be written: the instructions file's
+  added lines under their section headings, About me's lines, the whys. Not now and Edit… as text, Save in black, in
+  the card, not the composer's tray: a proposal doesn't stop the agent (the tray stays for what does). Sending another
+  message folds it to "Learned · 3 things · not saved · Review · Dismiss"; saved, it's "Learned · AGENTS.md +2 ·
+  About me +1 · Undo". Edit… is a sheet: each item's words, destination and section, or drop it.
+- **Where rules go.** The project's AGENTS.md (Q3), or CLAUDE.md when that's the only one there, so Claude Code keeps
+  reading it. In a worktree, the worktree's copy, so they travel with its branch. Each rule is a bullet after the last
+  line of its `## Section`, or in a new section at the end; one already there isn't added twice (learn.ts).
+- **Save and Undo** (`learn.save`, `learn.answer`): the session keeps what each save wrote (`learnUndo`, not sent to
+  the app), so Undo takes exactly those lines out (and the file, if the save made it) and those facts, and the card
+  waits again. The card's state is the session's `learned`.
+- **Tests:** learn.test.ts (where rules land, undo), harness-ideas.test.ts (the whole flow: card, written past, save,
+  undo, a chat refusing rules), ToolCardTests.swift (decoding, sections). Captures: `PIOPIO_DEMO_LEARN=card|later|saved`.
+
+**Not built yet:** skills as a destination (SH0, with PAR12's skill writing); /learn in agents and on coding agents
+(Claude Code, Codex); "when the work wraps up" as a second offer moment.
 
 ## Sources
 - Hindsight: [repository](https://github.com/vectorize-io/hindsight), [announcement](https://vectorize.io/blog/introducing-hindsight-agent-memory-that-works-like-human-memory), [paper](https://arxiv.org/abs/2512.12818); our [S6](../spikes/s6/README.md).

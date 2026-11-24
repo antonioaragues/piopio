@@ -54,6 +54,11 @@ export function endDetails(tool: string, args: unknown, result: PiToolResult | u
 		const d = (result?.details ?? {}) as { automation?: Extract<ToolDetails, { type: "automation" }>["automation"]; changed?: boolean };
 		return !isError && d.automation ? { type: "automation", automation: d.automation, ...(d.changed ? { changed: true } : {}) } : undefined;
 	}
+	if (tool === "propose_learnings") {
+		// The /learn card (docs/spec/14 M5): what it proposes; where it stands comes with the session (`learned`).
+		const d = result?.details as Extract<ToolDetails, { type: "learn" }> | undefined;
+		return !isError && d?.type === "learn" && Array.isArray(d.items) ? d : undefined;
+	}
 	if (tool === "search_conversations" || tool === "read_conversation") {
 		// The card (docs/spec/14 M4): the conversations it found or read, to open, and how many it held back.
 		const d = result?.details as Extract<ToolDetails, { type: "conversations" }> | undefined;

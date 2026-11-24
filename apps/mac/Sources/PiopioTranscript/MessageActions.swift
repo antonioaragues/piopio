@@ -406,6 +406,10 @@ public final class AskNextModel: @unchecked Sendable {
     /// Sends a suggestion; hides the list for this chat.
     @ObservationIgnored public var onSend: (@MainActor (String) -> Void)?
     @ObservationIgnored public var onDismiss: (@MainActor () -> Void)?
+    /// After you corrected the agent (docs/spec/14 M5): what it noticed, offered as /learn, above any suggestions.
+    public internal(set) var learnOffer: String?
+    @ObservationIgnored public var onLearn: (@MainActor () -> Void)?
+    @ObservationIgnored public var onDismissLearn: (@MainActor () -> Void)?
 
     public var current: String? { items.indices.contains(highlighted) ? items[highlighted] : nil }
 
@@ -416,7 +420,8 @@ public final class AskNextModel: @unchecked Sendable {
 
     static let headerHeight: CGFloat = 26
     static let rowHeight: CGFloat = 37
-    var height: CGFloat { Self.headerHeight + CGFloat(items.count) * Self.rowHeight + 8 }
+    static let offerHeight: CGFloat = 30
+    var height: CGFloat { (learnOffer == nil ? 0 : Self.offerHeight) + (items.isEmpty ? 0 : Self.headerHeight + CGFloat(items.count) * Self.rowHeight) + 8 }
 }
 
 final class AskNextAttachment: NSTextAttachment, @unchecked Sendable {
@@ -455,6 +460,23 @@ struct AskNextView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            if let offer = model.learnOffer {
+                HStack(spacing: 8) {
+                    Image(systemName: "sparkles").font(.system(size: 11, weight: .medium)).foregroundStyle(Color(nsColor: DS.fg3)).frame(width: 14)
+                    Text(offer).font(.system(size: 12.5)).foregroundStyle(Color(nsColor: DS.fg2)).lineLimit(1).truncationMode(.tail)
+                    Button("Learn from it") { MainActor.assumeIsolated { model.onLearn?() } }
+                        .buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color(nsColor: DS.accent))
+                        .help("Propose what to keep from this (/learn)")
+                    Spacer(minLength: 8)
+                    Button { MainActor.assumeIsolated { model.onDismissLearn?() } } label: {
+                        Image(systemName: "xmark").font(.system(size: 10, weight: .semibold)).foregroundStyle(Color(nsColor: DS.fg3)).frame(width: 20, height: 20).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help("Not in this conversation")
+                }
+                .frame(height: AskNextModel.offerHeight)
+            }
+            if !model.items.isEmpty {
             HStack {
                 Text("Ask next").font(.system(size: 11.5)).foregroundStyle(Color(nsColor: DS.fg3))
                 Spacer()
@@ -481,6 +503,7 @@ struct AskNextView: View {
                 }
                 .buttonStyle(.plain)
                 .onHover { if $0 { model.highlighted = i } }
+            }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)

@@ -56,6 +56,8 @@ final class ThreadModel {
     var restoring: CheckpointItem?
     /// A plan being edited before approval (its sheet), and one being sent back (the bar's note field).
     var editingPlan: PendingPrompt?
+    /// A /learn card being edited (docs/spec/14 M5): its items, to change, move or drop before saving.
+    var editingLearn: LearnEdit?
     var revisingPlan: String?
 
     @ObservationIgnored private weak var engine: EngineController?
@@ -93,6 +95,12 @@ final class ThreadModel {
             Task { await self?.send(text) }
         }
         document.askNext.onDismiss = { [weak self] in self?.dismissAskNext() }
+        // After a correction (docs/spec/14 M5): /learn, or not in this conversation.
+        document.askNext.onLearn = { [weak self] in
+            self?.dismissLearnOffer()
+            Task { await self?.send("/learn") }
+        }
+        document.askNext.onDismissLearn = { [weak self] in self?.dismissLearnOffer() }
         document.rememberDestination = compact ? nil : Self.rememberDestination(ref, engine: engine)
         // A subagent's first message is Piopio's brief (docs/spec/37).
         if ref.kind == .build, engine.buildSessions.first(where: { $0.ref.id == ref.id })?.parent != nil { document.briefFrom = "Piopio" }
@@ -335,6 +343,8 @@ final class ThreadModel {
             NotificationCenter.default.post(name: .openAgentRun, object: id)
         case .openSession(let id):
             NotificationCenter.default.post(name: .selectBuildSession, object: id)
+        case .learn(let kind, let callId):
+            Task { await learn(kind, callId) }
         case .openConversation(let id):
             // An earlier conversation a turn found (docs/spec/14 M4): a chat or a Build session, wherever it lives.
             NotificationCenter.default.post(name: .selectThread, object: id)
@@ -374,6 +384,24 @@ final class ThreadModel {
         guard ref.kind == .agent else { return "About me" }
         let name = engine.agents.first { $0.ref.id == ref.id }?.title ?? "the agent"
         return "\(name)'s memory"
+    }
+
+    /// A /learn card's choices (docs/spec/14 M5). Review is the document's own.
+    func learn(_ kind: String, _ callId: String, items: [LearnItem]? = nil) async {
+        guard let engine, let client = engine.client else { return }
+        do {
+            switch kind {
+            case "save": _ = try await client.call("learn.save", LearnSaveParams(ref: ref, callId: callId, items: items), as: LearnSaveResult.self)
+            case "later", "dismiss", "undo": try await engine.spaceCall("learn.answer", LearnAnswerParams(ref: ref, callId: callId, choice: kind))
+            case "edit":
+                guard let item = document.items.last(where: { if case .tool(let t) = $0 { t.callId == callId } else { false } }),
+                      case .tool(let t) = item, case .learn(let file, let items)? = t.typedDetails else { return }
+                editingLearn = LearnEdit(callId: callId, file: file, items: items, hasProject: ref.kind == .build)
+                return
+            default: return
+            }
+            try? await engine.refreshCatalog()
+        } catch { report(error) }
     }
 
     /// Remember this: one fact, written by you, in the bank the destination names.
@@ -614,6 +642,43 @@ final class ThreadModel {
     func refreshAskNext() {
         let show = !askNextDismissed && !composing && !isRunning && prompts.isEmpty && editing == nil
         document.showAskNext(show ? followUps.map { Array($0.prefix(3)) } : nil)
+        document.showLearnOffer(!composing && !isRunning && prompts.isEmpty && editing == nil ? learnOffer : nil)
+    }
+
+    // MARK: Learn offer (docs/spec/14 M5)
+
+    private static let learnOfferKey = "learnOfferDismissed"
+    private var learnOfferDismissed: Bool { (UserDefaults.standard.stringArray(forKey: Self.learnOfferKey) ?? []).contains(ref.id) }
+
+    /// After you corrected the agent in the last turn: a command you denied with a note, or a message that starts by
+    /// correcting it after a turn that used tools. Once per session, and not once it has a /learn card. Build only: it's
+    /// where project rules live.
+    var learnOffer: String? {
+        guard ref.kind == .build, !learnOfferDismissed, engine?.buildSessions.first(where: { $0.ref.id == ref.id })?.parent == nil else { return nil }
+        let items = document.items
+        if items.contains(where: { if case .tool(let t) = $0 { t.tool == "propose_learnings" } else { false } }) { return nil }
+        guard let last = items.lastIndex(where: { if case .user = $0 { true } else { false } }) else { return nil }
+        let turn = items[last...]
+        let deniedWithNote = turn.contains { if case .tool(let t) = $0 { t.status == .denied && (t.output ?? "").hasPrefix("The user denied this tool call:") } else { false } }
+        if deniedWithNote { return "You turned down a step and said why." }
+        guard case .user(let u) = items[last], Self.isCorrection(u.text) else { return nil }
+        let before = items[..<last]
+        let toolsBefore = before.reversed().prefix { if case .user = $0 { false } else { true } }.contains { if case .tool = $0 { true } else { false } }
+        return toolsBefore ? "You corrected how it works here." : nil
+    }
+
+    /// "No, use…", "Don't…", "That's wrong…", "Instead…" (English and Spanish), at the start of a message.
+    static func isCorrection(_ text: String) -> Bool {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let starts = ["no,", "no.", "no ", "nope", "don't", "do not", "that's wrong", "that is wrong", "wrong", "instead", "not like that", "stop,", "no uses", "no hagas", "así no", "eso no", "mal,", "en vez de", "en lugar de"]
+        return starts.contains { t.hasPrefix($0) } && t.count > 4
+    }
+
+    private func dismissLearnOffer() {
+        var ids = UserDefaults.standard.stringArray(forKey: Self.learnOfferKey) ?? []
+        if !ids.contains(ref.id) { ids.append(ref.id) }
+        UserDefaults.standard.set(Array(ids.suffix(500)), forKey: Self.learnOfferKey)
+        document.showLearnOffer(nil)
     }
 
     private func dismissAskNext() {
@@ -640,4 +705,14 @@ extension FileChange.Status {
         case .deleted: "brings back"
         }
     }
+}
+
+
+/// The Edit… sheet's input (docs/spec/14 M5): the card's items and where rules would go.
+struct LearnEdit: Identifiable {
+    let callId: String
+    let file: String?
+    var items: [LearnItem]
+    let hasProject: Bool
+    var id: String { callId }
 }

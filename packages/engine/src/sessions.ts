@@ -9,7 +9,7 @@ import { cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, watch,
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { getAgentDir, SessionManager } from "@earendil-works/pi-coding-agent";
-import type { ApprovalMode, ApprovalRule, Budget, ContainerRef, ModelRef, ProjectInfo, PromptResponse, SessionSummary, TimelineItem, WorkOn } from "@piopio/protocol";
+import type { ApprovalMode, ApprovalRule, Budget, ContainerRef, LearnItem, ModelRef, ProjectInfo, PromptResponse, SessionSummary, TimelineItem, WorkOn } from "@piopio/protocol";
 import { EngineError, type ModelHub } from "./models.js";
 import type { EnginePaths } from "./paths.js";
 import { CheckpointStore } from "./checkpoints.js";
@@ -53,6 +53,8 @@ import { SearchIndex } from "./search.js";
 import type { LedgerSource } from "./ledger.js";
 import { type Library, LibrarySearch, type LibraryOrigin, NOTE_PROMPT, noteRequest } from "./library.js";
 import type { HistoryBridge, HistoryHit } from "./tools/history.js";
+import type { LearnBridge } from "./tools/learn.js";
+import { addRules, instructionsFile, readInstructions, removeRules } from "./learn.js";
 import { AGENT_NAMES, findAgent, installedAgents, runExternalAgent, type ExternalAgent } from "./external-agents.js";
 import type { TelegramChannels } from "./channels/manager.js";
 import type { AgentWatchers } from "./watchers.js";
@@ -117,6 +119,8 @@ type CatalogEntry = SessionSummary & {
 	/** Offer cards this conversation left (by tool call id), answered or not; and its proposals' briefs. */
 	sideOffers?: Record<string, { title: string; brief?: string; project?: string; answered?: "new" | "here" }>;
 	sideBriefs?: Record<string, string>;
+	/** /learn saves (docs/spec/14 M5), by tool call: what each wrote, so Undo takes exactly that back. */
+	learnUndo?: Record<string, { project?: string; file?: string; created?: boolean; lines: string[]; facts: string[] }>;
 	/** Its pull request's comments already seen, and the head whose failing checks it was told about (docs/spec/17 §5). */
 	prSeen?: string[];
 	prFailedSha?: string;
@@ -510,6 +514,80 @@ export class Sessions {
 			if (!entry.segments!.length) delete entry.segments;
 			delete entry.handoff;
 		}
+	}
+
+	/**
+	 * /learn (docs/spec/14 M5): rules go into the project's instructions file where the session works (a worktree's own
+	 * copy, so they travel with its branch); facts go to About me. Not for agents, helpers or subagents.
+	 */
+	private learnBridge(entry: CatalogEntry): LearnBridge | undefined {
+		if ((entry.ref.kind !== "build" && entry.ref.kind !== "thread") || entry.parent || entry.helper || entry.reviewFor) return undefined;
+		const project = entry.ref.kind === "build" ? entry.cwd : undefined;
+		return {
+			project: () => project,
+			file: () => (project ? instructionsFile(project) : undefined),
+			aboutMe: () => !entry.temporary && Boolean(this.chat),
+			proposed: (callId) => {
+				(entry.learned ??= {})[callId] = { status: "pending" };
+				this.save();
+				this.changed(entry);
+			},
+		};
+	}
+
+	/** Saves a /learn card: its items, or the ones you edited. */
+	async learnSave(ref: ContainerRef, callId: string, edited?: LearnItem[]): Promise<{ file?: string; project: number; aboutMe: number }> {
+		const entry = this.entry(ref);
+		const state = entry.learned?.[callId];
+		if (!state) throw new EngineError("NOT_FOUND", "That card isn't in this conversation.");
+		if (state.status === "saved") throw new EngineError("INVALID", "It's saved already.");
+		const tool = (await this.runtime(ref)).snapshot().items.find((i) => i.kind === "tool" && i.callId === callId);
+		const details = tool?.kind === "tool" && tool.details?.type === "learn" ? tool.details : undefined;
+		const items = edited ?? details?.items ?? [];
+		const project = entry.ref.kind === "build" ? entry.cwd : undefined;
+		const rules = project ? items.filter((i) => i.to === "project" && i.text.trim()) : [];
+		const facts = items.filter((i) => i.to === "about_me" && i.text.trim()).map((i) => i.text.trim());
+		const undo: NonNullable<CatalogEntry["learnUndo"]>[string] = { lines: [], facts: [] };
+		if (rules.length && project) {
+			const file = details?.file ?? instructionsFile(project);
+			const before = readInstructions(project, file);
+			const { content, added } = addRules(before, rules);
+			if (added.length) {
+				writeFileAtomic(join(project, file), content);
+				Object.assign(undo, { project, file, lines: added, ...(before ? {} : { created: true }) });
+			}
+		}
+		if (facts.length && this.chat && !entry.temporary) undo.facts = (await this.chat.aboutMe.patch("user", facts, [])).added;
+		(entry.learnUndo ??= {})[callId] = undo;
+		entry.learned![callId] = { status: "saved", ...(undo.file ? { file: undo.file } : {}), ...(undo.facts.length ? { aboutMe: undo.facts.length } : {}) };
+		this.save();
+		this.changed(entry);
+		return { ...(undo.file ? { file: undo.file } : {}), project: undo.lines.length, aboutMe: undo.facts.length };
+	}
+
+	/** Not now, Dismiss, or Undo a save: exactly what it wrote comes out, and the card waits again. */
+	async learnAnswer(ref: ContainerRef, callId: string, choice: "later" | "dismiss" | "undo"): Promise<void> {
+		const entry = this.entry(ref);
+		const state = entry.learned?.[callId];
+		if (!state) throw new EngineError("NOT_FOUND", "That card isn't in this conversation.");
+		if (choice !== "undo") {
+			if (state.status === "saved") throw new EngineError("INVALID", "It's saved: use Undo.");
+			entry.learned![callId] = { status: choice === "later" ? "later" : "dismissed" };
+		} else {
+			const undo = entry.learnUndo?.[callId];
+			if (state.status !== "saved" || !undo) throw new EngineError("INVALID", "There's nothing saved to undo.");
+			if (undo.project && undo.file && undo.lines.length) {
+				const path = join(undo.project, undo.file);
+				const left = removeRules(readInstructions(undo.project, undo.file), undo.lines);
+				if (!left && undo.created) rmSync(path, { force: true });
+				else writeFileAtomic(path, left);
+			}
+			if (undo.facts.length && this.chat) await this.chat.aboutMe.patch("user", [], undo.facts);
+			delete entry.learnUndo![callId];
+			entry.learned![callId] = { status: "pending" };
+		}
+		this.save();
+		this.changed(entry);
 	}
 
 	/** A temporary chat becomes a normal one (docs/spec/14 M4): searched from now on, with what it says so far. */
@@ -2920,6 +2998,8 @@ export class Sessions {
 		if (!entry) return;
 		delete entry.followUps;
 		entry.updatedAt = new Date().toISOString();
+		// A /learn card you wrote past without answering folds to "not saved" (docs/spec/14 M5).
+		for (const state of Object.values(entry.learned ?? {})) if (state.status === "pending") state.status = "later";
 		if (entry.temporary) entry.temporary = { expiresAt: new Date(Date.parse(entry.updatedAt) + TEMPORARY_MS).toISOString() };
 		if (firstInput && (entry.title === "New thread" || entry.title === "New session")) {
 			entry.title = titleFrom(firstInput) || entry.title;
@@ -3259,6 +3339,7 @@ export class Sessions {
 				return parseVerdict(await ask(REVIEW_SYSTEM, reviewPrompt(command, entry.cwd!, request)));
 			},
 			...(this.historyBridge(entry) ? { history: this.historyBridge(entry)! } : {}),
+			...(this.learnBridge(entry) ? { learn: this.learnBridge(entry)! } : {}),
 			...(entry.projectPath ? { trustPath: entry.projectPath } : {}),
 			plan: {
 				active: () => entry.planMode ?? false,
@@ -3374,6 +3455,7 @@ export class Sessions {
 			...this.visualsFor(entry.ref),
 			...this.appsFor(entry),
 			...(this.historyBridge(entry) ? { history: this.historyBridge(entry)! } : {}),
+			...(this.learnBridge(entry) ? { learn: this.learnBridge(entry)! } : {}),
 			// Side conversations (docs/spec/24), here or in one of your projects (SCQ5).
 			side: this.sideBridge(entry),
 			...(this.automations ? { automations: this.automationsBridge(entry) } : {}),
@@ -3513,7 +3595,7 @@ function copyPart(segment: Segment, name: string, agentsDir: string): Segment {
 	return part;
 }
 
-function summary({ file: _f, sessionFile: _s, agentFile: _af, segments: _sg, handoff: _h, reviewFor: _rf, restoredFromSessionFile: _recovered, onDisk: _d, thinking: _t, migratedFrom: _m, sideBrief: _b, sideBy: _y, sideWoke: _w, sidePending: _p, sideOffers: _o, sideBriefs: _sb, prSeen: _ps, prFailedSha: _pf, ...rest }: CatalogEntry): SessionSummary {
+function summary({ file: _f, sessionFile: _s, agentFile: _af, segments: _sg, handoff: _h, reviewFor: _rf, restoredFromSessionFile: _recovered, onDisk: _d, thinking: _t, migratedFrom: _m, sideBrief: _b, sideBy: _y, sideWoke: _w, sidePending: _p, sideOffers: _o, sideBriefs: _sb, prSeen: _ps, prFailedSha: _pf, learnUndo: _lu, ...rest }: CatalogEntry): SessionSummary {
 	// Proposals go after a week (docs/spec/24 §3).
 	if (rest.sideProposals) {
 		const live = rest.sideProposals.filter((p) => Date.parse(p.expiresAt) > Date.now());
@@ -3559,7 +3641,7 @@ function buildMode(approvalMode: ApprovalMode): { approvalMode: ApprovalMode; pr
 }
 
 /** Tools whose card already asks the user for their answer: suggestions under it would ask a second time. */
-const ASKS_ON_A_CARD = new Set(["ask_user", "ask_owner", "side_offer", "side_propose", "offer_parallel", "propose_plan"]);
+const ASKS_ON_A_CARD = new Set(["ask_user", "ask_owner", "side_offer", "side_propose", "offer_parallel", "propose_plan", "propose_learnings"]);
 
 /**
  * Whether a turn's end may get suggested replies: not when it ended on a card that waits for the user (it asks

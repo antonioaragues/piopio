@@ -44,6 +44,7 @@ import { consultExtension, type ConsultBridge } from "../consult.js";
 import { offersExtension, type OffersBridge } from "../offers.js";
 import { guardsExtension } from "../tools/guards.js";
 import { CONVERSATION_MIME, formatConversation, historySdkExtension, type HistoryBridge } from "../tools/history.js";
+import { learnSdkExtension, type LearnBridge } from "../tools/learn.js";
 import { withPiopioPrompts } from "./piopio-commands.js";
 import { PromptBroker, uiBridge } from "./prompts.js";
 import { ContextBreakdown } from "./context-breakdown.js";
@@ -124,6 +125,8 @@ export type BuildOpenOptions = {
 	review?: (command: string, request: string | undefined, signal: AbortSignal | undefined) => Promise<Verdict | undefined>;
 	/** The project's other sessions, for search_conversations / read_conversation (tools/history.ts). */
 	history?: HistoryBridge;
+	/** /learn's card (tools/learn.ts, docs/spec/14 M5): where rules go, and whether About me takes facts. */
+	learn?: LearnBridge;
 	/** Shell commands run in macOS's sandbox (piopio-sandbox); read on every command. Default on. */
 	sandbox?: () => boolean;
 	/** Claude Code / Codex CLIs a task can go to (external-agents.ts). */
@@ -218,7 +221,7 @@ export class BuildRuntime implements Runtime {
 			agentDir,
 			settingsManager,
 			// Piopio's /automation, /grill-me and /browser (docs/spec/32 CM3).
-			promptsOverride: (base) => ({ ...base, prompts: withPiopioPrompts(base.prompts, { browser: Boolean(o.browser), automations: Boolean(o.automations) }) }),
+			promptsOverride: (base) => ({ ...base, prompts: withPiopioPrompts(base.prompts, { browser: Boolean(o.browser), automations: Boolean(o.automations), learn: Boolean(o.learn) }) }),
 			extensionFactories: o.chat ? chatFactories(o, broker, () => runtime) : [
 				// The pi CLI's built-ins (MCP servers, and codemode / tool search through which MCP tools are
 				// reached). Replaceable: a user extension that registers the same tools or /mcp takes over.
@@ -328,6 +331,7 @@ export class BuildRuntime implements Runtime {
 					: []),
 				goalExtension(),
 				...(o.history && !o.history.off() ? [historySdkExtension(o.history)] : []),
+				...(o.learn ? [learnSdkExtension(o.learn)] : []),
 				...(o.side ? [sideExtension(o.side)] : []),
 				...(o.automations ? [automationsExtension(o.automations)] : []),
 				planExtension({

@@ -182,6 +182,11 @@ public final class TranscriptDocument {
             NSPasteboard.general.setString(text, forType: .string)
             return
         }
+        // A folded /learn card opened again (docs/spec/14 M5): drawn whole, here only.
+        if case .learn(let kind, let callId) = action, kind == "review" || kind == "none" {
+            if kind == "review" { renderer.reviewing.insert(callId); redrawLearn(callId) }
+            return
+        }
         if case .undoAutomation(let id, let undoId) = action {
             // Its card then reads "Undone … Redo" (docs/spec/27 §4), not "Removed".
             renderer.undoneAutomations.insert(id)
@@ -407,6 +412,21 @@ public final class TranscriptDocument {
             }
         }
         return out
+    }
+
+    /// Where this conversation's /learn cards stand (docs/spec/14 M5): a card is drawn again when its state changes.
+    public func setLearned(_ learned: [String: LearnState]) {
+        guard learned != renderer.learned else { return }
+        let changed = Set(learned.keys).union(renderer.learned.keys).filter { learned[$0] != renderer.learned[$0] }
+        renderer.learned = learned
+        for id in changed { renderer.reviewing.remove(id) }
+        guard !loading else { return }
+        for id in changed { redrawLearn(id) }
+    }
+
+    private func redrawLearn(_ callId: String) {
+        guard !loading, let item = items.last(where: { if case .tool(let t) = $0 { t.callId == callId && t.tool == "propose_learnings" } else { false } }) else { return }
+        replace(item)
     }
 
     /// Where this conversation's side conversations stand, and its open proposals (docs/spec/24 §6): their lines in
@@ -682,11 +702,19 @@ public final class TranscriptDocument {
         removeTail()
         askNext.items = next
         askNext.highlighted = 0
-        if !next.isEmpty, !loading { insertTail() }
+        if !loading { insertTail() }
+    }
+
+    /// The /learn offer after you corrected the agent (docs/spec/14 M5), at the top of the same tail (nil hides it).
+    public func showLearnOffer(_ text: String?) {
+        guard text != askNext.learnOffer else { return }
+        removeTail()
+        askNext.learnOffer = text
+        if !loading { insertTail() }
     }
 
     private func insertTail() {
-        guard tailLength == 0, !askNext.items.isEmpty else { return }
+        guard tailLength == 0, !askNext.items.isEmpty || askNext.learnOffer != nil else { return }
         let s = NSMutableAttributedString(attachment: AskNextAttachment(model: askNext))
         s.append(NSAttributedString(string: "\n"))
         let p = NSMutableParagraphStyle()
@@ -868,6 +896,7 @@ public final class TranscriptDocument {
             (value as? UserImagesAttachment)?.model.onAction = { [weak self] action in self?.handle(action) }
             (value as? AutomationCardAttachment)?.model.onAction = { [weak self] action in self?.handle(action) }
             (value as? SideOfferAttachment)?.model.onAction = { [weak self] action in self?.handle(action) }
+            (value as? LearnCardAttachment)?.model.onAction = { [weak self] action in self?.handle(action) }
             (value as? SubagentRowAttachment)?.model.onAction = { [weak self] action in self?.handle(action) }
             if let visual = (value as? VisualAttachment)?.model {
                 visual.onAction = { [weak self] action in self?.handle(action) }

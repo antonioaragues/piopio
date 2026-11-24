@@ -81,9 +81,22 @@ struct SideOffers: ViewModifier {
         return open
     }
 
+    /// Its /learn cards' states (docs/spec/14 M5).
+    private var learned: [String: LearnState] {
+        (engine.buildSessions + engine.threads).first { $0.ref.id == ref.id }?.learned ?? [:]
+    }
+
     func body(content: Content) -> some View {
         let sides = sides, proposals = openProposals
+        let model = engine.thread(ref)
         content
+            .onChange(of: learned, initial: true) { _, now in document.setLearned(now) }
+            .sheet(item: Binding(get: { model.editingLearn }, set: { model.editingLearn = $0 })) { edit in
+                LearnEditSheet(edit: edit) { items in
+                    model.editingLearn = nil
+                    Task { await model.learn(items.isEmpty ? "dismiss" : "save", edit.callId, items: items.isEmpty ? nil : items) }
+                } cancel: { model.editingLearn = nil }
+            }
             .onChange(of: sides, initial: true) { _, now in document.setSides(now, openProposals: proposals) }
             .onChange(of: proposals) { _, now in document.setSides(sides, openProposals: now) }
             // Automation cards (docs/spec/27): one that's gone reads "Removed".

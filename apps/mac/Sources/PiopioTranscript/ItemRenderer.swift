@@ -34,6 +34,9 @@ nonisolated struct ItemRenderer: Sendable {
     var openProposals: [String: Date] = [:]
     /// Offers (side_offer call ids) you answered with Do it here: the question and your answer instead of the card.
     var keptHere: Set<String> = []
+    /// /learn cards (docs/spec/14 M5): where each stands, and the folded ones you opened again with Review.
+    var learned: [String: LearnState] = [:]
+    var reviewing: Set<String> = []
     /// Your "Do it here." messages that answered those offers: the offer's box shows the answer, so no bubble.
     var hereReplies: Set<String> = []
     /// The automations that exist now (docs/spec/27); nil until the app says. A card for one that's gone reads
@@ -145,6 +148,8 @@ nonisolated struct ItemRenderer: Sendable {
             return sideStarted(t)
         case .tool(let t) where t.tool == "side_offer" && t.status == .done:
             return sideOffer(t)
+        case .tool(let t) where t.tool == "propose_learnings" && t.status == .done && !compact:
+            return learnCard(t)
         case .tool(let t) where (t.tool == "offer_parallel" || t.tool == "offer_repeat") && t.status == .done:
             return offerCard(t)
         case .tool(let t) where (t.tool == "automate" || t.tool == "change_automation") && t.status == .done:
@@ -743,6 +748,32 @@ nonisolated struct ItemRenderer: Sendable {
         let out = NSMutableAttributedString(attributedString: line(m, p))
         out.addAttribute(.piopioCard, value: CardStyle.note.rawValue, range: NSRange(location: 0, length: out.length))
         return out
+    }
+
+    /// /learn's card (docs/spec/14 M5): waiting, it's the whole card with its choices; written past, not now, saved or
+    /// dismissed, one line (Review opens it again in place).
+    func learnCard(_ t: ToolItem) -> NSAttributedString {
+        guard case .learn(let file, let items)? = t.typedDetails, !items.isEmpty else { return attachmentParagraph(DisclosureAttachment(card: Self.toolCard(t, root: root))) }
+        let id = t.callId
+        let things = "\(items.count) thing\(items.count == 1 ? "" : "s")"
+        let plain = { (text: String) in (text, TranscriptAction.learn(kind: "none", callId: id)) }
+        let state = learned[id]
+        let model: LearnCardModel
+        switch state?.status {
+        case .saved:
+            var links: [(String, TranscriptAction)] = []
+            let rules = items.filter { $0.to == .project }.count
+            if let f = state?.file { links.append(("\(f) +\(rules)", .openFile(path: root.map { ($0 as NSString).appendingPathComponent(f) } ?? f, line: nil))) }
+            if let m = state?.aboutMe, m > 0 { links.append(plain("About me +\(m)")) }
+            model = LearnCardModel(.folded(callId: id, text: "Learned", links: links, actions: [("Undo", .learn(kind: "undo", callId: id))]))
+        case .later where !reviewing.contains(id):
+            model = LearnCardModel(.folded(callId: id, text: "Learned · \(things)", links: [plain("not saved")], actions: [("Review", .learn(kind: "review", callId: id)), ("Dismiss", .learn(kind: "dismiss", callId: id))]))
+        case .dismissed where !reviewing.contains(id):
+            model = LearnCardModel(.folded(callId: id, text: "Learned · \(things)", links: [plain("dismissed")], actions: [("Review", .learn(kind: "review", callId: id))]))
+        default:
+            model = LearnCardModel(.card(callId: id, file: file, items: items))
+        }
+        return attachmentParagraph(LearnCardAttachment(model: model), spacing: 14)
     }
 
     /// The card for a tool call (docs/spec/05-build BR1): edits and writes show their diff (open by default),

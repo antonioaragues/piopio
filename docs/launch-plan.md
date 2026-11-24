@@ -164,7 +164,7 @@ Durations assume one person. They are set by use and by outside parties, not by 
 ### Wave 2 · Finish what's half built (3–4 weeks)
 - **Side conversations:** the replay set, SD3 tuned to its acceptance, SD4.
 - **Apps and Library:** L2, L3, L4's rest, L5.
-- **Memory:** M4 and M5 (Q1 and Q3 decided 2026-11-24: past chats on and local, lessons into `AGENTS.md`).
+- **Memory:** M4 and M5 (Q1 and Q3 decided 2026-11-24: past chats on and local, lessons into `AGENTS.md`). **Built 2026-11-24:** M4 with temporary chats, M5 as one `/learn` (14 §8–§9).
 - **Build parity, the local part:** PAR6 hooks, PAR11 headless, PAR12, PAR7's issue → session and CI fix loop.
 - **Connectors C2,** as each OAuth app is approved.
 - **Image generation:** the spec, then the tool and how a picture shows and is kept.

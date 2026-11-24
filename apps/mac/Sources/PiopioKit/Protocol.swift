@@ -158,6 +158,38 @@ public enum ToolDetails: Sendable, Hashable {
     case files([PresentedFile])
     /// Earlier conversations a turn searched or read (docs/spec/14 M4), and how many it held back from a cloud model.
     case conversations([PastConversation], withheld: Int)
+    /// What /learn proposes to keep (docs/spec/14 M5), and the project file its rules would go into.
+    case learn(file: String?, items: [LearnItem])
+}
+
+/// One thing /learn proposes (docs/spec/14 M5): a rule for the project's instructions file, or a fact about you.
+public struct LearnItem: Codable, Sendable, Hashable, Identifiable {
+    public enum Destination: String, Codable, Sendable, CaseIterable { case project, aboutMe = "about_me" }
+    public var to: Destination
+    public var text: String
+    public var why: String?
+    public var section: String?
+    public var id: String { "\(to.rawValue):\(text)" }
+    public init(to: Destination, text: String, why: String? = nil, section: String? = nil) { self.to = to; self.text = text; self.why = why; self.section = section }
+}
+
+/// Where a /learn card stands (the session's `learned`).
+public struct LearnState: Codable, Sendable, Hashable {
+    public enum Status: String, Codable, Sendable { case pending, later, saved, dismissed }
+    public var status: Status
+    public var file: String?
+    public var aboutMe: Int?
+    public init(status: Status, file: String? = nil, aboutMe: Int? = nil) { self.status = status; self.file = file; self.aboutMe = aboutMe }
+}
+
+public struct LearnSaveParams: Encodable, Sendable {
+    public var ref: ContainerRef; public var callId: String; public var items: [LearnItem]?
+    public init(ref: ContainerRef, callId: String, items: [LearnItem]? = nil) { self.ref = ref; self.callId = callId; self.items = items }
+}
+public struct LearnSaveResult: Decodable, Sendable { public var file: String?; public var project: Int; public var aboutMe: Int }
+public struct LearnAnswerParams: Encodable, Sendable {
+    public var ref: ContainerRef; public var callId: String; public var choice: String
+    public init(ref: ContainerRef, callId: String, choice: String) { self.ref = ref; self.callId = callId; self.choice = choice }
 }
 
 /// An earlier conversation a search found or a turn read: opens from the card.
@@ -237,6 +269,12 @@ extension ToolItem {
                 var missing = false
                 if case .bool(let m)? = f["missing"] { missing = m }
                 return PresentedFile(path: path, name: f["name"]?.stringValue ?? (path as NSString).lastPathComponent, description: f["description"]?.stringValue, size: size, missing: missing)
+            })
+        case "learn":
+            guard case .array(let items)? = d["items"] else { return nil }
+            return .learn(file: d["file"]?.stringValue, items: items.compactMap { i in
+                guard let text = i["text"]?.stringValue, let to = i["to"]?.stringValue.flatMap(LearnItem.Destination.init(rawValue:)) else { return nil }
+                return LearnItem(to: to, text: text, why: i["why"]?.stringValue, section: i["section"]?.stringValue)
             })
         case "conversations":
             guard case .array(let items)? = d["conversations"] else { return nil }
@@ -554,6 +592,8 @@ public struct SessionSummary: Codable, Sendable, Hashable {
     /// A temporary chat (docs/spec/14 M4): deleted at `expiresAt`, 24 hours after its last message, unless kept.
     public struct Temporary: Codable, Sendable, Hashable { public var expiresAt: String }
     public var temporary: Temporary?
+    /// Its /learn cards by tool call (docs/spec/14 M5).
+    public var learned: [String: LearnState]?
     /// A conversation about an app (docs/spec/35 §15): the app's file.
     public var app: String?
     public var title: String

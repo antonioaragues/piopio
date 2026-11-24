@@ -199,7 +199,7 @@ struct SideOfferView: View {
 }
 
 /// A choice as text (the cards' secondary answers), with a quiet fill on hover.
-private struct TextButton: View {
+struct TextButton: View {
     let title: String
     var strong = false
     var help: String?
@@ -220,7 +220,7 @@ private struct TextButton: View {
 }
 
 /// The view's one black action (docs/design/grey), as the transcript's other cards draw it.
-private struct DarkButton: View {
+struct DarkButton: View {
     let title: String
     var symbol: String?
     var help: String?
@@ -245,7 +245,7 @@ private struct DarkButton: View {
 }
 
 /// A small chip-filled button (a row's Open).
-private struct QuietButton: View {
+struct QuietButton: View {
     let title: String
     var symbol: String?
     var help: String?
