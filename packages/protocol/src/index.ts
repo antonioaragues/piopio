@@ -63,12 +63,38 @@ export type AutomationSummary = Static<typeof AutomationSummary>;
 
 /** One thing /learn proposes to keep (docs/spec/14 M5): a project rule (under a section of AGENTS.md) or a fact about you. */
 export const LearnItem = Type.Object({
-	to: literals("project", "about_me"),
+	/** project: a rule for the instructions file; about_me: a fact; skill: how to do a kind of job (40 SH0). */
+	to: literals("project", "about_me", "skill"),
+	/** A rule or fact as it's written; for a skill, its "used when" (the description the model routes on). */
 	text: Type.String(),
 	why: Type.Optional(Type.String()),
 	section: Type.Optional(Type.String()),
+	/** skill: its name (lowercase-with-hyphens). */
+	name: Type.Optional(Type.String()),
+	/** skill: its instructions (Markdown: the steps, what to check). */
+	body: Type.Optional(Type.String()),
+	/** skill: add to this existing skill of yours instead of making a new one. */
+	addTo: Type.Optional(Type.String()),
+	/** skill: kept for this project only (its .pi/skills), not every project. */
+	projectOnly: Type.Optional(Type.Boolean()),
 });
 export type LearnItem = Static<typeof LearnItem>;
+
+/** A skill pi loads (backlog D9): where it lives, and whether Piopio may change it. */
+export const SkillInfo = Type.Object({
+	name: Type.String(),
+	description: Type.String(),
+	/** Its SKILL.md. */
+	path: Type.String(),
+	/** yours: ~/.pi/agent/skills or ~/.agents/skills; project: a project's .pi/skills or .agents/skills; package: a pi package's. */
+	where: literals("yours", "project", "package"),
+	/** Only through /skill:name (`disable-model-invocation`). */
+	manual: Type.Boolean(),
+	editable: Type.Boolean(),
+	/** package: its folder, as Settings › Extensions names it. */
+	source: Type.Optional(Type.String()),
+});
+export type SkillInfo = Static<typeof SkillInfo>;
 
 export const ToolDetails = Type.Union([
 	Type.Object({ type: Type.Literal("diff"), path: Type.String(), diff: Type.String() }),
@@ -686,7 +712,7 @@ export const SessionSummary = Type.Object({
 	 * Its /learn cards (docs/spec/14 M5), by tool call: "pending" until answered, "later" once you wrote again without
 	 * answering (or chose Not now), "saved" (and where), "dismissed".
 	 */
-	learned: Type.Optional(Type.Record(Type.String(), Type.Object({ status: literals("pending", "later", "saved", "dismissed"), file: Type.Optional(Type.String()), aboutMe: Type.Optional(Type.Number()) }))),
+	learned: Type.Optional(Type.Record(Type.String(), Type.Object({ status: literals("pending", "later", "saved", "dismissed"), file: Type.Optional(Type.String()), aboutMe: Type.Optional(Type.Number()), skills: Type.Optional(Type.Array(Type.String())) }))),
 	/** A conversation about an app (docs/spec/35 §15): the app's file. */
 	app: Type.Optional(Type.String()),
 	ref: ContainerRef,
@@ -1441,7 +1467,26 @@ export const methods = {
 	/** Saves a /learn card (docs/spec/14 M5): its items, or the ones you edited; writes the instructions file and About me. */
 	"learn.save": {
 		params: Type.Object({ ref: ContainerRef, callId: Type.String(), items: Type.Optional(Type.Array(LearnItem)) }),
-		result: Type.Object({ file: Type.Optional(Type.String()), project: Type.Number(), aboutMe: Type.Number() }),
+		result: Type.Object({ file: Type.Optional(Type.String()), project: Type.Number(), aboutMe: Type.Number(), skills: Type.Array(Type.String()) }),
+	},
+	/** Skills (backlog D9, PAR12): yours (every project), a project's, and packages' (read-only). */
+	"skills.list": {
+		params: Type.Object({ project: Type.Optional(Type.String()) }),
+		result: Type.Object({ skills: Type.Array(SkillInfo) }),
+	},
+	"skills.get": {
+		params: Type.Object({ path: Type.String() }),
+		result: Type.Object({ info: SkillInfo, body: Type.String() }),
+	},
+	/** A new skill (no `path`) or a change to one of yours (`path`: its SKILL.md; a new name renames its folder). */
+	"skills.save": {
+		params: Type.Object({ path: Type.Optional(Type.String()), project: Type.Optional(Type.String()), name: Type.String(), description: Type.String(), body: Type.String(), manual: Type.Optional(Type.Boolean()) }),
+		result: Type.Object({ path: Type.String() }),
+	},
+	/** Moves one of your skills' folder to the Trash. */
+	"skills.delete": {
+		params: Type.Object({ path: Type.String() }),
+		result: Type.Object({}),
 	},
 	/** Not now (folds it), Dismiss, or Undo a save (it's back to waiting). */
 	"learn.answer": {

@@ -236,7 +236,7 @@ describe("earlier conversations as background", () => {
 		await idle(a, ref, 2);
 		expect(await learned()).toEqual({ status: "later" });
 		// Saved: the rule under Testing in a new AGENTS.md, the fact in About me.
-		expect(await a.client.call("learn.save", { ref, callId })).toEqual({ file: "AGENTS.md", project: 1, aboutMe: 1 });
+		expect(await a.client.call("learn.save", { ref, callId })).toEqual({ file: "AGENTS.md", project: 1, aboutMe: 1, skills: [] });
 		expect(readFileSync(join(folder, "AGENTS.md"), "utf8")).toBe("## Testing\n\n- Run unit tests with `pnpm test:unit`.\n");
 		expect((await a.client.call("aboutMe.get", {})).text).toContain("Writes commit messages in English.");
 		expect(await learned()).toEqual({ status: "saved", file: "AGENTS.md", aboutMe: 1 });
@@ -251,6 +251,40 @@ describe("earlier conversations as background", () => {
 		await a.client.call("sessions.submit", { ref: chat, input: { text: `call: propose_learnings | ${JSON.stringify({ items: [items[0]] })}` } });
 		const c = await idle(a, chat);
 		expect(c.items.find((i) => i.kind === "tool" && i.tool === "propose_learnings")).toMatchObject({ status: "error" });
+	}, 30_000);
+
+	test("skills: saved, listed, read, renamed and deleted; /learn makes one, adds to one, and undoes (D9, 40 SH0)", async () => {
+		const a = await start();
+		const yours = join(a.home, "pi-agent", "skills");
+		const made = await a.client.call("skills.save", { name: "Release Piopio", description: "When asked to cut a release.", body: "1. Bump the version." });
+		expect(made.path).toBe(join(yours, "release-piopio", "SKILL.md"));
+		const listed = (await a.client.call("skills.list", {})).skills.find((s: { name: string }) => s.name === "release-piopio");
+		expect(listed).toMatchObject({ where: "yours", editable: true, manual: false, description: "When asked to cut a release." });
+		expect(await a.client.call("skills.get", { path: made.path })).toMatchObject({ body: "1. Bump the version." });
+		await expect(a.client.call("skills.save", { path: "/etc/x/SKILL.md", name: "x", description: "x", body: "x" })).rejects.toMatchObject({ data: { code: "INVALID" } });
+		// /learn: a new skill and more steps for the one above, in a chat.
+		const ref = (await a.client.call("sessions.create", { kind: "thread" })).ref;
+		await a.client.call("sessions.subscribe", { ref });
+		const items = [
+			{ to: "skill", name: "monthly-invoices", text: "When asked for the monthly invoice report.", body: "1. Export the CSV.\n2. Sum by client.", why: "you walked me through it" },
+			{ to: "skill", name: "release-piopio", add_to: "release-piopio", text: "Releases.", body: "2. Upload the DMG.", why: "you added a step" },
+		];
+		await a.client.call("sessions.submit", { ref, input: { text: `call: propose_learnings | ${JSON.stringify({ items })}` } });
+		const s = await idle(a, ref);
+		const tool = s.items.find((i) => i.kind === "tool" && i.tool === "propose_learnings");
+		const callId = tool!.kind === "tool" ? tool!.callId : "";
+		expect(tool && tool.kind === "tool" && [tool.status, tool.output]).toEqual(["done", expect.any(String)]);
+		expect(tool && tool.kind === "tool" && tool.details).toMatchObject({ items: [{ to: "skill", name: "monthly-invoices" }, { to: "skill", addTo: "release-piopio" }] });
+		expect(await a.client.call("learn.save", { ref, callId })).toMatchObject({ skills: ["monthly-invoices", "release-piopio"] });
+		expect(readFileSync(join(yours, "monthly-invoices", "SKILL.md"), "utf8")).toContain("description: When asked for the monthly invoice report.");
+		expect(readFileSync(made.path, "utf8")).toContain("1. Bump the version.\n\n2. Upload the DMG.");
+		await a.client.call("learn.answer", { ref, callId, choice: "undo" });
+		expect(existsSync(join(yours, "monthly-invoices"))).toBe(false);
+		expect(readFileSync(made.path, "utf8")).not.toContain("Upload the DMG");
+		// Delete: to the Trash, and off the list.
+		await a.client.call("skills.delete", { path: made.path });
+		expect(existsSync(made.path)).toBe(false);
+		expect((await a.client.call("skills.list", {})).skills.some((x: { name: string }) => x.name === "release-piopio")).toBe(false);
 	}, 30_000);
 
 	test("a temporary chat isn't searched, looks in no other, and goes after 24 hours unless kept (14 M4)", async () => {
@@ -295,6 +329,8 @@ describe("earlier conversations as background", () => {
 		await a.client.call("sessions.submit", { ref: second, input: { text: `call: search_conversations | {"query":"sink"}` } });
 		const s = await idle(a, second);
 		expect(toolOutput(s, "search_conversations")).not.toContain(first.id);
+		// Not offered at all: the call finds no such tool.
+		expect(toolOutput(s, "search_conversations")).toContain("not found");
 		await a.client.call("sessions.submit", { ref: second, input: { text: `What did we decide in @conversation:${first.id}?` } });
 		const t = await idle(a, second, 2);
 		expect(t.items.findLast((i) => i.kind === "user")).toMatchObject({ attachments: [{ mimeType: "text/x-piopio-conversation" }] });

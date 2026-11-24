@@ -765,6 +765,7 @@ nonisolated struct ItemRenderer: Sendable {
             let rules = items.filter { $0.to == .project }.count
             if let f = state?.file { links.append(("\(f) +\(rules)", .openFile(path: root.map { ($0 as NSString).appendingPathComponent(f) } ?? f, line: nil))) }
             if let m = state?.aboutMe, m > 0 { links.append(plain("About me +\(m)")) }
+            for name in state?.skills ?? [] { links.append(plain("skill \(name)")) }
             model = LearnCardModel(.folded(callId: id, text: "Learned", links: links, actions: [("Undo", .learn(kind: "undo", callId: id))]))
         case .later where !reviewing.contains(id):
             model = LearnCardModel(.folded(callId: id, text: "Learned · \(things)", links: [plain("not saved")], actions: [("Review", .learn(kind: "review", callId: id)), ("Dismiss", .learn(kind: "dismiss", callId: id))]))

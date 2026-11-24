@@ -14,7 +14,13 @@ struct LearnEditSheet: View {
         self.cancel = cancel
     }
 
-    private var kept: [LearnItem] { edit.items.filter { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty } }
+    /// What Save writes: items with words; a skill also needs a name and instructions.
+    private var kept: [LearnItem] {
+        edit.items.filter { item in
+            let has = { (s: String?) in !(s ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            return has(item.text) && (item.to != .skill || (has(item.name) || has(item.addTo)) && has(item.body))
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -40,7 +46,7 @@ struct LearnEditSheet: View {
             }
             .padding(.horizontal, 20).padding(.vertical, 12)
         }
-        .frame(width: 520, height: min(560, CGFloat(170 + edit.items.count * 96)))
+        .frame(width: 560, height: min(620, CGFloat(170 + edit.items.reduce(0) { $0 + ($1.to == .skill ? 230 : 96) })))
     }
 
     private func row(_ item: Binding<LearnItem>) -> some View {
@@ -49,8 +55,18 @@ struct LearnEditSheet: View {
                 Picker("", selection: item.to) {
                     if edit.hasProject { Text(edit.file ?? "AGENTS.md").tag(LearnItem.Destination.project) }
                     Text("About me").tag(LearnItem.Destination.aboutMe)
+                    Text(item.wrappedValue.addTo.map { "Add to \($0)" } ?? "A skill").tag(LearnItem.Destination.skill)
                 }
                 .labelsHidden().fixedSize()
+                if item.wrappedValue.to == .skill {
+                    TextField("Name", text: Binding(get: { item.wrappedValue.addTo ?? item.wrappedValue.name ?? "" }, set: { item.wrappedValue.name = $0 }))
+                        .textFieldStyle(.roundedBorder).frame(width: 170).disabled(item.wrappedValue.addTo != nil)
+                        .help("Lowercase with hyphens: it's how /skill:name calls it")
+                    if edit.hasProject {
+                        Toggle("Only this project", isOn: Binding(get: { item.wrappedValue.projectOnly ?? false }, set: { item.wrappedValue.projectOnly = $0 ? true : nil }))
+                            .toggleStyle(.checkbox).font(.system(size: 12)).disabled(item.wrappedValue.addTo != nil)
+                    }
+                }
                 if item.wrappedValue.to == .project {
                     TextField("Section", text: Binding(get: { item.wrappedValue.section ?? "" }, set: { item.wrappedValue.section = $0.isEmpty ? nil : $0 }))
                         .textFieldStyle(.roundedBorder).frame(width: 150)
@@ -60,8 +76,15 @@ struct LearnEditSheet: View {
                 Button { edit.items.removeAll { $0.id == item.wrappedValue.id } } label: { Image(systemName: "xmark") }
                     .buttonStyle(.plain).foregroundStyle(Color.dsFg3).help("Don't keep this")
             }
-            TextField("", text: item.text, axis: .vertical)
+            TextField(item.wrappedValue.to == .skill ? "Used when…" : "", text: item.text, axis: .vertical)
                 .textFieldStyle(.roundedBorder).lineLimit(1...4)
+                .help(item.wrappedValue.to == .skill ? "When the skill is used: what the model reads to decide to load it" : "")
+            if item.wrappedValue.to == .skill {
+                TextEditor(text: Binding(get: { item.wrappedValue.body ?? "" }, set: { item.wrappedValue.body = $0 }))
+                    .font(.system(size: 12, design: .monospaced))
+                    .frame(height: 120)
+                    .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.dsLine, lineWidth: 0.5))
+            }
             if let why = item.wrappedValue.why { Text(why).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3) }
         }
     }

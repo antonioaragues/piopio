@@ -24,17 +24,18 @@ import { ConnectorHub } from "./connectors/hub.js";
 import { choices } from "./connectors/permissions.js";
 import type { ConnectorEndpoints } from "./connectors/types.js";
 import type { Runtime } from "./runtimes/runtime.js";
-import { getAgentDir } from "@earendil-works/pi-coding-agent";
+import { getAgentDir, loadSkills, type Skill } from "@earendil-works/pi-coding-agent";
 import { listDir, readProjectFile, searchFiles, writeProjectFile } from "./files.js";
 import { McpConfig, type RawServer } from "./mcp.js";
 import { detectOtherApps, McpStatus, probe } from "./mcp-probe.js";
 import * as gitOps from "./git.js";
 import { Projects } from "./projects.js";
-import { Sessions } from "./sessions.js";
+import { moveToTrash, Sessions } from "./sessions.js";
 import { ABOUT_ME_BANK, AboutMe } from "./about-me.js";
 import { Settings } from "./settings.js";
 import { notInChat } from "./tools/mcp-chat.js";
-import { ChatResources } from "./tools/chat-resources.js";
+import { ChatResources, skillSource } from "./tools/chat-resources.js";
+import { editable, parseSkill, skillsRoot, writeSkill } from "./skills.js";
 import { Packages } from "./packages.js";
 import { exportMemory, MemoryProviders } from "./memory.js";
 import { AgentFiles } from "./agent-files.js";
@@ -43,7 +44,7 @@ import { groupSteps, StepsView } from "./timeline/steps.js";
 import { DeltaBatcher } from "./timeline/delta-batcher.js";
 import { replacedVisuals } from "./tools/visuals.js";
 import { fitCheck } from "./work/fit.js";
-import type { SpendRange, SpendSuggestion, TimelineItem, ToolItem } from "@piopio/protocol";
+import type { SkillInfo, SpendRange, SpendSuggestion, TimelineItem, ToolItem } from "@piopio/protocol";
 
 /** Subagents keep their own card (it opens their session). */
 /** Tools that stay their own item when steps fold: subagent tasks, questions you answered, plans, files handed over, visuals and apps made (they read as part of the conversation). */
@@ -673,6 +674,36 @@ export class Engine {
 		}
 	}
 
+	/** Where your skills may be written: every project's folders, and one project's when given (backlog D9). */
+	private skillRoots(project?: string): string[] {
+		return [skillsRoot(this.chatResources.agentDir), join(homedir(), ".agents", "skills"), ...(project ? [skillsRoot(this.chatResources.agentDir, project), join(project, ".agents", "skills")] : [])];
+	}
+
+	/** The known project a skill's file is in, if any. */
+	private projectOf(path: string): string | undefined {
+		return this.projects.list().map((p) => p.path).find((root) => resolve(path).startsWith(`${resolve(root)}/`));
+	}
+
+	/** Yours, a project's (with `project`), and packages'; pi's own order, the first of a name wins. */
+	async skillList(project?: string): Promise<SkillInfo[]> {
+		const all: Skill[] = [...(await this.chatResources.allSkills())];
+		if (project) for (const s of loadSkills({ cwd: project, agentDir: this.chatResources.agentDir, skillPaths: [], includeDefaults: true }).skills) if (!all.some((a) => a.filePath === s.filePath)) all.push(s);
+		const yours = this.skillRoots().map((r) => `${resolve(r)}/`);
+		const ofProject = project ? this.skillRoots(project).slice(2).map((r) => `${resolve(r)}/`) : [];
+		return all.flatMap((s): SkillInfo[] => {
+			const path = resolve(s.filePath);
+			const where = yours.some((r) => path.startsWith(r)) ? "yours" : ofProject.some((r) => path.startsWith(r)) ? "project" : project && path.startsWith(`${resolve(project)}/`) ? "project" : "package";
+			if (where === "project" && !project) return [];
+			return [{ name: s.name, description: s.description, path: s.filePath, where, manual: s.disableModelInvocation, editable: where !== "package" && path.endsWith("/SKILL.md"), ...(where === "package" ? { source: skillSource(s) } : {}) }];
+		});
+	}
+
+	/** Chats read skills again now; Build sessions at their next message. */
+	private async skillsChanged(): Promise<void> {
+		await this.chatResources.reload();
+		await this.sessions.reloadResources();
+	}
+
 	private inChat(name: string, server: RawServer): boolean {
 		const chat = this.settings.get().chat;
 		return chat.mcpServers ? chat.mcpServers.includes(name) : chat.mcp && server.enabled !== false;
@@ -1246,6 +1277,29 @@ export class Engine {
 				const p = params as Params<"packages.setResource">;
 				await this.packages.setResource(p.source, p.kind, p.path, p.enabled);
 				return {};
+			}
+			case "skills.list":
+				return { skills: await this.skillList((params as Params<"skills.list">).project) } satisfies Result<"skills.list">;
+			case "skills.get": {
+				const p = params as Params<"skills.get">;
+				const info = (await this.skillList(this.projectOf(p.path))).find((s) => s.path === p.path);
+				if (!info) throw new EngineError("NOT_FOUND", "That skill isn't loaded.");
+				return { info, body: parseSkill(readFileSync(p.path, "utf8")).body } satisfies Result<"skills.get">;
+			}
+			case "skills.save": {
+				const p = params as Params<"skills.save">;
+				const roots = this.skillRoots(p.project);
+				if (p.path && !editable(p.path, roots)) throw new EngineError("INVALID", "Only your own skills can be changed here; a package's change with the package.");
+				const path = writeSkill(skillsRoot(this.chatResources.agentDir, p.project), { name: p.name, description: p.description, body: p.body, ...(p.manual ? { manual: true } : {}) }, p.path);
+				await this.skillsChanged();
+				return { path } satisfies Result<"skills.save">;
+			}
+			case "skills.delete": {
+				const p = params as Params<"skills.delete">;
+				if (!editable(p.path, this.skillRoots(this.projectOf(p.path)))) throw new EngineError("INVALID", "Only your own skills can be deleted here.");
+				moveToTrash(dirname(p.path), this.options.trashDir ?? join(homedir(), ".Trash"));
+				await this.skillsChanged();
+				return {} satisfies Result<"skills.delete">;
 			}
 			case "packages.list":
 				return { packages: await this.packages.list() } satisfies Result<"packages.list">;

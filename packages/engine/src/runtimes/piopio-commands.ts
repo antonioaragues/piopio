@@ -6,7 +6,7 @@
 import type { PromptTemplate } from "@earendil-works/pi-coding-agent";
 import { LEARN_PROMPT } from "../tools/learn.js";
 
-type Bundled = { name: string; description: string; hint: string; content: string; needs?: "browser" | "automations" | "learn" };
+type Bundled = { name: string; description: string; hint: string; content: string; needs?: "browser" | "automations" | "learn" | "project" };
 
 export const PIOPIO_PROMPTS: readonly Bundled[] = [
 	{
@@ -24,6 +24,17 @@ Use the automate tool. If what it should do, when it should start or where the r
 		hint: "<what to keep, or nothing to look back>",
 		needs: "learn",
 		content: LEARN_PROMPT,
+	},
+	{
+		name: "init",
+		description: "Write this project's AGENTS.md: how to build, test and run it, and its conventions",
+		hint: "<anything it should know>",
+		needs: "project",
+		content: `Write this project's AGENTS.md, the instructions every conversation here reads (and Claude Code and Codex too). $ARGUMENTS
+
+Look before you write: the README, the package or build files, the scripts, the test setup, CI, and a few source files for the conventions. Then write AGENTS.md at the project's root with short sections: what this is, how to build, test and run it (the real commands), how the code is laid out, conventions, and pitfalls. Under 80 lines; only what someone new would get wrong, nothing you can't point to in the files.
+
+If AGENTS.md or CLAUDE.md is already there, don't overwrite it: propose what's missing with propose_learnings instead.`,
 	},
 	{
 		name: "grill-me",
@@ -45,7 +56,7 @@ Use the browser tools even if you could answer another way. When a page asks me 
 ];
 
 /** pi's templates plus Piopio's (those whose tools this session has), unless one of pi's has the name. */
-export function withPiopioPrompts(prompts: PromptTemplate[], has: { browser: boolean; automations: boolean; learn?: boolean }): PromptTemplate[] {
+export function withPiopioPrompts(prompts: PromptTemplate[], has: { browser: boolean; automations: boolean; learn?: boolean; project?: boolean }): PromptTemplate[] {
 	const taken = new Set(prompts.map((p) => p.name));
 	const own = PIOPIO_PROMPTS.filter((p) => !taken.has(p.name) && (!p.needs || has[p.needs] === true)).map(
 		(p): PromptTemplate => ({

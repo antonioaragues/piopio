@@ -108,6 +108,7 @@ struct ExtensionsPane: View {
                     .buttonStyle(PillStyle(kind: .toolbar))
                 AddButton(title: "Install") { installing = true }
             }
+            YourSkillsCard(engine: engine).padding(.bottom, 22)
             CardTitle("What a package can add")
             ListCard {
                 kind(PackageTile(extensions: 0, skills: 1), "Skills", "Know-how the model loads for a kind of task, like reviewing a PR", "Everywhere")
@@ -141,6 +142,7 @@ struct ExtensionsPane: View {
                     .buttonStyle(PillStyle(kind: .toolbar))
                 AddButton(title: "Install") { installing = true }
             }
+            YourSkillsCard(engine: engine).padding(.bottom, 22)
             CardTitle(title: "Installed") {
                 Button(working == "update" ? "Updating…" : "Update all") { updateAll() }
                     .buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Color.accentColor).disabled(working != nil)

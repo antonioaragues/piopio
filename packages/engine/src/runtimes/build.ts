@@ -221,7 +221,7 @@ export class BuildRuntime implements Runtime {
 			agentDir,
 			settingsManager,
 			// Piopio's /automation, /grill-me and /browser (docs/spec/32 CM3).
-			promptsOverride: (base) => ({ ...base, prompts: withPiopioPrompts(base.prompts, { browser: Boolean(o.browser), automations: Boolean(o.automations), learn: Boolean(o.learn) }) }),
+			promptsOverride: (base) => ({ ...base, prompts: withPiopioPrompts(base.prompts, { browser: Boolean(o.browser), automations: Boolean(o.automations), learn: Boolean(o.learn), project: Boolean(o.learn?.project()) }) }),
 			extensionFactories: o.chat ? chatFactories(o, broker, () => runtime) : [
 				// The pi CLI's built-ins (MCP servers, and codemode / tool search through which MCP tools are
 				// reached). Replaceable: a user extension that registers the same tools or /mcp takes over.
@@ -1229,7 +1229,10 @@ function chatFactories(o: BuildOpenOptions, broker: PromptBroker, runtime: () =>
 					),
 				]
 			: []),
-		...(o.history ? [historySdkExtension(o.history)] : []),
+		// Off in Settings › Memory: no tools (docs/spec/14 M4); @conversation still works.
+		...(o.history && !o.history.off() ? [historySdkExtension(o.history)] : []),
+		// /learn (docs/spec/14 M5): in a chat, facts about you and skills.
+		...(o.learn ? [learnSdkExtension(o.learn)] : []),
 		...(o.side ? [sideExtension(o.side)] : []),
 		...(o.automations ? [automationsExtension(o.automations)] : []),
 		// /goal: it keeps going on its own until the goal is met (docs/spec/32 CM4), bounded as in Build.

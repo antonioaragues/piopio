@@ -164,14 +164,46 @@ public enum ToolDetails: Sendable, Hashable {
 
 /// One thing /learn proposes (docs/spec/14 M5): a rule for the project's instructions file, or a fact about you.
 public struct LearnItem: Codable, Sendable, Hashable, Identifiable {
-    public enum Destination: String, Codable, Sendable, CaseIterable { case project, aboutMe = "about_me" }
+    public enum Destination: String, Codable, Sendable, CaseIterable { case project, aboutMe = "about_me", skill }
     public var to: Destination
+    /// A rule or fact as written; for a skill, when it's used (the description the model routes on).
     public var text: String
     public var why: String?
     public var section: String?
-    public var id: String { "\(to.rawValue):\(text)" }
-    public init(to: Destination, text: String, why: String? = nil, section: String? = nil) { self.to = to; self.text = text; self.why = why; self.section = section }
+    /// Skills (docs/spec/40 SH0): its name, its instructions, one of yours to add to, and whether it's this project's only.
+    public var name: String?
+    public var body: String?
+    public var addTo: String?
+    public var projectOnly: Bool?
+    public var id: String { "\(to.rawValue):\(name ?? ""):\(text)" }
+    public init(to: Destination, text: String, why: String? = nil, section: String? = nil, name: String? = nil, body: String? = nil, addTo: String? = nil, projectOnly: Bool? = nil) {
+        self.to = to; self.text = text; self.why = why; self.section = section; self.name = name; self.body = body; self.addTo = addTo; self.projectOnly = projectOnly
+    }
 }
+
+/// A skill pi loads (backlog D9): yours, a project's, or a package's (read-only).
+public struct SkillInfo: Codable, Sendable, Hashable, Identifiable {
+    public enum Where: String, Codable, Sendable { case yours, project, package }
+    public var name: String
+    public var description: String
+    public var path: String
+    public var `where`: Where
+    public var manual: Bool
+    public var editable: Bool
+    public var source: String?
+    public var id: String { path }
+}
+public struct SkillsListParams: Encodable, Sendable { public var project: String?; public init(project: String? = nil) { self.project = project } }
+public struct SkillsResult: Decodable, Sendable { public var skills: [SkillInfo] }
+public struct SkillPathParams: Encodable, Sendable { public var path: String; public init(path: String) { self.path = path } }
+public struct SkillResult: Decodable, Sendable { public var info: SkillInfo; public var body: String }
+public struct SkillSaveParams: Encodable, Sendable {
+    public var path: String?; public var project: String?; public var name: String; public var description: String; public var body: String; public var manual: Bool?
+    public init(path: String? = nil, project: String? = nil, name: String, description: String, body: String, manual: Bool? = nil) {
+        self.path = path; self.project = project; self.name = name; self.description = description; self.body = body; self.manual = manual
+    }
+}
+public struct SkillSaveResult: Decodable, Sendable { public var path: String }
 
 /// Where a /learn card stands (the session's `learned`).
 public struct LearnState: Codable, Sendable, Hashable {
@@ -179,14 +211,16 @@ public struct LearnState: Codable, Sendable, Hashable {
     public var status: Status
     public var file: String?
     public var aboutMe: Int?
-    public init(status: Status, file: String? = nil, aboutMe: Int? = nil) { self.status = status; self.file = file; self.aboutMe = aboutMe }
+    /// The skills a save made or added to.
+    public var skills: [String]?
+    public init(status: Status, file: String? = nil, aboutMe: Int? = nil, skills: [String]? = nil) { self.status = status; self.file = file; self.aboutMe = aboutMe; self.skills = skills }
 }
 
 public struct LearnSaveParams: Encodable, Sendable {
     public var ref: ContainerRef; public var callId: String; public var items: [LearnItem]?
     public init(ref: ContainerRef, callId: String, items: [LearnItem]? = nil) { self.ref = ref; self.callId = callId; self.items = items }
 }
-public struct LearnSaveResult: Decodable, Sendable { public var file: String?; public var project: Int; public var aboutMe: Int }
+public struct LearnSaveResult: Decodable, Sendable { public var file: String?; public var project: Int; public var aboutMe: Int; public var skills: [String]? }
 public struct LearnAnswerParams: Encodable, Sendable {
     public var ref: ContainerRef; public var callId: String; public var choice: String
     public init(ref: ContainerRef, callId: String, choice: String) { self.ref = ref; self.callId = callId; self.choice = choice }
@@ -274,7 +308,9 @@ extension ToolItem {
             guard case .array(let items)? = d["items"] else { return nil }
             return .learn(file: d["file"]?.stringValue, items: items.compactMap { i in
                 guard let text = i["text"]?.stringValue, let to = i["to"]?.stringValue.flatMap(LearnItem.Destination.init(rawValue:)) else { return nil }
-                return LearnItem(to: to, text: text, why: i["why"]?.stringValue, section: i["section"]?.stringValue)
+                var projectOnly: Bool?
+                if case .bool(let b)? = i["projectOnly"] { projectOnly = b }
+                return LearnItem(to: to, text: text, why: i["why"]?.stringValue, section: i["section"]?.stringValue, name: i["name"]?.stringValue, body: i["body"]?.stringValue, addTo: i["addTo"]?.stringValue, projectOnly: projectOnly)
             })
         case "conversations":
             guard case .array(let items)? = d["conversations"] else { return nil }

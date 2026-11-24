@@ -55,6 +55,7 @@ import { type Library, LibrarySearch, type LibraryOrigin, NOTE_PROMPT, noteReque
 import type { HistoryBridge, HistoryHit } from "./tools/history.js";
 import type { LearnBridge } from "./tools/learn.js";
 import { addRules, instructionsFile, readInstructions, removeRules } from "./learn.js";
+import { formatSkill, parseSkill, skillName, skillsRoot, writeSkill } from "./skills.js";
 import { AGENT_NAMES, findAgent, installedAgents, runExternalAgent, type ExternalAgent } from "./external-agents.js";
 import type { TelegramChannels } from "./channels/manager.js";
 import type { AgentWatchers } from "./watchers.js";
@@ -120,7 +121,7 @@ type CatalogEntry = SessionSummary & {
 	sideOffers?: Record<string, { title: string; brief?: string; project?: string; answered?: "new" | "here" }>;
 	sideBriefs?: Record<string, string>;
 	/** /learn saves (docs/spec/14 M5), by tool call: what each wrote, so Undo takes exactly that back. */
-	learnUndo?: Record<string, { project?: string; file?: string; created?: boolean; lines: string[]; facts: string[] }>;
+	learnUndo?: Record<string, { project?: string; file?: string; created?: boolean; lines: string[]; facts: string[]; skillsMade?: string[]; skillsBefore?: { path: string; text: string }[] }>;
 	/** Its pull request's comments already seen, and the head whose failing checks it was told about (docs/spec/17 §5). */
 	prSeen?: string[];
 	prFailedSha?: string;
@@ -532,11 +533,20 @@ export class Sessions {
 				this.save();
 				this.changed(entry);
 			},
+			skills: async () => (await this.yourSkills()).map((s) => s.name),
 		};
 	}
 
+	/** Your skills (every project's folder): the ones /learn may add to. */
+	private async yourSkills(): Promise<{ name: string; filePath: string }[]> {
+		const resources = this.chat?.resources;
+		if (!resources) return [];
+		const roots = [skillsRoot(resources.agentDir), join(homedir(), ".agents", "skills")].map((r) => `${resolve(r)}/`);
+		return (await resources.allSkills()).filter((s) => roots.some((r) => resolve(s.filePath).startsWith(r)) && s.filePath.endsWith("SKILL.md"));
+	}
+
 	/** Saves a /learn card: its items, or the ones you edited. */
-	async learnSave(ref: ContainerRef, callId: string, edited?: LearnItem[]): Promise<{ file?: string; project: number; aboutMe: number }> {
+	async learnSave(ref: ContainerRef, callId: string, edited?: LearnItem[]): Promise<{ file?: string; project: number; aboutMe: number; skills: string[] }> {
 		const entry = this.entry(ref);
 		const state = entry.learned?.[callId];
 		if (!state) throw new EngineError("NOT_FOUND", "That card isn't in this conversation.");
@@ -558,11 +568,34 @@ export class Sessions {
 			}
 		}
 		if (facts.length && this.chat && !entry.temporary) undo.facts = (await this.chat.aboutMe.patch("user", facts, [])).added;
+		// Skills (docs/spec/40 SH0): a new folder, or more instructions in one of yours.
+		const skills = items.filter((i) => i.to === "skill" && i.name?.trim() && i.body?.trim());
+		const named: string[] = [];
+		if (skills.length && this.chat?.resources) {
+			const agentDir = this.chat.resources.agentDir;
+			const mine = await this.yourSkills();
+			for (const item of skills) {
+				const target = item.addTo ? mine.find((s) => s.name === item.addTo) : undefined;
+				if (target) {
+					const text = readFileSync(target.filePath, "utf8");
+					const parsed = parseSkill(text);
+					writeFileAtomic(target.filePath, formatSkill({ ...parsed, body: `${parsed.body}\n\n${item.body!.trim()}` }, parsed.other));
+					(undo.skillsBefore ??= []).push({ path: target.filePath, text });
+					named.push(target.name);
+				} else {
+					const path = writeSkill(skillsRoot(agentDir, item.projectOnly && project ? project : undefined), { name: item.name!, description: item.text, body: item.body! });
+					(undo.skillsMade ??= []).push(dirname(path));
+					named.push(skillName(item.name!));
+				}
+			}
+			await this.chat.resources.reload();
+			await this.reloadResources();
+		}
 		(entry.learnUndo ??= {})[callId] = undo;
-		entry.learned![callId] = { status: "saved", ...(undo.file ? { file: undo.file } : {}), ...(undo.facts.length ? { aboutMe: undo.facts.length } : {}) };
+		entry.learned![callId] = { status: "saved", ...(undo.file ? { file: undo.file } : {}), ...(undo.facts.length ? { aboutMe: undo.facts.length } : {}), ...(named.length ? { skills: named } : {}) };
 		this.save();
 		this.changed(entry);
-		return { ...(undo.file ? { file: undo.file } : {}), project: undo.lines.length, aboutMe: undo.facts.length };
+		return { ...(undo.file ? { file: undo.file } : {}), project: undo.lines.length, aboutMe: undo.facts.length, skills: named };
 	}
 
 	/** Not now, Dismiss, or Undo a save: exactly what it wrote comes out, and the card waits again. */
@@ -583,6 +616,12 @@ export class Sessions {
 				else writeFileAtomic(path, left);
 			}
 			if (undo.facts.length && this.chat) await this.chat.aboutMe.patch("user", [], undo.facts);
+			for (const folder of undo.skillsMade ?? []) rmSync(folder, { recursive: true, force: true });
+			for (const before of undo.skillsBefore ?? []) writeFileAtomic(before.path, before.text);
+			if ((undo.skillsMade?.length || undo.skillsBefore?.length) && this.chat?.resources) {
+				await this.chat.resources.reload();
+				await this.reloadResources();
+			}
 			delete entry.learnUndo![callId];
 			entry.learned![callId] = { status: "pending" };
 		}
@@ -3610,7 +3649,7 @@ function summary({ file: _f, sessionFile: _s, agentFile: _af, segments: _sg, han
 }
 
 /** Moves a file into the Trash folder under a free name (same volume: a rename). */
-function moveToTrash(file: string, trash: string): void {
+export function moveToTrash(file: string, trash: string): void {
 	mkdirSync(trash, { recursive: true });
 	const name = basename(file);
 	let target = join(trash, name);

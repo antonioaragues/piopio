@@ -1,6 +1,6 @@
 # 40 · Show me how: skills from a demonstration
 
-Status: draft, 2026-11-23. **2026-11-24:** `/learn` and its card are built for project rules and About me (14 §9); SH0 adds skills to that same card. It develops 23 §9's "Teach by showing" and 32's `/learn`, and it
+Status: draft, 2026-11-23. **2026-11-24: SH0 built**: `/learn` proposes skills on its card (new, or added to one of yours), and Settings › Extensions › Your skills makes and edits them (14 §9). Recording (SH1–SH4) is not built. It develops 23 §9's "Teach by showing" and 32's `/learn`, and it
 needs PAR12's skill writing (D9). Prompted by Claude's **Record a skill** (Cowork, July 2026).
 
 ## 1. What Claude does

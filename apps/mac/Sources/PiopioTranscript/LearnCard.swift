@@ -62,7 +62,28 @@ public final class LearnCardModel: @unchecked Sendable {
             let whys = facts.compactMap(\.why)
             if !whys.isEmpty { total += 2 + Self.measure(whys.joined(separator: "; "), Self.whyFont, inner) }
         }
+        let skills = items.filter { $0.to == .skill }
+        for (i, item) in skills.enumerated() { total += Self.skillHeight(item, inner) - (i == 0 && rules.isEmpty && facts.isEmpty ? 8.5 : 0) }
         return ceil(total + 12 + 0.5 + Self.footerHeight)
+    }
+
+    nonisolated(unsafe) static let skillNameFont = NSFont.systemFont(ofSize: 13, weight: .semibold)
+    nonisolated(unsafe) static let usedWhenFont = NSFont.systemFont(ofSize: 12.5)
+    static let previewLines = 3
+
+    /// A skill's first steps as the card shows them, and how many lines are left out.
+    static func preview(_ body: String) -> (String, Int) {
+        let lines = body.split(separator: "\n", omittingEmptySubsequences: true).map(String.init).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+        return (lines.prefix(previewLines).joined(separator: "\n"), max(0, lines.count - previewLines))
+    }
+
+    static func skillHeight(_ item: LearnItem, _ inner: CGFloat) -> CGFloat {
+        let (shown, more) = preview(item.body ?? "")
+        var h = 8 + 0.5 + 8 + groupHeader + 6 + measure(item.name ?? "", skillNameFont, inner) + 2 + measure(item.text, usedWhenFont, inner) + 4
+        h += measure(shown, ruleFont, inner - ruleInset * 2) + 4
+        if more > 0 { h += 16 }
+        if let why = item.why { h += 2 + measure(why, whyFont, inner) }
+        return h
     }
 
     static func measure(_ text: String, _ font: NSFont, _ width: CGFloat) -> CGFloat {
@@ -120,6 +141,7 @@ struct LearnCardView: View {
     private func card(_ callId: String, _ file: String?, _ items: [LearnItem]) -> some View {
         let rules = LearnCardModel.sections(items)
         let facts = items.filter { $0.to == .aboutMe }
+        let skills = items.filter { $0.to == .skill }
         let count = items.count
         return VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 0) {
@@ -167,6 +189,10 @@ struct LearnCardView: View {
                     }
                     .padding(.top, 8)
                 }
+                ForEach(Array(skills.enumerated()), id: \.offset) { i, item in
+                    if i > 0 || !rules.isEmpty || !facts.isEmpty { Rectangle().fill(Color(nsColor: DS.line)).frame(height: 0.5).padding(.top, 8) }
+                    skill(item)
+                }
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, LearnCardModel.padding)
@@ -213,6 +239,27 @@ struct LearnCardView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(nsColor: DS.card), in: RoundedRectangle(cornerRadius: DS.Radius.card, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: DS.Radius.card, style: .continuous).strokeBorder(Color(nsColor: DS.line), lineWidth: 0.5))
+    }
+
+    /// A skill (docs/spec/40 SH0): new or added to one of yours, its name, when it's used, its first steps.
+    private func skill(_ item: LearnItem) -> some View {
+        let (shown, more) = LearnCardModel.preview(item.body ?? "")
+        return VStack(alignment: .leading, spacing: 0) {
+            groupHeader("text.book.closed", item.addTo == nil ? "New skill" : "Add to a skill", item.projectOnly == true ? "this project only" : "every project", "")
+            Text(item.addTo ?? item.name ?? "").font(Font(LearnCardModel.skillNameFont)).foregroundStyle(Color(nsColor: DS.fg))
+                .fixedSize(horizontal: false, vertical: true).padding(.bottom, 2)
+            Text(item.text).font(Font(LearnCardModel.usedWhenFont)).foregroundStyle(Color(nsColor: DS.fg2))
+                .fixedSize(horizontal: false, vertical: true).padding(.bottom, 4)
+            Text(shown).font(Font(LearnCardModel.ruleFont)).foregroundStyle(Color(nsColor: item.addTo == nil ? DS.fg : DS.green))
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, LearnCardModel.ruleInset)
+                .background(item.addTo == nil ? Color(nsColor: DS.chip).opacity(0.6) : Color(nsColor: DS.green).opacity(0.09), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .padding(.bottom, 4)
+            if more > 0 { Text("\(more) more line\(more == 1 ? "" : "s") · Edit… shows them").font(.system(size: 11.5)).foregroundStyle(Color(nsColor: DS.fg3)).frame(height: 16, alignment: .leading) }
+            why([item])
+        }
+        .padding(.top, 8)
     }
 
     private func groupHeader(_ symbol: String, _ title: String, _ place: String?, _ count: String) -> some View {

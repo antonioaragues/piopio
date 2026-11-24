@@ -345,8 +345,17 @@ what to keep, each where it belongs. M5 builds two destinations; SH0 adds skills
 - **Tests:** learn.test.ts (where rules land, undo), harness-ideas.test.ts (the whole flow: card, written past, save,
   undo, a chat refusing rules), ToolCardTests.swift (decoding, sections). Captures: `PIOPIO_DEMO_LEARN=card|later|saved`.
 
-**Not built yet:** skills as a destination (SH0, with PAR12's skill writing); /learn in agents and on coding agents
-(Claude Code, Codex); "when the work wraps up" as a second offer moment.
+**Skills, the third destination (built 2026-11-24, spec 40 SH0, PAR12):** an item `to: "skill"` carries a name, its
+"used when" (the description pi routes on) and its instructions; `addTo` adds the instructions to one of your skills
+instead, and `projectOnly` keeps it in the project's `.pi/skills`. The card shows "New skill · every project", the
+name, when it's used and the first three steps ("1 more line"). Save writes it where pi looks (skills.ts); Undo removes
+a new skill's folder or puts an added-to skill back as it was. Chats can propose skills too (and facts), not rules.
+
+**Also fixed:** chats load their own list of extensions, which offered the past-conversation tools even with Settings
+› Memory › Past conversations off (M4); they now honor it, and the test checks the tool isn't there.
+
+**Not built yet:** /learn in agents and on coding agents (Claude Code, Codex); "when the work wraps up" as a second
+offer moment.
 
 ## Sources
 - Hindsight: [repository](https://github.com/vectorize-io/hindsight), [announcement](https://vectorize.io/blog/introducing-hindsight-agent-memory-that-works-like-human-memory), [paper](https://arxiv.org/abs/2512.12818); our [S6](../spikes/s6/README.md).

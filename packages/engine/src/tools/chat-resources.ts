@@ -31,7 +31,13 @@ export class ChatResources {
 	private templates: Template[] = [];
 	private loading?: Promise<void>;
 
-	constructor(private readonly agentDir: string) {}
+	constructor(readonly agentDir: string) {}
+
+	/** Every skill loaded: yours and packages' (Settings › Extensions lists them). */
+	async allSkills(): Promise<readonly Skill[]> {
+		await this.ready();
+		return this.skills;
+	}
 
 	/** Reads skills and templates again (after a package change). */
 	reload(): Promise<void> {
