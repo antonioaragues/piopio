@@ -423,7 +423,8 @@ export class Engine {
 			}
 		});
 		// GitHub (docs/spec/05-build G4–G8): pull requests linked to conversations, polled for what happens on them.
-		this.github = new GitHub(this.secrets, options.github ?? {});
+		// Its short-lived git sign-in file goes in this engine's data folder, not the default one.
+		this.github = new GitHub(this.secrets, { home: options.paths.home, ...options.github });
 		this.sessions.github = this.github;
 		// The GitHub connector (docs/spec/12 C3) signs in with the same GitHub sign-in.
 		this.connectors.tokens.github = { get: async () => (await this.github.token())?.token, help: "Sign in to GitHub in Settings › Git & GitHub (or with `gh auth login`), then connect GitHub again." };

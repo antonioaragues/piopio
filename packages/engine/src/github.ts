@@ -11,7 +11,7 @@
  * The API and the token can be pointed elsewhere for tests (`api`, `token`).
  */
 import { spawn } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { EngineError } from "./models.js";
 import { git } from "./git.js";
@@ -129,7 +129,9 @@ export class GitHub {
 	async git(cwd: string, args: string[], timeoutMs = 120_000): Promise<string> {
 		const auth = await this.token();
 		if (!auth) return git(cwd, args, { timeoutMs });
-		const dir = mkdtempSync(join(this.options.home ?? enginePaths().home, "git-auth-"));
+		const home = this.options.home ?? enginePaths().home;
+		mkdirSync(home, { recursive: true, mode: 0o700 });
+		const dir = mkdtempSync(join(home, "git-auth-"));
 		try {
 			const file = join(dir, "config");
 			writeFileSync(file, `[http "https://github.com/"]\n\textraheader = AUTHORIZATION: basic ${Buffer.from(`x-access-token:${auth.token}`).toString("base64")}\n`, { mode: 0o600 });
