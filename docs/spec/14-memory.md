@@ -1,6 +1,6 @@
 # 14 · Memory (spike S8, 2026-10-24)
 
-**Status (2026-10-25):** M1 (hybrid recall) and M2 (learned facts for agents) are built, and M0 has measured them; see §7. Decisions: Q2 save and show with Undo; Q4 revised after use (2026-10-25): **search by words on this Mac is the default**, and search by meaning through OpenRouter is an explained opt-in in Settings › Memory. Q1 and Q3 wait for M4 and M5.
+**Status (2026-10-25):** M1 (hybrid recall) and M2 (learned facts for agents) are built, and M0 has measured them; see §7. Decisions: Q2 save and show with Undo; Q4 revised after use (2026-10-25): **search by words on this Mac is the default**, and search by meaning through OpenRouter is an explained opt-in in Settings › Memory. Q1 and Q3 decided 2026-11-24 (§6): **past chats on from day one, indexed on this Mac**, and **project lessons into `AGENTS.md`**. M4 and M5 are in the launch scope ([launch plan](../launch-plan.md) §3, wave 2).
 
 The question: how should Piopio's memory get better, where does a project like Hindsight fit, should memory have
 its own Settings section, and which kinds of memory belong in which part of the product (Chat, notebooks, agents,
@@ -171,7 +171,7 @@ way to see it.
 | **M2** Learned facts | Extraction and the add/replace/forget/nothing decision on the utility model, batched after turns; replaced facts in the history; cards with Undo. For agents and About me. | — |
 | **M3** Settings › Memory | The section above; About me and providers move there; Browse; export, wipe, rebuild. | — |
 | **M4** Past chats and notebooks | The `chats` bank, `search_chats` with its card, temporary chat; semantic `search_space`. | — |
-| **M5** Project lessons | Proposed lessons at the end of a Build session and `/remember`, as a diff into the project's instructions. | Your answer to §6 Q3 |
+| **M5** Project lessons | Proposed lessons at the end of a Build session and `/remember`, as a diff into the project's instructions. | §6 Q3: `AGENTS.md` (decided 2026-11-24) |
 | **M6** Hindsight adapter | 4.7 as planned: remote URL first, then the local daemon. M0 says whether it earns more than opt-in. | — |
 
 M1 and M2 come first because every area benefits, including cloud agents in Phase 5. M3 makes it all visible
@@ -188,9 +188,18 @@ before Past chats (M4) starts indexing more of your data.
 
 ## 6. Questions for you
 - **Q1 · Past chats:** off until you turn it on (more private), or on like ChatGPT (more useful from day one)?
+  **Decided 2026-11-24: on from day one, local.** The index is on this Mac and searched by words (Q4); only the
+  snippets a conversation uses go to its model, shown in `search_chats`'s card. Temporary chats are never indexed.
+  A chat that ran only on local models is found only from conversations on local models, so this is never the way
+  something private reaches a cloud model (local stays local, 07 §1.3). Settings ›
+  Memory turns it off. Notebooks are gone (18), so M4 is past chats and folder conversations; `search_space` drops.
 - **Q2 · Learning:** keep "save it and show it with Undo" (today), or offer "ask before saving" as well?
 - **Q3 · Project lessons:** into `AGENTS.md` (committed, shared with whoever uses the repo), or a local file that
   isn't committed (`.pi/` or `AGENTS.local.md`, read only by Piopio)?
+  **Decided 2026-11-24: `AGENTS.md`.** It is pi's own context file (pi loads it from the working folder and its
+  parents), and Claude Code and Codex read it too. Each lesson is a diff you approve; in a git repository it is a
+  change you commit or not, like any other. The local file is not built: pi's only uncommitted option,
+  `.pi/APPEND_SYSTEM.md`, needs project trust and replaces a global `APPEND_SYSTEM.md`.
 - **Q4 · Embeddings in the cloud:** is sending text to OpenRouter's embedding models acceptable as the default, with
   "Keep memory on this Mac" as the opt-out?
 

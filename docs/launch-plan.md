@@ -61,7 +61,7 @@ Fourteen items (Cloudflare added the same day), not in priority order, and one r
 | **Image generation** | none (backlog D11) | Nothing | A short spec first: which providers, where the pictures live |
 | **PARx** | 09, Track I | PAR2–PAR5, PAR8 | PAR1 (use), PAR6 hooks, PAR7 the GitHub loop, PAR9 iOS Simulator, PAR10 cloud and parallel tasks, PAR11 headless, PAR12 |
 | **Side conversations** | 24 | SD1–SD3 | SD3 tuned on its replay set, SD4 |
-| **Memory** | 14 | M0–M3 | M4 past chats, M5 project lessons, M6 Hindsight; Q1 and Q3 open |
+| **Memory** | 14 | M0–M3 | M4 past chats, M5 project lessons, M6 Hindsight (Q1 and Q3 decided 2026-11-24, 14 §6) |
 | **Apps and Library** | 35 | L1, part of L4 | L2, L3, the rest of L4, L5 |
 | **Evals** | §5 here | The memory set | The runner and the scenario set |
 
@@ -164,7 +164,7 @@ Durations assume one person. They are set by use and by outside parties, not by 
 ### Wave 2 · Finish what's half built (3–4 weeks)
 - **Side conversations:** the replay set, SD3 tuned to its acceptance, SD4.
 - **Apps and Library:** L2, L3, L4's rest, L5.
-- **Memory:** answer 14 Q1 and Q3, then M4 and M5.
+- **Memory:** M4 and M5 (Q1 and Q3 decided 2026-11-24: past chats on and local, lessons into `AGENTS.md`).
 - **Build parity, the local part:** PAR6 hooks, PAR11 headless, PAR12, PAR7's issue → session and CI fix loop.
 - **Connectors C2,** as each OAuth app is approved.
 - **Image generation:** the spec, then the tool and how a picture shows and is kept.
