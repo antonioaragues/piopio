@@ -31,3 +31,7 @@ apps/mac/App/build/
 
 # Local signing team (scripts/setup-signing.sh)
 apps/mac/App/Signing.local.xcconfig
+
+# The side-conversation replay set and its results are real messages from the owner's conversations: local only (docs/spec/24 §11).
+packages/engine/test/replay/side-offers.json
+packages/engine/test/replay/results/side-*.json

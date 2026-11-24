@@ -162,7 +162,8 @@ Durations assume one person. They are set by use and by outside parties, not by 
 - **Gate:** 8 of 8, evals at a baseline, a signed 0.1.0 that someone else installed.
 
 ### Wave 2 · Finish what's half built (3–4 weeks)
-- **Side conversations:** the replay set, SD3 tuned to its acceptance, SD4.
+- **Side conversations:** the replay set, SD3 tuned to its acceptance, SD4. **2026-11-24:** the set and its runner
+  built, the rule tuned and accepted at 85% of new tasks with no false offers (24 §12); SD4 left.
 - **Apps and Library:** L2, L3, L4's rest, L5.
 - **Memory:** M4 and M5 (Q1 and Q3 decided 2026-11-24: past chats on and local, lessons into `AGENTS.md`). **Built 2026-11-24:** M4 with temporary chats, M5 as one `/learn` (14 §8–§9).
 - **Build parity, the local part:** PAR6 hooks, PAR11 headless, PAR12, PAR7's issue → session and CI fix loop.

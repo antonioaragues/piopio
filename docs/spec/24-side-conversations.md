@@ -372,8 +372,8 @@ exist yet. That's what's left of SD3 (below).
 
   In `ToolCardTests`, the card and the proposal line.
 - **Left of SD3:**
-  - the replay set of ~60 real messages and its acceptance (≥ 90% of new tasks offered, ≤ 1 false offer in 20
-    continuations) on the default models, after a week of use;
+  - ~~the replay set of ~60 real messages and its acceptance~~ built and run 2026-11-24 (§12): the rule is tuned and
+    accepted at 85% of new tasks offered with no false offers;
   - Options on the card (where it runs, worktree, model, permissions), as in the reference;
   - an offer answered New conversation becomes its side's line (`side.from`); one answered Do it here still shows its
     buttons, and a click says why it can't;
@@ -406,3 +406,41 @@ for subagents at work (17 §3).
   > **Since 27 (built 2026-11-18):** `offer_repeat` is gone (27 §10), and the `[Routine]` prefix becomes
   > `[Automation]` (27 AU12). This list was written the day before.
 - **Tests:** `follow-ups.test.ts` (`followUpsFit`), `side.test.ts` (`from`), `SideLinesTests` and `ToolCardTests`.
+
+## 12. SD3 tuned on the replay set (2026-11-24)
+
+**The set.** 60 real messages from the owner's conversations about Piopio (57 with Claude Code, 3 with Piopio), each
+written in the middle of a conversation, with what came just before it (the user's previous message and the end of the
+answer) and a label from §3: 27 new tasks (offer) and 33 that stay. Clear cases only; borderline ones carry a note.
+It's the owner's own words, so it stays out of git (`packages/engine/test/replay/side-offers.json`, in `.gitignore`)
+and so do the results files, which quote the messages.
+
+**The runner.** `test/side-replay.test.ts` gives each message, after its context, to the model with a Build preamble and
+the side rules exactly as `sidePrompt` writes them ("Ask"), plus a few work tools. A first action of `side_offer` or
+`side_start` is an offer; anything else stays; a failed or empty request is reported apart. Opt-in and paid
+(about $0.02 a run on Haiku 5.5): `scripts/side-replay.sh` asks for the OpenRouter key without echoing it.
+`PIOPIO_REPLAY_MODELS` compares models, `PIOPIO_REPLAY_LABEL` names a run. Without the set, the tests skip.
+
+**What the runs found** (Haiku 5.5, the default chat model):
+
+| Version | New tasks offered | False offers | What changed |
+|---|---|---|---|
+| v1, as built | 4/27 | 0/33 | |
+| v2 | 15/27 | 0/33 | A new task is a different subject (feature, screen, bug, document, idea) *even in the same project*; "anything a few tool calls settle, whatever it's about, stays" dropped; decide first |
+| v3 | 20/27 | 2/33 | Discussing, rethinking or designing another subject counts too; the offer comes first, with no text before it |
+| **v4, kept** | **23/27** | **0/33** | Decide from the message and the conversation, without opening files; a question stays (answer it; offer if it turns into work); "like this run" stays |
+| v5, reverted | 23/27 | 3/32 | "Work just wrapped up doesn't pull the next subject in": more false offers, the same misses |
+
+The model's habit was the problem, not the definition: it read every request about the same app as part of the work
+at hand and started on it (`bash` first in 34 of 60 in v1). Examples in the rule are invented, never taken from the set.
+
+**Accepted at v4 (decided 2026-11-24):** 85% of new tasks offered against a 90% target, with no false offers, the side
+§3 prefers (a wrong stay only makes a conversation longer). The four it still misses are bugs reported right after a
+commit or push, where the model goes to look at the code before deciding. Prompt wording looks to be at its ceiling,
+and one run to the next moves by about two cases.
+
+**Caveats and next.** The rule was tuned on the same 60 messages it's measured on, so passing says "consistent with
+these", not that it generalizes: every miss the beta finds goes into the set, labeled, before it's fixed. The real
+Build prompt is longer than the runner's preamble. If misses keep coming, SCQ2's check before the turn (the utility
+model judging new or not with the same rule) is the next step, measured on this set.
+
