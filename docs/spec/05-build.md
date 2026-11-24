@@ -187,7 +187,8 @@ Three modes, set per session (default per project; global default = **Auto-edit*
   together. While the review runs the panel says so, with a link to it.
 - **RV3 in captures (2026-11-24):** the panel is as tall as its findings, up to 260 points, then scrolls (it was 260
   whatever it held). When it appears (or the drawer opens or closes) the transcript keeps its last line above the
-  composer (UI2, checked live). A fixed finding stays "Fixing": nothing marks it done yet
+  composer (UI2, checked live). A finding sent with Fix is **fixed** once that turn finishes ("✓ Fixed"; the header stops
+  counting it and says "All fixed" when none is left); a turn that's stopped or fails puts it back to open
   ([the pass](../research/par-pass-2026-11-24.md)).
 - **RV4** Posting the findings to GitHub as review comments is not built: it publishes on the user's behalf and needs
   its own confirmation design.

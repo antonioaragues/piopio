@@ -1640,7 +1640,7 @@ public struct CreateSessionResult: Decodable, Sendable { public var ref: Contain
 /// A finding of a review by an agent (docs/spec/05-build "Review by an agent").
 public struct ReviewFinding: Codable, Sendable, Hashable, Identifiable {
     public enum Severity: String, Codable, Sendable { case bug, risk, nit }
-    public enum State: String, Codable, Sendable { case open, fixing, dismissed }
+    public enum State: String, Codable, Sendable { case open, fixing, fixed, dismissed }
     public var id: String
     public var severity: Severity
     public var file: String

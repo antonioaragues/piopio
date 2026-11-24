@@ -65,10 +65,10 @@ struct ReviewPanel: View {
         case .failed: return review.summary ?? "The review didn't finish."
         case .done:
             let counts = [ReviewFinding.Severity.bug, .risk, .nit].compactMap { s -> String? in
-                let n = review.findings.filter { $0.severity == s && $0.state != .dismissed }.count
+                let n = review.findings.filter { $0.severity == s && ($0.state == .open || $0.state == .fixing) }.count
                 return n > 0 ? "\(n) \(Self.word(s, n))" : nil
             }
-            let head = counts.isEmpty ? "Nothing to fix" : counts.joined(separator: ", ")
+            let head = counts.isEmpty ? (review.findings.contains { $0.state == .fixed } ? "All fixed" : "Nothing to fix") : counts.joined(separator: ", ")
             return [head, review.summary].compactMap { $0 }.joined(separator: " · ")
         }
     }
@@ -95,6 +95,8 @@ struct ReviewPanel: View {
             VStack(alignment: .trailing, spacing: 6) {
                 if f.state == .fixing {
                     Text("Fixing").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                } else if f.state == .fixed {
+                    Label("Fixed", systemImage: "checkmark").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
                 } else {
                     Button("Fix") { Task { await session.fix([f], from: review) } }
                         .buttonStyle(.plain).font(.system(size: 12, weight: .medium)).foregroundStyle(Color.dsFg)

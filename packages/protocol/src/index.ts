@@ -642,7 +642,8 @@ export const ReviewFinding = Type.Object({
 	detail: Type.String(),
 	suggestion: Type.Optional(Type.String()),
 	/** Sent to the session to fix, or set aside. */
-	state: literals("open", "fixing", "dismissed"),
+	/** "fixed": the turn Fix started finished (a stopped or failed one puts it back to "open"). */
+	state: literals("open", "fixing", "fixed", "dismissed"),
 });
 export type ReviewFinding = Static<typeof ReviewFinding>;
 /** A review of a session's changes or a pull request, and what it found. */

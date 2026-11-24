@@ -104,6 +104,12 @@ test("a session's changes: the reviewer gets the diff; its findings land on the 
 	]);
 	await a.client.call("sessions.reviewFinding", { ref, id: "f2", state: "dismissed" });
 	expect((await summaryOf(a, ref.id)).review!.findings[1]!.state).toBe("dismissed");
+
+	// Fix, as the app does it: the message, then the finding marked fixing; when that turn finishes, it's fixed.
+	await a.client.call("sessions.submit", { ref, input: { text: "Fix this from the review of this session's changes: the total multiplies by 1." } });
+	await a.client.call("sessions.reviewFinding", { ref, id: "f1", state: "fixing" });
+	summary = await until(() => summaryOf(a, ref.id), (s) => s.review!.findings[0]!.state !== "fixing");
+	expect(summary.review!.findings.map((f) => f.state)).toEqual(["fixed", "dismissed"]);
 });
 
 test("with no changes in the session, its branch against main; with nothing at all, it says so", { timeout: 40_000 }, async () => {

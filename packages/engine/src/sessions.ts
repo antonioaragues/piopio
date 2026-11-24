@@ -429,6 +429,37 @@ export class Sessions {
 		finding.state = state;
 		this.save();
 		this.changed(entry);
+		if (state === "fixing") void this.watchFix(ref, id);
+	}
+
+	/**
+	 * A finding sent to fix (the Review panel's Fix) is fixed once that turn finishes; a turn that's stopped or fails
+	 * puts it back to open. One you dismiss or reopen meanwhile stays as you left it.
+	 */
+	private async watchFix(ref: ContainerRef, id: string): Promise<void> {
+		const runtime = await this.runtime(ref).catch(() => undefined);
+		if (!runtime) return;
+		// The app sends the message first, so the turn is usually running already.
+		let started = runtime.snapshot().state.status !== "idle";
+		const off = runtime.onEvents((events) => {
+			for (const e of events) {
+				if (e.type !== "state") continue;
+				if (e.state.status !== "idle") {
+					started = true;
+					continue;
+				}
+				if (!started) continue;
+				off();
+				const entry = this.entries.get(ref.id);
+				const finding = entry?.review?.findings.find((f) => f.id === id);
+				if (!entry || !finding || finding.state !== "fixing") return;
+				const last = [...runtime.snapshot().items].reverse().find((i) => i.kind === "assistant");
+				finding.state = last?.kind === "assistant" && last.status === "done" ? "fixed" : "open";
+				this.save();
+				this.changed(entry);
+				return;
+			}
+		});
 	}
 
 	/** Where a review session's report_findings goes. */
