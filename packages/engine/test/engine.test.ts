@@ -687,11 +687,11 @@ describe("approvals and questions (docs/spec/05-build §6)", () => {
 		const { folder, project } = await newProject(a);
 		expect(project.approvalMode).toBe("auto_edit");
 		const s = await buildSession(a, folder);
-		await a.client.call("sessions.submit", { ref: s.ref, input: { text: "$ echo first" } });
+		await a.client.call("sessions.submit", { ref: s.ref, input: { text: "$ printf first" } });
 		const waiting = await stateWhere(a, s.sub, (st) => st.status === "waiting_approval");
 		expect(waiting.approvalMode).toBe("auto_edit");
 		const [prompt] = waiting.prompts!;
-		expect(prompt).toMatchObject({ kind: "approval", title: "Run a command", detail: "echo first", tool: "bash", rule: { kind: "command", pattern: "echo" } });
+		expect(prompt).toMatchObject({ kind: "approval", title: "Run a command", detail: "printf first", tool: "bash", rule: { kind: "command", pattern: "printf" } });
 		expect((await tools(a, s.ref))[0]?.status).toBe("pending_approval");
 
 		// A second client (the app after a restart) sees the same pending request.
@@ -703,10 +703,10 @@ describe("approvals and questions (docs/spec/05-build §6)", () => {
 		await a.client.call("sessions.respond", { ref: s.ref, promptId: prompt!.id, response: { decision: "always" } });
 		await stateWhere(a, s.sub, (st) => st.status === "idle");
 		expect((await tools(a, s.ref))[0]).toMatchObject({ status: "done", output: expect.stringContaining("first") });
-		expect((await a.client.call("projects.list")).projects[0].rules).toMatchObject([{ kind: "command", pattern: "echo" }]);
+		expect((await a.client.call("projects.list")).projects[0].rules).toMatchObject([{ kind: "command", pattern: "printf" }]);
 
 		const t = await buildSession(a, folder);
-		await a.client.call("sessions.submit", { ref: t.ref, input: { text: "$ echo second" } });
+		await a.client.call("sessions.submit", { ref: t.ref, input: { text: "$ printf second" } });
 		const done = await stateWhere(a, t.sub, (st) => st.status === "idle" || st.status === "waiting_approval");
 		expect(done.status).toBe("idle");
 		expect((await tools(a, t.ref))[0]?.status).toBe("done");

@@ -390,7 +390,7 @@ struct CheckAfterEditsRow: View {
                 Task { await engine.setCheck(command.isEmpty ? nil : command, for: project) }
             }
         } message: {
-            Text("Runs in the project folder when the agent has edited files, before it answers. Errors in the files it changed go back to it, twice at most.")
+            Text("Runs in the project folder when the agent has edited files, before it answers. New errors go back to it (in the files it changed, or in others its changes broke), twice at most.")
         }
     }
 

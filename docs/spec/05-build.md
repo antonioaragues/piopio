@@ -60,9 +60,9 @@ Default state for new sessions: **approvals, checkpoints, todos, notify and suba
   agent answers. A run that only read, or a failed edit, runs nothing.
 - **DG2 What.** The project's own check, not a language server: its `typecheck` / `type-check` / `check:types` /
   `check` script (with its package manager), `tsc --noEmit` when the project has TypeScript installed, `cargo check`,
-  `go vet`, `pyright` or `mypy`. On the project page, **Check after edits**: Automatic (what was detected), a command
-  of the user's, or Off. Chat projects and review sessions don't run it.
-  **Since 18 CF3 (2026-11-07):** the Chat lens is gone, replaced by the Read only permission, so "Chat projects" is not a kind any more.
+  `go vet`, `pyright` or `mypy`. In the project's settings sheet, under How it works (18 CF22; decided 2026-11-24:
+  there is no project page, 18 CF21), **Check after edits**: Automatic (what was detected), a command of the user's, or
+  Off. A conversation in Read only edits nothing, so it never runs there; review sessions don't run it.
 - **DG3 Feedback.** The problems the agent's changes brought in go back, with a line or two of context, at most 60
   lines: those in the files it changed, and, since 2026-11-24, those anywhere else that weren't there before its first
   edit. Before a message's first `edit` or `write` the check runs once as a **baseline**, and a problem elsewhere counts
@@ -115,8 +115,8 @@ Three modes, set per session (default per project; global default = **Auto-edit*
 
 | Mode | read/grep/ls | write/edit (inside project) | bash | network tools | writes outside project |
 |---|---|---|---|---|---|
-| **Ask** | auto | ask | ask | ask | ask |
-| **Auto-edit** | auto | auto | ask (unless allow-listed) | auto | ask |
+| **Ask** | auto | ask | ask (reads auto) | ask | ask |
+| **Auto-edit** | auto | auto | ask (reads auto, or allow-listed) | auto | ask |
 | **Full auto** | auto | auto | auto | auto | ask |
 
 > **Since 18 §10 (built 2026-11-07):** `read_only` is a fourth approval mode, and Plan is a fifth choice in the selector (18 CF3). The default is the project's own: a folder without code markers starts in Read only, a code repository in Auto-edit (18 §4).
@@ -125,6 +125,13 @@ Three modes, set per session (default per project; global default = **Auto-edit*
 - **AP2** Rules: command prefix patterns (`npm test`, `git status`, `swift build`), tool names, path globs. Stored per project in `catalog.db` and exportable to `.pi/` if the user wants them shared with the CLI.
   **As built:** a project's rules are kept with the project in `projects.json` (`packages/engine/src/projects.ts`; 39 §2 names the file), not in `catalog.db`.
 - **AP3** Built-in **deny-list** that always asks even in Full auto: `rm -rf` outside worktree, `git push --force`, `sudo`, writes to `~/.ssh`, `~/.aws`, keychain tools, `curl … | sh`.
+- **AP3b** **Commands that only read run** (decided and built 2026-11-24) in Ask and Auto-edit, as `read` and `grep`
+  already do: every part is a read-only program with read-only arguments (Plan mode's list: `ls`, `cat`, `grep`, `rg`,
+  `find` without `-delete`/`-exec`, `git status`/`log`/`diff`/`show`, `sed -n Np`…), `cd` into the project or below, or
+  `true`; output thrown away (`2>/dev/null`, `2>&1`) is fine. An argument naming a sensitive path (keys, credentials)
+  asks, as `read` does. Anything else asks as before: the network (`curl`), runners (`npm run`), `xargs`, programs not
+  on the list, redirects to files. Read only still refuses every command. Found in the real-use pass: every task
+  opened with two or three approvals for `ls`, `cat package.json`, `git status` (`readsOnly` in `policy.ts`).
 - **AP4** Approvals time out? **No** by default. The session waits ("waiting for you").
 - **AP5** **Sandbox** (built 2026-11-08, Settings › Approvals, default on): in Ask and Auto-edit, `bash` runs through `sandbox-exec` with a Seatbelt profile that allows everything except writes outside the project (or worktree, plus the repository's git folder), temporary folders, `/dev` and package/build caches (`~/Library/Caches`, `~/.npm`, `~/.cargo/registry`, DerivedData, …). Reads and the network are not restricted. A blocked write tells the model it can run the command again with `outside_project: true`, which always asks (deny-list rules and Always allow don't skip it). If the sandbox can't start, nothing runs. macOS refuses a sandbox inside a sandbox, so confined commands find `swift` and `xcodebuild` through wrappers that turn their own manifest, plugin and script sandboxes off (`SHIMS` in `sandbox.ts`); another tool that tries gets a hint to look for its flag, not the `outside_project` one. Full auto runs commands unconfined, as before. Not covered: `edit`/`write` (they keep the path checks above), MCP servers and the terminal tab.
   **Since 39 (built 2026-11-23):** "Reads and the network are not restricted" no longer holds. The sandbox hides Piopio's data, sign-ins, credential files, SSH private keys and the Keychain tool (39 §1), and a project you add or clone is filtered until you trust it: its commands reach this Mac, the built-in sites and the sites you allowed (39 §2, §3). Project trust is defined there (39 §2) and, for coding agents, in 31 CA13; a filtered project can't be in Full auto (39 NF3).

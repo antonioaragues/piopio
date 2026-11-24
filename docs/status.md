@@ -56,6 +56,9 @@ From the real-use pass and the roadmap's PAR rows; each is "Done" in [09-roadmap
 - **Coding agents (PAR8):** no agents or automations on them (A4, left for later), no computer use. Titles and
   follow-ups on Codex and Antigravity come from another provider. The shapes Codex 0.170 and Antigravity 1.5 send
   for Piopio's tools are matched as found on 2026-11-24; a new version can change them.
+- **Approvals:** since 2026-11-24, commands that only read (`ls`, `cat`, `grep`, `git status`/`log`/`diff`, `cd` within
+  the project) run without asking in Ask and Auto-edit, as `read` and `grep` do; everything else asks as before
+  (05 AP3b).
 - **Transcript:** while an answer streams in a cramped layout (the drawer and the Review panel open), its last line sits
   at the panel's edge.
 

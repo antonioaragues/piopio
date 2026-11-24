@@ -95,7 +95,7 @@ test("on start, notes about conversations that no longer exist are dropped", asy
 
 test("W3: an approval left waiting gets one reminder, and no note", async () => {
 	const { client, ref } = await start("ask");
-	await client.call("sessions.submit", { ref, input: { text: "$ echo hello" } });
+	await client.call("sessions.submit", { ref, input: { text: "$ printf hello" } });
 	await until(() => attention(client), (a) => a.some((x) => x.message.startsWith("Still waiting for you after")));
 	await new Promise((r) => setTimeout(r, 800));
 	expect(attention(client).filter((x) => x.message.startsWith("Still waiting for you"))).toHaveLength(1);

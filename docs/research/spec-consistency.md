@@ -232,6 +232,7 @@ first step shows now.
 04 §2, L73 and 18 §8, L207 ("The chat profile also removes `edit` and `write`"): a folder conversation that reads.
 18 §15, L475: a conversation with no project. 05 DG2, L62 still says "Chat projects and review sessions don't run
 it", a kind 18 removed. **Your call:** the first is really "Read only"; one of the two needs another name.
+*(05 DG2's sentence fixed 2026-11-24: "a conversation in Read only edits nothing, so it never runs there".)*
 
 **2.9 Do chats have file tools?** *Stale.*
 18 §15, L479: "No file or command tools, no approval modes".
@@ -740,7 +741,8 @@ went *(less sure)*.
 
 **17.2 Where "Check after edits" lives.** *Contradiction.* 05 DG2, L61 (2026-11-21): "On the project page, **Check
 after edits**". 18 CF21, L560: "**No project page.**" **Your call:** probably the project's settings sheet; then 18
-CF22 needs the row.
+CF22 needs the row. **Decided 2026-11-24:** the settings sheet, How it works, as the app already had it; 05 DG2 and 18
+CF22 say so.
 
 **17.3 Shortcuts.** One key, two jobs: ⌘O (3.11) and Esc (16.4). Bound in 08 to things that no longer exist: ⌘1–3
 (mode switcher), ⌘⇧A (approvals inbox). 08's ⌘⌥I for the inspector differs from the app (⌘I). ⌘⇧N moved from New
@@ -831,7 +833,7 @@ built and cited from 09, 23 and 40, 36 is the one to rename.
 7. Whether board helpers are capped by the conversation's mode (5.7); whether subagents are still read-only (6.3).
 8. The script runner's tool list and timeouts, and whether it runs anything but JavaScript (15.4, 16.2).
 9. GitHub's sign-in in the cloud (12.7); `mac_shell` and `mac_imessage_send` on the Mac Bridge (12.4).
-10. Which area gates New Project (3.10); where Check after edits lives (17.2); what Esc does first (16.4).
+10. Which area gates New Project (3.10); where Check after edits lives (17.2, decided 2026-11-24: the settings sheet); what Esc does first (16.4).
 11. Whether a Builder still exists, and whether `ask_user` and `ask_owner` are one tool (7.8, 7.9).
 12. Show me how under an opted-in cloud transcriber (16.3).
 13. A prefix rule for IDs (§19).

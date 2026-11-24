@@ -82,6 +82,8 @@ export function decide(mode: ApprovalMode, tool: string, input: Record<string, u
 		if (mode === "full_auto") return { action: "allow" };
 		// piopio-sandbox: leaving the sandbox always asks, rules or not.
 		if (input.outside_project === true) return { action: "ask", reason: "Runs outside the sandbox, so it can write anywhere" };
+		// Reading runs, as `read` and `grep` do: `ls`, `cat package.json`, `git status` don't ask (05-build §6).
+		if ((mode === "ask" || mode === "auto_edit") && readsOnly(command, cwd, home)) return { action: "allow" };
 		const parsed = parseCommands(command);
 		const segments = parsed ?? [];
 		const commandRules = rules.filter((r) => r.kind === "command");
@@ -254,23 +256,60 @@ const READ_ONLY_SUB: Record<string, Set<string>> = {
 /** A conservative argument-aware policy. Unknown forms are refused in Plan mode. */
 export function readOnlyCommand(command: string): boolean {
 	const segments = parseCommands(command);
-	return Boolean(segments?.every(([program, ...args]) => {
-		if (!program) return false;
-		if (program === "git") {
-			if (args.some(a => /^(--output|--ext-diff|--textconv|--exec-path|--open-files-in-pager)(=|$)/.test(a))) return false;
-			if (args[0] === "branch") return args.slice(1).every(a => ["-a", "-r", "-v", "-vv", "--all", "--remotes", "--list", "--show-current"].includes(a));
-			if (args[0] === "remote") return args.slice(1).every(a => a === "-v" || a === "--verbose");
+	return Boolean(segments?.every(readOnlySegment));
+}
+
+/**
+ * A command that only reads, which Ask and Auto-edit run without asking (docs/spec/05-build §6, 2026-11-24): the same
+ * reads `read` and `grep` make, which never ask. Every part is a read-only program (`readOnlyCommand`'s list), `cd`
+ * into the project or below, or `true`; output thrown away (`2>/dev/null`, `2>&1`) is fine. An argument naming a
+ * sensitive path (keys, credentials) makes it ask, as `read` does.
+ */
+export function readsOnly(command: string, cwd: string, home: string): boolean {
+	const stripped = command.replace(/\s+(?:[12]?>\s*\/dev\/null|2>&1)(?=\s|$|[;&|])/g, "");
+	const segments = parseCommands(stripped);
+	if (!segments) return false;
+	const project = physical(resolve(cwd));
+	let here = resolve(cwd);
+	for (const [program, ...args] of segments) {
+		if (program === "true" || program === ":") {
+			if (args.length) return false;
+			continue;
 		}
-		if (READ_ONLY_SUB[program]) return Boolean(args[0] && READ_ONLY_SUB[program]!.has(args[0]));
-		if (program === "sed") return args[0] === "-n" && Boolean(args[1] && /^(?:\d+|\$)(?:,(?:\d+|\$))?p$/.test(args[1])) && args.slice(2).every(a => !a.startsWith("-") || a === "-");
-		if (program === "sort") return !args.some(a => /^(-[^-]*o|--output)/.test(a));
-		if (program === "file") return !args.some(a => /^-[^-]*C/.test(a) || a.startsWith("--compile"));
-		if (program === "date") return args.every(a => a === "-u" || a === "--utc" || a.startsWith("+"));
-		if (!READ_ONLY.has(program)) return false;
-		if (program === "find" && args.some(a => /^-(delete|exec(dir)?|ok(dir)?|fprint0?|fprintf|fls)$/.test(a))) return false;
-		if (program === "fd" && args.some(a => /^(-[^-]*[xX]|--exec(?:-batch)?)/.test(a))) return false;
-		if (program === "rg" && args.some(a => /^(--pre|--hostname-bin)(=|$)/.test(a))) return false;
-		if ((program === "tree" || program === "diff") && args.some(a => /^-[^-]*o/.test(a) || a.startsWith("--out"))) return false;
-		return true;
-	}));
+		if (program === "cd") {
+			if (args.length !== 1 || args[0]!.startsWith("-")) return false;
+			const to = resolve(here, expandHome(args[0]!, home));
+			if (!inside(physical(to), project)) return false;
+			here = to;
+			continue;
+		}
+		if (!readOnlySegment([program!, ...args])) return false;
+		for (const arg of args) {
+			const value = arg.startsWith("-") ? (arg.includes("=") ? arg.slice(arg.indexOf("=") + 1) : "") : arg;
+			if (!value) continue;
+			const path = resolve(here, expandHome(value, home));
+			if (sensitivePath(path, home) ?? sensitivePath(physical(path), physical(home))) return false;
+		}
+	}
+	return true;
+}
+
+function readOnlySegment([program, ...args]: string[]): boolean {
+	if (!program) return false;
+	if (program === "git") {
+		if (args.some(a => /^(--output|--ext-diff|--textconv|--exec-path|--open-files-in-pager)(=|$)/.test(a))) return false;
+		if (args[0] === "branch") return args.slice(1).every(a => ["-a", "-r", "-v", "-vv", "--all", "--remotes", "--list", "--show-current"].includes(a));
+		if (args[0] === "remote") return args.slice(1).every(a => a === "-v" || a === "--verbose");
+	}
+	if (READ_ONLY_SUB[program]) return Boolean(args[0] && READ_ONLY_SUB[program]!.has(args[0]));
+	if (program === "sed") return args[0] === "-n" && Boolean(args[1] && /^(?:\d+|\$)(?:,(?:\d+|\$))?p$/.test(args[1])) && args.slice(2).every(a => !a.startsWith("-") || a === "-");
+	if (program === "sort") return !args.some(a => /^(-[^-]*o|--output)/.test(a));
+	if (program === "file") return !args.some(a => /^-[^-]*C/.test(a) || a.startsWith("--compile"));
+	if (program === "date") return args.every(a => a === "-u" || a === "--utc" || a.startsWith("+"));
+	if (!READ_ONLY.has(program)) return false;
+	if (program === "find" && args.some(a => /^-(delete|exec(dir)?|ok(dir)?|fprint0?|fprintf|fls)$/.test(a))) return false;
+	if (program === "fd" && args.some(a => /^(-[^-]*[xX]|--exec(?:-batch)?)/.test(a))) return false;
+	if (program === "rg" && args.some(a => /^(--pre|--hostname-bin)(=|$)/.test(a))) return false;
+	if ((program === "tree" || program === "diff") && args.some(a => /^-[^-]*o/.test(a) || a.startsWith("--out"))) return false;
+	return true;
 }

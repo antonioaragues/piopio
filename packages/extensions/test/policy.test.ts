@@ -30,7 +30,7 @@ group("modes (docs/spec/05-build §6)", () => {
 		expect(run("auto_edit", "bash", { command: "git status && pnpm vitest" }, rules)).toBe("allow");
 		expect(run("auto_edit", "bash", { command: "pnpm vitest && rm -rf build" }, rules)).toBe("ask");
 		expect(run("auto_edit", "bash", { command: "pnpm vitestx" }, rules)).toBe("ask");
-		expect(run("ask", "bash", { command: "git status" }, rules)).toBe("ask");
+		expect(run("ask", "bash", { command: "pnpm vitest run engine" }, rules)).toBe("ask");
 		expect(run("full_auto", "bash", { command: "rm -rf build" })).toBe("allow");
 	});
 	test("the browser reads like web_fetch; acting asks per site, so the modes only keep it out of Read only (docs/spec/22)", () => {
@@ -80,6 +80,52 @@ group("deny-list (AP3): always asks, even in full auto", () => {
 	});
 	test("credential files ask even to read", () => {
 		expect(decide("full_auto", "read", { path: "~/.aws/credentials" }, cwd, [], home)).toEqual({ action: "ask", reason: "Touches ~/.aws" });
+	});
+});
+
+// From the real-use pass (2026-11-24): every task opened with two or three approvals for `ls`, `cat package.json`,
+// `git status`, while `read` and `grep` read the same files without asking.
+group("commands that only read run in Ask and Auto-edit, as read and grep do (docs/spec/05-build §6)", () => {
+	test("the reads a model starts with run", () => {
+		for (const command of [
+			"ls -la",
+			"git status",
+			"git log -n 5 --oneline",
+			"cat server.mjs && cat public/app.js",
+			"cat package.json | grep -A8 '\"scripts\"'",
+			"cd /work/app && ls -la && cat package.json && git status 2>/dev/null | head -20",
+			"cd src && grep -rn qty .",
+			"git grep 'api/' || true",
+			"git diff --check && git diff -- public/app.js",
+			"rg TODO 2>&1 | head",
+		]) {
+			expect(run("auto_edit", "bash", { command }), command).toBe("allow");
+			expect(run("ask", "bash", { command }), command).toBe("allow");
+		}
+	});
+	test("anything else still asks: changes, the network, programs it doesn't know, sensitive paths, cd out of the project", () => {
+		for (const command of [
+			"npm run typecheck",
+			"sleep 2; curl -s http://localhost:5173/",
+			"lsof -i :5173 || true",
+			"find public -type f | xargs ls -la",
+			"cat package.json > copy.json",
+			"echo x 2>/dev/null > a.txt",
+			"git commit -m x",
+			"find . -delete",
+			"cat ~/.ssh/id_ed25519",
+			"grep --file=~/.aws/credentials x",
+			"cd ~ && cat .ssh/id_ed25519",
+			"cd /etc && cat hosts",
+			"cd .. && ls",
+			"ls $(whoami)",
+		]) {
+			expect(run("auto_edit", "bash", { command }), command).toBe("ask");
+		}
+	});
+	test("Read only still refuses every command; Full auto runs them all", () => {
+		expect(decide("read_only", "bash", { command: "ls" }, cwd, [], home).action).toBe("ask");
+		expect(run("full_auto", "bash", { command: "npm run typecheck" })).toBe("allow");
 	});
 });
 

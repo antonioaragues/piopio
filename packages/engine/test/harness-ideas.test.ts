@@ -457,23 +457,23 @@ describe("auto review", () => {
 		const { ref } = await a.client.call("sessions.create", { kind: "build", cwd: folder });
 		const sub = (await a.client.call("sessions.subscribe", { ref })).subscriptionId as string;
 
-		// Off (the default): nobody is consulted.
-		await a.client.call("sessions.submit", { ref, input: { text: "$ echo off" } });
+		// Off (the default): nobody is consulted. (`printf`, not `echo`: a command that only reads runs without asking.)
+		await a.client.call("sessions.submit", { ref, input: { text: "$ printf off" } });
 		const first = await stateWhere(a, sub, (st) => st.status === "waiting_approval");
 		expect(asked).toEqual([]);
 		await a.client.call("sessions.respond", { ref, promptId: first.prompts![0]!.id, response: { decision: "allow" } });
 		await stateWhere(a, sub, (st) => st.status === "idle");
 
 		await a.client.call("settings.set", { build: { autoReview: true } });
-		await a.client.call("sessions.submit", { ref, input: { text: "$ echo safe" } });
+		await a.client.call("sessions.submit", { ref, input: { text: "$ printf safe" } });
 		await stateWhere(a, sub, (st) => st.status === "idle" || st.status === "waiting_approval");
 		const s = await idle(a, ref, 2);
 		expect(s.state.status).toBe("idle");
 		// The reason is on the command's card, not a note between steps.
-		expect(s.items.find((i) => i.kind === "tool" && (i.args as { command?: string }).command === "echo safe")).toMatchObject({ review: "Prints text." });
+		expect(s.items.find((i) => i.kind === "tool" && (i.args as { command?: string }).command === "printf safe")).toMatchObject({ review: "Prints text." });
 		expect(s.items.some((i) => i.kind === "system" && i.text.startsWith("Auto review"))).toBe(false);
 		// The command reaches the reviewer fenced as the agent's text, not as instructions to it.
-		expect(asked[0]).toMatch(/Command:\nThe text between the two (outside-[0-9a-f]{12}) lines came from outside: the coding agent[^\n]*\n--- \1 ---\necho safe\n--- end \1 ---/);
+		expect(asked[0]).toMatch(/Command:\nThe text between the two (outside-[0-9a-f]{12}) lines came from outside: the coding agent[^\n]*\n--- \1 ---\nprintf safe\n--- end \1 ---/);
 
 		await a.client.call("sessions.submit", { ref, input: { text: "$ git clean -fdx" } });
 		const waiting = await stateWhere(a, sub, (st) => st.status === "waiting_approval");
