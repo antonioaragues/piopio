@@ -1,6 +1,7 @@
 # 29 · Provider order: use your plan first, then your credits
 
-Status: draft 2026-11-18, from a question by the user; nothing here is built. It revises spec 10's FR4 ("never
+Status: draft 2026-11-18, from a question by the user; nothing here is built. §7 was rewritten 2026-11-25 on pi's
+virtual models (what it replaced is at the end of §7). It revises spec 10's FR4 ("never
 silently switch to another paid provider") and its "out of scope: automatic provider fallback": switching becomes
 possible, but only along an order you set, only to **the same model**, and never in silence. It also changes 10 FR2
 and 10 §7's "the same model through different providers is distinguishable" (PO3 and PO7: one model with several
@@ -31,6 +32,10 @@ than one of them, Piopio uses them top to bottom: the first one that can answer 
   history; pi-ai's `transformMessages` rewrites tool-call ids and thinking blocks for the next provider. pi-ai retries
   429 and 5xx itself and honours `retry-after` up to 60 s; a longer wait fails with "Server requested Ns retry delay",
   which is the usual shape of a plan limit with a reset time.
+- **pi can also route.** A virtual model (pi-coding-agent `docs/virtual-models.md`) is a selectable model whose
+  `route()` picks the physical model for each request, and is asked again on every automatic retry with the request
+  that failed. pi retries overloads, 5xx and short rate limits; it deliberately does not retry plan limits, quota or
+  billing errors (`NON_RETRYABLE_PROVIDER_LIMIT_ERROR_PATTERN` in pi-ai's `utils/retry.js`), so those end the run.
 
 ## 2. Three ideas inside "order"
 
@@ -154,22 +159,50 @@ matters there; nothing else differs.
 
 ## 7. Engine and protocol
 
-**A routing provider, registered with pi.** `ModelHub` registers one more native provider, `route`, whose models are
-the merged models (PO3) and whose `stream` tries the real routes in order. pi-durable, pi-coding-agent and `utility()`
-see an ordinary provider and need no change. Precedent: `openrouter-live.ts` already wraps a pi provider
-(`live.wrap`).
-- Its `stream` resolves the route list for the model (your order, minus resting routes, minus routes the conversation
-  doesn't fit), starts the first, and forwards events. If the first event is an error that §5 says moves on, it rests
-  that route and starts the next, emitting a `route` event first. Once anything has streamed, errors pass through.
-- The assistant message keeps the **real** provider and model, so pi-ai prices it with that route's pricing,
-  `transformMessages` prepares the history for the next one, and costs land under the right account.
-- A **`RouteBook`** (new, `routes.ts`) holds the order, the merge table, the splits and the resting state, in
-  `routes.json` (no secrets). Resting state survives an engine restart.
+**A merged model is a pi virtual model.** For each model with more than one route (PO3), `ModelHub` registers a
+virtual model on the shared `ModelRuntime` (`modelRuntime.registerVirtualModel`), under a provider `order` that has
+only these, with the normalized id (`order/openai/gpt-6-sol`). pi asks its `route()` before every request and sends
+the request to the physical model it returns. Nothing wraps a provider and nothing sits in the stream.
 
-**Session model.** A session's model stays a `ModelRef`; a new optional `routing: "order" | "only"` goes beside it.
-Absent means `"only"`, so every existing session, agent and automation keeps exactly its route. New picks from a
-merged row are `"order"`. `sessions.configure` maps `"order"` to the `route` provider when the session starts or
-changes model.
+- **`routes.pick(model, messages)`** is the one decision: your order, minus resting routes, minus routes the
+  conversation doesn't fit (context, images). The router calls it:
+  - `reason: "user"` → the first route `pick` gives. A new turn is back on the plan as soon as it stops resting (PO5).
+  - `reason: "continuation"` → `request.previous`, the route this turn is on (PO5: a turn sticks to its route).
+  - `reason: "retry"` → pi retried after a failure and passes it as `request.failed`. If that attempt had streamed
+    output, or §5 says its kind doesn't move on, or the next route bills per token and the setting is "Ask", return
+    `failed.model` (pi's ordinary retry). Otherwise return the next route `pick` gives.
+  - `reason: "direct"` (compaction summaries, `utility()`, pi-durable) → `previous` when it is a route of this model
+    and isn't resting, else the first route `pick` gives.
+- **The assistant message names the real provider and model.** pi records that on every answer, so pi-ai prices it
+  with that route's pricing, `transformMessages` prepares the history for the next one, costs land under the right
+  account, and the session keeps showing the model you picked. This is pi's split between selection and dispatch.
+- **A `RouteBook`** (new, `routes.ts`) holds the order, the merge table, the splits and the resting state, in
+  `routes.json` (no secrets). Resting state survives an engine restart. Resting is shared by every conversation, so
+  it lives here and not in pi's per-branch router state.
+- **Resting is fed from failed answers.** Both runtimes already classify a failed assistant message for the error
+  card (`describeModelError`). The same place tells the `RouteBook` (`failed(route, kind, until?)`), which rests the
+  route per §5. The router only reads the `RouteBook`.
+
+**The errors pi doesn't retry.** A plan limit, quota or billing error (§5's `credits`), and usually `model` and
+`auth`, end the run: pi never asks the router about them. That fits PO6, which wants a pause there anyway:
+- The failed answer rests the route. If another route can take the conversation, the engine shows the ask card
+  instead of the error card, or, for a route that needs no yes ("Switch and tell me", or a plan, free or local
+  route), goes on at once.
+- Going on is pi's own continue: the call the error card's Retry makes in a Build session, `submit({ type: "continue"
+  })` in pi-durable. The next request is routed again and `pick` skips the resting route.
+- "Wait until 14:20" and the under-2-minutes wait (§10 Q4) hold that continue until the reset time.
+- Worth proposing upstream: let a virtual model's router see limit errors as a `retry`, so the engine wouldn't need
+  to continue the run itself.
+
+**Session model.** A session's model stays a `ModelRef`, and there is no new field. Following the order means the
+`ModelRef` names the virtual model (`{ provider: "order", id }`); pinned means it names a physical one. Every
+existing session, agent and automation names a physical model, so it keeps exactly its route. New picks from a merged
+row get the virtual model.
+
+**pi-durable and `utility()`.** Both call the shared `ModelRuntime`, which routes a virtual model as `direct`: they
+follow the order and the resting state. pi-durable has its own retry and passes no `failed`, so there a switch
+happens on the request after a route starts resting, not through the router's `retry` branch. The virtual model
+declares the smallest context window of its routes, which pi-durable's compaction threshold reads.
 
 **Protocol.**
 - `providers.list` gains `order` (its place) and `resting` (`{ until?, reason }`); `providers.reorder { ids }` sets the
@@ -178,10 +211,28 @@ changes model.
   merged rows unless asked for every route.
 - `providers.split { a, b }` / `providers.unsplit` for "Not the same model".
 - Settings gain `models.switching: "ask" | "switch" | "never"`.
-- A `session.route` notification (`{ from, to, reason, until? }`) for the chip and the transcript line, and an
-  ask card that is a `confirm` request in what the session waits on you for (the same kind of request tool approvals
+- A `session.route` notification (`{ from, to, reason, until? }`) for the chip and the transcript line. The timeline
+  emits it when an answer's provider differs from the previous answer's, with the reason from the `RouteBook`. The
+  ask card is a `confirm` request in what the session waits on you for (the same kind of request tool approvals
   and `ask_user` use), so automations' Waiting on you handles it with no new plumbing.
 - `ErrorKind` is unchanged; the "no route left" error carries every route's reason.
+
+**To check before phase 3** (read in pi 1.6.0's code, not yet run):
+1. The failed answer reaches the `RouteBook` before pi asks the router for the retry (pi waits its backoff in
+   between, so a switch on a 5xx comes a few seconds late).
+2. pi-durable accepts a virtual model as a conversation's model: `getModel` finds it, `streamSimple` routes it, and
+   usage lands under the physical model.
+3. Which of §5's `model` and `auth` errors pi retries, with real error texts from ChatGPT, Claude and OpenRouter.
+4. Continuing a Build session after a failed run routes with `reason: "user"` or `"continuation"`; with
+   `"continuation"` and no earlier answer on this turn, `previous` is the resting route and the router must still
+   call `pick`.
+
+**What this replaced (2026-11-25).** The first draft registered a native provider `route` whose `stream` tried the
+real routes in order, plus a `routing: "order" | "only"` field on the session. Its reason was that pi-durable,
+pi-coding-agent and `utility()` would "see an ordinary provider and need no change". Virtual models give the same,
+since they sit in the `ModelRuntime` all three share, and pi then records the route, prices it and sizes compaction
+by itself. A provider that swaps routes inside `stream` would also have had to hold the stream open while the ask
+card waits for you.
 
 ## 8. Phases
 
@@ -189,8 +240,8 @@ changes model.
    order. No switching yet. Small, useful on its own.
 2. **One row per model.** The merge (PO3), merged picker rows with the route tail, pins, "Show every route", the split
    in Settings. Still no switching: a merged pick uses the first route.
-3. **Switching (B).** The `route` provider, resting, §5, the ask card, the chip and transcript lines, the reply
-   footer, the setting.
+3. **Switching (B).** The virtual models and their router, resting, §5, the ask card, the chip and transcript lines,
+   the reply footer, the setting.
 4. **Away.** Automations and agents: waiting for a yes in Waiting on you, budget, run history per route.
 
 ## 9. Acceptance criteria
@@ -207,7 +258,7 @@ changes model.
 - A failure after output streamed never moves on by itself; its card offers "Continue via …".
 - An automation run that needs credits while you're away waits in Waiting on you (or skips, per its setting), and its
   credits spend counts against its budget.
-- Existing sessions, agents and automations keep their route (absent `routing` = pinned).
+- Existing sessions, agents and automations keep their route (their model names a physical provider = pinned).
 - Tests (engine, faux providers as two routes of one model): merge and split; order persistence; each §5 kind moves on
   or doesn't; resting until reset and across restart; coming back at the next turn; ask, switch and never; pinned;
   context and image skipping; mid-stream failure passes through; costs recorded under the real route; automation
@@ -243,6 +294,9 @@ The two specs answer different questions and stack:
 - **28 picks the model, 29 picks the route.** A role (Lead, Deep, Build, Quick) names one model. When that model has
   several routes, it follows your order like any pick: "Build: GPT-6 Sol" runs on the ChatGPT plan, then on OpenRouter
   credits. A role can be pinned to one route, as a conversation can (PO7).
+- **One function, two routers.** A role (28 §7) and a merged model (§7 here) are both pi virtual models, and pi
+  doesn't let one route to another. So a role's router resolves its model and then calls `routes.pick()` itself, the
+  same call the merged model's router makes.
 - **28's AM9 holds.** No switching to another role's model on an error; this spec never changes the model either. 28's
   "fallback within a role" (its Later) is this spec's idea C and waits with it (§10 Q2); if it comes, it should be one
   mechanism for both.

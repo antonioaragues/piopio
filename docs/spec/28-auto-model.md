@@ -1,7 +1,8 @@
 # 28 · Auto model: Piopio picks the model for each piece of work
 
 Status: draft 2026-11-18, from a conversation with the user; its open questions were answered the same day (§10);
-nothing here is built. It adds to 07 §1.3 (defaults per
+nothing here is built. §7 was rewritten 2026-11-25 on pi's virtual models (what it replaced is at the end of §7). It
+adds to 07 §1.3 (defaults per
 mode stay), and changes 10 §3 (which put "intelligent model routing" out of scope), 26 §4 (the way of working's build
 and review models) and 24 §4 (`side_start`'s `model`). Background work (07 §1.3, "Automatic") stays as it is.
 
@@ -147,37 +148,70 @@ rows they are today.
 
 ## 7. Engine and protocol
 
+**A role is a pi virtual model.** pi's virtual models (pi-coding-agent `docs/virtual-models.md`) are selectable models
+whose `route()` picks a physical model and a thinking level for each request. Each role is one, so a session on Auto
+has an ordinary `ModelRef` and pi does the resolving, the recording and the bookkeeping.
+
 - **Roles in settings:** `settings.models.auto: { enabled: false, roles: { lead?, deep?, build?, quick? }, planWithDeep,
-  retryOnDeep, newConversations: "default" | "auto" }`, each role `{ model: ModelRef, thinking? }`. `enabled` is false
-  until you switch it on, and every path below checks it first: off, `{ auto: true }` is refused by
-  `sessions.create` / `configure`, `task` and `side_start` don't offer `role`, and `think_hard` isn't registered.
-  Switching it off rewrites each auto session to its resolved Lead model. A project's way of working gains the same
-  `roles` and keeps reading `buildModel` / `reviewModel` (migrated into `roles.build` and `reviewRole`).
+  retryOnDeep, newConversations: "default" | "auto" }`, each role `{ model: ModelRef, thinking? }`. A project's way of
+  working gains the same `roles` and keeps reading `buildModel` / `reviewModel` (migrated into `roles.build` and
+  `reviewRole`).
+- **Four virtual models:** `ModelHub` registers `auto/lead`, `auto/deep`, `auto/build` and `auto/quick` on the shared
+  `ModelRuntime` (`modelRuntime.registerVirtualModel`), under a provider `auto` that has only these. A project that
+  overrides a role gets its own (`auto/build@<projectId>`), registered when the project's settings load, because
+  `route()` receives the request and not the session, so it can't know the project.
+- **`enabled` is the registration.** Off, the four aren't registered: the picker has no Auto row because the catalog
+  has none, `sessions.create` / `configure` refuse `auto/*` like any unknown model, `task` and `side_start` don't offer
+  `role`, and `think_hard` isn't registered. Switching it off unregisters them and rewrites each auto session's
+  catalog entry to its resolved Lead model. pi does the same on its side: a session whose virtual model is gone falls
+  back to the physical model that answered last.
 - **One resolver:** `roles.ts` — `resolveRole(role, { projectId? }) → { model, thinking }`: the project's override,
-  else yours, else the suggestion for your connected providers, else Lead's. Everything in §4 asks it; nothing else
-  reads role settings.
-- **Sessions:** a session's model becomes `ModelRef | { auto: true }`. An auto session stores the role it runs as
-  (`lead`, or what its parent gave it), and resolves the model at the start of each turn, so changing a role in
-  Settings applies from the next turn without touching history. `sessions.configure` can switch between Auto and a
-  pinned model.
-- **Timeline:** `assistant` items gain `role?`; the cost ledger rows gain `role`.
-- **Tools:** `task` gains `role?: "quick" | "build" | "deep"`; `side_start`'s `model` becomes `role` (a model only
-  when you named one); `think_hard({ question })` is a new extension in Build and chat profiles. It sends Deep the
-  question, the conversation's last turns (capped, as `side_read` does) and AGENTS.md, as one call without tools, and
-  returns the text. At most two calls per turn; the third returns "ask the user instead".
-- **Plan mode:** the planning turns run with the Deep role; Approve sets the role back to Lead before the first Act
-  turn.
-- **Work runner:** `modelFor(kind)` asks the resolver; the "sent back twice" path (26 §7's review limit) retries once
-  with Deep before it pauses for you.
+  else yours, else the suggestion for your connected providers, else Lead's. Only the routers call it.
+- **The router** (one function for every role):
+  - `reason: "user"` → `resolveRole`. Changing a role in Settings applies from the next turn without touching history.
+  - `reason: "continuation"` → `request.previous`. The turn stays on its model and keeps its prompt cache (AM6).
+  - `reason: "retry"` → `request.failed`. Auto never moves to another role's model on an error (AM9).
+  - `reason: "direct"` (a compaction summary, `think_hard`, `utility()`) → `resolveRole`.
+  - The resolved model then goes through [29](29-provider-order.md)'s route choice when it has several routes. A
+    virtual model can't route to another one, so both specs call the same `routes.pick()` (29 §11).
+- **Sessions:** a session's model stays a `ModelRef`; on Auto it is `{ provider: "auto", id: "<role>" }`, the role it
+  runs as (`lead`, or what its parent gave it). There is no new session field and no per-turn `setModel`. pi records
+  the selection (`model_change`) and, on every assistant message, the physical model that answered; resuming restores
+  the selection; compaction uses the limits of the model that answered.
+- **Timeline:** `assistant` items gain `role?`, read from the selection in force when the message was written; the
+  cost ledger rows gain `role`. The model and cost are the physical ones pi already puts on the message.
+- **Tools:** `task` gains `role?: "quick" | "build" | "deep"` and starts the child session on `auto/<role>`;
+  `side_start`'s `model` becomes `role` (a model only when you named one). `think_hard({ question })` is a new
+  extension in Build and chat profiles. It sends `auto/deep` the question, the conversation's last turns (capped, as
+  `side_read` does) and AGENTS.md, as one call without tools (`models.streamSimple`, which pi routes as `direct`),
+  and returns the text. At most two calls per turn; the third returns "ask the user instead".
+- **Plan mode:** entering Plan in an Auto conversation selects `auto/deep` (`session.setModel`); Approve selects
+  `auto/lead` before the first Act turn. The switch is a recorded model change, made where the permission mode
+  changes, because the router can't see the permission mode.
+- **Work runner:** `modelFor(kind)` returns the role's `ModelRef` (the project's when it overrides); the "sent back
+  twice" path (26 §7's review limit) retries once on `auto/deep` before it pauses for you.
 - **Suggestions:** `ROLE_MODELS[provider]` beside `PREFERRED_MODEL` and `UTILITY_MODEL`, with Lead, Deep, Build and
   Quick for OpenRouter, Anthropic, OpenAI and the subscriptions; endpoints and other providers get Lead = their
   preferred model and nothing else (so Auto is the same as pinned until you fill the rows).
 - **Tests** (faux provider with four models, fake clock): with Auto off, nothing changes (no picker row, no role
-  parameter, no `think_hard`, `{ auto: true }` refused); turning it off moves auto sessions to Lead, pinned;
+  parameter, no `think_hard`, `auto/*` refused); turning it off moves auto sessions to Lead, pinned;
   resolution order; a subagent with and without a role; helpers
   with project overrides; Plan → Approve switch; the review-twice retry; `think_hard`'s limit; changing a role mid-
-  conversation applies next turn; a pinned conversation unchanged; a provider disconnected under a role says so and
-  doesn't fall back.
+  conversation applies next turn and not mid-turn; a retry stays on the model that failed; each answer records the
+  physical model; a pinned conversation unchanged; a provider disconnected under a role says so and doesn't fall back.
+
+**To check before AM-1** (read in pi 1.6.0's code, not yet run):
+1. A virtual model registered on the shared `ModelRuntime` shows in `models.list` and is accepted by
+   `createAgentSession` as the session model.
+2. A project's own virtual models can be registered and replaced while sessions run (pi says registration follows
+   `registerProvider`'s queuing and reload rules).
+3. An automation that runs as Piopio is a Build session, so it gets all of the above. Agents stay out of v1 (§4);
+   pi-durable would only route a virtual model as `direct` (29 §7).
+
+**What this replaced (2026-11-25).** The first draft made a session's model `ModelRef | { auto: true }` and had the
+engine resolve the model at the start of each turn, with its own switch for Plan → Act. That rebuilt, beside pi, what
+virtual models do inside it, and would have lost pi's record of selection versus answering model, compaction against
+the routed model's limits, and staying on one model within a turn.
 
 ## 8. Milestones
 
@@ -195,7 +229,7 @@ rows they are today.
 - **Native advisor tools** (Anthropic's advisor tool, OpenRouter's `advisor`) where the provider has them, instead of
   our `think_hard` call: cheaper (no extra round trip) but provider-bound.
 - **Fallback within a role** on rate limits, as an explicit list per role ("if Fable is busy, use Opus"), never across
-  providers without saying so.
+  providers without saying so. In the router this is the `retry` branch returning the next model in the list.
 - **Agents on Auto**: an agent's own conversation stays its model, its subagents use roles.
 
 ## 10. Questions answered (2026-11-18)
