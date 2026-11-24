@@ -217,3 +217,20 @@ test("ACP tool calls get Piopio's names and arguments", () => {
 	expect(acpTool({ kind: "edit", content: [{ type: "diff", path: "/a/new.md", oldText: null, newText: "hi" }] })).toEqual({ name: "write", args: { path: "/a/new.md", content: "hi" } });
 	expect(acpTool({ kind: "read", locations: [{ path: "/a/c.ts" }] }).name).toBe("read");
 });
+
+// Found in the real-use pass (2026-11-24, docs/research/par-pass-2026-11-24.md F7): Codex's and Antigravity's
+// `npm run dev` showed as a failed card with no output while the server kept serving the preview.
+test.each([
+	["Codex", CODEX],
+	["Antigravity CLI", AGY],
+])("a command %s leaves running when its turn ends is done, with what it printed", { timeout: 30_000 }, async (name, model) => {
+	const a = await start();
+	const folder = await project(a);
+	const { ref } = await a.client.call("sessions.create", { kind: "build", cwd: folder, model });
+	const sub = (await a.client.call("sessions.subscribe", { ref })).subscriptionId as string;
+	await turn(a, ref, sub, "serve: npm run dev");
+	const tool = ((await a.client.call("sessions.open", { ref })) as Snapshot).items.find((i) => i.kind === "tool");
+	expect(tool).toMatchObject({ tool: "bash", status: "done" });
+	expect(tool?.kind === "tool" && tool.output).toBe(`Shop ready at http://localhost:5173\nStill running in ${name} when its turn ended.`);
+	await stop(a);
+});

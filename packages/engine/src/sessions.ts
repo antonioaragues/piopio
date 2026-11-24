@@ -70,10 +70,11 @@ import { sdkMessages, SdkEventMapper } from "./timeline/pi-sdk.js";
 import { migrateChat } from "./migrate-chats.js";
 import type { CloudMemory, Params, Result, SessionEvent } from "@piopio/protocol";
 import { CloudAgentView, type CloudLink } from "./cloud.js";
-import { readJsonFile, writeFileAtomic } from "./atomic.js";
 import type { SecretBroker } from "./secrets.js";
 import { TelegramChannels as TelegramSecrets } from "./channels/manager.js";
 import { progressLine } from "./progress-line.js";
+import { portsServedIn } from "./ports.js";
+import { readJsonFile, writeFileAtomic } from "./atomic.js";
 
 type CatalogEntry = SessionSummary & {
 	thinking?: string;
@@ -2144,7 +2145,9 @@ export class Sessions {
 						ports: async () => {
 							const open = this.open.get(ref.id);
 							const runtime = open ? innerOf(await open) : undefined;
-							return runtime instanceof BuildRuntime ? runtime.previewPorts() : [];
+							// Piopio's own background commands; a coding agent's are found by where they run (ports.ts).
+							if (runtime instanceof BuildRuntime) return runtime.previewPorts();
+							return entry.cwd ? portsServedIn(entry.cwd) : [];
 						},
 					}
 				: undefined;

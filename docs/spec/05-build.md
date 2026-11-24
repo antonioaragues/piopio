@@ -63,9 +63,13 @@ Default state for new sessions: **approvals, checkpoints, todos, notify and suba
   `go vet`, `pyright` or `mypy`. On the project page, **Check after edits**: Automatic (what was detected), a command
   of the user's, or Off. Chat projects and review sessions don't run it.
   **Since 18 CF3 (2026-11-07):** the Chat lens is gone, replaced by the Read only permission, so "Chat projects" is not a kind any more.
-- **DG3 Feedback.** Only the problems in the files the agent changed go back (errors elsewhere were there before),
-  with a line or two of context, at most 60 lines. The run goes on with them as a message ("fix them, then finish; if
-  one is wrong, say so"), shown in the transcript as "Checked with <command>: N problems in files it changed". At most
+- **DG3 Feedback.** The problems the agent's changes brought in go back, with a line or two of context, at most 60
+  lines: those in the files it changed, and, since 2026-11-24, those anywhere else that weren't there before its first
+  edit. Before a message's first `edit` or `write` the check runs once as a **baseline**, and a problem elsewhere counts
+  only when the baseline didn't have it (the same file and message, on any line). A check whose last run took over
+  20 s gets no baseline, so the first edit doesn't wait twice; then only the edited files count. The run goes on with
+  them as a message ("fix them, then finish; if one is wrong, say so"), shown in the transcript as "Checked with
+  <command>: N new problems since its first edit" (without a baseline, "N problems in files it changed"). At most
   twice per message from the user; a third time the note says "(left for you)" and the agent stops.
 - **DG4 Bounds.** It runs in the project folder with the session's sandbox (confined unless Full auto), a two-minute
   limit, and no colours. A check that passes, times out or names none of the edited files adds nothing.
@@ -74,9 +78,10 @@ Default state for new sessions: **approvals, checkpoints, todos, notify and suba
   with its source), the live transcript taking messages pi adds at a boundary (`entry_appended`), and the project
   page's row. Not done: coding agents (Claude Code, Codex, Antigravity) run their own loop, so the check doesn't run
   for them; a language server's live diagnostics.
-- **Found in use (2026-11-24):** DG3's rule misses a break the agent causes in a file it didn't edit (a changed return
-  type broke a caller, and the check stayed silent). A baseline before the first edit would fix it, at one more check
-  per run; open, [the pass](../research/par-pass-2026-11-24.md) F3.
+- **Found in use (2026-11-24):** DG3's first rule (only the files it edited) missed a break the agent caused in a file it
+  didn't touch: a changed return type broke a caller, and the check stayed silent. The baseline above fixes it
+  (`problemKeys` and `problemsIn`'s baseline in `diagnostics.ts`), tried for real: the same change came back as "1 new
+  problem since its first edit" and the agent fixed the caller ([the pass](../research/par-pass-2026-11-24.md) F3).
 
 The engine adds three more (not pi extensions of this package): the **context guards** (the model's clock and the repeated-call nudge, `tools/guards.ts`), **earlier conversations** (`search_conversations` / `read_conversation` and `@conversation:<id>` mentions, `tools/history.ts`), and **Claude Code / Codex** as `task` backends (`external-agents.ts`). See [docs/research/deepseek-harness.md § As built](../research/deepseek-harness.md#as-built-2026-11-08).
 

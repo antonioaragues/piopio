@@ -133,6 +133,14 @@ async function prompt(sessionId: string, blocks: any[]) {
 			update(sessionId, { sessionUpdate: "tool_call_update", toolCallId, status: r?.isError ? "failed" : "completed", content: (r?.content ?? []).map((c: any) => ({ type: "content", content: c })) });
 			continue;
 		}
+		// A command that keeps running past the turn (a dev server): it prints, and never reports an end.
+		const serve = /^serve:\s*(.+)$/.exec(line);
+		if (serve) {
+			const toolCallId = `call_fake_${++counter}`;
+			update(sessionId, { sessionUpdate: "tool_call", toolCallId, kind: "execute", title: serve[1], status: "in_progress", rawInput: { command: serve[1] } });
+			update(sessionId, { sessionUpdate: "tool_call_update", toolCallId, status: "in_progress", _meta: { terminal_output_delta: { data: "Shop ready at http://localhost:5173\n" } } });
+			continue;
+		}
 		const bash = /^\$\s*(.+)$/.exec(line);
 		const write = /^write:\s*(.+?)\s*\|\s*(.*)$/.exec(line);
 		if (!bash && !write) continue;

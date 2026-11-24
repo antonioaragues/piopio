@@ -202,8 +202,9 @@ describe("the project's check after edits (05-build Diagnostics, roadmap PAR5)",
 		const notes = async () => ((await a.client.call("sessions.open", { ref })) as Snapshot).items.flatMap((i) => (i.kind === "system" ? [i.text] : []));
 		for (let i = 0; i < 200 && (await notes()).length < 1; i++) await new Promise((r) => setTimeout(r, 100));
 		await stateWhere(a, sub, (s) => s.status === "idle");
-		// Only src/cart.ts's error: src/other.ts was there before. The run went on with it (the scripted model answers it).
-		expect(await notes()).toEqual([`Checked with ${check}: 1 problem in files it changed`]);
+		// Only src/cart.ts's error: src/other.ts was there before (the baseline before the first edit had it). The run went
+		// on with it (the scripted model answers it).
+		expect(await notes()).toEqual([`Checked with ${check}: 1 new problem since its first edit`]);
 		const items = ((await a.client.call("sessions.open", { ref })) as Snapshot).items;
 		expect(items.at(-1)).toMatchObject({ kind: "assistant" });
 		expect(JSON.stringify(items.at(-1))).toContain("src/cart.ts(2,7)");

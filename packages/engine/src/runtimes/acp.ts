@@ -377,7 +377,14 @@ export class AcpRuntime implements Runtime {
 
 	private turnEnded(result: { stopReason?: string; usage?: Record<string, number> }): void {
 		this.endAssistant();
-		for (const [id, t] of this.tools) if (!t.done) this.endTool(id, { toolCallId: id, status: "failed" }, t);
+		// A command still going when the turn ends (a dev server the agent left serving) didn't fail: it shows what it
+		// printed and that it's still running. Anything else left open, or a turn you stopped, ends as failed.
+		for (const [id, t] of this.tools) {
+			if (t.done) continue;
+			const running = t.name === "bash" && result.stopReason !== "cancelled";
+			if (running) t.terminal = `${t.terminal}${t.terminal && !t.terminal.endsWith("\n") ? "\n" : ""}Still running in ${this.name} when its turn ended.`;
+			this.endTool(id, { toolCallId: id, status: running ? "completed" : "failed" }, t);
+		}
 		// The plan pays (CA6): tokens, no spending.
 		const u = result.usage;
 		if (u) {

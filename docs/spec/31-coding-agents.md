@@ -236,7 +236,9 @@ Decided 2026-11-20 with the user on [picker.html](../design/agent-runtimes/picke
   permission naming only the call; Antigravity CLI 1.5 titles one "Run mcp_piopio_<tool>". Neither was recognized, so
   each of Piopio's tools asked ("Run a command" with no detail, or "Use Run mcp_piopio_…") and its card was `bash` or
   `Run`. Now the structure (Codex) and the title without "Run " (Antigravity) are matches, and the fake agent sends
-  both shapes. Still open: a long-running command on Codex or Antigravity ends as an error card while it serves (F7).
+  both shapes. A command still running when the agent's turn ends (a dev server) ends as done, with what it printed and
+  "Still running in Codex when its turn ended", not as a failed card with no output (F7); a turn you stop still
+  fails it. Its server opens in the preview without asking (22 §6.1, F4).
 
 - **Finishing touches (2026-11-21):**
   - **Undo:** after a switch, the session's state says who ran the conversation before (`state.handoff.from`) until the

@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "vitest";
-import { detectCheck, diagnosticsExtension, MAX_CHECK_ROUNDS, problemsIn, runCheck } from "../src/diagnostics.js";
+import { BASELINE_MAX_MS, detectCheck, diagnosticsExtension, MAX_CHECK_ROUNDS, problemKeys, problemsIn, runCheck } from "../src/diagnostics.js";
 
 const folder = (files: Record<string, string>) => {
 	const dir = mkdtempSync(join(tmpdir(), "piopio-check-"));
@@ -75,4 +75,51 @@ test("twice per message at most, then a note that leaves it to the user; nothing
 	command = undefined;
 	await edit();
 	expect(await settle()).toBeUndefined();
+});
+
+// Found in the real-use pass (2026-11-24, docs/research/par-pass-2026-11-24.md F3): `total()` in cart.ts started
+// returning a string, checkout.ts (not edited) broke, and the check said nothing.
+test("with a baseline before the first edit, a break in a file it didn't edit counts; one that was already there doesn't", async () => {
+	// The check's output is a file the test rewrites between the baseline and the end of the run.
+	const cwd = folder({ "out.txt": "src/old.ts(1,1): error TS1005: ';' expected.\n", "check.sh": "cat out.txt; grep -q error out.txt && exit 1; exit 0\n" });
+	const handlers = new Map<string, (event: unknown, ctx: unknown) => unknown>();
+	diagnosticsExtension({ command: () => "sh check.sh", shell: () => "/bin/sh" })({ on: (name: string, h: (e: unknown, c: unknown) => unknown) => handlers.set(name, h) } as never);
+	const fire = (name: string, event: unknown = {}) => handlers.get(name)!(event, { cwd });
+	await fire("session_start");
+	await fire("input");
+	await fire("tool_call", { toolName: "edit", input: { path: "src/cart.ts" } }); // the baseline: old.ts is already broken
+	writeFileSync(join(cwd, "out.txt"), ["src/old.ts(1,1): error TS1005: ';' expected.", "src/checkout.ts(5,43): error TS2551: Property 'toFixed' does not exist on type 'string'."].join("\n"));
+	await fire("tool_result", { toolName: "edit", input: { path: "src/cart.ts" } });
+	const r = (await fire("agent_before_settle", { outcome: "completed", entries: [] })) as { continue?: boolean; entries: { content: string; details: { summary: string } }[] };
+	expect(r.continue).toBe(true);
+	expect(r.entries[0]!.details.summary).toBe("Checked with sh check.sh: 1 new problem since its first edit");
+	expect(r.entries[0]!.content).toContain("src/checkout.ts(5,43): error TS2551");
+	expect(r.entries[0]!.content).not.toContain("src/old.ts");
+
+	// The same problem on another line is still the old one.
+	expect(problemKeys("src/a.ts(3,7): error TS1: bad", "/p")).toEqual(problemKeys("src/a.ts(40,2): error TS1: bad", "/p"));
+	expect(problemsIn("src/a.ts(40,2): error TS1: bad\nsrc/b.ts(1,1): error TS2: worse", [], "/p", problemKeys("src/a.ts(3,7): error TS1: bad", "/p"))).toEqual(["src/b.ts(1,1): error TS2: worse"]);
+	expect(problemsIn("error[E0308]: mismatched types\n  --> src/lib.rs:4:9", [], "/p", new Set())).toEqual(["error[E0308]: mismatched types", "  --> src/lib.rs:4:9"]);
+});
+
+test("a slow check gets no baseline: only the edited files count", async () => {
+	const cwd = folder({ "check.sh": "echo 'src/other.ts(1,1): error TS1: bad'; exit 1\n" });
+	const handlers = new Map<string, (event: unknown, ctx: unknown) => unknown>();
+	const calls: string[] = [];
+	diagnosticsExtension({ command: () => "sh check.sh", shell: () => "/bin/sh", wrap: (c) => (calls.push(c), c) })({ on: (name: string, h: (e: unknown, c: unknown) => unknown) => handlers.set(name, h) } as never);
+	const fire = (name: string, event: unknown = {}) => handlers.get(name)!(event, { cwd });
+	await fire("session_start");
+	const now = Date.now;
+	let t = 0;
+	Date.now = () => (t += BASELINE_MAX_MS + 1);
+	try {
+		await fire("tool_call", { toolName: "edit", input: { path: "src/a.ts" } }); // baseline, and it was slow
+		await fire("tool_result", { toolName: "edit", input: { path: "src/a.ts" } });
+		expect(await fire("agent_before_settle", { outcome: "completed", entries: [] })).toBeUndefined(); // other.ts is new, but no baseline counts it
+		await fire("input");
+		await fire("tool_call", { toolName: "edit", input: { path: "src/a.ts" } });
+	} finally {
+		Date.now = now;
+	}
+	expect(calls).toHaveLength(2); // the first baseline and the settle; the next message skips its baseline
 });
