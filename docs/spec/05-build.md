@@ -185,6 +185,9 @@ Three modes, set per session (default per project; global default = **Auto-edit*
   above the conversation: severity, title, `file:line` (opens the file at that line), the explanation, and **Fix**
   (sends the finding to the session as a message, and marks it fixing) or **Dismiss**; **Fix all** sends the open ones
   together. While the review runs the panel says so, with a link to it.
+- **RV3 in captures (2026-11-24):** the panel is as tall as its findings, up to 260 points, then scrolls (it was 260
+  whatever it held). Open: with the terminal drawer open, the agent's last line ends under the composer when the panel
+  appears ([the pass](../research/par-pass-2026-11-24.md), UI2).
 - **RV4** Posting the findings to GitHub as review comments is not built: it publishes on the user's behalf and needs
   its own confirmation design.
 - **As built (2026-11-21):** `code-review.ts` (the reviewer's message and `report_findings`, which never asks),

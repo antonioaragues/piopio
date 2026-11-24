@@ -9,6 +9,7 @@ struct ReviewPanel: View {
     let review: ReviewInfo
     let session: ThreadModel
     @State private var folded = false
+    @State private var listHeight: CGFloat = 0
 
     private var open: [ReviewFinding] { review.findings.filter { $0.state == .open } }
     private var shown: [ReviewFinding] { review.findings.filter { $0.state != .dismissed } }
@@ -18,6 +19,7 @@ struct ReviewPanel: View {
             header
             if !folded, review.status == .done, !shown.isEmpty {
                 Rectangle().fill(Color.dsLine).frame(height: 0.5)
+                // As tall as its findings, up to 260 (a ScrollView alone takes all 260, empty or not), then it scrolls.
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(Array(shown.enumerated()), id: \.element.id) { i, f in
@@ -25,8 +27,9 @@ struct ReviewPanel: View {
                             if i < shown.count - 1 { Rectangle().fill(Color.dsLine).frame(height: 0.5).padding(.leading, 62) }
                         }
                     }
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { listHeight = $0 }
                 }
-                .frame(maxHeight: 260)
+                .frame(height: min(max(listHeight, 1), 260))
             }
         }
         .background(Color.dsCard, in: RoundedRectangle(cornerRadius: 12, style: .continuous))

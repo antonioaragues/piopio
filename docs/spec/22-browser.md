@@ -194,6 +194,8 @@ as untrusted content. It never counts as an instruction from you, and it can't g
   read made beside `browser_open` saw the page before it, or none. A server a coding agent starts with its own background
   command counts as the session's too: a process under the engine (the agents' CLIs are its children) listening in the
   session's folder (`ports.ts`), so its address opens without asking, as Piopio's own do ([the pass](../research/par-pass-2026-11-24.md), F4).
+  The address field shows an address without its scheme and a bare trailing "/" ("localhost:5173": a narrow pane cut
+  the port off), and a local address typed without one opens over http.
 
 ## 7. Sign-ins and profiles
 

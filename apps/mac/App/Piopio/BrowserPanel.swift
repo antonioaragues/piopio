@@ -33,8 +33,8 @@ struct BrowserPanel: View {
                 .padding(24)
             }
         }
-        .onChange(of: session.current?.url) { _, url in address = url?.absoluteString ?? "" }
-        .onAppear { address = session.current?.url?.absoluteString ?? "" }
+        .onChange(of: session.current?.url) { _, url in address = BrowserSession.shown(url) }
+        .onAppear { address = BrowserSession.shown(session.current?.url) }
     }
 
     /// "Piopio is browsing" while the model clicks and types here, and a few seconds after (spec 22 §5).

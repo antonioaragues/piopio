@@ -233,10 +233,21 @@ final class BrowserSession {
     }
 
     /// Opens a URL the user typed in the panel's address field.
+    /// The address as the field shows it: without "https://" or "http://" and a bare trailing "/", so a narrow panel
+    /// still shows the host and port ("localhost:5173", not "http://localhost:51").
+    static func shown(_ url: URL?) -> String {
+        guard var text = url?.absoluteString else { return "" }
+        for scheme in ["https://", "http://"] where text.hasPrefix(scheme) { text.removeFirst(scheme.count) }
+        if text.hasSuffix("/"), text.dropLast().firstIndex(of: "/") == nil { text.removeLast() }
+        return text
+    }
+
     func go(_ text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
-        let url = trimmed.contains("://") ? URL(string: trimmed) : trimmed.contains(".") && !trimmed.contains(" ") ? URL(string: "https://\(trimmed)") : URL(string: "https://duckduckgo.com/?q=\(trimmed.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? trimmed)")
+        // A local address the field showed without its scheme ("localhost:5173") is http, not a search.
+        let local = trimmed.wholeMatch(of: /(localhost|127\.0\.0\.1|\[::1\]|[\w.-]+\.localhost)(:\d+)?(\/\S*)?/) != nil
+        let url = trimmed.contains("://") ? URL(string: trimmed) : local ? URL(string: "http://\(trimmed)") : trimmed.contains(".") && !trimmed.contains(" ") ? URL(string: "https://\(trimmed)") : URL(string: "https://duckduckgo.com/?q=\(trimmed.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? trimmed)")
         guard let url else { return }
         let tab = current ?? newTab()
         Task {
