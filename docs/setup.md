@@ -91,6 +91,17 @@ scripts/recovery-smoke.sh   # failed send and offline backup/restore
 
 One engine file: `cd packages/engine && npx vitest run test/<file>.test.ts`.
 
+**Evals of real use** (launch plan §5): real models and the coding agents on a fixture project, checked on the
+result. They cost money and are never run on CI: by hand, or nightly. Needs `pnpm build`, Google Chrome,
+`OPENROUTER_API_KEY` in the environment for Piopio's own agent, and the agents' CLIs signed in (`claude`, `codex login`,
+`agy`). `node packages/engine/test/evals/run.mjs`; see [its README](../packages/engine/test/evals/README.md). Piopio's
+own agent hasn't run in the evals yet (the first run had no key in its environment); with `OPENROUTER_API_KEY` set in
+your shell:
+
+```bash
+node packages/engine/test/evals/run.mjs --runners openrouter:anthropic/claude-haiku-5.5
+```
+
 ## 6. When something goes wrong
 
 - **App logs:** subsystem `app.piopio` (Keychain choices, failures; never values).

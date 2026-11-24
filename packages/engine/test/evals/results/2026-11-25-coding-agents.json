@@ -1,0 +1,365 @@
+{
+	"at": "2026-11-24T23:18:55.285Z",
+	"commit": "38a33e5 (with uncommitted changes)",
+	"engineBuiltAt": "2026-11-24T22:36:50.955Z",
+	"pi": "1.6.0",
+	"agents": {
+		"claude": "2.1.319 (Claude Code)",
+		"codex": "codex-cli 0.170.0",
+		"antigravity": "1.5.13"
+	},
+	"browser": "headless Google Chrome stand-in (browser.mjs)",
+	"budgetUsd": 2,
+	"spentUsd": 0,
+	"passed": "4/6",
+	"notRun": [
+		{
+			"runner": "openrouter:anthropic/claude-haiku-5.5",
+			"why": "OPENROUTER_API_KEY isn't set"
+		}
+	],
+	"results": [
+		{
+			"scenario": "preview-fix",
+			"runner": "claude-code:haiku",
+			"pass": true,
+			"checks": {
+				"app.js asks for /api/products": {
+					"pass": true
+				},
+				"the project typechecks": {
+					"pass": true
+				},
+				"the last browser read lists the three products": {
+					"pass": true
+				},
+				"no browser_eval": {
+					"pass": true,
+					"detail": "0 calls"
+				},
+				"no approval for Piopio's own tools": {
+					"pass": true
+				}
+			},
+			"costUsd": 0,
+			"tokens": {
+				"input": 26,
+				"output": 159,
+				"cacheRead": 560301
+			},
+			"seconds": 30,
+			"approvals": [
+				{
+					"kind": "approval",
+					"tool": "bash",
+					"title": "Run a command",
+					"detail": "npm run dev",
+					"reason": "This command requires approval",
+					"answer": "allow",
+					"own": false
+				},
+				{
+					"kind": "approval",
+					"tool": "bash",
+					"title": "Run a command",
+					"detail": "sleep 2; cat /private/tmp/claude-501/-private-var-folders-hz-zmf9jdkx6n9f47s1zjw5n80h0000gn-T-piopio-eval-work-HmqhNV-par-shop/1676678a-982b-49bb-a35f-e09f36e05b81/tasks/blub70x06.output; curl -s -i localhost:52288/api/items | head -1; curl -s localhost:52288/api/products",
+					"answer": "allow",
+					"own": false
+				},
+				{
+					"kind": "approval",
+					"tool": "bash",
+					"title": "Run a command",
+					"detail": "npm run typecheck 2>&1 | tail -5; echo \"exit $?\"; git diff --stat",
+					"answer": "allow",
+					"own": false
+				}
+			],
+			"toolCalls": {
+				"bash": 6,
+				"browser_open": 2,
+				"browser_requests": 2,
+				"browser_read": 2,
+				"browser_console": 2,
+				"edit": 1,
+				"browser_screenshot": 1
+			},
+			"browserCalls": [
+				"browser_open",
+				"browser_requests",
+				"browser_read",
+				"browser_console",
+				"browser_open",
+				"browser_read",
+				"browser_console",
+				"browser_requests",
+				"browser_screenshot (failed)"
+			]
+		},
+		{
+			"scenario": "review-fix",
+			"runner": "claude-code:haiku",
+			"pass": false,
+			"checks": {
+				"the review finished": {
+					"pass": false,
+					"detail": "The review ended without reporting findings."
+				},
+				"a bug at src/cart.ts near the line": {
+					"pass": false,
+					"detail": "no findings"
+				}
+			},
+			"costUsd": 0,
+			"tokens": {
+				"input": 6,
+				"output": 350,
+				"cacheRead": 106721
+			},
+			"seconds": 13,
+			"approvals": [],
+			"toolCalls": {
+				"bash": 1,
+				"ReportFindings": 1
+			},
+			"browserCalls": [],
+			"engineLog": "/var/folders/hz/zmf9jdkx6n9f47s1zjw5n80h0000gn/T/piopio-evals/review-fix-claude-code_haiku-1795562380435.log",
+			"project": "/var/folders/hz/zmf9jdkx6n9f47s1zjw5n80h0000gn/T/piopio-eval-work-vhCZox"
+		},
+		{
+			"scenario": "preview-fix",
+			"runner": "codex-cli:gpt-6.2-sol",
+			"pass": true,
+			"checks": {
+				"app.js asks for /api/products": {
+					"pass": true
+				},
+				"the project typechecks": {
+					"pass": true
+				},
+				"the last browser read lists the three products": {
+					"pass": true
+				},
+				"no browser_eval": {
+					"pass": true,
+					"detail": "0 calls"
+				},
+				"no approval for Piopio's own tools": {
+					"pass": true
+				}
+			},
+			"costUsd": 0,
+			"tokens": {
+				"input": 15767,
+				"output": 1151,
+				"cacheRead": 351744
+			},
+			"seconds": 53,
+			"approvals": [
+				{
+					"kind": "approval",
+					"tool": "bash",
+					"title": "Run a command",
+					"detail": "npm run dev",
+					"answer": "allow",
+					"own": false
+				},
+				{
+					"kind": "approval",
+					"tool": "bash",
+					"title": "Run a command",
+					"detail": "node --check public/app.js",
+					"answer": "allow",
+					"own": false
+				}
+			],
+			"toolCalls": {
+				"bash": 11,
+				"read": 5,
+				"browser_open": 2,
+				"browser_requests": 2,
+				"browser_read": 2,
+				"browser_console": 2,
+				"edit": 1
+			},
+			"browserCalls": [
+				"browser_open",
+				"browser_requests",
+				"browser_read",
+				"browser_console",
+				"browser_open",
+				"browser_console",
+				"browser_read",
+				"browser_requests"
+			]
+		},
+		{
+			"scenario": "review-fix",
+			"runner": "codex-cli:gpt-6.2-sol",
+			"pass": true,
+			"checks": {
+				"the review finished": {
+					"pass": true
+				},
+				"a bug at src/cart.ts near the line": {
+					"pass": true,
+					"detail": "bug src/cart.ts:5 Cart total adds quantity to the unit price"
+				},
+				"the finding is fixed": {
+					"pass": true,
+					"detail": "fixed"
+				},
+				"the multiplication is back": {
+					"pass": true
+				},
+				"the project typechecks": {
+					"pass": true
+				}
+			},
+			"costUsd": 0,
+			"tokens": {
+				"input": 22791,
+				"output": 2475,
+				"cacheRead": 309504
+			},
+			"seconds": 77,
+			"approvals": [],
+			"toolCalls": {
+				"bash": 21,
+				"read": 4,
+				"edit": 1,
+				"grep": 1,
+				"report_findings": 1
+			},
+			"browserCalls": []
+		},
+		{
+			"scenario": "preview-fix",
+			"runner": "antigravity-cli:gemini-3.8-flash",
+			"pass": true,
+			"checks": {
+				"app.js asks for /api/products": {
+					"pass": true
+				},
+				"the project typechecks": {
+					"pass": true
+				},
+				"the last browser read lists the three products": {
+					"pass": true
+				},
+				"no browser_eval": {
+					"pass": true,
+					"detail": "0 calls"
+				},
+				"no approval for Piopio's own tools": {
+					"pass": true
+				}
+			},
+			"costUsd": 0,
+			"tokens": {
+				"input": 47103,
+				"output": 4008,
+				"cacheRead": 214913
+			},
+			"seconds": 63,
+			"approvals": [
+				{
+					"kind": "approval",
+					"tool": "bash",
+					"title": "Run a command",
+					"detail": "ls -la",
+					"answer": "allow",
+					"own": false
+				},
+				{
+					"kind": "approval",
+					"tool": "bash",
+					"title": "Run a command",
+					"detail": "ls -la src public",
+					"answer": "allow",
+					"own": false
+				},
+				{
+					"kind": "approval",
+					"tool": "bash",
+					"title": "Run a command",
+					"detail": "git status",
+					"answer": "allow",
+					"own": false
+				},
+				{
+					"kind": "approval",
+					"tool": "bash",
+					"title": "Run a command",
+					"detail": "git log -n 5 --oneline",
+					"answer": "allow",
+					"own": false
+				},
+				{
+					"kind": "approval",
+					"tool": "bash",
+					"title": "Run a command",
+					"detail": "node server.mjs",
+					"answer": "allow",
+					"own": false
+				},
+				{
+					"kind": "approval",
+					"tool": "bash",
+					"title": "Run a command",
+					"detail": "git diff",
+					"answer": "allow",
+					"own": false
+				}
+			],
+			"toolCalls": {
+				"bash": 6,
+				"read": 6,
+				"browser_open": 2,
+				"browser_read": 2,
+				"browser_console": 2,
+				"browser_requests": 2,
+				"edit": 1
+			},
+			"browserCalls": [
+				"browser_open",
+				"browser_read",
+				"browser_console",
+				"browser_requests",
+				"browser_open",
+				"browser_read",
+				"browser_console",
+				"browser_requests"
+			]
+		},
+		{
+			"scenario": "review-fix",
+			"runner": "antigravity-cli:gemini-3.8-flash",
+			"pass": false,
+			"checks": {
+				"the review finished": {
+					"pass": false,
+					"detail": "The review ended without reporting findings."
+				},
+				"a bug at src/cart.ts near the line": {
+					"pass": false,
+					"detail": "no findings"
+				}
+			},
+			"costUsd": 0,
+			"tokens": {
+				"input": 17320,
+				"output": 698,
+				"cacheRead": 0
+			},
+			"seconds": 9,
+			"approvals": [],
+			"toolCalls": {
+				"bash": 1
+			},
+			"browserCalls": [],
+			"engineLog": "/var/folders/hz/zmf9jdkx6n9f47s1zjw5n80h0000gn/T/piopio-evals/review-fix-antigravity-cli_gemini-3.8-flash-1795562587216.log",
+			"project": "/var/folders/hz/zmf9jdkx6n9f47s1zjw5n80h0000gn/T/piopio-eval-work-f0BKnO"
+		}
+	]
+}

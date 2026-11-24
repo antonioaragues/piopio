@@ -205,7 +205,8 @@ tools, gets a real job done, and that is what changes when a prompt, a tool or p
 weeks).
 
 - **The runner:** the engine headless, driven over its socket as `test/client.ts` does, against real providers, with a
-  budget per run. On demand and nightly, never on every push.
+  budget per run. On demand and nightly, never on every push. First slice (2026-11-25):
+  [packages/engine/test/evals](../packages/engine/test/evals/README.md), four scenarios from the PAR pass.
 - **The set, 25–30 scenarios to start**, each a starting state, a prompt and a check on the result, not on the words:
   - *Build:* fix a failing test in a fixture repository (the test passes, nothing else changed); a change across
     several files; a denied command with a note (the next approach differs); plan, then build; a review that finds a
