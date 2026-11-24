@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { afterEach, expect, test } from "vitest";
 import { enginePaths } from "../src/paths.js";
 import { Engine } from "../src/server.js";
+import { sidePrompt } from "../src/tools/side.js";
 import { TestClient } from "./client.js";
 
 // Side conversations, SD1–SD2 (docs/spec/24): started when you ask for separate work or with /side; each one works
@@ -212,3 +213,11 @@ test("from a conversation with no project, a task about one of your projects goe
 	await client.call("sessions.submit", { ref: chat, input: { text: `Separately, please.\n${sideStart({ title: "X", brief: "x", project: "Nowhere" })}` } });
 	await until(() => items(client, chat), (x) => x.some((i) => i.tool === "side_start" && i.status === "error" && i.output?.includes("No project called “Nowhere”")));
 }, 60_000);
+
+test("the rule names the tool its setting asks for: side_offer on Ask, side_start on Always start, neither when off", () => {
+	const first = (onUnrelated: "ask" | "start" | "off") => sidePrompt([], { onUnrelated, propose: false }).match(/Then (\w+) is the very first thing/)?.[1];
+	expect(first("ask")).toBe("side_offer");
+	expect(first("start")).toBe("side_start");
+	expect(sidePrompt([], { onUnrelated: "start", propose: false })).not.toContain("side_offer");
+	expect(first("off")).toBeUndefined();
+});
