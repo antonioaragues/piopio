@@ -58,4 +58,20 @@ scripts/swift-test.sh                                                  # what th
 scripts/build-app.sh                                                   # what the app job does
 ```
 
+## The protocol between the engine and the app
+
+The protocol is defined once, in `packages/protocol` (TypeBox); the app's Swift types in
+`apps/mac/Sources/PiopioKit/Protocol.swift` are kept by hand. Two checks hold them together (re-audit 2026-11-25):
+
+- `packages/protocol/test/schema.test.ts` (in `pnpm test`): `schema/protocol.schema.json` and
+  `schema/protocol.samples.json` are what the protocol says now. A change to the protocol fails here until
+  `corepack pnpm schema` is run and both files are committed with it.
+- `apps/mac/Tests/PiopioKitTests/ProtocolContractTests.swift` (in `scripts/swift-test.sh`): every sample of a result
+  or notification the app reads decodes into the Swift type it reads it as, with the app's decoder, and its table
+  lists every `client.call(…, as:)` in the app. A new method the app calls goes in that table; a failure is a field or
+  an enum value the two sides disagree on (the file says how to read each one).
+
+So a protocol change is: `packages/protocol/src/index.ts`, `corepack pnpm schema`, `Protocol.swift`, the contract
+table if the app calls something new, then `pnpm test` and `scripts/swift-test.sh`.
+
 `pnpm test` clears ambient `PIOPIO_*` variables first ([`vitest.setup.ts`](../vitest.setup.ts)), so a shell that has a built `Piopio.app` on `PATH` (or `PIOPIO_FM` set) gives the same answers as CI.

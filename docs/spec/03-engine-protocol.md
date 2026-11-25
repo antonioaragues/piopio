@@ -1,6 +1,6 @@
 # 03 — Engine Protocol
 
-The single contract between clients (Mac app, later the iOS app) and engines (Local, Cloud). It is defined in `packages/protocol` with TypeBox, exported as JSON Schema, and compiled into Swift `Codable` types.
+The single contract between clients (Mac app, later the iOS app) and engines (Local, Cloud). It is defined in `packages/protocol` with TypeBox and exported as JSON Schema with samples of every definition (`corepack pnpm schema`). The Swift `Codable` types are still written by hand; a contract test decodes every sample the app reads into them (docs/ci.md, "The protocol between the engine and the app").
 
 ## 1. Transport
 

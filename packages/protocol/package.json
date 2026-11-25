@@ -14,7 +14,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "schema": "node dist/emit-schema.js schema/protocol.schema.json"
+    "schema": "node dist/emit-schema.js schema/protocol.schema.json",
+    "test": "vitest run"
   },
   "dependencies": {
     "typebox": "1.3.27"
