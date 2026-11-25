@@ -361,11 +361,6 @@ export class AgentCore {
 		return this.def.contacts.find((c) => c.role === "owner");
 	}
 
-	/** The engine is stopping. */
-	close(): void {
-		this.safety.close();
-	}
-
 	/** The kill switch: every person's turn and every run stops. */
 	private async abortAll(): Promise<void> {
 		const { harness, context } = this.options;

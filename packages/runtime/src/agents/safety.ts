@@ -11,7 +11,7 @@
  * - Tools that change something return a card and record how to reverse it; Undo works for 24 hours.
  * - The Inbox: approvals, messages the agent sent the owner on its own, failed runs, budget and pause notes.
  */
-import { awaitWithContext, type Context } from "@earendil-works/chord/context";
+import type { Context } from "@earendil-works/chord/context";
 import { defineSignal, type ConversationId, type Harness, type HookApi, type JsonObject, type SignalResult } from "@earendil-works/pi-durable";
 import { Type } from "typebox";
 import { contactFor, type AgentDefinition, type Contact } from "./definition.js";
@@ -90,12 +90,12 @@ export type AgentStatus = { paused: boolean; spendUsd: number; budgetUsd?: numbe
 export const ApprovalDecided = defineSignal({ name: "piopio.approval-decided", version: 1, schema: Type.Object({}) });
 
 /** What the gate needs from the `beforeTool` hook's api. */
+/** What a call waiting for its approval sleeps on: the decision's signal, until the approval's deadline. */
+export type ApprovalSleep = { until: number; signals: ReturnType<typeof ApprovalDecided.key>[] };
 export type GateApi = Pick<HookApi, "taskId" | "readSignal" | "conversationId">;
 
 const DAY = 24 * 3600_000;
 const MAX_KEPT = 300;
-/** setTimeout's limit. */
-const MAX_TIMER = 2 ** 31 - 1;
 
 export interface SafetyHost {
 	readonly harness: Harness;
@@ -128,9 +128,6 @@ export interface SafetyHost {
 }
 
 export class Safety {
-	private readonly waiters = new Map<string, Set<(a: Approval) => void>>();
-	private closing = false;
-
 	constructor(private readonly host: SafetyHost) {}
 
 	private get def(): AgentDefinition {
@@ -143,11 +140,6 @@ export class Safety {
 
 	private iso(t = this.host.now()): string {
 		return new Date(t).toISOString();
-	}
-
-	/** The engine is stopping: `ask` waits end without cancelling their approvals. */
-	close(): void {
-		this.closing = true;
 	}
 
 	// ── Gate: pause and budget ──
@@ -240,7 +232,7 @@ export class Safety {
 	 * The `beforeTool` hook: blocks what's paused, over budget or not allowed; parks the call where approval is
 	 * required. pi-durable runs it again from the top on every wake (the decision, the deadline, a restart).
 	 */
-	async beforeTool(call: { id: string; name: string; arguments: unknown }, api: GateApi, context: Context): Promise<{ arguments?: JsonObject; block?: string; sleep?: { until: number; signals: ReturnType<typeof ApprovalDecided.key>[] } } | undefined> {
+	async beforeTool(call: { id: string; name: string; arguments: unknown }, api: GateApi, context: Context): Promise<{ arguments?: JsonObject; block?: string; sleep?: ApprovalSleep } | undefined> {
 		const conversationId = api.conversationId;
 		const gate = await this.gate();
 		if (!gate.ok) return { block: `${gate.message} Nothing was done.` };
@@ -269,14 +261,8 @@ export class Safety {
 		if (!rule) return undefined;
 		const asked = await this.request({ callId: call.id, tool: call.name, args, key: allowKey(call.name, args), rule, taskId: String(api.taskId) }, conversationId);
 		if (!asked) return undefined;
-		let approval = asked;
-		if (approval.status === "pending") {
-			const woke = await api.readSignal(ApprovalDecided, approval.id, context);
-			if (woke === undefined && approval.expiresAt > this.host.now()) return { sleep: { signals: [ApprovalDecided.key(approval.id)], until: approval.expiresAt } };
-			// Woken by the deadline, or by a decision (stored with its signal, so the record already says which).
-			if (woke !== undefined && "value" in woke) approval = (await this.host.read()).approvals?.find((a) => a.id === asked.id) ?? asked;
-			else approval = await this.settle(approval.id, "expired");
-		}
+		const approval = await this.answered(asked, api, context);
+		if ("sleep" in approval) return approval;
 		switch (approval.status) {
 			case "approved":
 				return approval.editedArgs ? { arguments: approval.editedArgs } : undefined;
@@ -291,17 +277,32 @@ export class Safety {
 
 	/**
 	 * A tool asks the owner in the middle of its call, for something only it knows (the browser: the site of the page it
-	 * would act on, docs/spec/22 W3). The same approval as a `requireApproval` rule's: in the chat, in Needs you, kept
-	 * across a restart by `callId`, and "Always allow" remembers `key`. `approved` is true at once when it's remembered.
+	 * would act on, docs/spec/22 W3). The same approval as a `requireApproval` rule's: in the chat, in Needs you, and
+	 * "Always allow" remembers `key`. `approved` is true at once when it's remembered. While the owner hasn't answered
+	 * it returns `sleep`, which the tool returns as its own result: pi-durable parks the call on the decision's signal
+	 * and runs the tool again on every wake (the decision, the deadline, a restart), when this finds the same approval
+	 * by `callId`.
 	 */
-	async ask(request: { callId: string; tool: string; args: JsonObject; key: string }, conversationId: ConversationId, context: Context): Promise<{ approved: boolean; reason?: string }> {
+	async ask(request: { callId: string; tool: string; args: JsonObject; key: string }, api: GateApi, context: Context): Promise<{ approved: boolean; reason?: string } | { sleep: ApprovalSleep }> {
 		const gate = await this.gate();
 		if (!gate.ok) return { approved: false, reason: gate.message };
-		let approval = await this.request({ ...request, rule: request.tool }, conversationId);
-		if (approval?.status === "pending") approval = await this.wait(approval, context);
-		if (!approval || approval.status === "approved") return { approved: true };
+		const asked = await this.request({ ...request, rule: request.tool, taskId: String(api.taskId) }, api.conversationId);
+		if (!asked) return { approved: true };
+		const approval = await this.answered(asked, api, context);
+		if ("sleep" in approval) return approval;
+		if (approval.status === "approved") return { approved: true };
 		if (approval.status === "denied") return { approved: false, ...(approval.reason ? { reason: approval.reason } : {}) };
 		return { approved: false, reason: approval.status === "expired" ? "no answer within 24 hours" : "the request was cancelled" };
+	}
+
+	/** The approval once it's settled, or the sleep that waits for it: on the decision's signal, until its deadline. */
+	private async answered(asked: Approval, api: GateApi, context: Context): Promise<Approval | { sleep: ApprovalSleep }> {
+		if (asked.status !== "pending") return asked;
+		const woke = await api.readSignal(ApprovalDecided, asked.id, context);
+		if (woke === undefined && asked.expiresAt > this.host.now()) return { sleep: { signals: [ApprovalDecided.key(asked.id)], until: asked.expiresAt } };
+		// Woken by the deadline, or by a decision (stored with its signal, so the record already says which).
+		if (woke !== undefined && "value" in woke) return (await this.host.read()).approvals?.find((a) => a.id === asked.id) ?? asked;
+		return this.settle(asked.id, "expired");
 	}
 
 	/** Whether "Always allow" remembers this key. */
@@ -337,28 +338,13 @@ export class Safety {
 			await this.inbox({ kind: "approval", title: who.runLabel ? `${who.runLabel} · needs your OK` : `Approval · ${created.tool}`, body: created.title, needsYou: true, approvalId: created.id, conversation: who.runId ? `run:${who.runId}` : who.peerId ? `agent:${who.peerId}` : `person:${who.contact?.id ?? "owner"}` });
 			this.host.onApproval?.(created);
 			approval = created;
+		} else if (approval.status === "pending" && call.taskId && approval.taskId !== call.taskId) {
+			// Asked before calls parked (it waited in memory then): this call is the one a decision wakes now.
+			const id = approval.id;
+			await this.host.write((s) => void ((s.approvals ?? []).find((a) => a.id === id)!.taskId = call.taskId!));
+			approval = { ...approval, taskId: call.taskId };
 		}
 		return approval;
-	}
-
-	/** A tool's own question (`ask`) waits inside its call, in this process. */
-	private async wait(approval: Approval, context: Context): Promise<Approval> {
-		if (approval.expiresAt <= this.host.now()) return this.settle(approval.id, "expired");
-		const decided = new Promise<Approval>((resolve) => {
-			const set = this.waiters.get(approval.id) ?? new Set();
-			set.add(resolve);
-			this.waiters.set(approval.id, set);
-		});
-		const timer = setTimeout(() => void this.settle(approval.id, "expired"), Math.min(MAX_TIMER, approval.expiresAt - this.host.now()));
-		try {
-			return await awaitWithContext(decided, context);
-		} catch (error) {
-			// Stopped (the turn was aborted): the request goes too. Not when the engine is only stopping.
-			if (!this.closing) await this.settle(approval.id, "cancelled").catch(() => undefined);
-			throw error;
-		} finally {
-			clearTimeout(timer);
-		}
 	}
 
 	/** The owner's answer. `args` approves with changes; `always` stops asking for this kind of call. */
@@ -382,10 +368,10 @@ export class Safety {
 		return settled;
 	}
 
-	/** A call ended without running (stopped while it waited): its pending approval goes too. */
+	/** A call ended without running (stopped while it waited): its pending approvals go too, a tool's own (`<callId>:…`) included. */
 	async dropped(conversationId: ConversationId | string, callId: string): Promise<void> {
-		const pending = (await this.host.read()).approvals?.find((a) => a.conversationId === String(conversationId) && a.callId === callId && a.status === "pending");
-		if (pending) await this.settle(pending.id, "cancelled");
+		const pending = ((await this.host.read()).approvals ?? []).filter((a) => a.conversationId === String(conversationId) && (a.callId === callId || a.callId.startsWith(`${callId}:`)) && a.status === "pending");
+		for (const a of pending) await this.settle(a.id, "cancelled");
 	}
 
 	private async settle(id: string, status: ApprovalStatus, args?: JsonObject, reason?: string, commit?: (apply: (s: SafetyState, status: ApprovalStatus) => void) => Promise<unknown>): Promise<Approval> {
@@ -403,8 +389,6 @@ export class Safety {
 		};
 		await (commit ? commit(apply) : this.host.write((s) => apply(s, status)));
 		if (!settled) throw new Error(`No approval ${id}.`);
-		for (const resolve of this.waiters.get(id) ?? []) resolve(settled);
-		this.waiters.delete(id);
 		this.host.onApproval?.(settled);
 		this.host.onStatus?.();
 		return settled;

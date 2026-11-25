@@ -161,12 +161,12 @@ export class AgentRuntime implements Runtime {
 		// The browser (docs/spec/22 W3): acting on a site it isn't allowed asks the owner like its other approvals.
 		let runtime: AgentRuntime | undefined;
 		const browser = options.browser
-			? (durableBrowserExtension(options.browser, (call, context) => async (request) => {
+			? (durableBrowserExtension(options.browser, (api, context) => async (request) => {
 					const core = runtime?.core;
 					if (!core) return { approved: false, reason: "the agent isn't ready" };
 					const site = request.site;
 					const page = typeof request.args.url === "string" ? request.args.url : undefined;
-					return core.safety.ask({ callId: `${call.callId}:site:${site}`, tool: "browser_site", args: { site, ...(page ? { page } : {}) }, key: `browser_site:${site}` }, call.conversationId as never, context as never);
+					return core.safety.ask({ callId: `${api.callId}:site:${site}`, tool: "browser_site", args: { site, ...(page ? { page } : {}) }, key: `browser_site:${site}` }, api as never, context as never);
 				}) as unknown as Extension)
 			: undefined;
 		const wantsBrowser = () => Boolean(browser && options.definition().tools.browser);
@@ -494,7 +494,6 @@ export class AgentRuntime implements Runtime {
 	}
 
 	async close(): Promise<void> {
-		this.core.close();
 		for (const view of await Promise.allSettled(this.views.values())) if (view.status === "fulfilled") await view.value.stop();
 		await this.harness.close(ctx);
 	}

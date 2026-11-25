@@ -13,8 +13,7 @@ import { TestClient } from "./client.js";
 type Ctx = { home: string; engine: Engine; client: TestClient };
 const open: Ctx[] = [];
 
-async function start(): Promise<Ctx> {
-	const home = mkdtempSync(join(tmpdir(), "piopio-agent-browser-"));
+async function start(home = mkdtempSync(join(tmpdir(), "piopio-agent-browser-"))): Promise<Ctx> {
 	const paths = enginePaths(home);
 	const engine = new Engine({ paths, faux: true, piSessionDir: join(home, "pi-sessions"), piAgentDir: join(home, "pi-agent"), trashDir: join(home, "trash"), agentsDir: join(home, "Agents"), hooksPort: 0, allowPrivateFetch: true, log: () => {} });
 	await engine.listen();
@@ -139,5 +138,50 @@ test("an agent's Allow once covers that call only; your sites in Settings › Br
 	await a.client.call("agents.decide", { ref, approvalId: again.approvalId, approve: true });
 	expect(tools(await finished(2))[1]).toMatchObject({ status: "done", output: "Clicked e4." });
 	expect((await a.client.call("browser.sites", {})).sites).toEqual([]);
+	app.close();
+}, 60_000);
+
+// The wait is pi-durable's: the call parks on the decision's signal, so no process holds it and other browser calls
+// aren't kept behind it. (It waited on a promise in the engine before: a restart lost it, and the conversation's
+// browser was held for up to a day.)
+test("a click that waits for the owner survives a restart, and Stop takes its request away", async () => {
+	let a = await start();
+	const fakeApp = async () => {
+		const paths = enginePaths(a.home);
+		const app = await TestClient.connect(paths.socket);
+		await app.call("engine.hello", { token: readFileSync(paths.tokenFile, "utf8").trim(), client: "fake app", protocolVersion: "1.0", services: ["app.tool", "browser"] });
+		app.appTool = (p) => ((p.sites ?? []).includes("example.com") ? { ok: true, output: `Clicked ${p.args.ref}.` } : { ok: false, output: "", needsSite: "example.com" });
+		return app;
+	};
+	let app = await fakeApp();
+	const { ref } = await a.client.call("agents.create", { name: "Scout", owner: "Antonio", model: { provider: "faux", id: "faux-1" } });
+	const got = await a.client.call("agents.get", { ref });
+	const def = got.definition as Record<string, any>;
+	await a.client.call("agents.save", { ref, definition: { ...def, tools: { ...def.tools, browser: { use: "asks" } } }, instructions: got.instructions });
+	const owner = () => a.client.call("sessions.open", { ref }).then((s: Snapshot) => s.items);
+	const pending = () => until(owner, (xs) => approvals(xs).some((x) => x.status === "pending")).then((xs) => approvals(xs).find((x) => x.status === "pending")!);
+	const finished = (n: number) => until(owner, (xs) => tools(xs).filter((t) => t.status === "done" || t.status === "error").length >= n);
+
+	await a.client.call("sessions.submit", { ref, input: { text: call("browser_click", { ref: "e3" }) } });
+	const asked = await pending();
+
+	// The engine stops and starts while it waits: the same request is still there, and its answer runs the click.
+	app.close();
+	a.client.close();
+	await a.engine.stop();
+	open.splice(open.indexOf(a), 1);
+	a = await start(a.home);
+	app = await fakeApp();
+	expect((await pending()).approvalId).toBe(asked.approvalId);
+	await a.client.call("agents.decide", { ref, approvalId: asked.approvalId, approve: true });
+	expect(tools(await finished(1))[0]).toMatchObject({ tool: "browser_click", status: "done", output: "Clicked e3." });
+	expect(approvals(await owner()).filter((x) => x.status === "pending")).toEqual([]);
+
+	// Stopped while it waits: the request is cancelled, and can't be answered any more.
+	await a.client.call("sessions.submit", { ref, input: { text: call("browser_click", { ref: "e4" }) } });
+	const second = await pending();
+	await a.client.call("sessions.abort", { ref });
+	await until(owner, (xs) => approvals(xs).every((x) => x.status !== "pending"));
+	await expect(a.client.call("agents.decide", { ref, approvalId: second.approvalId, approve: true })).rejects.toThrow();
 	app.close();
 }, 60_000);
