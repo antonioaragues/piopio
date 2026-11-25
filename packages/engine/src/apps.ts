@@ -550,15 +550,17 @@ export class Apps {
 	}
 
 	/**
-	 * Stop reading: the app's sources aren't allowed any more, and what it read from your calendars is forgotten.
-	 * It asks for Allow again before it reads anything.
+	 * Stop reading: the app's sources aren't allowed any more, and everything it read is forgotten (files, your
+	 * calendars, Piopio's numbers), so it shows nothing until you allow it again (re-audit 2026-11-25 V7: only the
+	 * calendars went, and the rest kept showing). Waiting for Allow after a page edit is different: it shows what you
+	 * allowed before (`view`).
 	 */
 	revoke(path: string): AppView {
 		path = resolve(path);
 		delete this.state.allowed[path];
 		this.saveState();
 		const cache = this.readCache(path);
-		for (const [name, c] of Object.entries(cache.sources)) if (c.accounts) delete cache.sources[name];
+		cache.sources = {};
 		this.writeCache(path, cache);
 		return this.view(path, {});
 	}
@@ -813,6 +815,16 @@ ${sources}
 					changed = true;
 				}
 				return { id, label: id, state: "gone", error: `${id} isn't connected any more.` };
+			}
+			// Reading it set to Ask or Off in Settings › Connectors: what it read goes now, not at the next read (V7).
+			const permission = this.opts.calendar?.permission(id) ?? "runs";
+			if (permission !== "runs") {
+				const error = `Reading ${a.app} (${a.label}) ${permission === "off" ? "is off" : "asks first"} in Settings › Connectors, so apps don't read it.`;
+				if (c?.events || c?.error !== error) {
+					accounts[id] = { error, failedAt: c?.failedAt ?? new Date().toISOString() };
+					changed = true;
+				}
+				return { id, label: `${a.app} (${a.label})`, state: "failed", error, failedAt: accounts[id]!.failedAt! };
 			}
 			return { id, label: `${a.app} (${a.label})`, state: c?.error ? "failed" : "ok", ...(c?.error ? { error: c.error } : {}), ...(c?.readAt ? { readAt: c.readAt } : {}), ...(c?.failedAt ? { failedAt: c.failedAt } : {}) };
 		});

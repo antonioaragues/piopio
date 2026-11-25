@@ -164,6 +164,17 @@ describe("when the data changes or goes wrong", () => {
 });
 
 describe("allowing sources (docs/spec/35 §3.4)", () => {
+	// Re-audit 2026-11-25 V7: Stop reading forgot only calendars; a file's rows kept showing.
+	it("Stop reading forgets a file's rows too, until it's allowed and read again", async () => {
+		const { apps, plan } = await projectApp();
+		expect(Object.keys(apps.openApp(plan.path).data)).toEqual(["expenses"]);
+		const stopped = apps.revoke(plan.path);
+		expect(stopped.data).toEqual({});
+		expect(apps.openApp(plan.path).data).toEqual({});
+		expect(Object.keys((await apps.allow(plan.path)).data)).toEqual(["expenses"]);
+		apps.closeApp(plan.path);
+	});
+
 	it("a page edit asks nothing; a new source waits for Allow, drawing what was read before", async () => {
 		const { apps, plan, project } = await projectApp();
 		const html = readFileSync(plan.path, "utf8");
@@ -392,6 +403,20 @@ describe("calendar sources (docs/spec/35 §16)", () => {
 		const waiting = await apps.refresh(plan.path);
 		expect(waiting.allowed).toBe(false);
 		expect((await apps.allow(plan.path)).data.week).toHaveLength(3);
+	});
+
+	// Re-audit 2026-11-25 V7: an app opened without a new read still showed an account's events after its reading was set to Off.
+	it("set to Off or Ask in Settings › Connectors: an app opened without a read shows nothing of that account", async () => {
+		const { apps, plan, cal } = await calendarApp();
+		expect((apps.openApp(plan.path).data.week as unknown[]).length).toBe(2);
+		cal.state.permission["outlook:work"] = "off";
+		const opened = apps.openApp(plan.path);
+		expect((opened.data.week as { title: string }[]).map((e) => e.title)).toEqual(["Dentist"]);
+		expect(opened.sources[0]!.error).toContain("Reading Outlook (me@work.com) is off");
+		// Back to Runs: nothing comes back before a new read.
+		cal.state.permission["outlook:work"] = "runs";
+		expect((apps.openApp(plan.path).data.week as { title: string }[]).map((e) => e.title)).toEqual(["Dentist"]);
+		apps.stop();
 	});
 
 	it("Stop reading forgets what it read and waits for Allow", async () => {
