@@ -14,7 +14,7 @@ import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, statSync, watch, writeFileSync, type FSWatcher } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
-import { physical, sensitivePath } from "@piopio/pi-extensions";
+import { credentialAt } from "@piopio/pi-extensions";
 
 export const MANIFEST_ID = "piopio-app";
 /** The most a source may hand the page (§3.2). */
@@ -267,9 +267,8 @@ export function readSource(path: string, columns?: string[]): { data: unknown } 
 	const ext = extname(path).slice(1).toLowerCase();
 	if (!READABLE.has(ext)) return { error: `${name} isn't a file an app can read (CSV, TSV, JSON, Markdown or text).` };
 	// Keys and credentials, wherever a symlink makes them look like they are: never an app's data.
-	const home = homedir();
-	const secret = sensitivePath(resolve(path), home) ?? sensitivePath(physical(path), physical(home));
-	if (secret) return { error: `${name} is a key or credentials file (${secret.replace(/^Touches /, "in ")}), which apps don't read.` };
+	const secret = credentialAt(path, { home: homedir() });
+	if (secret) return { error: `${name} is a key or credentials file (in ${secret.label}), which apps don't read.` };
 	let size: number;
 	try {
 		const s = statSync(path);

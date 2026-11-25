@@ -8,10 +8,15 @@
  *   ("example.com", "*.example.com"), or the user allowed it in this session. Any other host waits while the user is
  *   asked, once per host: Allow (this session), Always (a rule of the project) or Deny (refused for the session).
  * - A stopped run refuses what was waiting without deciding: the next command that wants the host asks again.
+ * - A name is resolved once, here, and the connection goes to the address checked: a name that resolves to this Mac or
+ *   a private network (a LAN, 169.254.x.x) is refused, so an allowed name can't be pointed at them (DNS rebinding).
+ *   An IP address is asked about as itself. Trusting the project opens the network, LAN included.
  * - It keeps a list of what it refused, which the bash tool turns into a note for the agent.
  */
 import { createServer, request as httpRequest, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import { lookup } from "node:dns/promises";
 import { connect as tcpConnect, isIP, type Socket } from "node:net";
+import { isPrivateAddress } from "./tools/web.js";
 
 /** Hosts a project's commands reach without asking: where installs and builds get their packages, and GitHub (reads: commands are signed out of it in the sandbox). */
 export const BUILT_IN_HOSTS = [
@@ -68,9 +73,13 @@ export type NetworkFilterOptions = {
 	/** Always: the project keeps the host as a rule. */
 	addRule: (pattern: string) => void;
 	builtIn?: readonly string[];
-	/** Tests: where a host really is. */
+	/** Tests: where a host really is (no resolving, no address check). */
 	route?: (host: string, port: number) => { host: string; port: number };
+	/** Tests: a name's addresses. */
+	resolve?: (host: string) => Promise<string[]>;
 };
+
+const LOCAL_NAMES = new Set(["localhost", "127.0.0.1", "::1"]);
 
 export class NetworkFilter {
 	private server?: Server;
@@ -112,7 +121,7 @@ export class NetworkFilter {
 	/** Whether `host` may be reached now: the lists, else the user (one question per host at a time). */
 	async allows(host: string): Promise<boolean> {
 		const h = host.toLowerCase().replace(/\.$/, "");
-		if (h === "localhost" || h === "127.0.0.1" || h === "::1") return true;
+		if (LOCAL_NAMES.has(h)) return true;
 		if (this.denied.has(h)) return false;
 		if (this.allowed.has(h) || [...(this.opts.builtIn ?? BUILT_IN_HOSTS), ...this.opts.rules()].some((p) => hostMatches(h, p))) return true;
 		let pending = this.asking.get(h);
@@ -133,6 +142,19 @@ export class NetworkFilter {
 		return pending;
 	}
 
+	/**
+	 * Where to connect for an allowed `host` on `port`: the test route, the host itself when it's an address (asked
+	 * about as such) or this Mac, else the name's first address, refused when any of them is local or private.
+	 */
+	private async destination(host: string, port: number): Promise<{ host: string; port: number } | { refused: string }> {
+		if (this.opts.route) return this.opts.route(host, port);
+		if (isIP(host) || LOCAL_NAMES.has(host)) return { host, port };
+		const addresses = await (this.opts.resolve?.(host) ?? lookup(host, { all: true }).then((r) => r.map((a) => a.address))).catch(() => [] as string[]);
+		if (!addresses.length) return { refused: `${host} doesn't resolve` };
+		if (addresses.some(isPrivateAddress)) return { refused: `${host} resolves to a local or private address` };
+		return { host: addresses[0]!, port };
+	}
+
 	private refuse(host: string): void {
 		this.refused.push({ host, at: Date.now() });
 		if (this.refused.length > 500) this.refused.splice(0, this.refused.length - 500);
@@ -150,7 +172,11 @@ export class NetworkFilter {
 			this.refuse(target.host);
 			return void client.end("HTTP/1.1 403 Forbidden\r\nX-Piopio: network filter\r\n\r\n");
 		}
-		const to = this.opts.route?.(target.host, target.port) ?? target;
+		const to = await this.destination(target.host, target.port);
+		if ("refused" in to) {
+			this.refuse(target.host);
+			return void client.end(`HTTP/1.1 403 Forbidden\r\nX-Piopio: network filter (${to.refused})\r\n\r\n`);
+		}
 		const upstream = tcpConnect(to.port, to.host, () => {
 			client.write("HTTP/1.1 200 Connection Established\r\n\r\n");
 			if (head.length) upstream.write(head);
@@ -178,7 +204,12 @@ export class NetworkFilter {
 			this.refuse(url.hostname);
 			return void res.writeHead(403, { "x-piopio": "network filter" }).end(`Piopio's network filter didn't let this project's commands reach ${url.hostname}.`);
 		}
-		const to = this.opts.route?.(url.hostname, port) ?? { host: url.hostname, port };
+		const to = await this.destination(url.hostname.replace(/^\[|\]$/g, ""), port);
+		if ("refused" in to) {
+			this.refuse(url.hostname);
+			return void res.writeHead(403, { "x-piopio": "network filter" }).end(`Piopio's network filter didn't let this project's commands reach ${url.hostname}: ${to.refused}.`);
+		}
+		// Connected by address; the Host header still names the site, so virtual hosts answer as usual.
 		const headers = Object.fromEntries(Object.entries(req.headers).filter(([k]) => !k.startsWith("proxy-")));
 		const out = httpRequest({ host: to.host, port: to.port, method: req.method, path: `${url.pathname}${url.search}`, headers }, (up) => {
 			res.writeHead(up.statusCode ?? 502, up.headers);

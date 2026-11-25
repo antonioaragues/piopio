@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { describe, expect, test } from "vitest";
-import { confine, networkHint, proxyEnv, sandboxExtension, sandboxHidden, sandboxHint, sandboxRoots, sandboxShims, seatbeltProfile } from "../src/sandbox.js";
+import { confine, networkHint, proxyEnv, sandboxExtension, sandboxHidden, sandboxHint, sandboxProfile, sandboxRoots, sandboxShims, seatbeltProfile } from "../src/sandbox.js";
 
 // The wrappers go in Piopio's data folder: a scratch one here, never the user's.
 process.env.PIOPIO_HOME = realpathSync(mkdtempSync(join(tmpdir(), "pio-home-")));
@@ -115,6 +115,39 @@ describe.skipIf(process.platform !== "darwin")("piopio-sandbox", () => {
 		expect(sh(`cat ${join(home, ".ssh", "work_key.pub")} ${join(home, ".ssh", "config")}`).stdout).toBe("ssh-ed25519 AAAA me\nHost x\n");
 		expect(sh("/usr/bin/security list-keychains").stderr).toContain("Operation not permitted");
 	});
+
+	test("every credential paths.ts marks hidden is unreadable; the ones tools need stay readable", () => {
+		const base = realpathSync(mkdtempSync(join(tmpdir(), "pio-cred2-")));
+		const home = join(base, "home");
+		const project = join(base, "project");
+		mkdirSync(project);
+		const hiddenFiles = [".config/gh/hosts.yml", ".config/gcloud/credentials.db", ".claude/.credentials.json", ".cargo/credentials.toml", ".vault-token"];
+		const readable = [".npmrc", ".docker/config.json", ".kube/config"];
+		for (const f of [...hiddenFiles, ...readable]) {
+			mkdirSync(join(home, f, ".."), { recursive: true });
+			writeFileSync(join(home, f), "x\n");
+		}
+		const sh = (command: string) => spawnSync("/bin/sh", ["-c", confine(command, sandboxProfile(project, { home, piopioHome: join(base, "P") }), "/bin/sh")], { cwd: project, encoding: "utf8" });
+		for (const f of hiddenFiles) expect(sh(`cat ${join(home, f)}`).stderr, f).toContain("Operation not permitted");
+		for (const f of readable) expect(sh(`cat ${join(home, f)}`).stdout, f).toBe("x\n");
+	});
+
+	// Re-audit 2026-11-25 (V3): a confined command could plant code that pi, Claude Code or git run later, unconfined.
+	test("the project's agent setup can't be written, created, renamed away or replaced; the rest of the project can", () => {
+		const project = realpathSync(mkdtempSync(join(tmpdir(), "pio-control-")));
+		spawnSync("git", ["init", "-q"], { cwd: project });
+		mkdirSync(join(project, ".pi", "skills"), { recursive: true });
+		mkdirSync(join(project, ".claude"));
+		const sh = (command: string) => spawnSync("/bin/sh", ["-c", confine(command, sandboxProfile(project), "/bin/sh")], { cwd: project, encoding: "utf8" });
+		for (const command of ["mkdir .pi/extensions", "echo x > .pi/settings.json", "echo x > .claude/settings.json", "echo x > .claude/settings.local.json", "echo x > .mcp.json", "echo x > .git/hooks/post-checkout", "mv .pi .pi-old", "rm -rf .claude", "ln -s /tmp .pi/extensions"]) {
+			const r = sh(command);
+			expect(r.status, command).not.toBe(0);
+			expect(r.stderr, command).toContain("Operation not permitted");
+		}
+		expect(existsSync(join(project, ".pi", "extensions"))).toBe(false);
+		expect(existsSync(join(project, ".pi", "skills"))).toBe(true);
+		expect(sh("echo ok > .pi/skills/note.md && mkdir -p src && echo x > src/a.ts && git add -A && git -c user.email=a@b -c user.name=a commit -qm x && echo done").stdout.trim()).toBe("done");
+	});
 });
 
 test("a confined command's failure says what stopped it: signed out of GitHub, a write outside, a nested sandbox", () => {
@@ -144,6 +177,11 @@ describe.skipIf(process.platform !== "darwin")("a filtered network (docs/spec/39
 			expect(await sh(`curl -s --noproxy '*' http://127.0.0.1:${port}/`)).toBe("local");
 			expect(await sh("curl -sS --noproxy '*' --max-time 5 -o /dev/null http://1.1.1.1/; echo exit=$?")).toMatch(/exit=7/);
 			expect(await sh("echo $HTTPS_PROXY $NO_PROXY $NODE_USE_ENV_PROXY")).toBe("http://127.0.0.1:4321 localhost,127.0.0.1,::1 1");
+			// No name lookups (re-audit V5: DNS carried data past the filter), but "localhost" still resolves.
+			const lookup = (name: string) => sh(`${process.execPath} -e 'require("dns").lookup("${name}", (e, a) => console.log(e ? e.code : "ok"))'`);
+			expect(await lookup("example.com")).toBe("ENOTFOUND");
+			expect(await lookup("localhost")).toBe("ok");
+			expect(await sh(`curl -s --noproxy '*' http://localhost:${port}/`)).toBe("local");
 			// Not filtered: the profile has no network rule.
 			expect(seatbeltProfile(sandboxRoots(project))).not.toContain("network-outbound (remote ip");
 		} finally {

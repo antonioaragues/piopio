@@ -6,7 +6,7 @@ import { readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { git } from "./git.js";
 import { EngineError } from "./models.js";
-import { physical } from "@piopio/pi-extensions";
+import { under, within } from "@piopio/pi-extensions";
 
 const SKIP = new Set([".git", "node_modules", ".build", "DerivedData", "dist", "build", ".next", ".venv", "venv", "__pycache__", ".turbo", ".cache"]);
 const MAX_FILES = 50_000;
@@ -85,9 +85,13 @@ function walk(root: string): string[] {
 
 const MAX_READ = 2 * 1024 * 1024;
 
-/** A file of the folder for the viewer: text only, cut at 2 MB. The path must stay inside `cwd`. */
+/**
+ * A file of the folder for the viewer: text only, cut at 2 MB. Where the file really is must be inside `cwd`: a
+ * repository can ship `notes.md -> ~/.npmrc`, and the viewer would show it.
+ */
 export async function readProjectFile(cwd: string, path: string): Promise<{ content: string; size: number; truncated: boolean; binary: boolean }> {
 	const full = inside(cwd, path);
+	if (!within(full, cwd)) throw new EngineError("INVALID", "That file is a link to somewhere outside the project; open it there.");
 	const { readFile, stat } = await import("node:fs/promises");
 	const info = await stat(full).catch(() => {
 		throw new EngineError("NOT_FOUND", `No file ${path}`);
@@ -106,17 +110,15 @@ export async function readProjectFile(cwd: string, path: string): Promise<{ cont
  */
 export async function writeProjectFile(cwd: string, path: string, content: string): Promise<void> {
 	const full = inside(cwd, path);
-	const real = physical(full);
-	const root = physical(cwd);
-	if (real !== root && !real.startsWith(`${root}/`)) throw new EngineError("INVALID", "That file is a link to somewhere outside the project; edit it there.");
+	if (!within(full, cwd)) throw new EngineError("INVALID", "That file is a link to somewhere outside the project; edit it there.");
 	const { writeFile } = await import("node:fs/promises");
 	await writeFile(full, content);
 }
 
+/** `path` resolved in `cwd`, refused when it's spelled outside it ("../x", "/etc"); callers that open it check `within` too. */
 function inside(cwd: string, path: string): string {
-	const root = resolve(cwd);
-	const full = resolve(root, path);
-	if (full !== root && !full.startsWith(`${root}/`)) throw new EngineError("INVALID", "That path is outside the project.");
+	const full = resolve(cwd, path);
+	if (!under(full, resolve(cwd))) throw new EngineError("INVALID", "That path is outside the project.");
 	return full;
 }
 

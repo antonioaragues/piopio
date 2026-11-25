@@ -3,7 +3,9 @@
  * the user approved, or one a rule allows, can only write inside the project (docs/research/deepseek-harness.md §1.1).
  *
  * - Reading Piopio's own data folder (the engine's token and socket among it) and AI and cloud sign-in files is refused
- *   too, so a confined command can't talk to the engine or take keys (`sandboxHidden`).
+ *   too, so a confined command can't talk to the engine or take keys (`sandboxHidden`, from paths.ts `credentials`).
+ * - The project's agent setup (paths.ts `PROJECT_CONTROL`: pi's extensions and settings, Claude Code's hooks, git's
+ *   hooks) can't be written: it runs code in later sessions, outside the sandbox (`sandboxProtected`).
  * - Everything else works as before: reading, the network, running tools. Writes are allowed in the project folder
  *   (the worktree for a worktree session, plus the repository's git folder), temporary folders and the usual package
  *   and build caches, so installs and builds keep working.
@@ -22,6 +24,7 @@ import { isAbsolute, join, resolve } from "node:path";
 import { createBashToolDefinition, getShellConfig, type ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { startedText, type ProcessManager } from "./background.js";
+import { credentials, piopioHome, PROJECT_CONTROL, PROJECT_CONTROL_DIRS } from "./paths.js";
 
 export const SANDBOX_EXEC = "/usr/bin/sandbox-exec";
 export const OUTSIDE_PROJECT = "outside_project";
@@ -128,11 +131,6 @@ exec ${tool} "$@"
 
 let shims: string | undefined | null = null;
 
-/** Piopio's data folder, as the engine has it (`PIOPIO_HOME`, set by the app). */
-function piopioHome(home = homedir()): string {
-	return process.env.PIOPIO_HOME ?? join(home, "Library", "Application Support", "Piopio");
-}
-
 /**
  * Where the wrappers live: in Piopio's data folder, which confined commands can't write to (they come first on PATH, so
  * a folder they could write, like the temporary one, would let one command plant a fake `git` for every later one).
@@ -170,21 +168,35 @@ function sbpl(value: string): string {
 	return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }
 
-/** Files of plain-text credentials that builds and tests don't read: git's and netrc's passwords, registry tokens. */
-const CREDENTIAL_FILES = [".netrc", ".git-credentials", ".pypirc", ".gem/credentials"];
-
 /**
- * What sandboxed commands may not read or connect to: Piopio's own data folder (the engine's token and socket, every
- * chat, agent and secret it keeps), the sign-ins of AI tools and cloud CLIs, plain-text credentials and SSH private
- * keys. Without this a confined command could read the token, talk to the engine and change its own permissions, or
- * take the user's keys and send them anywhere (the network is open).
- * Left readable on purpose: the rest of ~/.ssh (config, known_hosts, public keys) and ~/.gnupg, so git over SSH (with
- * the agent's keys) and signed commits work; the keychains, which code signing needs.
+ * What sandboxed commands may not read or connect to: the credentials paths.ts marks hidden (Piopio's own data folder,
+ * with the engine's token and socket and every chat, agent and secret it keeps; AI tools' and cloud CLIs' sign-ins;
+ * plain-text passwords and registry tokens) and SSH private keys. Without this a confined command could read the token,
+ * talk to the engine and change its own permissions, or take the user's keys and send them anywhere.
+ * The credentials marked readable stay readable (the rest of ~/.ssh, ~/.gnupg, the keychains, ~/.npmrc): tools need
+ * them at work. Add a location to paths.ts `CREDENTIALS`, not here.
  */
 export function sandboxHidden(options: { home?: string; piopioHome?: string } = {}): string[] {
 	const home = options.home ?? homedir();
-	const piopio = options.piopioHome ?? piopioHome(home);
-	return [piopio, join(home, ".pi", "agent", "auth.json"), join(home, ".codex", "auth.json"), join(home, ".aws"), ...CREDENTIAL_FILES.map((f) => join(home, f)), ...sshPrivateKeys(home)].map(real);
+	return [...credentials(options).filter((c) => c.commands === "hidden").map((c) => c.path), ...sshPrivateKeys(home).map(real)];
+}
+
+/**
+ * What in the project sandboxed commands may not write, though it's inside a root: its agent setup (paths.ts
+ * `PROJECT_CONTROL`, in the project folder and in the repository's git folder for `.git/hooks`), and the setup folders
+ * themselves (`.pi`, `.claude`), so one can't be renamed away and replaced whole.
+ */
+export function sandboxProtected(cwd: string): { subpaths: string[]; literals: string[] } {
+	const root = real(cwd);
+	const git = gitCommonDir(cwd);
+	const subpaths = PROJECT_CONTROL.map((entry) => join(root, entry));
+	if (git && git !== join(root, ".git")) subpaths.push(join(git, "hooks"));
+	return { subpaths, literals: PROJECT_CONTROL_DIRS.map((dir) => join(root, dir)) };
+}
+
+/** The profile for a command run in `cwd`: the roots it may write, what it can't read, what in the project it can't change. */
+export function sandboxProfile(cwd: string, options: { extra?: readonly string[]; filtered?: boolean; home?: string; piopioHome?: string; tmp?: string } = {}): string {
+	return seatbeltProfile(sandboxRoots(cwd, options), sandboxHidden(options), undefined, options.filtered ?? false, sandboxProtected(cwd));
 }
 
 /** The private keys in ~/.ssh, whatever they're named: the files that start like one. */
@@ -231,9 +243,10 @@ export const KEYCHAIN_TOOL = "/usr/bin/security";
  * `readable` folders there (the wrappers) stay readable only.
  * Reading in `hidden` is refused for contents (`file-read-data`: files and folder listings), not metadata: tools that
  * resolve their working folder (`realpath`, `git`) stat each folder above it. Later rules win in Seatbelt, but only over
- * a rule for the same operation, so each allow names the operation its deny does.
+ * a rule for the same operation, so each allow names the operation its deny does; `protect` comes last, over the roots.
+ * Use `sandboxProfile(cwd)`, which fills these in; this is the part that writes the rules.
  */
-export function seatbeltProfile(roots: readonly string[], hidden: readonly string[] = sandboxHidden(), readable: readonly string[] = [real(sandboxShimsDir())], filtered = false): string {
+export function seatbeltProfile(roots: readonly string[], hidden: readonly string[] = sandboxHidden(), readable: readonly string[] = [real(sandboxShimsDir())], filtered = false, protect: { subpaths: readonly string[]; literals: readonly string[] } = { subpaths: [], literals: [] }): string {
 	const subpaths = (paths: readonly string[]) => paths.map((p) => `(subpath ${sbpl(p)})`).join(" ");
 	const lines = ["(version 1)", "(allow default)", "(deny file-write*)", '(allow file-write* (subpath "/dev"))', `(allow file-write* ${subpaths(roots)})`, `(deny process-exec (literal ${sbpl(KEYCHAIN_TOOL)}))`];
 	if (hidden.length) {
@@ -245,10 +258,17 @@ export function seatbeltProfile(roots: readonly string[], hidden: readonly strin
 		if (rootsInside.length) lines.push(`(allow file-write* ${subpaths(rootsInside)})`);
 	}
 	// A filtered network (docs/spec/39): no address but this Mac's, where dev servers, tests and the filter's proxy are.
-	// Unix sockets (DNS, ssh-agent) aren't addresses; the hidden ones stay refused above.
-	if (filtered) lines.push('(deny network-outbound (remote ip "*:*"))', '(allow network-outbound (remote ip "localhost:*"))');
+	// And no name lookups: a query for <data>.attacker.example reaches the attacker's DNS server through macOS's resolver,
+	// past the filter (re-audit 2026-11-25 V5). Names resolve in the proxy, which asks first; "localhost" still resolves
+	// (checked 2026-11-25: Node, curl). Other unix sockets (ssh-agent) aren't addresses; the hidden ones stay refused.
+	if (filtered) lines.push('(deny network-outbound (remote ip "*:*"))', '(allow network-outbound (remote ip "localhost:*"))', `(deny network-outbound (remote unix-socket (subpath ${sbpl(MDNS_RESPONDER)})))`);
+	const protectedPaths = [...protect.subpaths.map((p) => `(subpath ${sbpl(p)})`), ...protect.literals.map((p) => `(literal ${sbpl(p)})`)];
+	if (protectedPaths.length) lines.push(`(deny file-write* ${protectedPaths.join(" ")})`);
 	return lines.join("\n");
 }
+
+/** macOS's resolver: every name lookup (getaddrinfo) is a message on this socket. */
+const MDNS_RESPONDER = "/private/var/run/mDNSResponder";
 
 /** A POSIX shell word. */
 export function shellQuote(value: string): string {
@@ -309,7 +329,7 @@ export function sandboxExtension(bridge: SandboxBridge, options: { shellPath?: (
 		// The network as the next command gets it, read just before it starts (the spawn hook can't wait).
 		let network: FilteredNetwork | undefined;
 		const line = (command: string, at: string) => {
-			const profile = seatbeltProfile(sandboxRoots(at, { extra: bridge.extraRoots?.() ?? [] }), undefined, undefined, network !== undefined);
+			const profile = sandboxProfile(at, { extra: bridge.extraRoots?.() ?? [], filtered: network !== undefined });
 			return confine(command, profile, shell(), sandboxShims(), network?.port ? proxyEnv(network.port) : {});
 		};
 		// A proxy that can't start still filters: nothing outside this Mac, rather than everything.

@@ -121,3 +121,25 @@ test("plain HTTP is forwarded to an allowed host, and refused with a note for an
 	expect(no.status).toBe(403);
 	expect(no.body).toContain("didn't let this project's commands reach elsewhere.example");
 });
+
+// Re-audit 2026-11-25 V5: an allowed name was connected to wherever it resolved at that moment, LAN and 169.254.169.254
+// included (DNS rebinding). Now a name is resolved once in the filter and refused when it points at a private address.
+test("an allowed name that resolves to this Mac or a private network is refused, tunneled or forwarded", async () => {
+	const addresses: Record<string, string[]> = { "registry.example": ["10.0.0.5"], "api.mine.example": ["93.184.216.34", "169.254.169.254"], "a.cdn.example": ["::ffff:127.0.0.1"], "gone.cdn.example": [] };
+	const f = new NetworkFilter({ rules: () => ["api.mine.example"], ask: async () => "deny", addRule: () => {}, builtIn: ["registry.example", "*.cdn.example"], resolve: async (h) => addresses[h] ?? [] });
+	closing.push(f);
+	const port = await f.start();
+	for (const host of ["registry.example", "api.mine.example", "a.cdn.example", "gone.cdn.example"]) {
+		const r = await tunnel(port, `${host}:443`);
+		expect(r.status, host).toBe("HTTP/1.1 403 Forbidden");
+	}
+	const body = await new Promise<string>((resolve) => {
+		const s = connect(port, "127.0.0.1", () => s.write("GET http://registry.example/x HTTP/1.1\r\nHost: registry.example\r\nConnection: close\r\n\r\n"));
+		let buf = "";
+		s.on("data", (d) => (buf += d.toString()));
+		s.on("end", () => resolve(buf));
+	});
+	expect(body).toContain("403");
+	expect(body).toContain("resolves to a local or private address");
+	expect(f.refusedSince(0)).toEqual(["registry.example", "api.mine.example", "a.cdn.example", "gone.cdn.example"]);
+});
