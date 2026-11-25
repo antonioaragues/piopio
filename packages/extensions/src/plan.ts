@@ -2,17 +2,34 @@
  * piopio-plan: plan mode (docs/spec/05-build §4). While it's on, the agent explores with read-only tools and
  * ends with `propose_plan`; edits, writes and commands that change things are refused. Approving the plan
  * turns plan mode off, and the agent builds it. Off by default; `/plan` toggles it (also in the pi CLI).
+ *
+ * Whether it's on is kept in the session, as an entry of its own (pi's way to keep an extension's state): it survives
+ * closing the session, follows the branch you're on in the session tree, and pi's CLI sees what Piopio set.
  */
-import { defineTool, type ExtensionFactory } from "@earendil-works/pi-coding-agent";
+import { defineTool, type ExtensionContext, type ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { readOnlyCommand } from "./policy.js";
 
 /** The answer to a plan: approved (as proposed, or as the user edited it) or sent back with a note. */
 export type PlanAnswer = { approved: boolean; note?: string; summary?: string; steps?: string[] };
 
+/** The session entry that says plan mode went on or off. */
+export const PLAN_ENTRY = "piopio.plan";
+
+/** Whether plan mode is on at the end of a branch's entries; undefined when no entry says. */
+export function planFrom(entries: readonly { type: string; customType?: string; data?: unknown }[]): boolean | undefined {
+	for (let i = entries.length - 1; i >= 0; i--) {
+		const e = entries[i]!;
+		if (e.type === "custom" && e.customType === PLAN_ENTRY) return (e.data as { on?: unknown } | undefined)?.on === true;
+	}
+	return undefined;
+}
+
 export interface PlanBridge {
-	active(): boolean;
-	setActive(on: boolean): void;
+	/** What a branch without an entry starts as: a conversation made in plan mode, or one from before the entry existed. */
+	initial?(): boolean;
+	/** It went on or off, or the session moved to a branch where it's different (the app shows it). */
+	changed?(on: boolean): void;
 	/** Shows the plan and waits; undefined when the run was stopped. */
 	propose(plan: { callId: string; summary: string; steps: string[] }, signal: AbortSignal | undefined): Promise<PlanAnswer | undefined>;
 }
@@ -34,11 +51,28 @@ function section(event: unknown, name: string, text: string | undefined): void {
 	else delete sections[name];
 }
 
-export function planExtension(bridge?: PlanBridge): ExtensionFactory {
-	let cliActive = process.env.PIOPIO_PLAN === "1";
-	const active = () => bridge?.active() ?? cliActive;
-	const setActive = (on: boolean) => (bridge ? bridge.setActive(on) : (cliActive = on));
+/** What the host holds to read and set plan mode from outside the conversation (the app's switch). */
+export type PlanHandle = { active(): boolean; setActive(on: boolean): void };
+
+export function planExtension(bridge?: PlanBridge, handle?: (plan: PlanHandle) => void): ExtensionFactory {
 	return (pi) => {
+		const start = () => bridge?.initial?.() ?? process.env.PIOPIO_PLAN === "1";
+		let on = start();
+		const active = () => on;
+		const setActive = (next: boolean) => {
+			if (next === on) return;
+			on = next;
+			pi.appendEntry(PLAN_ENTRY, { on });
+			bridge?.changed?.(on);
+		};
+		const restore = (ctx: ExtensionContext) => {
+			const before = on;
+			on = planFrom(ctx.sessionManager.getBranch() as never) ?? start();
+			if (on !== before) bridge?.changed?.(on);
+		};
+		pi.on("session_start", (_e, ctx) => restore(ctx));
+		pi.on("session_tree", (_e, ctx) => restore(ctx));
+		handle?.({ active, setActive });
 		pi.registerCommand("plan", {
 			description: "Turn plan mode on or off (explore and propose a plan before changing anything)",
 			handler: async (_args, ctx) => {

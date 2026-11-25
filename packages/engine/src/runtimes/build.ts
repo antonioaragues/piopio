@@ -19,7 +19,7 @@ import {
 	type AgentSession,
 	type ExtensionFactory,
 } from "@earendil-works/pi-coding-agent";
-import { backgroundExtension, confine, diagnosticsExtension, ProcessManager, proxyEnv, sandboxProfile, sandboxUnavailable, type BackgroundProcess, type FilteredNetwork } from "@piopio/pi-extensions";
+import { backgroundExtension, confine, diagnosticsExtension, ProcessManager, proxyEnv, sandboxProfile, sandboxUnavailable, type BackgroundProcess, type FilteredNetwork, type PlanHandle } from "@piopio/pi-extensions";
 import { NetworkFilter } from "../network-filter.js";
 import { codeReviewExtension, type ReviewBridge } from "../code-review.js";
 import { approvalsExtension, checkpointsExtension, goalExtension, notifyExtension, planExtension, presentExtension, sandboxExtension, subagentsExtension, todosExtension, type ApprovalMode, type Question, type Rule, type SubagentBridge, type Verdict } from "@piopio/pi-extensions";
@@ -117,7 +117,8 @@ export type BuildOpenOptions = {
 	/** The session needs the user (a new prompt) or told them something (notify_user). */
 	onAttention?: (kind: "waiting" | "notify", message: string) => void;
 	/** Plan mode (piopio-plan), kept by the catalog so it survives a reopen. */
-	plan: { active(): boolean; setActive(on: boolean): void };
+	/** What plan mode starts as where the session's file doesn't say (the extension keeps it there, plan.ts). */
+	plan: { initial(): boolean };
 	webOptions?: WebOptions;
 	/** Where project trust is looked up (the project folder; differs from `cwd` for worktree sessions). */
 	trustPath?: string;
@@ -164,7 +165,7 @@ export class BuildRuntime implements Runtime {
 		private readonly approvalMode: () => ApprovalMode,
 		private readonly cwd: string,
 		private readonly checkpoints: CheckpointStore,
-		private readonly plan: BuildOpenOptions["plan"],
+		private readonly plan: PlanHandle,
 		private readonly chat?: ChatProfile,
 	) {
 		this.builder = new TimelineBuilder(ref);
@@ -202,6 +203,7 @@ export class BuildRuntime implements Runtime {
 		// Commands the agent leaves running (05-build §9 TM4).
 		const processes = new ProcessManager();
 		let runtime: BuildRuntime | undefined;
+		let planHandle: PlanHandle | undefined;
 		const agentDir = o.piAgentDir ?? getAgentDir();
 		const settingsManager = SettingsManager.create(o.cwd, agentDir);
 		// A filtered network's proxy (docs/spec/39), the session's own, started the first time a command needs it.
@@ -333,12 +335,10 @@ export class BuildRuntime implements Runtime {
 				...(o.learn ? [learnSdkExtension(o.learn)] : []),
 				...(o.side ? [sideExtension(o.side)] : []),
 				...(o.automations ? [automationsExtension(o.automations)] : []),
-				planExtension({
-					active: o.plan.active,
-					setActive: (on) => {
-						o.plan.setActive(on);
-						runtime?.planChanged();
-					},
+				planExtension(
+					{
+					initial: o.plan.initial,
+					changed: () => runtime?.planChanged(),
 					propose: async (plan, signal) => {
 						const response = await broker.ask({ kind: "plan", title: plan.summary, steps: plan.steps, callId: plan.callId }, signal);
 						if (!response) return undefined;
@@ -349,7 +349,9 @@ export class BuildRuntime implements Runtime {
 							...(response.summary ? { summary: response.summary } : {}),
 						};
 					},
-				}),
+					},
+					(handle) => (planHandle = handle),
+				),
 				// The project's check after the agent's edits, confined like its commands (05-build "Diagnostics"). After
 				// approvals and plan mode: it runs the check as a baseline on the first edit's tool_call, and pi stops at
 				// the first handler that blocks, so a denied or plan-mode edit never runs the project's scripts
@@ -397,7 +399,9 @@ export class BuildRuntime implements Runtime {
 			resourceLoader,
 			...(o.thinking ? { thinkingLevel: o.thinking as never } : {}),
 		});
-		runtime = new BuildRuntime(o.ref, o.hub, session, o.model, broker, o.approvals.mode, o.cwd, o.checkpoints, o.plan, o.chat);
+		// The extension holds plan mode (in the session's entries); until it has loaded, what the session starts as.
+		const plan: PlanHandle = { active: () => planHandle?.active() ?? o.plan.initial(), setActive: (on) => planHandle?.setActive(on) };
+		runtime = new BuildRuntime(o.ref, o.hub, session, o.model, broker, o.approvals.mode, o.cwd, o.checkpoints, plan, o.chat);
 		runtime.closeNetwork = () => filter?.close();
 		if (!o.chat) runtime.useProcesses(processes);
 		if (o.keepImages) runtime.builder.keepImages = o.keepImages;

@@ -32,7 +32,7 @@ import type { Apps, MakeContext } from "./apps.js";
 import { historySdkExtension } from "./tools/history.js";
 import { isCodingAgent } from "./coding-agents.js";
 import { fileAnswers, fileItems, handoffSummary, innerOf, pastItems, SegmentedRuntime, type Segment } from "./runtimes/segments.js";
-import { parseVerdict, REVIEW_SYSTEM, reviewPrompt } from "@piopio/pi-extensions";
+import { parseVerdict, REVIEW_SYSTEM, reviewPrompt, PLAN_ENTRY, planFrom } from "@piopio/pi-extensions";
 import type { Runtime } from "./runtimes/runtime.js";
 import { aboutMeExtension, aboutMeSdkExtension, type AboutMe } from "./about-me.js";
 import type { Settings } from "./settings.js";
@@ -297,7 +297,11 @@ export class Sessions {
 			entry.approvalMode = change.approvalMode; // read by the runtime's approvals bridge
 			entry.profile = change.approvalMode === "read_only" ? "chat" : "build"; // the runtime switches its tools
 		}
-		if (change.planMode !== undefined) entry.planMode = change.planMode;
+		// Plan mode lives in the pi session (plan.ts): an open one takes it below; a closed one gets it in its file; one
+		// with no file yet starts as this.
+		if (change.planMode !== undefined && !this.open.has(ref.id) && !this.inPiSession(entry, (manager) => void (planFrom(manager.getBranch() as never) === change.planMode || manager.appendCustomEntry(PLAN_ENTRY, { on: change.planMode })))) {
+			entry.planMode = change.planMode;
+		}
 		if (change.toolsOff) {
 			// Read live by the runtimes; chat MCP tools are reinstalled, connector tools follow on the next turn.
 			const list = [...new Set(change.toolsOff.filter((t) => /^(connector|mcp):.+/.test(t)))].sort();
@@ -664,17 +668,25 @@ export class Sessions {
 			}, () => undefined);
 			return;
 		}
+		this.inPiSession(entry, (manager) => void (manager.getSessionName() === title || manager.appendSessionInfo(title)));
+	}
+
+	/**
+	 * Writes to the pi session file of a conversation that isn't open (a name, a setting kept as an entry). False when
+	 * it has no file yet. The file keeps its date: this isn't activity, so the conversation stays where it was in every
+	 * list.
+	 */
+	private inPiSession(entry: CatalogEntry, write: (manager: SessionManager) => void): boolean {
 		const file = entry.sessionFile;
-		if (!file || !existsSync(file)) return;
+		if (entry.ref.kind === "agent" || (entry.model && isCodingAgent(entry.model.provider)) || !file || !existsSync(file)) return false;
 		try {
-			const manager = SessionManager.open(file);
-			if (manager.getSessionName() === title) return;
-			// A name isn't activity: the file keeps its date, so the conversation stays where it was in every list.
 			const { atimeMs, mtimeMs } = statSync(file);
-			manager.appendSessionInfo(title);
+			write(SessionManager.open(file));
 			utimesSync(file, atimeMs / 1000, mtimeMs / 1000);
+			return true;
 		} catch (error) {
-			this.log(`Couldn't name the pi session of “${title}”: ${(error as Error).message}`);
+			this.log(`Couldn't write to the pi session of “${entry.title}”: ${(error as Error).message}`);
+			return false;
 		}
 	}
 
@@ -2725,13 +2737,7 @@ export class Sessions {
 			...(this.historyBridge(entry) ? { history: this.historyBridge(entry)! } : {}),
 			...(this.learnBridge(entry) ? { learn: this.learnBridge(entry)! } : {}),
 			...(entry.projectPath ? { trustPath: entry.projectPath } : {}),
-			plan: {
-				active: () => entry.planMode ?? false,
-				setActive: (on) => {
-					entry.planMode = on;
-					this.save();
-				},
-			},
+			plan: { initial: () => entry.planMode ?? false },
 			...(entry.parent || entry.helper
 				? {}
 				: {
@@ -2832,7 +2838,7 @@ export class Sessions {
 			// Nothing in a chat goes through approval modes: it has no file or command tools.
 			approvals: { mode: () => "full_auto", rules: () => [], addRule: () => {} },
 			checkpoints: this.checkpoints,
-			plan: { active: () => false, setActive: () => {} },
+			plan: { initial: () => false },
 			webOptions: this.webOptions,
 			keepImages: toolImageKeeper(attachmentsDir(this.paths.home, entry.ref.id)),
 			...this.browserFor(entry.ref),
