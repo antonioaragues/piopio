@@ -9,13 +9,13 @@
  */
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { createRegistry, Harness, type ConversationWatch } from "@earendil-works/pi-durable";
-import { methods, PROTOCOL_VERSION, type JsonRpcId, type MethodName, type ModelRef, type Params, type Result, type SessionEvent } from "@piopio/protocol";
+import { methods, PROTOCOL_VERSION, type JsonRpcId, type MethodName, type ModelRef, type Params, type Result, type SessionEvent, type TimelineItem } from "@piopio/protocol";
 import { PiHarness, ROOT_SESSION, type PiSession } from "agents/harness/pi";
 import { Lifecycle } from "agents/lifecycle";
 import { WebSockets } from "agents/websockets";
 import { DurableObject } from "cloudflare:workers";
 import { Value } from "typebox/value";
-import { alwaysLabel, modelOf, validate, type AgentDefinition, type MemoryRecord, type Reminder } from "@piopio/runtime";
+import { alwaysLabel, modelOf, validate, type AgentDefinition, type MemoryRecord, type Reminder, DurableViewMapper, type DurableView, type Entry } from "@piopio/runtime";
 import { AgentHost, AgentWake, defaultAgent, type StoredAgent } from "./agent.js";
 import { sameSecret } from "./auth.js";
 import { CloudTelegram } from "./telegram.js";
@@ -23,7 +23,7 @@ import type { Env } from "./env.js";
 import { createCloudModels, defaultModel } from "./models.js";
 import { REGISTRY_NAME } from "./registry-do.js";
 import { TimelineBuilder } from "./timeline/builder.js";
-import { DurableViewMapper, type DurableView, type Entry } from "./timeline/pi-durable.js";
+import { agentItem } from "./timeline/agent-items.js";
 
 export const CLOUD_VERSION = "0.0.0";
 
@@ -78,7 +78,7 @@ class SessionView {
 		const transcript = (await history().catch(() => undefined)) ?? ((await pi.messages()) as unknown as Entry[]);
 		const watch = await pi.watch();
 		const builder = new TimelineBuilder({ kind: "agent", id: agentId, conversationId: conversation });
-		const mapper = new DurableViewMapper(builder);
+		const mapper = new DurableViewMapper<TimelineItem>(builder, { ownItem: agentItem });
 		mapper.load(transcript, watch.value as unknown as DurableView, false);
 		builder.setState({ model });
 		builder.flush();

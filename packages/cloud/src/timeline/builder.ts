@@ -4,34 +4,17 @@
  * calls on this builder. It keeps the current items and collects SessionEvents until flush().
  */
 import type { AssistantItem, AssistantPart, SessionEvent, SessionState, Snapshot, TimelineItem, ToolItem, Usage, ContainerRef } from "@piopio/protocol";
+import { contentText, type PiContentBlock, type PiMessage, type PiUsage } from "@piopio/runtime";
 
-/** Minimal structural views of pi-ai messages (avoid coupling to upstream unions). */
-export type PiContentBlock =
-	| { type: "text"; text: string }
-	| { type: "thinking"; thinking: string; redacted?: boolean }
-	| { type: "toolCall"; id: string; name: string; arguments: unknown }
-	| { type: "image"; mimeType?: string };
-export type PiUsage = { input: number; output: number; cacheRead: number; cacheWrite: number; cost?: { total?: number } };
-export type PiMessage =
-	| { role: "user"; content: string | PiContentBlock[]; timestamp?: number }
-	| { role: "assistant"; content: PiContentBlock[]; provider?: string; model?: string; usage?: PiUsage; stopReason?: string; errorMessage?: string; timestamp?: number }
-	| { role: "toolResult"; toolCallId: string; toolName: string; content: PiContentBlock[]; isError?: boolean; timestamp?: number }
-	| { role: string; [key: string]: unknown };
+// The message views and the pi-durable mapper are shared (packages/runtime/src/timeline).
+export { contentText };
+export type { PiContentBlock, PiMessage, PiUsage };
 
 export const emptyUsage = (): Usage => ({ inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, costUsd: 0 });
 
 export function toUsage(u: PiUsage | undefined): Usage | undefined {
 	if (!u) return undefined;
 	return { inputTokens: u.input ?? 0, outputTokens: u.output ?? 0, cacheReadTokens: u.cacheRead ?? 0, cacheWriteTokens: u.cacheWrite ?? 0, costUsd: u.cost?.total ?? 0 };
-}
-
-export function contentText(content: string | PiContentBlock[] | undefined): string {
-	if (content === undefined) return "";
-	if (typeof content === "string") return content;
-	return content
-		.map((b) => (b.type === "text" ? b.text : b.type === "image" ? "[image]" : ""))
-		.filter((s) => s.length > 0)
-		.join("\n");
 }
 
 const iso = (ms?: number) => new Date(ms ?? Date.now()).toISOString();

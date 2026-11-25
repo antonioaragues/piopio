@@ -1,43 +1,74 @@
-// Copied from packages/engine/src/timeline/pi-durable.ts (without Piopio's typed user entries). Moves to packages/runtime (shared) later.
 /**
- * Maps a pi-durable conversation's state onto the timeline builder. pi-durable 1.5 dropped its event stream
+ * Maps a pi-durable conversation's state onto a timeline builder. pi-durable 1.5 dropped its event stream
  * (`watchEvents()`); a renderer watches the conversation view (`Conversation.watch()`) instead: a window over the
  * transcript plus `pi.live` (the answer being streamed, the tool round) and `pi.inbox`. Each new value is compared with
  * the last one to make the builder calls the events used to drive.
+ *
+ * One mapper for every host of an agent (the Mac's engine, the cloud's Durable Object): each brings its own builder,
+ * which this only knows as `MapperBuilder`, and says what it draws itself (`ownItem`).
  */
-import { contentText, type PiContentBlock, type PiMessage, type TimelineBuilder } from "./builder.js";
-import type { TimelineItem } from "@piopio/protocol";
+import { RECALL_ENTRY } from "../agents/core.js";
+import { contentText, type PiContentBlock, type PiMessage } from "./messages.js";
 
+const USER_ENTRY = "piopio.user";
+/** `attachments`: as the host's builder takes them (the engine's attachment infos). */
+type UserData = { text: string; attachments?: unknown };
+
+/** What the mapper sets on the session's state. */
+export type MapperState = { status?: "running" | "idle"; queue?: { id: string; mode: "steer" | "followUp"; text?: string }[] };
+
+/**
+ * The timeline builder as the mapper uses it. `I` is the host's item type; the mapper only reads an item's id and time,
+ * and makes one kind itself (a compaction marker).
+ */
+export interface MapperBuilder<I extends { id: string; at: string } = { id: string; at: string }> {
+	reset(messages: readonly PiMessage[], idOf: (index: number, message: PiMessage) => string, emit?: boolean): void;
+	/** Sends the current items as a fresh snapshot. */
+	resnapshot(): void;
+	readonly currentItems: readonly I[];
+	/** Adds an item before `beforeId`, or at the end. */
+	insert(item: I, beforeId?: string, emit?: boolean): void;
+	/** Adds an item where its time puts it (a host's own items). */
+	place?(item: I, emit?: boolean): void;
+	user(id: string, text: string, timestamp?: number, attachments?: never): void;
+	assistantStart(id: string, model?: string): void;
+	assistantDelta(index: number, kind: "text" | "thinking", text: string): void;
+	assistantEnd(message: Extract<PiMessage, { role: "assistant" }>, finalId?: string): void;
+	toolStart(callId: string, name: string, args: unknown, parentCallId?: string): void;
+	toolOutput(callId: string, change: { append: string } | { set: string }): void;
+	toolEnd(callId: string, output: string | undefined, isError: boolean, durationMs?: number, result?: { details?: unknown }): void;
+	system(id: string, level: "info" | "warn" | "error", text: string): void;
+	setState(patch: MapperState): void;
+}
+
+export type MapperOptions<I> = {
+	/** The text of a queued submission, when known. */
+	queueText?: (submissionId: string) => string | undefined;
+	/** An entry the host draws itself (a note, a message the agent sent on its own): its item, placed by its time. */
+	ownItem?: (entry: Entry) => I | undefined;
+};
 
 /** `head`: on a compaction, the first entry it kept as it was (what's older was summarized). */
 export type Entry = { id: string | number; kind: string; model?: PiMessage[]; data?: unknown; head?: string | number };
 
-/** An agent's own entries (@piopio/runtime's NOTICE_ENTRY and OUT_ENTRY): drawn as a note and as its message. */
-const NOTICE = "piopio.notice";
-const OUT = "piopio.channel-out";
-
-function agentItem(entry: Entry): TimelineItem | undefined {
-	const at = (t?: number) => new Date(t ?? Date.now()).toISOString();
-	if (entry.kind === NOTICE) {
-		const d = entry.data as { text: string; at?: string };
-		return { kind: "system", id: `notice:${entry.id}`, at: d.at ?? at(), level: "info", text: d.text };
-	}
-	if (entry.kind === OUT) {
-		const d = entry.data as { text: string; from: string; suggestions?: string[] };
-		return { kind: "assistant", id: String(entry.id), at: at(entry.model?.[0]?.timestamp as number | undefined), parts: [{ type: "text", text: d.text }], status: "done", outbound: { from: d.from, ...(d.suggestions?.length ? { suggestions: d.suggestions } : {}) } };
-	}
-	return undefined;
-}
+/** Entries the model reads that the transcript doesn't show: what memory recalled for a message (docs/spec/38 R3). */
+const UNSEEN = new Set([RECALL_ENTRY]);
 
 /** Flattens committed entries into messages, keeping the entry id for each. */
-export function messagesFromEntries(entries: readonly Entry[]): { messages: PiMessage[]; ids: string[] } {
+export function messagesFromEntries(entries: readonly Entry[], own: (entry: Entry) => unknown = () => undefined): { messages: PiMessage[]; ids: string[] } {
 	const messages: PiMessage[] = [];
 	const ids: string[] = [];
 	for (const e of entries) {
-		if (e.kind === "pi.compaction" || e.kind === NOTICE || e.kind === OUT) continue;
+		if (e.kind === "pi.compaction" || UNSEEN.has(e.kind) || own(e) !== undefined) continue;
 		for (const [i, m] of (e.model ?? []).entries()) {
 			if (m.role !== "user" && m.role !== "assistant" && m.role !== "toolResult") continue;
-			messages.push(m);
+			if ((e.kind === USER_ENTRY || (e.kind === "piopio.imported" && typeof (e.data as { text?: unknown })?.text === "string")) && m.role === "user") {
+				// Show the words and file names, not the attachment blocks the model reads.
+				const data = e.data as UserData;
+				messages.push({ role: "user", content: data.text, attachments: data.attachments, timestamp: m.timestamp } as PiMessage);
+			} else {
+				messages.push(m);
+			}
 			ids.push(i === 0 ? String(e.id) : `${e.id}:${i}`);
 		}
 	}
@@ -61,7 +92,7 @@ type InboxItem = { id: string | number; mode: string };
 /** What one new value changed, for the caller's own bookkeeping. */
 export type ViewChange = { appended: Entry[]; runEnded: boolean };
 
-export class DurableViewMapper {
+export class DurableViewMapper<I extends { id: string; at: string } = { id: string; at: string }> {
 	private provisional = 0;
 	/** The newest entry already shown. */
 	private last = -Infinity;
@@ -79,11 +110,18 @@ export class DurableViewMapper {
 	private lastInbox: InboxItem[] = [];
 	private inboxKey = "";
 
-	/** `queueText(id)` returns the text of a queued submission, when known. */
+	private readonly queueText: (submissionId: string) => string | undefined;
+	private readonly ownItem: (entry: Entry) => I | undefined;
+
+	/** A function as `options` is `queueText`: the text of a queued submission, when known. */
 	constructor(
-		private readonly builder: TimelineBuilder,
-		private readonly queueText: (submissionId: string) => string | undefined = () => undefined,
-	) {}
+		private readonly builder: MapperBuilder<I>,
+		options: MapperOptions<I> | ((submissionId: string) => string | undefined) = {},
+	) {
+		const o = typeof options === "function" ? { queueText: options } : options;
+		this.queueText = o.queueText ?? (() => undefined);
+		this.ownItem = o.ownItem ?? (() => undefined);
+	}
 
 	/** Re-reads queue texts (a submission's text can become known after its inbox update). */
 	refreshQueue(): void {
@@ -100,17 +138,20 @@ export class DurableViewMapper {
 	}
 
 	/**
-	 * The first state: the active transcript (`Conversation.context()`, read before the watch) and the watch's first
+	 * The first state: the conversation's history (its entries in order, read before the watch) and the watch's first
 	 * value, which may hold newer entries, an answer being streamed and running tools. Notices already in it (the last
 	 * run's failure) aren't shown again. Returns the entries the view added after the transcript.
+	 *
+	 * The history is everything said, not the model's context: a compaction summarizes older entries for the model and
+	 * leaves them where they were, so the reader still sees them, with a marker where the summary took over.
 	 */
 	load(transcript: readonly Entry[], view: DurableView, emit: boolean): Entry[] {
-		const { messages, ids } = messagesFromEntries(transcript);
+		const { messages, ids } = messagesFromEntries(transcript, this.ownItem);
 		this.builder.reset(messages, (i) => ids[i]!, false);
 		for (const e of transcript) {
 			this.note(e, true);
-			const item = agentItem(e);
-			if (item) this.builder.place(item, false);
+			const own = this.ownItem(e);
+			if (own) this.place(own, false);
 			if (e.kind === "pi.compaction") this.compacted(e, false);
 		}
 		if (emit) this.builder.resnapshot();
@@ -211,12 +252,15 @@ export class DurableViewMapper {
 	private entry(entry: Entry): void {
 		const b = this.builder;
 		this.note(entry, false);
-		const own = agentItem(entry);
-		if (own) return void b.place(own);
+		const own = this.ownItem(entry);
+		if (own) return this.place(own, true);
 		if (entry.kind === "pi.compaction") return this.compacted(entry, true);
 		const message = entry.model?.[0];
-		if (!message) return;
-		if (message.role === "user") b.user(String(entry.id), contentText(message.content as string | PiContentBlock[]), message.timestamp as number | undefined);
+		if (!message || UNSEEN.has(entry.kind)) return;
+		if (message.role === "user" && entry.kind === USER_ENTRY) {
+			const data = entry.data as UserData;
+			b.user(String(entry.id), data.text, message.timestamp as number | undefined, data.attachments as never);
+		} else if (message.role === "user") b.user(String(entry.id), contentText(message.content as string | PiContentBlock[]), message.timestamp as number | undefined);
 		else if (message.role === "assistant") {
 			this.stream = undefined;
 			b.assistantEnd(message as Extract<PiMessage, { role: "assistant" }>, String(entry.id));
@@ -230,21 +274,29 @@ export class DurableViewMapper {
 				const call = this.calls.get(m.toolCallId);
 				b.toolStart(m.toolCallId, call?.name ?? m.toolName ?? "tool", call?.args ?? {});
 			}
-			this.end(m.toolCallId, contentText(m.content), m.isError ?? false);
+			// Its details too: a file card's files (06 §14), a plan's outcome.
+			const details = (m as { details?: unknown }).details;
+			this.end(m.toolCallId, contentText(m.content), m.isError ?? false, details === undefined ? undefined : { details });
 		}
 	}
 
 	/**
 	 * A compaction's marker, with its summary (the entry's own message, what the model reads in place of the older
 	 * entries), put before the first entry it kept: what's above was summarized for the model, what's below it still
-	 * reads as it was said. As in the engine's mapper (packages/engine/src/timeline/pi-durable.ts).
+	 * reads as it was said.
 	 */
 	private compacted(entry: Entry, emit: boolean): void {
 		const summary = contentText((entry.model?.[0]?.content ?? "") as string | PiContentBlock[]).trim();
 		if (!summary) return;
 		const head = Number(entry.head);
 		const kept = Number.isFinite(head) ? this.builder.currentItems.find((i) => Number(i.id) >= head) : undefined;
-		this.builder.insert({ kind: "compaction", id: String(entry.id), at: kept?.at ?? new Date().toISOString(), summary }, kept?.id, emit);
+		this.builder.insert({ kind: "compaction", id: String(entry.id), at: kept?.at ?? new Date().toISOString(), summary } as unknown as I, kept?.id, emit);
+	}
+
+	/** A host's own item, where its time puts it (or at the end, for a builder that doesn't place by time). */
+	private place(item: I, emit: boolean): void {
+		if (this.builder.place) this.builder.place(item, emit);
+		else this.builder.insert(item, undefined, emit);
 	}
 
 	private slot(slot: Slot): void {
@@ -269,9 +321,9 @@ export class DurableViewMapper {
 		else if (slot.entry === undefined && this.started.has(id)) this.end(id, undefined, true);
 	}
 
-	private end(callId: string, output: string | undefined, isError: boolean): void {
+	private end(callId: string, output: string | undefined, isError: boolean, result?: { details?: unknown }): void {
 		this.ended.add(callId);
 		this.outputs.delete(callId);
-		this.builder.toolEnd(callId, output, isError);
+		this.builder.toolEnd(callId, output, isError, undefined, result);
 	}
 }

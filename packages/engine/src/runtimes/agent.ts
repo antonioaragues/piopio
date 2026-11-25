@@ -18,12 +18,12 @@ import { createToolSearchExtension } from "@earendil-works/pi-durable/tool-searc
 import type { ApprovalItem, AssistantItem, ContainerRef, ModelRef, ResultItem, SessionEvent, Snapshot, TimelineItem, UtilityChoice } from "@piopio/protocol";
 import type { AgentFileInfo, AgentFilesBridge } from "@piopio/runtime";
 import type { KeptAttachment } from "../attachment-files.js";
-import { AGENT_ENTRY, AgentCore, type AgentCoreOptions, alwaysLabel, modelOf, type Envelope, LEARN_ENTRY, NOTICE_ENTRY, OUT_ENTRY, type AgentDefinition, type Approval, type MemoryProvider, type ResultCard, type RunRecord, type UndoRecord } from "@piopio/runtime";
+import { AGENT_ENTRY, AgentCore, type AgentCoreOptions, alwaysLabel, modelOf, type Envelope, LEARN_ENTRY, NOTICE_ENTRY, OUT_ENTRY, type AgentDefinition, type Approval, type MemoryProvider, type ResultCard, type RunRecord, type UndoRecord, DurableViewMapper, type DurableView, type Entry } from "@piopio/runtime";
 import { BOT_TOKEN } from "../channels/telegram.js";
 import { buildInput } from "../input.js";
 import { EngineError, type ModelHub } from "../models.js";
 import { emptyUsage, TimelineBuilder, toUsage, type PiMessage, type PiUsage } from "../timeline/builder.js";
-import { DurableViewMapper, type DurableView, type Entry } from "../timeline/pi-durable.js";
+
 import { groupSteps, StepsView } from "../timeline/steps.js";
 import { createWebExtension, type WebOptions } from "../tools/web.js";
 import { durableBrowserExtension, type BrowserCall } from "../tools/browser-tools.js";
@@ -491,7 +491,7 @@ export class AgentRuntime implements Runtime {
 export class AgentView implements Runtime {
 	private readonly emitter = new Emitter();
 	private readonly builder: TimelineBuilder;
-	private readonly mapper: DurableViewMapper;
+	private readonly mapper: DurableViewMapper<TimelineItem>;
 	private readonly steps = new StepsView((items) => this.group(items), () => this.items());
 	private watch?: ConversationWatch;
 	private readonly queueTexts = new Map<string, string>();
@@ -524,7 +524,7 @@ export class AgentView implements Runtime {
 		else if ("peer" in who) this.peer = who.peer;
 		else this.contactId = who.contactId;
 		this.builder = new TimelineBuilder(this.ref);
-		this.mapper = new DurableViewMapper(this.builder, (id) => this.queueTexts.get(id));
+		this.mapper = new DurableViewMapper<TimelineItem>(this.builder, (id) => this.queueTexts.get(id));
 	}
 
 	get ref(): ContainerRef {

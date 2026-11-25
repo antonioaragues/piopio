@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import type { SessionEvent, TimelineItem } from "@piopio/protocol";
 import { describe, expect, test } from "vitest";
 import { TimelineBuilder, type PiMessage } from "../src/timeline/builder.js";
-import { DurableViewMapper, messagesFromEntries } from "../src/timeline/pi-durable.js";
+import { DurableViewMapper, messagesFromEntries } from "@piopio/runtime";
 import { SdkEventMapper } from "../src/timeline/pi-sdk.js";
 import { endDetails, startDetails } from "../src/timeline/tool-details.js";
 
