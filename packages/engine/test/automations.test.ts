@@ -396,6 +396,10 @@ test("an agent keeps its reminders and facts true: it sees its automations each 
 	db.close();
 	expect(sections["agent-automations"]).toContain("“ITV reminder”: Once, Wed 4 Dec 2030, 09:00");
 	expect(sections["agent-automations"]).toContain("cancel_automation it in the same turn");
+	// No next-run time in it: that moves on every fire, and the section would be sent again each time (its tool has it).
+	expect(sections["agent-automations"]).not.toContain("Next 2030");
+	await client.call("sessions.submit", { ref, input: { text: call("list_automations", {}) } });
+	await until(items, (xs) => JSON.stringify(xs).includes("Next 2030-12-04 08:00 UTC"));
 	// Its facts with their ids come just before the message they're recalled for (docs/spec/38 R3).
 	const said = models.findIndex((m) => m.role === "user" && JSON.stringify(m.content).includes("When does the ITV expire?"));
 	expect(JSON.stringify(models[said - 1]?.content)).toContain(`(${old!.id}) `);

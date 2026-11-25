@@ -16,13 +16,14 @@ import { promptSection, type PromptEvent } from "../tools/prompt-sections.js";
 /** The tools' names: Piopio's and an agent's are the same words. */
 export const AUTOMATION_TOOLS = ["automate", "list_automations", "change_automation", "cancel_automation"];
 
-const describe = (s: AutomationSummary) =>
-	`${s.id} “${s.name}”: ${s.when}; runs as ${s.runsAs}; ${s.does}; result: ${s.tellsYou}.${s.next ? ` Next ${new Date(s.next).toISOString().slice(0, 16).replace("T", " ")} UTC.` : ""}${s.url ? ` Its URL (POST, from this Mac): ${s.url}` : ""}`;
+/** `next` off leaves out the next run's time: the one part of a line that changes each time it fires. */
+const describe = (s: AutomationSummary, next = true) =>
+	`${s.id} “${s.name}”: ${s.when}; runs as ${s.runsAs}; ${s.does}; result: ${s.tellsYou}.${next && s.next ? ` Next ${new Date(s.next).toISOString().slice(0, 16).replace("T", " ")} UTC.` : ""}${s.url ? ` Its URL (POST, from this Mac): ${s.url}` : ""}`;
 
 /** A list for the model: one line per automation. */
-export function listText(service: Automations, list: Automation[]): string {
+export function listText(service: Automations, list: Automation[], next = true): string {
 	if (!list.length) return "No automations.";
-	return list.map((a) => `- ${describe(service.summary(a))}${a.enabled ? "" : " (paused)"}`).join("\n");
+	return list.map((a) => `- ${describe(service.summary(a), next)}${a.enabled ? "" : " (paused)"}`).join("\n");
 }
 
 /** What the agent's tools give the host: its own automations only (AU5). */
@@ -49,7 +50,7 @@ export function agentBridge(service: Automations, agentId: string): AutomationsB
 	return {
 		// The agent made it, whoever asked (AU5).
 		add: async (i) => service.summary(service.add({ ...input(i), runsAs: agentId }, agentId)),
-		list: async () => listText(service, service.list().filter((a) => a.runsAs === agentId)),
+		list: async (o) => listText(service, service.list().filter((a) => a.runsAs === agentId), o?.next !== false),
 		change: async (id, i) => {
 			const before = structuredClone(mine(id)) as unknown as JsonObject;
 			const { runsAs: _drop, ...rest } = input(i) as AutomationInput & { runsAs?: string };

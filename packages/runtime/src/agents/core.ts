@@ -958,7 +958,9 @@ export class AgentCore {
 					if (!bridge || !core.def.tools.builtin.includes("schedule")) return undefined;
 					const contact = await core.contactOf(input.conversationId, context);
 					if (contact ? contact.role !== "owner" : !(await core.proactive.runOf(input.conversationId))) return undefined;
-					const list = await bridge.list().catch(() => "");
+					// Without next-run times: they move on every fire, and this section would be sent again each time
+					// (its schedule is in each line; list_automations has the exact time).
+					const list = await bridge.list({ next: false }).catch(() => "");
 					if (!list.trim() || list.trim() === "No automations.") return undefined;
 					const shown = list.length > AUTOMATIONS_IN_PROMPT ? `${list.slice(0, list.lastIndexOf("\n", AUTOMATIONS_IN_PROMPT))}\n- … more: list_automations` : list;
 					return `Your automations (each runs its prompt as written, on its day):\n${shown}\n\nKeep them true to what you know. When you learn something that changes one or makes it pointless (a date moved, an appointment booked, the thing done, sold or cancelled), change_automation or cancel_automation it in the same turn, and say so in a line.`;

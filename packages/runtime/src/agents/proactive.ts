@@ -81,7 +81,11 @@ export type AutomationToolInput = {
 export type AutomationSummary = { id: string; name: string; when: string; runsAs: string; does: string; tellsYou: string; runsOn: string; url?: string; next?: number };
 export interface AutomationsBridge {
 	add(input: AutomationToolInput, by: string): Promise<AutomationSummary>;
-	list(): Promise<string>;
+	/**
+	 * One line per automation. `next: false` leaves out each one's next run time, for the system prompt: that time
+	 * moves on every fire, and a section that changes is sent again and breaks the provider's prompt cache from there.
+	 */
+	list(options?: { next?: boolean }): Promise<string>;
 	/** Returns the record before the change, for Undo. */
 	change(id: string, input: AutomationToolInput): Promise<{ summary: AutomationSummary; before: JsonObject }>;
 	remove(id: string): Promise<{ summary: AutomationSummary; before: JsonObject }>;
