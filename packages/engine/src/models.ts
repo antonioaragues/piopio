@@ -141,24 +141,42 @@ export class ModelHub {
 
 	private catalogRestored = false;
 	private catalogChecked = 0;
+	private catalogRefresh?: Promise<unknown>;
+
+	/** The connected providers pi keeps a catalog for (not your own endpoints, not the scripted model). */
+	private catalogProviders(rt: ModelRuntime, connected: Set<string>): string[] {
+		return [...connected].filter((id) => !this.endpoints.get(id) && id !== "faux" && rt.getProvider(id));
+	}
 
 	/**
-	 * pi's own catalog refresh, for the connected providers: models.json is read again, the catalog kept from last time
-	 * is restored, and pi.dev is asked for a newer one (pi asks at most every four hours; OpenRouter's is then narrowed
-	 * to what your key may use). The first list after a start waits for the kept catalog only; the network runs in the
-	 * background unless you asked to refresh.
+	 * Before a model list is read: pi's catalog as it should be seen. A refresh rebuilds a provider and, for a moment,
+	 * leaves out the models that came from pi.dev, so one still running is waited for. The first list after a start
+	 * restores the catalog kept from last time (no network); asking to refresh reads models.json again and waits for
+	 * pi.dev (OpenRouter's is then narrowed to what your key may use).
 	 */
-	private async followCatalog(rt: ModelRuntime, connected: Set<string>, force: boolean): Promise<void> {
-		const providers = [...connected].filter((id) => !this.endpoints.get(id) && id !== "faux" && rt.getProvider(id));
+	private async catalogReady(rt: ModelRuntime, connected: Set<string>, force: boolean): Promise<void> {
+		await this.catalogRefresh;
+		const providers = this.catalogProviders(rt, connected);
 		if (!providers.length) return;
 		if (!this.catalogRestored) {
 			this.catalogRestored = true;
 			await rt.refresh({ providers, allowNetwork: false }).catch(() => undefined);
 		}
-		if (!force && Date.now() - this.catalogChecked < CATALOG_CHECK_MS) return;
+		if (!force) return;
 		this.catalogChecked = Date.now();
-		const network = rt.refresh({ providers, ...(force ? { force: true } : {}) }).catch(() => undefined);
-		if (force) await network;
+		await rt.refresh({ providers, force: true }).catch(() => undefined);
+	}
+
+	/**
+	 * After a model list was read: pi checks pi.dev for a newer catalog in the background (it asks at most every four
+	 * hours). Started here, not before the list, so the list isn't read while providers are being rebuilt.
+	 */
+	private catalogLater(rt: ModelRuntime, connected: Set<string>): void {
+		if (this.catalogRefresh || Date.now() - this.catalogChecked < CATALOG_CHECK_MS) return;
+		const providers = this.catalogProviders(rt, connected);
+		if (!providers.length) return;
+		this.catalogChecked = Date.now();
+		this.catalogRefresh = rt.refresh({ providers }).catch(() => undefined).finally(() => (this.catalogRefresh = undefined));
 	}
 
 	/** The shared runtime (pi-ai `Models`). The engine awaits `ready()` before serving, so it's always there. */
@@ -218,7 +236,7 @@ export class ModelHub {
 	async listModels(refresh = false): Promise<ModelInfo[]> {
 		const rt = await this.ready();
 		const ids = await this.connected();
-		if (this.options.remoteCatalog) await this.followCatalog(rt, ids, refresh);
+		if (this.options.remoteCatalog) await this.catalogReady(rt, ids, refresh);
 		else if (refresh && ids.has("openrouter")) await rt.refresh({ providers: ["openrouter"] }).catch(() => undefined);
 		const out: ModelInfo[] = [];
 		if (this.faux) out.push(...rt.getModels("faux").map((m) => toInfo(m, "Faux", undefined)));
@@ -239,6 +257,7 @@ export class ModelHub {
 			out.push(...available.filter((m) => !hidden.has(m.id)).map((m) => toInfo(m, provider.name, billing)));
 		}
 		out.push(...(await this.agentModels()));
+		if (this.options.remoteCatalog) this.catalogLater(rt, ids);
 		return out;
 	}
 
