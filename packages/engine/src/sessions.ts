@@ -2307,22 +2307,23 @@ export class Sessions {
 
 	/**
 	 * An agent's browser (docs/spec/22 W3): its tabs in a profile of its own (or yours, when its Setup says so), the
-	 * sites its Setup allows, and the sites you allow or block everywhere (Settings › Browser).
+	 * sites its Setup allows, and the sites you allow or block everywhere (Settings › Browser). One caller for the
+	 * agent, so its calls run one at a time on its tab, from every conversation it has (browserCaller); the Setup is
+	 * read on each call.
 	 */
 	private agentBrowser(ref: ContainerRef): { browser?: BrowserCall } {
 		const app = this.agentHost?.app;
 		if (!app) return {};
 		const id = ref.id;
 		const setting = () => this.agentDefinition(id).definition.tools.browser;
+		const call = browserCaller(app, { kind: "agent", id }, {
+			allowPrivate: false,
+			...(this.browserSites ? { sites: this.browserSites } : {}),
+			agent: { profile: () => (setting()?.profile === "yours" ? undefined : `agent:${id}`), sites: () => (setting()?.use === "allowed" ? (setting()?.sites ?? []) : []) },
+		});
 		return {
 			browser: (name, args, ask) => {
-				const b = setting();
-				if (!b) return Promise.resolve({ text: "The browser is off in this agent's Setup.", images: [], isError: true });
-				const call = browserCaller(app, { kind: "agent", id }, {
-					allowPrivate: false,
-					...(this.browserSites ? { sites: this.browserSites } : {}),
-					agent: { ...(b.profile === "yours" ? {} : { profile: `agent:${id}` }), sites: () => (b.use === "allowed" ? (b.sites ?? []) : []) },
-				});
+				if (!setting()) return Promise.resolve({ text: "The browser is off in this agent's Setup.", images: [], isError: true });
 				return call(name, args, ask);
 			},
 		};

@@ -112,3 +112,32 @@ test("an agent browses in its own profile; acting asks the owner per site, Alway
 	expect(tools(await finished(7))[6]).toMatchObject({ status: "error", output: expect.stringContaining("blocked in Settings") });
 	app.close();
 }, 60_000);
+
+// Re-audit 2026-11-25 V4: "Allow once" was recorded for the agent in your conversations' list, so every later call of
+// that agent, from any contact or run, acted on the site without asking until the engine restarted.
+test("an agent's Allow once covers that call only; your sites in Settings › Browser are untouched", async () => {
+	const a = await start();
+	const paths = enginePaths(a.home);
+	const app = await TestClient.connect(paths.socket);
+	await app.call("engine.hello", { token: readFileSync(paths.tokenFile, "utf8").trim(), client: "fake app", protocolVersion: "1.0", services: ["app.tool", "browser"] });
+	app.appTool = (p) => ((p.sites ?? []).includes("example.com") ? { ok: true, output: `Clicked ${p.args.ref}.` } : { ok: false, output: "", needsSite: "example.com" });
+	const { ref } = await a.client.call("agents.create", { name: "Scout", owner: "Antonio", model: { provider: "faux", id: "faux-1" } });
+	const got = await a.client.call("agents.get", { ref });
+	const def = got.definition as Record<string, any>;
+	await a.client.call("agents.save", { ref, definition: { ...def, tools: { ...def.tools, browser: { use: "asks" } } }, instructions: got.instructions });
+	const owner = () => a.client.call("sessions.open", { ref }).then((s: Snapshot) => s.items);
+	const pending = () => until(owner, (xs) => approvals(xs).some((x) => x.status === "pending")).then((xs) => approvals(xs).find((x) => x.status === "pending")!);
+	const finished = (n: number) => until(owner, (xs) => tools(xs).filter((t) => t.status === "done" || t.status === "error").length >= n);
+
+	await a.client.call("sessions.submit", { ref, input: { text: call("browser_click", { ref: "e3" }) } });
+	await a.client.call("agents.decide", { ref, approvalId: (await pending()).approvalId, approve: true });
+	expect(tools(await finished(1))[0]).toMatchObject({ status: "done" });
+	// The next click asks again.
+	await a.client.call("sessions.submit", { ref, input: { text: call("browser_click", { ref: "e4" }) } });
+	const again = await pending();
+	expect(again).toMatchObject({ tool: "browser_site", title: "Click and type on example.com" });
+	await a.client.call("agents.decide", { ref, approvalId: again.approvalId, approve: true });
+	expect(tools(await finished(2))[1]).toMatchObject({ status: "done", output: "Clicked e4." });
+	expect((await a.client.call("browser.sites", {})).sites).toEqual([]);
+	app.close();
+}, 60_000);

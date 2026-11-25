@@ -260,6 +260,11 @@ export class Safety {
 		if (call.name === "send_message" && who.contact && who.contact.role !== "owner" && args.to !== who.contact.id && args.to !== owner?.id) {
 			return { block: `Messages from ${who.contact.name} can't make you write to other people.` };
 		}
+		// AS2: a contact can't make the agent browse. Its browser is signed in (as the owner, or where the owner signed it
+		// in with Watch) and reading runs without asking, so a contact could read the owner's pages (re-audit 2026-11-25 V4).
+		if (call.name.startsWith("browser_") && who.contact && who.contact.role !== "owner" && !who.peerId) {
+			return { block: `Messages from ${who.contact.name} can't make you use the browser: it's signed in for the owner. Read public pages with web_fetch if you have it.` };
+		}
 		const rule = (this.def.policies?.requireApproval ?? []).find((r) => matches(r, call.name, args, owner?.id ?? "owner"));
 		if (!rule) return undefined;
 		const asked = await this.request({ callId: call.id, tool: call.name, args, key: allowKey(call.name, args), rule, taskId: String(api.taskId) }, conversationId);

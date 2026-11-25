@@ -250,10 +250,12 @@ export async function checkUrl(raw: string, allowPrivate = false): Promise<strin
 export type PreviewOptions = { profile: string; ports: () => Promise<number[]> };
 
 /**
- * An agent's browser (22 W3): `profile` names the profile its tabs use (`agent:<id>`, or unset for yours), and
- * `sites` are the ones its Setup lets it act on without asking.
+ * An agent's browser (22 W3): `profile` names the profile its tabs use (`agent:<id>`, or undefined for yours), and
+ * `sites` are the ones its Setup lets it act on without asking. Both are read on every call: the Setup can change.
+ * The owner's answers are the agent's own (its approvals, and its Always allow in its state), so a site approved once
+ * is approved for that call only: nothing goes in `BrowserSites`, which is your conversations' and Settings' list.
  */
-export type AgentBrowserOptions = { profile?: string; sites: () => string[] };
+export type AgentBrowserOptions = { profile: () => string | undefined; sites: () => string[] };
 
 /**
  * Browser calls for one conversation, through the app. They run one at a time, in the order they were made: they share
@@ -277,6 +279,8 @@ function browserCall(app: AppServices, ref: ContainerRef, options: { allowPrivat
 	const preview = options.preview;
 	return async (name, args, ask) => {
 		let local: string[] = [];
+		// An agent's "Allow once": this call may act on the site, and only this call (AgentBrowserOptions).
+		const approvedNow = new Set<string>();
 		if (preview) {
 			const ports = await preview.ports().catch(() => []);
 			local = [...new Set([...ports.flatMap((p) => [`localhost:${p}`, `127.0.0.1:${p}`]), ...granted])];
@@ -298,10 +302,10 @@ function browserCall(app: AppServices, ref: ContainerRef, options: { allowPrivat
 		try {
 			for (let attempt = 0; ; attempt++) {
 				const sites = () => {
-					const own = options.agent?.sites().map(normalizeSite).filter((s) => !options.sites?.blocked(s)) ?? [];
+					const own = [...(options.agent?.sites() ?? []), ...approvedNow].map(normalizeSite).filter((s) => !options.sites?.blocked(s));
 					return [...new Set([...(options.sites?.allowedFor(ref.id) ?? []), ...own])];
 				};
-				const agentProfile = options.agent?.profile;
+				const agentProfile = options.agent?.profile();
 				const r = await app.tool({ name, args, ref, groups: ["browser"], shortcuts: [], ...(acting ? { sites: sites() } : {}), ...(preview ? { preview: { profile: preview.profile, local } } : {}), ...(agentProfile ? { profile: agentProfile } : {}) });
 				if (!r.needsSite) return { text: r.output, images: r.images ?? [], ...(r.ok ? {} : { isError: true }) };
 				const site = r.needsSite;
@@ -309,7 +313,8 @@ function browserCall(app: AppServices, ref: ContainerRef, options: { allowPrivat
 				if (!ask || !options.sites || attempt > 0) return { text: `Acting on ${site} needs the user's permission, and it can't be asked here.`, images: [], isError: true };
 				const answer = await ask({ site, tool: name, title: `Let Piopio click and type on ${site}`, args });
 				if (!answer.approved) return { text: `The user didn't let Piopio act on ${site}${answer.reason ? ` (${answer.reason})` : ""}. Don't try another way; ask them what to do.`, images: [], isError: true };
-				options.sites.grant(ref.id, site, answer.always);
+				if (options.agent) approvedNow.add(site);
+				else options.sites.grant(ref.id, site, answer.always);
 			}
 		} catch (error) {
 			const text = error instanceof AppUnavailable ? "Piopio isn't open on the Mac, so the browser can't be used now." : `The browser couldn't do it: ${(error as Error).message}`;

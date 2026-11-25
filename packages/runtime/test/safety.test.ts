@@ -46,3 +46,33 @@ group("budget (06 §9 AS3)", () => {
 		expect(await safetyWith(0.7, undefined, 1).gate()).toEqual({ ok: true });
 	});
 });
+
+// Re-audit 2026-11-25 V4: a contact's message could make the agent read pages in a browser signed in for the owner.
+group("what a contact can't make the agent do (06 §9 AS2)", () => {
+	const safetyFor = (who: { contact?: { id: string; name: string; role: string }; peerId?: string }) => {
+		let state: Record<string, unknown> = {};
+		const host = {
+			harness: { usage: async () => ({ models: {}, tools: {} }) },
+			context: {},
+			definition: () => ({ name: "Ada", contacts: [], policies: {} }),
+			now: () => Date.parse("2026-11-25T12:00:00Z"),
+			read: async () => state,
+			write: async (change: (s: Record<string, unknown>) => void) => { const next = structuredClone(state); change(next); state = next; },
+			whose: async () => who,
+		};
+		return new Safety(host as never);
+	};
+	const before = (safety: Safety, name: string) => safety.beforeTool({ id: "c1", name, arguments: { url: "https://bank.example/" } }, { conversationId: "conv", taskId: "t" } as never, {} as never);
+
+	test("use the browser: it's signed in for the owner", async () => {
+		const maria = safetyFor({ contact: { id: "maria", name: "María", role: "contact" } });
+		for (const tool of ["browser_open", "browser_read", "browser_screenshot", "browser_click"]) {
+			expect(await before(maria, tool), tool).toEqual({ block: expect.stringContaining("can't make you use the browser") });
+		}
+	});
+	test("the owner, the agent's own runs and other agents of the owner still browse", async () => {
+		for (const who of [{ contact: { id: "owner", name: "Antonio", role: "owner" } }, {}, { contact: { id: "maria", name: "María", role: "contact" }, peerId: "scout" }]) {
+			expect(await before(safetyFor(who), "browser_read"), JSON.stringify(who)).toBeUndefined();
+		}
+	});
+});
