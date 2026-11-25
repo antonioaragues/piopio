@@ -54,7 +54,7 @@ export function memoryHandlers(engine: Engine): Handlers<"memory"> {
 			return (await engine.memory.status()) satisfies Result<"memory.status">;
 		},
 		"memory.banks": async (_params, _call) => {
-			const owners = engine.sessions.memoryOwners();
+			const owners = engine.sessions.agents.memoryOwners();
 			const labels = new Map(owners.agents.flatMap((a) => a.partitions.map((p) => [p.bank, { label: p.label, agent: a }] as const)));
 			const banks = engine.memory.builtin.banks().map((b) => {
 				const owner = labels.get(b.bank);
@@ -88,7 +88,7 @@ export function memoryHandlers(engine: Engine): Handlers<"memory"> {
 		},
 		"memory.setLearning": async (params, _call) => {
 			const p = params as Params<"memory.setLearning">;
-			await engine.sessions.setLearning(p.ref, p.learn);
+			await engine.sessions.agents.setLearning(p.ref, p.learn);
 			return {} satisfies Result<"memory.setLearning">;
 		},
 		"memory.recall": async (params, _call) => {

@@ -16,7 +16,7 @@ export function cloudHandlers(engine: Engine): Handlers<"cloud"> {
 		"cloud.setup": async (params, _call) => {
 			const p = params as Params<"cloud.setup">;
 			const r = await engine.cloud.setup(p.apiToken, p.accountId);
-			if (r.status) void engine.sessions.refreshCloudAgents();
+			if (r.status) void engine.sessions.agents.refreshCloudAgents();
 			return r satisfies Result<"cloud.setup">;
 		},
 		"cloud.update": async (_params, _call) => {
@@ -27,7 +27,7 @@ export function cloudHandlers(engine: Engine): Handlers<"cloud"> {
 			return (await engine.cloud.connect(p.url, p.token)) satisfies Result<"cloud.connect">;
 		},
 		"cloud.disconnect": async (_params, _call) => {
-			const up = engine.sessions.agentList().filter((a) => engine.sessions.isCloud(a.id));
+			const up = engine.sessions.agents.agentList().filter((a) => engine.sessions.agents.isCloud(a.id));
 			if (up.length) throw new EngineError("INVALID", `${up.map((a) => a.name).join(", ")} ${up.length === 1 ? "runs" : "run"} in your cloud. Move ${up.length === 1 ? "it" : "them"} to this Mac first.`);
 			await engine.cloud.disconnect();
 			return {} satisfies Result<"cloud.disconnect">;

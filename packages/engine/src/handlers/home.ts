@@ -15,9 +15,9 @@ export function homeHandlers(engine: Engine): Handlers<"home"> {
 			const p = params as Params<"home.agenda">;
 			// Messages held by quiet hours or limits, across agents.
 			let held = 0;
-			for (const a of engine.sessions.list("agent")) held += (await engine.sessions.agentRuns(a.ref).catch(() => undefined))?.outbox.length ?? 0;
+			for (const a of engine.sessions.list("agent")) held += (await engine.sessions.agents.agentRuns(a.ref).catch(() => undefined))?.outbox.length ?? 0;
 			const all = engine.projects.list();
-			const agents = new Map(engine.sessions.agentList().map((a) => [a.id, a.name]));
+			const agents = new Map(engine.sessions.agents.agentList().map((a) => [a.id, a.name]));
 			const automations = engine.automations.list().map((a) => ({
 				id: a.id,
 				name: a.name,

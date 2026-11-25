@@ -234,9 +234,9 @@ export class Engine {
 		// Agents on Telegram from this Mac (docs/spec/19 S4): polling, so no webhook or cloud.
 		this.telegram = new TelegramChannels({
 			// A cloud agent's bot is read by the cloud, by webhook (docs/spec/30 K1).
-			agents: () => this.sessions.agentList().filter((a) => !this.sessions.isCloud(a.id)),
-			definition: (id) => this.sessions.agentList().find((a) => a.id === id)?.definition,
-			save: (id, change, message) => this.sessions.changeAgent(id, change, message),
+			agents: () => this.sessions.agents.agentList().filter((a) => !this.sessions.agents.isCloud(a.id)),
+			definition: (id) => this.sessions.agents.agentList().find((a) => a.id === id)?.definition,
+			save: (id, change, message) => this.sessions.agents.changeAgent(id, change, message),
 			submit: async (id, contactId, text) => {
 				const view = await (await this.sessions.agent({ kind: "agent", id })).view(contactId);
 				await view.submit(text, { whenBusy: "followUp" });
@@ -300,8 +300,8 @@ export class Engine {
 			clockFile: join(options.paths.home, "automations-clock.sqlite"),
 			log: this.log,
 			agent: (id) => {
-				const a = this.sessions.agentList().find((x) => x.id === id);
-				return a ? { id: a.id, name: a.name, telegram: Boolean(a.definition.channels?.telegram), ...(this.sessions.isCloud(a.id) ? { cloud: true } : {}) } : undefined;
+				const a = this.sessions.agents.agentList().find((x) => x.id === id);
+				return a ? { id: a.id, name: a.name, telegram: Boolean(a.definition.channels?.telegram), ...(this.sessions.agents.isCloud(a.id) ? { cloud: true } : {}) } : undefined;
 			},
 			project: (id) => {
 				try {
@@ -480,13 +480,13 @@ export class Engine {
 			this.cloud?.woke();
 		});
 		this.wake.start();
-		void this.sessions.startAgents(this.log);
+		void this.sessions.agents.startAgents(this.log);
 		// MCP apps (Linear): their servers' current tools, for conversations started from now on.
 		void this.connectors.refreshMcpTools().catch(() => undefined);
 		// Cloud agents' status (paused, spend, Inbox) and their approvals' notifications, every minute (docs/spec/30 K1).
-		this.cloudTick = setInterval(() => void this.sessions.refreshCloudAgents(), 60_000);
+		this.cloudTick = setInterval(() => void this.sessions.agents.refreshCloudAgents(), 60_000);
 		this.cloudTick.unref?.();
-		void this.sessions.refreshCloudAgents();
+		void this.sessions.agents.refreshCloudAgents();
 		void this.work.resume().catch((error: unknown) => this.log(`Work: ${(error as Error).message}`));
 		// Open pull requests: what happens on them goes to the conversation that owns them (docs/spec/17 §5).
 		this.prTimer = setInterval(() => void this.sessions.prs.poll().catch((error: unknown) => this.log(`Pull requests: ${(error as Error).message}`)), this.options.github?.pollMs ?? 120_000);
@@ -513,12 +513,12 @@ export class Engine {
 			}
 			case "agents": {
 				const summaries = new Map(this.sessions.list("agent").map((s) => [s.ref.id, s]));
-				return this.sessions.agentList().map((a) => {
+				return this.sessions.agents.agentList().map((a) => {
 					const status = summaries.get(a.id)?.agent?.status;
 					return {
 						id: a.id,
 						name: a.name,
-						runsOn: this.sessions.isCloud(a.id) ? "cloud" : "mac",
+						runsOn: this.sessions.agents.isCloud(a.id) ? "cloud" : "mac",
 						model: a.definition.models.default,
 						paused: status?.paused ?? false,
 						spendUsd: status?.spendUsd ?? 0,
@@ -630,7 +630,7 @@ export class Engine {
 				const name = agents.get(id);
 				if (!name) return undefined;
 				try {
-					const model = this.sessions.agentDefinition(id).definition.models.default;
+					const model = this.sessions.agents.agentDefinition(id).definition.models.default;
 					return { name, ...(model ? { model } : {}) };
 				} catch {
 					return { name };

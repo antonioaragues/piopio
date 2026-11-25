@@ -10,11 +10,11 @@ import type { Handlers } from "./types.js";
 export function inboxHandlers(engine: Engine): Handlers<"inbox"> {
 	return {
 		"inbox.list": async (_params, _call) => {
-			return (await engine.sessions.inbox()) satisfies Result<"inbox.list">;
+			return (await engine.sessions.agents.inbox()) satisfies Result<"inbox.list">;
 		},
 		"inbox.read": async (params, _call) => {
 			const p = params as Params<"inbox.read">;
-			await engine.sessions.inboxRead(p.items);
+			await engine.sessions.agents.inboxRead(p.items);
 			return {} satisfies Result<"inbox.read">;
 		},
 	};

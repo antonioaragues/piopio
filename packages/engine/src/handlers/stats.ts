@@ -104,14 +104,14 @@ async function setup(engine: Engine): Promise<Result<"stats.setup">> {
 	const usedMcp = new Set(mcp.map((m) => m.name).filter((name) => [...toolNames].some((t) => t.startsWith(`${name}_`) || t.startsWith(`mcp__${name}__`) || t.includes(`__${name}__`))));
 	const summaries = new Map(engine.sessions.list("agent").map((s) => [s.ref.id, s]));
 	const automations = engine.automations.list();
-	const agents: SetupAgent[] = engine.sessions.agentList().map((a) => {
+	const agents: SetupAgent[] = engine.sessions.agents.agentList().map((a) => {
 		const s = summaries.get(a.id);
 		const status = s?.agent?.status;
 		return {
 			id: a.id,
 			name: a.name,
 			...(s?.agent?.avatar ? { avatar: s.agent.avatar } : {}),
-			cloud: engine.sessions.isCloud(a.id),
+			cloud: engine.sessions.agents.isCloud(a.id),
 			model: a.definition.models.default,
 			telegram: Boolean(a.definition.channels?.telegram),
 			paused: status?.paused ?? false,
