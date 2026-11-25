@@ -22,7 +22,7 @@ beforeAll(async () => {
 			compatibilityDate: config.compatibility_date,
 			compatibilityFlags: config.compatibility_flags,
 			durableObjects: { AGENT: { className: "AgentDO", useSQLite: true }, REGISTRY: { className: "RegistryDO", useSQLite: true } },
-			bindings: { OWNER_TOKEN: "t", PIOPIO_FAUX_MODEL: "1", PIOPIO_FAUX_TPS: "100", PIOPIO_TEST_HOOKS: "1", PIOPIO_TEST_WAKE_MS: "1000" },
+			bindings: { OWNER_TOKEN: "t", PIOPIO_FAUX_MODEL: "1", PIOPIO_FAUX_TPS: "100", PIOPIO_TEST_HOOKS: "1" },
 		}),
 	);
 	base = await mf.ready;
@@ -44,7 +44,7 @@ const status = async (agent: string) => (await (await mf.dispatchFetch(`${base.h
 const evict = (agent: string) => mf.unsafeEvictDurableObject(config.name, "AgentDO", { name: agent, webSockets: "close" });
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-type Overview = { runs: { kind: string; status: string; firedAt: string; prompt: string; summary?: string }[]; upcoming: { kind: string; next?: number }[]; alarm: number | null; nextWake?: number; instanceId: string; rests: number[] };
+type Overview = { runs: { kind: string; status: string; firedAt: string; prompt: string; summary?: string }[]; upcoming: { kind: string; next?: number }[]; alarm: number | null; instanceId: string };
 
 describe("Piopio's agent in a Durable Object (spike S7)", () => {
 	test("a person's turn runs through AgentCore; what they said is in memory on the object's SQLite, after an eviction too", async () => {
@@ -68,18 +68,18 @@ describe("Piopio's agent in a Durable Object (spike S7)", () => {
 	});
 
 	test(
-		"between wakes the agent rests (pi closed, no timers); a reminder then fires from its alarm, with nothing else waking it",
+		"between wakes nothing pins the object (pi open, no timers); a reminder then fires from pi's alarm, with nothing else waking it",
 		async () => {
 			const agent = "s7-reminder";
 			await call(agent, "say", { contact: "owner", text: "hi" }); // the owner's conversation exists
-			const { at, wake } = await call<{ at: number; wake: number }>(agent, "remind", { inMs: 8000, prompt: "Stretch your legs" });
-			expect(wake).toBe(at);
+			const { at } = await call<{ at: number }>(agent, "remind", { inMs: 8000, prompt: "Stretch your legs" });
 			const armed = await call<Overview>(agent, "overview");
 			expect(armed.upcoming).toEqual([expect.objectContaining({ kind: "reminder", next: at })]);
 
-			// The settle check (1 s in tests) finds nothing running and the reminder far enough away: it rests.
+			// The turn that set it is over; the reminder's task sleeps.
 			await sleep(3000);
-			// With pi closed nothing pins the object: the eviction is immediate (a sleeping task's timer would hold it).
+			// pi arms no timer for a sleeping task (it hands the time to the alarm through onWake), so nothing pins the
+			// object: the eviction is immediate, with pi open.
 			const evictStarted = Date.now();
 			await evict(agent);
 			expect(Date.now() - evictStarted).toBeLessThan(1500);
@@ -88,9 +88,6 @@ describe("Piopio's agent in a Durable Object (spike S7)", () => {
 			await sleep(Math.max(0, at + 5000 - Date.now()));
 			const lookedAt = Date.now();
 			const after = await call<Overview>(agent, "overview");
-			// It rested before the reminder (and again after its run).
-			expect(after.rests.some((t) => t < at)).toBe(true);
-			expect(after.rests.some((t) => t > at)).toBe(true);
 			const run = after.runs.find((r) => r.kind === "reminder");
 			expect(run).toBeDefined();
 			expect(run!.prompt).toBe("Stretch your legs");

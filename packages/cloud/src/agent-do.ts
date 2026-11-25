@@ -16,7 +16,7 @@ import { WebSockets } from "agents/websockets";
 import { DurableObject } from "cloudflare:workers";
 import { Value } from "typebox/value";
 import { alwaysLabel, modelOf, validate, type AgentDefinition, type MemoryRecord, type Reminder, DurableViewMapper, type DurableView, type Entry } from "@piopio/runtime";
-import { AgentHost, AgentWake, defaultAgent, type StoredAgent } from "./agent.js";
+import { AgentHost, defaultAgent, type StoredAgent } from "./agent.js";
 import { sameSecret } from "./auth.js";
 import { CloudTelegram } from "./telegram.js";
 import type { Env } from "./env.js";
@@ -116,7 +116,7 @@ export class AgentDO extends DurableObject<Env> {
 			const pi = await Harness.open(storage, { models: await createCloudModels(this.env), registry, onWake }, context);
 			const model = defaultModel(this.env);
 			this.agentDef = (await this.ctx.storage.get<StoredAgent>(AGENT_KEY)) ?? defaultAgent(this.agentId, `${model.provider}:${model.id}`);
-			const host = new AgentHost(pi, () => this.agentDef!, this.ctx.storage, context, () => void this.wake.rearm().catch(() => undefined), (to, text) => this.telegram.outbound(to, text));
+			const host = new AgentHost(pi, () => this.agentDef!, this.ctx.storage, context, (to, text) => this.telegram.outbound(to, text));
 			registry.install(host.core.extension);
 			await host.core.configureAll();
 			this.host = host;
@@ -151,25 +151,6 @@ export class AgentDO extends DurableObject<Env> {
 		});
 	})();
 
-	/** Wakes the object for the agent's schedules, reminders and held messages, and lets it rest in between. */
-	readonly wake = new AgentWake({
-		agent: () => this.agent(),
-		open: () => this.host !== undefined,
-		busy: async () => {
-			for (const connection of this.webSockets.getConnections<ConnState>()) if (connection.state?.subs?.length) return true;
-			return this.working();
-		},
-		rest: async () => {
-			this.hostReady = undefined;
-			this.host = undefined;
-			for (const view of this.views.values()) await (await view.catch(() => undefined))?.close();
-			this.views.clear();
-			await this.harness.dispose();
-			// The last few rests (spike S7 tests read them).
-			await this.ctx.storage.put(RESTS_KEY, [...((await this.ctx.storage.get<number[]>(RESTS_KEY)) ?? []), Date.now()].slice(-10));
-		},
-	}, this.env.PIOPIO_TEST_WAKE_MS ? { settleMs: Number(this.env.PIOPIO_TEST_WAKE_MS), restThresholdMs: 2 * Number(this.env.PIOPIO_TEST_WAKE_MS) } : undefined);
-
 	/** Whether pi is answering anyone: a person's conversation, or the root session. */
 	private async working(): Promise<boolean> {
 		const people = Object.values(await this.host!.core.people());
@@ -200,7 +181,7 @@ export class AgentDO extends DurableObject<Env> {
 		},
 	});
 
-	readonly lifecycle = Lifecycle.install(this).use(this.harness).use(this.webSockets).use(this.wake);
+	readonly lifecycle = Lifecycle.install(this).use(this.harness).use(this.webSockets);
 
 	private get agentId(): string {
 		return this.lifecycle.name;
@@ -211,7 +192,6 @@ export class AgentDO extends DurableObject<Env> {
 		// Moved back to the Mac: nothing runs here until it's deployed again.
 		if (await this.ctx.storage.get(RETIRED_KEY)) return;
 		await this.agent();
-		await this.wake.rearm();
 		this.telegram.resume();
 		for (const connection of this.webSockets.getConnections<ConnState>()) {
 			const subs = connection.state?.subs ?? [];
@@ -279,7 +259,6 @@ export class AgentDO extends DurableObject<Env> {
 				if (body.wait === false) return Response.json({ session, operationId: receipt.operationId });
 				const result = await this.harness.wait(receipt.operationId, { session });
 				await core.afterTurn(contact, text, result.text ?? "", { ref: `agent:${this.agentId}` });
-				await this.wake.rearm();
 				return Response.json({ ...result, session });
 			}
 			case "/__test/agent/wait": {
@@ -289,10 +268,10 @@ export class AgentDO extends DurableObject<Env> {
 			case "/__test/agent/remind": {
 				const at = Date.now() + Number(body.inMs ?? 2000);
 				await core.proactive.restoreReminder({ id: `r${at.toString(36)}`, prompt: String(body.prompt ?? "Remind me"), at, createdAt: new Date().toISOString(), by: "owner" });
-				return Response.json({ at, wake: await this.wake.rearm() });
+				return Response.json({ at });
 			}
 			case "/__test/agent/overview":
-				return Response.json({ ...(await core.proactive.overview()), alarm: await this.ctx.storage.getAlarm(), nextWake: await host.nextWake(), instanceId: this.instanceId, rests: (await this.ctx.storage.get<number[]>(RESTS_KEY)) ?? [] });
+				return Response.json({ ...(await core.proactive.overview()), alarm: await this.ctx.storage.getAlarm(), instanceId: this.instanceId });
 			case "/__test/agent/list": {
 				const bank = `${this.agentId}/${url.searchParams.get("partition") ?? "owner"}`;
 				const fts = this.ctx.storage.sql.exec("SELECT count(*) AS n FROM memory_fts").toArray()[0];
@@ -415,14 +394,12 @@ export class AgentDO extends DurableObject<Env> {
 					if (!p.prompt?.trim()) throw new RpcError("INVALID", "Give a schedule or a prompt.");
 					run = await core.proactive.startRun("manual", p.trial ? "trial" : "manual", p.prompt.trim());
 				}
-				await this.wake.rearm().catch(() => undefined);
 				return { runId: run.id } satisfies Result<"agents.runNow">;
 			}
 			case "agents.pause": {
 				const p = params as Params<"agents.pause">;
 				this.ownAgent(p.ref);
 				await (await this.agent()).core.safety.setPaused(p.paused);
-				await this.wake.rearm().catch(() => undefined);
 				return {} satisfies Result<"agents.pause">;
 			}
 			case "agents.decide": {
@@ -563,7 +540,6 @@ export class AgentDO extends DurableObject<Env> {
 		}
 		if (reminders) lines.push(`Reminders: ${reminders}.`);
 		if (p.telegram) lines.push(await this.telegram.connect(p.telegram.token));
-		await this.wake.rearm().catch(() => undefined);
 		const deployedAt = new Date().toISOString();
 		await this.env.REGISTRY.getByName(REGISTRY_NAME).put({ id: this.agentId, name: definition.name, ...(definition.avatar ? { avatar: definition.avatar } : {}), deployedAt });
 		return { deployedAt, lines };
@@ -720,7 +696,6 @@ export class AgentDO extends DurableObject<Env> {
 const ALARMS_KEY = "piopio:alarms";
 const ORIGIN_KEY = "piopio:origin";
 const AGENT_KEY = "piopio:agent";
-const RESTS_KEY = "piopio:rests";
 /** Set when the agent moved back to the Mac (everything else was deleted). */
 const RETIRED_KEY = "piopio:retired";
 

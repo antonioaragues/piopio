@@ -11,7 +11,7 @@ The Cloud Engine: a Cloudflare Worker with `RegistryDO` + one `AgentDO` per agen
 | `src/index.ts` | Worker `piopio-cloud`. `GET /v1/ws?agent=<id>` → that agent's `AgentDO`, only with the owner's token. `GET /v1/agents` lists the registry (owner only). `GET /v1/health` is the one open route. |
 | `src/registry-do.ts` | (K1) `RegistryDO`, one object named `registry`: the agents deployed here. An agent adds itself on deploy and leaves on retire. |
 | `src/auth.ts` | The owner check at the Worker: `Authorization: Bearer <OWNER_TOKEN>`, compared in constant time; no `OWNER_TOKEN` → everything is refused (503). |
-| `src/agent.ts` | (S7) `AgentHost`: `AgentCore` on the harness pi opened, memory on the object's SQLite. `AgentWake`: the Lifecycle job that wakes the agent for its schedules and lets it rest in between. |
+| `src/agent.ts` | (S7) `AgentHost`: `AgentCore` on the harness pi opened, memory on the object's SQLite. Waking is PiHarness's own job (below). |
 | `src/agent-do.ts` | `AgentDO`: a plain `DurableObject` with `Lifecycle.install(this).use(PiHarness).use(WebSockets)`. JSON-RPC over the socket: `engine.hello`, `engine.status`, `sessions.subscribe` / `unsubscribe` / `submit` / `abort`, `agents.runs` / `conversations`, and `session.events` notifications. K1: `agents.deploy` / `export` / `retire` move an agent between the Mac and here (docs/spec/30 §13). |
 | `src/telegram.ts` | (5.3) The agent's bot by webhook: connect by pasting the token, pair the owner with a `/start` link, a person's message and its answer, messages the agent sends on its own. The Bot API client is `@piopio/runtime`'s, shared with the Mac. |
 | `src/models.ts` | pi-ai `Models`: OpenRouter (key from the `OPENROUTER_API_KEY` secret), or the faux echo model when `PIOPIO_FAUX_MODEL` is set. |
@@ -141,6 +141,31 @@ verified in workerd via Miniflare with the faux model (`test/agent.test.ts`, 3 t
   in definitions are `provider:id` (`faux:echo`).
 - **Memory on the object's SQLite works**, FTS5 and its triggers included (`durableSql` adapts `ctx.storage.sql` to the
   provider's synchronous `Sql`). What a person said is recalled after an eviction.
+- **Waking and resting are pi's own** (since 2026-11-25). Schedules, reminders and the outbox sleep inside pi-durable
+  tasks. pi reports its next sleep through `onWake`, PiHarness's one Lifecycle job (`pi-wake`) is due then, and its
+  alarm restarts an evicted object. With `onWake` pi arms no timer for a sleeping task, so nothing pins the object: it
+  is evicted with pi open.
+  - **verified (Miniflare):** with a reminder 8 s away the eviction is immediate, and the reminder fires from the alarm
+    at its moment with nothing else touching the object.
+  - **what this replaced:** the spike (PiHarness then handed only model retries and deferred polls to the alarm) had a
+    job of ours, `AgentWake`, due at `Proactivity.nextWake()`, which worked the time out again from the definition, the
+    reminders and the outbox; and because a sleeping task's timer pinned the object, it closed pi between wakes ("rest").
+    Both are removed.
+- **Bundle:** 3.3 MB, 540 KB gzipped (pi-ai's model catalog is most of it). Within the Workers size limits.
+- **Tooling:** wrangler 4.151 ships Miniflare 5 (beta) with a new options shape. `convertV4MiniflareOptions` bridges it, and `unsafeEvictDurableObject` gives real hibernation/eviction in tests. `@cloudflare/vitest-pool-workers` needs vitest 4 and the repo uses vitest 5, so tests drive Miniflare from Node instead.
+- pi-durable commits partial answers every 100 ms (as in S1), so short faux answers arrive with no `item.delta`.
+
+## What spike S7 learned (2026-10-25): **go**
+
+Piopio's own agent runtime (`AgentCore` from `@piopio/runtime`) runs in the AgentDO on the pi that `PiHarness` opens,
+verified in workerd via Miniflare with the faux model (`test/agent.test.ts`, 3 tests; the S4 suite still passes).
+
+- **The agent runs unchanged.** `AgentCore` takes PiHarness's pi harness, a definition from the object's storage (a
+  personal-assistant default until the app deploys one) and the built-in memory provider. People's conversations are
+  PiHarness sessions, so a person's turn interrupted by an eviction finishes from PiHarness's alarm, as in S4. Model ids
+  in definitions are `provider:id` (`faux:echo`).
+- **Memory on the object's SQLite works**, FTS5 and its triggers included (`durableSql` adapts `ctx.storage.sql` to the
+  provider's synchronous `Sql`). What a person said is recalled after an eviction.
 - **Schedules need our own wake.** PiHarness hands only model retries and deferred polls to the alarm; our schedules,
   reminders and outbox sleep inside pi-durable tasks, which nothing wakes once the object is gone. `AgentWake` (a
   Lifecycle job) is due at the agent's next wake, from the new `Proactivity.nextWake()` in `@piopio/runtime`, which
@@ -159,22 +184,16 @@ verified in workerd via Miniflare with the faux model (`test/agent.test.ts`, 3 t
   `async_hooks`, `diagnostics_channel`, `os`, `util`, `path` and `fs` (code paths it doesn't run).
 
 **Gaps, for 5.1**
-- **More sleeps for `nextWake()`:**
-  - ~~approval expiry (24 h)~~: since 2026-11-26 a call waiting for approval is parked at pi-durable's gate with the
-    24 h as its `until`, so it is one of pi's own sleeps and reaches the alarm through `onWake` (not run on Cloudflare
-    yet);
-  - ~~`ask_agent` timeouts~~: since 2026-11-26 the call is parked on a pi-durable signal with the timeout as its
-    `until`, the same way (not run on Cloudflare yet);
-  - the heartbeat's budget check.
+- **Sleeps reach the alarm on their own:** approval expiry (24 h), `ask_agent` timeouts and the browser's site approval
+  are pi-durable sleeps like the schedules (not run on Cloudflare yet). The heartbeat's budget check is still open.
 - **Real traffic:** turns go through test routes here. The protocol (`agents.*` over the socket) and channel webhooks
   come in 5.1 and 5.3.
 - **Not verified on a real account:**
   - production alarm timing;
   - the 15-minute alarm limit with a long run;
   - a real model;
-  - what resting saves in duration billing.
 - **Upstream asks:**
-  - a "next timer" from pi-durable's scheduler would make the wake generic instead of knowing our tasks;
+  - ~~a "next timer" from pi-durable's scheduler~~: it exists (`onWake`), and is what wakes the agent now;
   - with the S4 note, `unref`-less timers on Workers pin objects.
 
 ## Telegram from the cloud (5.3)

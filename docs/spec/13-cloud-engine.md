@@ -60,9 +60,11 @@ approves from Telegram buttons; agent-to-agent works in the cloud.
 - a turn interrupted by eviction finishes;
 - a reminder fires from the agent's own alarm after the object rested and was evicted.
 
-Two things the platform didn't give us:
-- **The wake:** a Lifecycle job at `Proactivity.nextWake()`.
-- **Rest:** a sleeping task's timer pins the object, so pi is closed between wakes.
+Two things the platform didn't give us then, and does now (2026-11-25), so ours are removed:
+- **The wake:** it was a Lifecycle job of ours at `Proactivity.nextWake()`. pi-durable now reports its next sleep
+  (`onWake`) and PiHarness's own job is due then.
+- **Rest:** a sleeping task's timer pinned the object, so pi was closed between wakes. With `onWake` pi arms no timer,
+  and the object is evicted with pi open.
 
 Details and gaps: [packages/cloud/README.md](../../packages/cloud/README.md).
 

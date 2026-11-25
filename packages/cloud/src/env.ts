@@ -11,8 +11,6 @@ export interface Env {
 	PIOPIO_FAUX_MODEL?: string;
 	/** Faux model speed in tokens per second (4 characters each). */
 	PIOPIO_FAUX_TPS?: string;
-	/** Tests: the agent's settle check after this many ms, and rest when the next wake is twice that away. */
-	PIOPIO_TEST_WAKE_MS?: string;
 	/** Tests: Telegram's Bot API base (a fake). Never deployed (the deploy script refuses PIOPIO_TEST_*). */
 	PIOPIO_TEST_TELEGRAM_API?: string;
 	/** Any value: enable test-only routes (`/__test/status`). Never set in production. */
