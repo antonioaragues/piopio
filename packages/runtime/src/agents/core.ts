@@ -719,10 +719,12 @@ export class AgentCore {
 			},
 		});
 
+		// Two reasons to forget (re-audit 2026-11-25): a fact that's wrong keeps its history, so Undo can bring it back; one
+		// the person asked to forget goes for good (`purge`: out of memory's history too), with no Undo holding its text.
 		const forget = defineTool({
 			name: "forget",
-			description: "Delete a fact from memory by its id (from recall), when it's wrong or the person asks.",
-			parameters: Type.Object({ id: Type.String() }),
+			description: "Delete a fact from memory by its id (from recall), when it's wrong or the person asks. Set asked when the person asked you to forget it: then nothing of it is kept, and it can't be undone.",
+			parameters: Type.Object({ id: Type.String(), asked: Type.Optional(Type.Boolean({ description: "The person asked to forget it (not just that it's wrong)." })) }),
 			execute: async (args, api, context) => {
 				const s = await scope(api.conversationId, context);
 				const provider = core.options.memory();
@@ -732,10 +734,11 @@ export class AgentCore {
 					// What it said, so Undo can put it back.
 					const old = provider.list ? (await provider.list(bank, { limit: 500 }).catch(() => ({ records: [] as MemoryRecord[] }))).records.find((r) => r.id === args.id) : undefined;
 					try {
-						await provider.forget(bank, args.id, "agent");
+						await provider.forget(bank, args.id, "agent", args.asked ? { purge: true } : {});
 					} catch {
 						continue; // not in this partition
 					}
+					if (args.asked) return { output: [{ type: "text", text: "Forgotten for good, as asked: nothing of it is kept." }], details: { card: { kind: "memory", title: "Forgotten for good" } satisfies ResultCard } as never };
 					const card: ResultCard = { kind: "memory", title: "Forgotten", ...(old ? { detail: old.text } : {}) };
 					const undo = old ? await core.safety.recordUndo("memory.restore", { bank, text: old.text, kind: old.kind }, `forgetting “${old.text.slice(0, 60)}”`, api.conversationId) : undefined;
 					return { output: [{ type: "text", text: "Forgotten." }], details: { card, ...(undo ? { undo } : {}) } as never };
