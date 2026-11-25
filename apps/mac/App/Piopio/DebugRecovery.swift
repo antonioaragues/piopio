@@ -21,6 +21,18 @@ import PiopioKit
             thread.composerAttachments = [PendingAttachment(name: "note.txt", attachment: .text(name: "note.txt", mimeType: nil, text: "Recovery attachment"))]
             try await thread.flushDraft()
             try require(DraftStore(home: engine.home).load("thread:\(chat.key)")?.attachments.count == 1, "Draft and attachment persist to disk")
+            // A draft that can't be read when its model is made (the Mac locked) isn't deleted, and comes back on open.
+            guard let other = await engine.createThread() else { throw EngineError(code: "INTERNAL", message: "create chat") }
+            let store = DraftStore(home: engine.home), key = "thread:\(other.key)"
+            try store.save(ComposerDraft(text: "Written before the lock"), for: key)
+            try FileManager.default.setAttributes([.posixPermissions: 0], ofItemAtPath: store.url(key).path)
+            let unread = engine.thread(other)
+            try await unread.flushDraft()
+            try require(unread.composerText.isEmpty && FileManager.default.fileExists(atPath: store.url(key).path), "A draft that can't be read isn't deleted")
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: store.url(key).path)
+            await unread.open()
+            try require(unread.composerText == "Written before the lock", "A draft that couldn't be read comes back when the conversation opens")
+            unread.composerText = ""; try await unread.flushDraft()
             let sent = await thread.send(thread.composerText, attachments: thread.composerAttachments.map(\.attachment))
             try require(sent && thread.composerText.isEmpty && thread.composerAttachments.isEmpty, "Acknowledged send clears the draft")
             _ = try await settled(engine, ref: chat)

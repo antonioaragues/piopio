@@ -606,7 +606,8 @@ struct AskBox: View {
         .onAppear {
             // A project page's box starts in its project each time it opens.
             if let projectId { targetRaw = "project:" + projectId }
-            if let saved = DraftStore(home: engine.home).load(draftKey) {
+            // Home only shows while someone's at the Mac, so a draft that can't be read now is left for the next time.
+            if let saved = try? DraftStore(home: engine.home).load(draftKey) {
                 if saved.text != text { restoring = true; text = saved.text }
                 pendingChat = saved.destination
             }

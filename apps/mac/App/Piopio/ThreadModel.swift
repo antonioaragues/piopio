@@ -20,6 +20,10 @@ final class ThreadModel {
     @ObservationIgnored private let draftWriter: DraftWriter
     @ObservationIgnored private var draftSaveTask: Task<Void, Never>?
     @ObservationIgnored private var pendingInput: ComposerDraft?
+    /// The stored draft couldn't be read when this model was made (the Mac locked, say: models are made for background
+    /// work too). Until it's read, an empty composer isn't saved, since that would delete it; `open()` reads it again.
+    @ObservationIgnored private var draftUnread = false
+    private var mayWriteDraft: Bool { !draftUnread || !composerText.isEmpty || !composerAttachments.isEmpty }
     private var draftKey: String { "\(ref.kind.rawValue):\(ref.key)" }
     private func currentDraft() -> ComposerDraft {
         let same = pendingInput?.text.trimmingCharacters(in: .whitespacesAndNewlines) == composerText.trimmingCharacters(in: .whitespacesAndNewlines) && pendingInput?.attachments == composerAttachments.map(\.attachment) && pendingInput?.editItemId == editing?.itemId
@@ -27,6 +31,7 @@ final class ThreadModel {
     }
     private func persistDraft() {
         draftSaveTask?.cancel()
+        guard mayWriteDraft else { return }
         let input = currentDraft()
         draftSaveTask = Task { [weak self, draftWriter, draftKey] in
             do {
@@ -39,6 +44,7 @@ final class ThreadModel {
     }
     func flushDraft() async throws {
         draftSaveTask?.cancel()
+        guard mayWriteDraft else { return }
         try await draftWriter.save(currentDraft(), for: draftKey)
         try await draftWriter.save(pendingInput ?? ComposerDraft(), for: draftKey + "/pending")
     }
@@ -76,13 +82,7 @@ final class ThreadModel {
         self.ref = ref
         self.engine = engine
         self.notifies = notifies
-        if let saved = draftStore.load(draftKey) {
-            composerText = saved.text
-            composerAttachments = saved.attachments.map { PendingAttachment(name: $0.name, attachment: $0) }
-            pendingInput = saved
-            if let id = saved.editItemId { editing = (id, saved.text) }
-        }
-        if let pending = draftStore.load(draftKey + "/pending") { pendingInput = pending }
+        restoreDraft()
         document.onFollowingChange = { [weak self] following in self?.isFollowing = following }
         document.onAction = { [weak self] action in self?.handle(action) }
         document.bottomInset = 150 // the floating composer sits over the bottom of the transcript
@@ -135,8 +135,27 @@ final class ThreadModel {
         await task.value
     }
 
+    /// The stored draft into the composer, and the message that was being sent (`/pending`) for its retry identity.
+    private func restoreDraft() {
+        do {
+            let saved = try draftStore.load(draftKey)
+            let pending = try draftStore.load(draftKey + "/pending")
+            draftUnread = false
+            if let saved {
+                pendingInput = saved
+                if let id = saved.editItemId { editing = (id, saved.text) }
+                composerAttachments = saved.attachments.map { PendingAttachment(name: $0.name, attachment: $0) }
+                composerText = saved.text
+            }
+            if let pending { pendingInput = pending }
+        } catch {
+            draftUnread = true
+        }
+    }
+
     private func load() async {
         guard !loaded, let engine else { return }
+        if draftUnread, composerText.isEmpty, composerAttachments.isEmpty { restoreDraft() }
         do {
             let sub = try await engine.subscribe(ref) { [weak self] events in self?.receive(events) }
             subscriptionId = sub.subscriptionId
