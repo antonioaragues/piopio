@@ -111,6 +111,8 @@ struct BuildSessionView: View {
     /// Review a pull request: its number (05-build "Review by an agent").
     @State private var reviewingPR = false
     @AppStorage("buildTerminal") private var showTerminal = false
+    /// The background command whose tab the drawer shows (TM4), set by its tab or its row in Background (docs/spec/43).
+    @State private var drawerProcess: String?
 
     private var project: ProjectInfo? { engine.projects.first { $0.path == (summary.projectPath ?? summary.cwd) } }
 
@@ -166,7 +168,7 @@ struct BuildSessionView: View {
                     conversation
                 }
                 if showTerminal, !chatLens, let cwd = summary.cwd {
-                    TerminalDrawer(cwd: cwd, session: session, previewProfile: summary.projectPath ?? cwd) { showTerminal = false }
+                    TerminalDrawer(cwd: cwd, session: session, previewProfile: summary.projectPath ?? cwd, selectedProcess: $drawerProcess) { showTerminal = false }
                         .padding(.horizontal, 8)
                         .padding(.bottom, 8)
                 }
@@ -193,7 +195,7 @@ struct BuildSessionView: View {
                                            filesFilter = .touched
                                            previewing = nil
                                            inspectorTab = .files
-                                       })
+                                       }, background: background)
                     }
                     }
                 }
@@ -356,6 +358,38 @@ struct BuildSessionView: View {
         }
     }
 
+    /// Background (docs/spec/43): its commands and subagents, for the Summary column's last block; nil when there's none.
+    private var background: BackgroundBlock? {
+        let rows = BackgroundWork.rows(processes: session.processes, subagents: subagents)
+        guard BackgroundBlock.shows(running: rows.running, finished: rows.finished) else { return nil }
+        return BackgroundBlock(running: rows.running, finished: rows.finished, conversationId: summary.ref.id, open: { row in
+            switch row.kind {
+            case .command:
+                // Its tab in the terminal drawer.
+                guard !chatLens else { return }
+                drawerProcess = row.id
+                showTerminal = true
+            case .subagent: openSubagent(row.id)
+            }
+        }, stop: { row in
+            switch row.kind {
+            case .command: Task { await session.stopProcess(row.id) }
+            case .subagent:
+                guard let child = engine.buildSessions.first(where: { $0.ref.id == row.id }) else { return }
+                Task { await engine.thread(child.ref).stop() }
+            }
+        }, preview: { address in
+            guard let url = URL(string: address) else { return }
+            BrowserCenter.shared.session(summary.ref.id).openPreview(url, profile: summary.projectPath ?? summary.cwd ?? "")
+        })
+    }
+
+    /// How many commands and subagents run now: the Summary icon's count while the column doesn't show it (BG8).
+    private var backgroundRunning: Int {
+        session.processes.filter { $0.status == .running }.count
+            + subagents.filter { $0.state == "working" || $0.state == "queued" || $0.state == "starting" }.count
+    }
+
     /// This conversation's subagents, oldest first, as their rows show them (docs/spec/37).
     private var subagents: [SubagentInfo] {
         engine.buildSessions.filter { $0.parent?.id == summary.ref.id }.sorted { $0.createdAt < $1.createdAt }.map { s in
@@ -420,13 +454,28 @@ struct BuildSessionView: View {
         let on = panelShown && subagentOpen == nil && inspectorTab == view
         // A blue dot on Inspector while something waits on you (an approval, a question, a command the sandbox stopped).
         let needsYou = view == .inspector && session.state?.status == .waitingApproval
-        return ToolbarIcon(symbol: view.symbol, label: view.title, on: on, help: on ? "Hide the \(view.title.lowercased())" : view.help) { show(view) }
+        // While the column doesn't show Summary, how many commands and subagents run (docs/spec/43 BG8); the blue
+        // dot wins, since it asks for you.
+        let running = view == .inspector && !on && !needsYou ? backgroundRunning : 0
+        let help = on ? "Hide the \(view.title.lowercased())" : running > 0 ? "\(running) running in the background" : view.help
+        return ToolbarIcon(symbol: view.symbol, label: view.title, on: on, help: help) { show(view) }
             .overlay(alignment: .topTrailing) {
                 if needsYou {
                     Circle().fill(Color.accentColor).frame(width: 7, height: 7)
                         .overlay(Circle().strokeBorder(Color.dsWin, lineWidth: 1.5))
                         .offset(x: -4, y: 3)
                         .accessibilityLabel("Waiting on you")
+                } else if running > 0 {
+                    Text("\(running)")
+                        .font(.system(size: 9.5, weight: .semibold).monospacedDigit())
+                        .foregroundStyle(Color.dsWin)
+                        .padding(.horizontal, 3.5)
+                        .frame(minWidth: 14, minHeight: 14)
+                        .background(Capsule().fill(Color.dsFg2))
+                        .overlay(Capsule().strokeBorder(Color.dsWin, lineWidth: 1))
+                        .offset(x: 1, y: -1)
+                        .allowsHitTesting(false)
+                        .accessibilityLabel("\(running) running in the background")
                 }
             }
     }

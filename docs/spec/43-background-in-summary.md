@@ -1,7 +1,7 @@
 # 43 · Background work in the Summary column
 
 Status: draft 2026-11-25 from a request by the user; **decided by the user the same day (§6: the block always last, a
-number on the toolbar icon, commands and subagents only)**; nothing here is built.
+number on the toolbar icon, commands and subagents only)**; **built 2026-11-25** (§7).
 Mockup: [docs/design/background/background.html](../design/background/background.html) (running, one failed, all
 finished, column closed and a chat).
 It adds one block to the Summary column (Build's `InspectorPanel` and a chat's `ChatSummaryPanel`). It doesn't
@@ -107,3 +107,25 @@ Background                         2 running ⌄
 1. **Side conversations in the list (BG2):** no. The block shows commands and subagents only.
 2. **Where the block goes (BG5):** always at the bottom of the column, even while something runs.
 3. **The toolbar count (BG8):** a number, not a dot.
+
+## 7. As built (2026-11-25)
+
+- **Rows:** `BackgroundWork` and `BackgroundRow` in `PiopioTranscript/BackgroundWork.swift`, beside `SubagentInfo`
+  (whose line and glyph states they reuse), not in PiopioKit as §4 said. `BackgroundWork.label` is now the one label
+  for a command: the drawer's tab uses it too. Tests: `BackgroundWorkTests` (each ending's line and glyph, the order,
+  the address, the ticking time, the head).
+- **Block:** `BackgroundBlock.swift`. `SessionTab` draws it last; Plan, Changes or Read is no longer the last block
+  when it shows. `BuildSessionView` builds it from `session.processes` and the subagents its transcript rows already
+  use, and acts on it: a command opens the drawer on its tab (`TerminalDrawer.selectedProcess` is now the session's
+  binding), a subagent opens beside, Stop is `processStop` or the subagent's `stop()`, and the address opens the
+  project preview. The fold is remembered per conversation only when you fold it (`backgroundFolded`).
+- **Chats:** plain chats (`ThreadView`, `ChatSummaryPanel`) run no background commands and no subagents (`task` is
+  Build's), so the block isn't there. A Build session in the Read-only lens has it, without the drawer.
+- **Toolbar:** the Summary icon's count while the column doesn't show Summary (closed, or on Files or the Browser),
+  with "N running in the background" as its tooltip. The blue needs-you dot takes its place while something waits on
+  you.
+- **Checked** in captures of the Debug app with the scripted model (a dev server, a command that exits 1, a subagent):
+  the block under Changes with both subheadings, the times ticking, `localhost:5173 ↗`, "Finished 1" unfolded
+  (`PIOPIO_DEMO_BACKGROUND_FINISHED=1`) with "exit 1 · 1s" in red, and the closed column's "2" on the Summary icon.
+  Not clicked in a live window: Stop, a row opening the drawer or a subagent, and the address opening the preview.
+

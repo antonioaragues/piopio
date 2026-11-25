@@ -128,10 +128,10 @@ struct TerminalDrawer: View {
     let session: ThreadModel
     /// The project's preview profile: its folder, as the engine names it (docs/spec/22 §6).
     var previewProfile: String = ""
+    /// A background command's tab (TM4), instead of a shell: the session's, so a row in Background can pick it.
+    @Binding var selectedProcess: String?
     let close: () -> Void
     @State private var selected: UUID?
-    /// A background command's tab (TM4), instead of a shell.
-    @State private var selectedProcess: String?
     private let store = TerminalStore.shared
     private var process: BackgroundProcess? { selectedProcess.flatMap { id in session.processes.first { $0.id == id } } }
 
@@ -159,7 +159,7 @@ struct TerminalDrawer: View {
                 ForEach(session.processes) { p in
                     HStack(spacing: 6) {
                         Circle().fill(p.status == .running ? Color(white: 0.85) : Color(white: 0.45)).frame(width: 6, height: 6)
-                        Text("\(Self.label(p)) · agent").font(.system(size: 11.5, weight: .medium)).lineLimit(1)
+                        Text("\(BackgroundWork.label(p)) · agent").font(.system(size: 11.5, weight: .medium)).lineLimit(1)
                     }
                     .foregroundStyle(Color(red: 0xE5 / 255, green: 0xE5 / 255, blue: 0xEA / 255).opacity(p.id == process?.id ? 1 : 0.6))
                     .padding(.horizontal, 10)
@@ -232,11 +232,6 @@ struct TerminalDrawer: View {
         }
     }
 
-    /// "npm run dev", or the agent's label for it, short enough for a tab.
-    static func label(_ p: BackgroundProcess) -> String {
-        let text = p.command.count <= 28 ? p.command : (p.description ?? String(p.command.prefix(26)) + "…")
-        return text
-    }
 }
 
 /// A background command's output (TM4), read from the engine as it comes while the tab is open.

@@ -4,7 +4,7 @@ import PiopioTranscript
 import SwiftUI
 
 // The Inspector (docs/design/inspector, options 2a and 4a): Build's right-hand panel, one column (Setup, Tools,
-// Skills, Read, Changes, Plan; the Session and Changes tabs became one on 2026-11-15), and the footer every panel
+// Skills, Read, Changes, Plan, Background (docs/spec/43); the Session and Changes tabs became one on 2026-11-15), and the footer every panel
 // shares (context and cost, nowhere else).
 
 /// The Inspector: its column and the shared footer. Whether Changes is open is kept per session.
@@ -19,13 +19,16 @@ struct InspectorPanel: View {
     let onReview: (String?) -> Void
     /// "Read" opens the Files panel on the files it touched.
     let onRead: () -> Void
+    /// What the conversation left running and ran (docs/spec/43): the column's last block, nil when there's none.
+    let background: BackgroundBlock?
     @State private var changesOpen: Bool
     @State private var files: [FileChange] = []
 
     init(engine: EngineController, session: ThreadModel, summary: SessionSummary, project: ProjectInfo?, git: GitModel?, chatLens: Bool,
-         committing: Binding<Bool>, onReview: @escaping (String?) -> Void, onRead: @escaping () -> Void) {
+         committing: Binding<Bool>, onReview: @escaping (String?) -> Void, onRead: @escaping () -> Void, background: BackgroundBlock? = nil) {
         self.engine = engine; self.session = session; self.summary = summary; self.project = project; self.git = git
         self.chatLens = chatLens; self._committing = committing; self.onReview = onReview; self.onRead = onRead
+        self.background = background
         // PIOPIO_DEMO_INSPECTOR_CHANGES=1: captures open with Changes unfolded.
         let demo = ProcessInfo.processInfo.environment["PIOPIO_DEMO_INSPECTOR_CHANGES"] == "1"
         _changesOpen = State(initialValue: demo || Self.remembered(summary.ref.id))
@@ -35,7 +38,8 @@ struct InspectorPanel: View {
         VStack(spacing: 0) {
             ScrollView {
                 SessionTab(engine: engine, session: session, summary: summary, project: project, git: git, chatLens: chatLens,
-                           committing: $committing, files: files, changesOpen: $changesOpen, onReview: onReview, onRead: onRead)
+                           committing: $committing, files: files, changesOpen: $changesOpen, onReview: onReview, onRead: onRead,
+                           background: background)
                     .padding(.top, 4)
             }
             InspectorFooter(thread: session)
@@ -124,22 +128,26 @@ struct SessionTab: View {
     @Binding var changesOpen: Bool
     let onReview: (String?) -> Void
     let onRead: () -> Void
+    var background: BackgroundBlock?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // No plan, no Plan block (docs/design/plan-flow): then the block above it is the last.
+            // No plan, no Plan block (docs/design/plan-flow): then the block above it is the last. Background, when
+            // there is any, is always the last (docs/spec/43 BG5).
             let plan = PlanBlock.shown(session) != nil
+            let tail = plan || background != nil
             setup.inspectorBlock()
             ToolsBlock(engine: engine, thread: session, summary: summary).inspectorBlock()
             SkillsBlock(thread: session).inspectorBlock()
-            read.inspectorBlock(last: chatLens && !plan)
+            read.inspectorBlock(last: chatLens && !tail)
             if !chatLens {
                 ChangesBlock(engine: engine, session: session, summary: summary, git: git, files: files,
                              commit: git?.status?.repo == true && (git?.changedCount ?? 0) > 0 ? { committing = true } : nil,
                              onReview: onReview, open: $changesOpen)
-                    .inspectorBlock(last: !plan)
+                    .inspectorBlock(last: !tail)
             }
-            if plan { PlanBlock(session: session).inspectorBlock(last: true) }
+            if plan { PlanBlock(session: session).inspectorBlock(last: background == nil) }
+            if let background { background.inspectorBlock(last: true) }
         }
         .padding(.horizontal, 18)
     }
