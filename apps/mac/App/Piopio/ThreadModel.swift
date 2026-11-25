@@ -107,6 +107,13 @@ final class ThreadModel {
     }
 
     var isRunning: Bool { state?.status == .running }
+    /// Nothing needs it now, so EngineController may let it go (it keeps the most recent few): loaded (one that isn't
+    /// costs little, and lists make them for every row), off screen, not running or waiting on you, nothing being sent
+    /// or edited. Its draft is saved; opened again, it loads from the engine.
+    var canLetGo: Bool {
+        loaded && document.scrollView.window == nil && state?.status != .running && state?.status != .waitingApproval && prompts.isEmpty
+            && queue.isEmpty && !isSubmitting && editing == nil && editingPlan == nil && editingLearn == nil && restoring == nil
+    }
     /// Files sent in this conversation; the summary a switch of runner sends ("Conversation so far.md") isn't yours.
     var attachmentCount: Int {
         _ = state

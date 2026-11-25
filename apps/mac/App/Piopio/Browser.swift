@@ -8,7 +8,8 @@ import WebKit
 /// conversation's ref; this keeps that conversation's tabs, all in one profile that holds the user's sign-ins (BW5), and
 /// answers with what the model reads (and screenshots). A conversation's tabs show in its Browser panel; while no panel
 /// shows them they live in a transparent window on screen, so pages keep running at full speed (W0: a window off
-/// screen or never shown is throttled to one frame a second).
+/// screen or never shown is throttled to one frame a second). A tab nobody has used for `restAfter` leaves that window
+/// and WebKit slows it down; the next tool call puts it back.
 @MainActor @Observable
 final class BrowserCenter {
     static let shared = BrowserCenter()
@@ -88,6 +89,42 @@ final class BrowserCenter {
         view.frame = content.bounds
         view.autoresizingMask = [.width, .height]
         content.addSubview(view)
+        parkedAt[ObjectIdentifier(view)] = .now
+        startResting()
+    }
+
+    // MARK: Resting
+
+    /// How long a parked tab keeps running at full speed with nobody using it. Every tab ever opened stayed in the
+    /// transparent window at full speed for as long as Piopio ran (re-audit 2026-11-25 §5.2).
+    static let restAfter: Duration = .seconds(600)
+    @ObservationIgnored private var parkedAt: [ObjectIdentifier: ContinuousClock.Instant] = [:]
+    @ObservationIgnored private var resting: Task<Void, Never>?
+
+    private func startResting() {
+        guard resting == nil else { return }
+        resting = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(60))
+                self?.rest()
+            }
+        }
+    }
+
+    /// Takes the parked tabs nobody used for `restAfter` out of the window: WebKit slows a page in no window (W0).
+    func rest(now: ContinuousClock.Instant = .now) {
+        let parked = parking.contentView?.subviews ?? []
+        parkedAt = parkedAt.filter { id, _ in parked.contains { ObjectIdentifier($0) == id } }
+        for view in parked {
+            guard let since = parkedAt[ObjectIdentifier(view)], now - since > Self.restAfter, (view as? WKWebView)?.isLoading != true else { continue }
+            view.removeFromSuperview()
+            parkedAt[ObjectIdentifier(view)] = nil
+        }
+    }
+
+    /// Before a tool call: the conversation's tabs no panel shows go back to the window, at full speed, from now.
+    private func wake(_ session: BrowserSession) {
+        for tab in session.tabs where tab.view.superview == nil || tab.view.superview === parking.contentView { park(tab.view) }
     }
 
     /// An agent's own profile (`agent:<id>`, spec 22 §7 and W3): created empty, kept between launches. Nil: yours.
@@ -135,10 +172,28 @@ final class BrowserCenter {
         reveals[id, default: 0] += 1
     }
 
-    /// Closes a conversation's tabs (archived or deleted).
+    /// Closes a conversation's tabs.
     func close(_ id: String) {
         sessions.removeValue(forKey: id)?.tabs.forEach { $0.close() }
         openPanels.remove(id)
+        reveals[id] = nil
+    }
+
+    /// A conversation or agent that was deleted (the catalog's `removed`): its tabs closed, and an agent's own profile
+    /// (its sign-ins and storage) deleted with it, as the engine deletes its memory and files. Both stayed before.
+    func forget(_ ref: ContainerRef) {
+        close(ref.id)
+        guard ref.kind == .agent else { return }
+        let profile = "agent:\(ref.id)"
+        profiles[profile] = nil
+        let id = Self.profileID(profile)
+        Task {
+            // WebKit refuses while a closed tab's web view is still going away: once more, a moment later.
+            for attempt in 0..<3 {
+                if attempt > 0 { try? await Task.sleep(for: .seconds(2)) }
+                do { return try await WKWebsiteDataStore.remove(forIdentifier: id) } catch {}
+            }
+        }
     }
 
     // MARK: app.tool
@@ -151,6 +206,7 @@ final class BrowserCenter {
             return Self.reply(ok: false, "The browser is for conversations, Build sessions and agents.")
         }
         let session = session(id)
+        wake(session)
         // An agent's tabs live in its own profile unless its Setup says yours (W3). Changing it starts its tabs afresh.
         let profile = params["profile"]?.stringValue
         if session.profile != profile {

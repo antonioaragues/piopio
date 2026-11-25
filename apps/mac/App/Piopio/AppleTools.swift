@@ -358,7 +358,7 @@ actor AppleTools {
         p.standardError = err
         try p.run()
         let data = await Task.detached { out.fileHandleForReading.readDataToEndOfFile() }.value
-        p.waitUntilExit()
+        await Task.detached { p.waitUntilExit() }.value
         let text = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
         guard p.terminationStatus == 0 else {
             let message = String(decoding: err.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)

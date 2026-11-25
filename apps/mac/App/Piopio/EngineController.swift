@@ -65,6 +65,10 @@ final class EngineController {
     /// Spend, read again every few minutes while connected: one at a time (each connection used to add its own).
     @ObservationIgnored private var usagePoller: Task<Void, Never>?
     @ObservationIgnored private var openThreads: [String: ThreadModel] = [:]
+    /// `openThreads`' keys, the most recently used last. Each open conversation holds its whole transcript and a live
+    /// subscription; past `keptThreads`, the oldest that nothing needs (`ThreadModel.canLetGo`) are let go.
+    @ObservationIgnored private var threadOrder: [String] = []
+    static let keptThreads = 12
     @ObservationIgnored private var handlers: [String: ([SessionEvent]) -> Void] = [:]
     @ObservationIgnored private var orphans: [String: [[SessionEvent]]] = [:]
 
@@ -101,7 +105,7 @@ final class EngineController {
             }
             try await Task.sleep(for: .milliseconds(150))
             process = nil
-            handlers = [:]; orphans = [:]; openThreads = [:]; liveStatus = [:]
+            handlers = [:]; orphans = [:]; openThreads = [:]; threadOrder = []; liveStatus = [:]
             let folder = home
             let result = try await Task.detached { try operation(folder) }.value
             if background { try Self.agent.register(); agentTick += 1 }
@@ -286,12 +290,15 @@ final class EngineController {
 
     /// Restarts the launchd-managed engine (Restart button, version mismatch).
     private func restartBackgroundEngine() {
-        let kickstart = Process()
-        kickstart.executableURL = URL(fileURLWithPath: "/bin/launchctl")
-        kickstart.arguments = ["kickstart", "-k", "gui/\(getuid())/app.piopio.engine"]
-        try? kickstart.run()
-        kickstart.waitUntilExit()
         Task {
+            // `kickstart -k` waits for the old engine to stop: off the main thread, so the window keeps drawing meanwhile.
+            await Task.detached {
+                let kickstart = Process()
+                kickstart.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+                kickstart.arguments = ["kickstart", "-k", "gui/\(getuid())/app.piopio.engine"]
+                try? kickstart.run()
+                kickstart.waitUntilExit()
+            }.value
             try? await Task.sleep(for: .milliseconds(400))
             await start()
         }
@@ -542,6 +549,8 @@ final class EngineController {
         buildSessions = merged(buildSessions, kind: .build)
         agents = merged(agents, kind: .agent)
         for id in removed { forget(id) }
+        // Deleted: its browser tabs close, and an agent's own browser profile goes too.
+        for ref in change.removed { BrowserCenter.shared.forget(ref) }
     }
 
     // MARK: Projects
@@ -681,10 +690,29 @@ final class EngineController {
     // MARK: Threads
 
     func thread(_ ref: ContainerRef) -> ThreadModel {
+        if threadOrder.last != ref.key {
+            threadOrder.removeAll { $0 == ref.key }
+            threadOrder.append(ref.key)
+        }
         if let open = openThreads[ref.key] { return open }
         let t = ThreadModel(ref: ref, engine: self)
         openThreads[ref.key] = t
+        letGoOfOldThreads()
         return t
+    }
+
+    /// The oldest conversations past `keptThreads` that nothing needs: their drafts saved, their subscriptions closed.
+    private func letGoOfOldThreads() {
+        threadOrder.removeAll { openThreads[$0] == nil }
+        var extra = openThreads.count - Self.keptThreads
+        for key in threadOrder where extra > 0 {
+            guard let t = openThreads[key], t.canLetGo else { continue }
+            openThreads[key] = nil
+            extra -= 1
+            t.close()
+            Task { try? await t.flushDraft() }
+        }
+        threadOrder.removeAll { openThreads[$0] == nil }
     }
 
     /// Drops the open models of a session (and its agent conversations).

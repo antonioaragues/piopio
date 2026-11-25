@@ -40,9 +40,9 @@ public final class TranscriptDocument {
     private var pendingEvents: [SessionEvent] = []
     private var prefetched: (text: SendableText, lengths: [Int], ids: [String])?
     private var prefetching = false
-    private var boundsObserver: NSObjectProtocol?
-    private var frameObserver: NSObjectProtocol?
-    private var scrollFrameObserver: NSObjectProtocol?
+    /// The scroll view's notifications. A block observer stays in NotificationCenter until it's removed, so they go
+    /// when the document does (as VisualCard's do): each closed conversation left three behind.
+    nonisolated(unsafe) private var observers: [NSObjectProtocol] = []
     private let hover = HoverTracker()
     private var hoveredItem: String?
     /// The action row under each message, by item (shown on hover).
@@ -132,24 +132,26 @@ public final class TranscriptDocument {
         scrollView.automaticallyAdjustsContentInsets = false
         scrollView.contentView.postsBoundsChangedNotifications = true
         scrollView.contentView.postsFrameChangedNotifications = true
-        frameObserver = NotificationCenter.default.addObserver(forName: NSView.frameDidChangeNotification, object: scrollView.contentView, queue: .main) { [weak self] _ in
+        observers.append(NotificationCenter.default.addObserver(forName: NSView.frameDidChangeNotification, object: scrollView.contentView, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.layoutColumn(); self?.keepEndAfterResize() }
-        }
+        })
         // The scroll view itself can be resized (an inspector opening) without its clip view posting first.
         scrollView.postsFrameChangedNotifications = true
-        scrollFrameObserver = NotificationCenter.default.addObserver(forName: NSView.frameDidChangeNotification, object: scrollView, queue: .main) { [weak self] _ in
+        observers.append(NotificationCenter.default.addObserver(forName: NSView.frameDidChangeNotification, object: scrollView, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.layoutColumn(); self?.keepEndAfterResize() }
-        }
+        })
         textView.addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect], owner: hover, userInfo: nil))
         hover.document = self
-        boundsObserver = NotificationCenter.default.addObserver(forName: NSView.boundsDidChangeNotification, object: scrollView.contentView, queue: .main) { [weak self] _ in
+        observers.append(NotificationCenter.default.addObserver(forName: NSView.boundsDidChangeNotification, object: scrollView.contentView, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self, !self.keepingEnd else { return }
                 self.isFollowing = self.atBottom
                 self.loadOlderIfNeeded()
             }
-        }
+        })
     }
+
+    deinit { observers.forEach(NotificationCenter.default.removeObserver) }
 
     private var storage: NSTextStorage { textView.textStorage! }
     private var layoutManager: NSTextLayoutManager { textView.textLayoutManager! }

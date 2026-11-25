@@ -125,3 +125,26 @@ import Testing
     #expect(!html.contains("data-piopio-visual"))
     #expect(VisualExport.strip("**Visual: Spending**\n\n<!-- piopio-visual:Y2FsbHw3 -->\n\nAfter") == "**Visual: Spending**\n\nAfter")
 }
+
+/// A visual's picture is kept for the newest `maxPictures` only (re-audit 2026-11-25 §5.2: every one stayed in memory).
+@Test @MainActor func onlyTheNewestPicturesAreKept() {
+    let store = VisualStore()
+    let image = NSImage(size: NSSize(width: 1, height: 1))
+    for i in 0..<VisualStore.maxPictures { store.notePicture(image, key: "call\(i)") }
+    // One drawn again counts as new: the next one past the limit takes the oldest after it.
+    store.notePicture(image, key: "call0")
+    store.notePicture(image, key: "new")
+    #expect(store.pictures.count == VisualStore.maxPictures)
+    #expect(store.pictures["call0"] != nil && store.pictures["new"] != nil)
+    #expect(store.pictures["call1"] == nil && store.pictures["call2"] != nil)
+}
+
+/// A document's scroll observers go with it (re-audit 2026-11-25 §5.2: each closed conversation left three behind).
+@Test @MainActor func aDocumentsObserversGoWithIt() {
+    weak var gone: TranscriptDocument?
+    autoreleasepool {
+        let doc = TranscriptDocument()
+        gone = doc
+    }
+    #expect(gone == nil)
+}

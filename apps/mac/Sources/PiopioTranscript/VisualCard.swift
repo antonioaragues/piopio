@@ -550,11 +550,21 @@ public struct AppCanvas: NSViewRepresentable {
     private(set) var heights: [String: CGFloat] = [:]
     /// The width cards were last laid out at: the check draws at it.
     var columnWidth: CGFloat = 720
+    /// What each visual last looked like, shown while its web view loads again: the newest `maxPictures` (each is a
+    /// bitmap of a card, megabytes at 2x; kept for every visual ever shown, they only grew). One that's gone shows
+    /// "Drawing…" until its page draws.
     private(set) var pictures: [String: NSImage] = [:]
+    static let maxPictures = 40
+    private var pictureOrder: [String] = []
     private var live: [(key: String, view: VisualWebView)] = []
 
     func noteHeight(_ height: CGFloat, key: String) { heights[key] = height }
-    func notePicture(_ image: NSImage, key: String) { pictures[key] = image }
+    func notePicture(_ image: NSImage, key: String) {
+        pictures[key] = image
+        pictureOrder.removeAll { $0 == key }
+        pictureOrder.append(key)
+        while pictureOrder.count > Self.maxPictures { pictures[pictureOrder.removeFirst()] = nil }
+    }
 
     /// The web view for a visual: the one kept, or a new one (`fresh`), which the caller loads.
     func webView(_ key: String) -> (view: VisualWebView, fresh: Bool) {
