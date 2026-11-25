@@ -5,7 +5,6 @@
  * The list of accounts and the settings (no secrets) live in `connectors.json`.
  */
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import type { ProviderAuthEvent } from "@piopio/protocol";
 import type { SecretBroker } from "../secrets.js";
@@ -20,7 +19,7 @@ import { notion } from "./notion.js";
 import { outlook } from "./outlook.js";
 import { CAPABILITIES, type CapabilityGroup, defaultPermission, groupOf, type Permission } from "./permissions.js";
 import { type ApiConnector, type AuthorizedFetch, type Calendar, type CalendarEntry, type ConnectorDefinition, type ConnectorEndpoints, isMcp, type Mailbox, type McpCall, type McpConnector, type McpToolInfo, type Tokens } from "./types.js";
-import { writeFileAtomic } from "../atomic.js";
+import { readJsonFile, writeFileAtomic } from "../atomic.js";
 
 export type Account = { id: string; connector: string; label: string; addedAt: string };
 /**
@@ -83,13 +82,8 @@ export class ConnectorHub {
 			return { ...d, apiBase: o.apiBase ?? d.apiBase, oauth: { ...d.oauth, ...(o.authorizeUrl ? { authorizeUrl: o.authorizeUrl } : {}), ...(o.tokenUrl ? { tokenUrl: o.tokenUrl } : {}) } };
 		});
 		const path = this.path;
-		if (path && existsSync(path)) {
-			try {
-				this.state = { accounts: [], settings: {}, ...(JSON.parse(readFileSync(path, "utf8")) as Partial<State>) };
-			} catch {
-				// a damaged file only loses the list; tokens stay in the Keychain
-			}
-		}
+		// A damaged file is moved aside and the list starts empty; tokens stay in the Keychain.
+		if (path) this.state = { accounts: [], settings: {}, ...readJsonFile<Partial<State>>(path, () => ({})) };
 	}
 
 	private get path(): string | undefined {

@@ -3,9 +3,10 @@
  * `<project>/.pi/mcp.json` (project, read by pi only when the project is trusted). Settings › MCP servers
  * lists and edits these files; Build sessions connect to the servers through pi's own MCP extension.
  */
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { McpServerInfo } from "@piopio/protocol";
+import { writeFileAtomic } from "./atomic.js";
 import { EngineError } from "./models.js";
 
 type Scope = "global" | "project";
@@ -149,9 +150,7 @@ export class McpConfig {
 		const file = read(path);
 		change(file);
 		mkdirSync(dirname(path), { recursive: true });
-		const tmp = `${path}.tmp`;
-		writeFileSync(tmp, `${JSON.stringify(file, null, 2)}\n`);
-		renameSync(tmp, path);
+		writeFileAtomic(path, `${JSON.stringify(file, null, 2)}\n`);
 	}
 }
 

@@ -11,10 +11,11 @@
  * What's allowed is the manifest's list of sources (§3.4): a page edit asks nothing, a new or changed source waits.
  */
 import { createHash } from "node:crypto";
-import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, statSync, watch, writeFileSync, type FSWatcher } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, watch, writeFileSync, type FSWatcher } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { credentialAt } from "@piopio/pi-extensions";
+import { readJsonFile, writeFileAtomic } from "./atomic.js";
 
 export const MANIFEST_ID = "piopio-app";
 /** The most a source may hand the page (§3.2). */
@@ -421,12 +422,8 @@ export class Apps {
 			settleMs?: number;
 		},
 	) {
-		try {
-			const read = JSON.parse(readFileSync(this.stateFile, "utf8")) as Partial<State>;
-			this.state = { allowed: read.allowed ?? {}, conversations: read.conversations ?? {} };
-		} catch {
-			// Nothing allowed yet.
-		}
+		const read = readJsonFile<Partial<State>>(this.stateFile, () => ({}));
+		this.state = { allowed: read.allowed ?? {}, conversations: read.conversations ?? {} };
 	}
 
 	private get stateFile() {
@@ -880,19 +877,14 @@ ${sources}
 	}
 
 	private readHistory(path: string): History {
-		try {
-			const read = JSON.parse(readFileSync(this.historyFile(path), "utf8")) as Partial<History>;
-			return { ...(read.current !== undefined ? { current: read.current } : {}), revisions: read.revisions ?? [] };
-		} catch {
-			return { revisions: [] };
-		}
+		const read = readJsonFile<Partial<History>>(this.historyFile(path), () => ({}));
+		return { ...(read.current !== undefined ? { current: read.current } : {}), revisions: read.revisions ?? [] };
 	}
 
 	private writeHistory(path: string, history: History): void {
 		const file = this.historyFile(path);
 		mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
-		writeFileSync(`${file}.tmp`, JSON.stringify(history), { mode: 0o600 });
-		renameSync(`${file}.tmp`, file);
+		writeFileAtomic(file, JSON.stringify(history), { mode: 0o600 });
 	}
 
 	private cacheFile(path: string): string {
@@ -900,25 +892,18 @@ ${sources}
 	}
 
 	private readCache(path: string): CacheFile {
-		try {
-			const read = JSON.parse(readFileSync(this.cacheFile(path), "utf8")) as Partial<CacheFile>;
-			return { sources: read.sources ?? {} };
-		} catch {
-			return { sources: {} };
-		}
+		return { sources: readJsonFile<Partial<CacheFile>>(this.cacheFile(path), () => ({})).sources ?? {} };
 	}
 
 	private writeCache(path: string, cache: CacheFile): void {
 		const file = this.cacheFile(path);
 		mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
-		writeFileSync(`${file}.tmp`, JSON.stringify(cache), { mode: 0o600 });
-		renameSync(`${file}.tmp`, file);
+		writeFileAtomic(file, JSON.stringify(cache), { mode: 0o600 });
 	}
 
 	private saveState(): void {
 		mkdirSync(this.opts.home, { recursive: true });
-		writeFileSync(`${this.stateFile}.tmp`, JSON.stringify(this.state, null, "\t"), { mode: 0o600 });
-		renameSync(`${this.stateFile}.tmp`, this.stateFile);
+		writeFileAtomic(this.stateFile, JSON.stringify(this.state, null, "\t"), { mode: 0o600 });
 	}
 
 	/** Watches the page and each source's folder (a file saved by replacing it keeps being seen). */

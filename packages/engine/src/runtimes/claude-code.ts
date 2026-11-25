@@ -5,7 +5,7 @@
  * and keeps Piopio's copy of the transcript (pi-shaped messages, as `TimelineBuilder` reads them) with Claude Code's
  * session id, so a reopened conversation shows its history and continues the same Claude Code session.
  */
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import type { ApprovalMode, Attachment, AttachmentInfo, ContainerRef, ModelRef, PromptResponse, Snapshot } from "@piopio/protocol";
 import { CLAUDE_CODE, CLAUDE_CODE_NAME, type AgentMessage, type AgentPermissionMode, type AgentQuery, type AgentUserMessage, type CanUseTool, type ClaudeCodeAgent } from "../coding-agents.js";
@@ -16,6 +16,7 @@ import { collectTools, PIOPIO_MCP, PIOPIO_MCP_PREFIX, piopioServer } from "./cla
 import { CLAUDE_CODE_TOOLS_OFF, claudeCodeEnv } from "./claude-code-env.js";
 import { PromptBroker } from "./prompts.js";
 import { agentIdleMs, Emitter, IdleTimer, type Runtime, type SubmitOptions } from "./runtime.js";
+import { readJsonFile, writeFileAtomic } from "../atomic.js";
 
 type Stored = { version: 1; sessionId?: string; messages: PiMessage[] };
 type Input = { text: string; attachments: (Attachment & { stored?: string })[] };
@@ -253,20 +254,13 @@ export class ClaudeCodeRuntime implements Runtime {
 	}
 
 	private static load(file: string): Stored {
-		if (!existsSync(file)) return { version: 1, messages: [] };
-		try {
-			const s = JSON.parse(readFileSync(file, "utf8")) as Stored;
-			return { version: 1, ...(s.sessionId ? { sessionId: s.sessionId } : {}), messages: Array.isArray(s.messages) ? s.messages : [] };
-		} catch {
-			return { version: 1, messages: [] };
-		}
+		const s = readJsonFile<Partial<Stored>>(file, () => ({}));
+		return { version: 1, ...(s.sessionId ? { sessionId: s.sessionId } : {}), messages: Array.isArray(s.messages) ? s.messages : [] };
 	}
 
 	private save(): void {
 		mkdirSync(dirname(this.options.file), { recursive: true });
-		const tmp = `${this.options.file}.tmp`;
-		writeFileSync(tmp, JSON.stringify(this.stored), { mode: 0o600 });
-		renameSync(tmp, this.options.file);
+		writeFileAtomic(this.options.file, JSON.stringify(this.stored), { mode: 0o600 });
 	}
 
 	/** Claude Code's own session id, once it started one. */

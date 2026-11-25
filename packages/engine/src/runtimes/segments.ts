@@ -148,11 +148,21 @@ export class SegmentedRuntime implements Runtime {
 		);
 	}
 
+	/**
+	 * The first message after the switch carries the summary. It's taken before the await, so a second message sent
+	 * meanwhile doesn't carry it too, and put back if the message didn't go: it isn't lost with it.
+	 */
 	async submit(text: string, options: SubmitOptions) {
 		const handoff = this.handoff;
 		if (!handoff) return this.inner.submit(text, options);
 		this.handoff = undefined;
-		const result = await this.inner.submit(text, { ...options, attachments: [handoffAttachment(handoff.summary), ...(options.attachments ?? [])] });
+		let result: Awaited<ReturnType<Runtime["submit"]>>;
+		try {
+			result = await this.inner.submit(text, { ...options, attachments: [handoffAttachment(handoff.summary), ...(options.attachments ?? [])] });
+		} catch (error) {
+			this.handoff ??= handoff;
+			throw error;
+		}
 		handoff.sent();
 		return result;
 	}

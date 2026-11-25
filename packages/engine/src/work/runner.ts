@@ -9,13 +9,13 @@
  * What starts a project's work on its own is an automation run by Piopio there (docs/spec/27, automations/).
  */
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { ApprovalMode, WayOfWorking, WorkLanding, WorkTask } from "@piopio/protocol";
 import { EngineError } from "../models.js";
 import { detectLanguage, fitCheck } from "./fit.js";
 import { BUILTIN_PLAYBOOKS, defaultPlaybook, partFor, PIOPIO_BOARD, playbookOf, projectPlaybooks, type HelperKind, type Playbook } from "./playbooks.js";
-import { writeFileAtomic } from "../atomic.js";
+import { readJsonFile, writeFileAtomic } from "../atomic.js";
 
 export type TaskState = WorkTask["state"];
 export type { WayOfWorking, WorkLanding, WorkTask };
@@ -84,7 +84,7 @@ export class WorkRunner {
 	now: () => number = () => Date.now();
 
 	constructor(private readonly host: WorkHost) {
-		this.work = readJson<ProjectWork[]>(host.stateFile) ?? [];
+		this.work = readJsonFile<ProjectWork[]>(host.stateFile, () => []);
 	}
 
 	/** The migration's records, written before anything runs. */
@@ -522,13 +522,30 @@ export class WorkRunner {
 		return turn;
 	}
 
-	/** Merge the task's branch into the work branch, then the checks. A conflict or a failing check goes back. */
+	/**
+	 * Merge the task's branch into the work branch, then the checks. A conflict or a failing check goes back. Safe to run
+	 * again after a crash at any point (resume): a merge left half done is aborted, one made but not yet checked is undone
+	 * and made again, and one whose worktree was already removed is finished.
+	 */
 	private async integrateNow(work: ProjectWork, t: WorkTask): Promise<void> {
 		const git = work.git!;
 		t.state = "integrating";
 		this.save(work);
+		const subject = `Merge ${t.id}: ${t.title}`;
+		await this.host.git(git.integration, ["merge", "--abort"]).catch(() => undefined);
+		const branch = await this.host.git(work.cwd, ["rev-parse", "--verify", "-q", `refs/heads/${t.branch}`]).catch(() => "");
+		if (!branch.trim()) {
+			// The worktree and its branch go only after the merge and the checks passed: what's left is saying so.
+			const merged = await this.host.git(git.integration, ["log", "-1", "--format=%H", "-F", `--grep=${subject}`]).catch(() => "");
+			if (merged.trim()) return this.complete(work, t, ` Merged into ${git.branch}${work.way.testCommand ? ", checks passed" : ""}.`);
+			return this.block(work, t, `Its branch (${t.branch}) is gone and it was never merged into ${git.branch}.`);
+		}
+		if ((await this.host.git(git.integration, ["log", "-1", "--format=%s"]).catch(() => "")).trim() === subject) {
+			await this.host.git(git.integration, ["reset", "-q", "--hard", "HEAD~1"]);
+		}
+		const before = (await this.host.git(git.integration, ["rev-parse", "HEAD"])).trim();
 		try {
-			await this.host.git(git.integration, [...PIOPIO, "merge", "--no-ff", "-q", "-m", `Merge ${t.id}: ${t.title}`, t.branch!]);
+			await this.host.git(git.integration, [...PIOPIO, "merge", "--no-ff", "-q", "-m", subject, t.branch!]);
 		} catch (error) {
 			await this.host.git(git.integration, ["merge", "--abort"]).catch(() => undefined);
 			return this.sendBack(work, t, `Your branch conflicts with the work branch (${git.branch}). Merge it into yours (\`git merge ${git.branch}\`), resolve the conflicts, check it still works, then report again.\n\n${quote((error as Error).message.slice(0, 2000))}`, "the checks");
@@ -536,7 +553,7 @@ export class WorkRunner {
 		if (work.way.testCommand) {
 			const result = await this.host.run(git.integration, work.way.testCommand);
 			if (!result.ok) {
-				await this.host.git(git.integration, ["reset", "-q", "--hard", "HEAD~1"]);
+				await this.host.git(git.integration, ["reset", "-q", "--hard", before]);
 				return this.sendBack(work, t, `After merging into ${git.branch}, the checks failed (\`${work.way.testCommand}\`):\n\n${quote(result.output.slice(-3000))}\n\nFix it on your branch, then report again.`, "the checks");
 			}
 		}
@@ -676,6 +693,11 @@ export class WorkRunner {
 	async resume(): Promise<void> {
 		for (const work of this.work) {
 			for (const t of work.tasks) {
+				// Cut off mid-merge: merged again, in the order they were waiting (integrateNow is safe to run again).
+				if (t.state === "integrating") {
+					void this.integrate(work, t).catch(() => undefined);
+					continue;
+				}
 				if (t.state !== "doing" && t.state !== "review") continue;
 				await this.watch(work, t).catch(() => undefined);
 				const id = t.state === "doing" ? t.sessionId : t.reviewSessionId;
@@ -690,14 +712,6 @@ export class WorkRunner {
 		this.stopped = true;
 		for (const off of this.watching.values()) off();
 		this.watching.clear();
-	}
-}
-
-function readJson<T>(file: string): T | undefined {
-	try {
-		return existsSync(file) ? (JSON.parse(readFileSync(file, "utf8")) as T) : undefined;
-	} catch {
-		return undefined;
 	}
 }
 

@@ -8,7 +8,7 @@
  * call; the app checks the site of the page actually showing (the user may have navigated in the panel) and, when it
  * isn't among them, does nothing and answers `needsSite`. The engine then asks the user and tries once more.
  */
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { Type, type TSchema } from "typebox";
 import { defineTool as defineCodingTool, type ExtensionFactory } from "@earendil-works/pi-coding-agent";
@@ -19,6 +19,7 @@ import type { AppServices } from "../app-services.js";
 import type { CallSite } from "../connectors/extension.js";
 import { isPrivateHost } from "./web.js";
 import { promptSection, type PromptEvent } from "./prompt-sections.js";
+import { readJsonFile, writeFileAtomic } from "../atomic.js";
 
 type Image = { mimeType: string; data: string };
 export type BrowserResult = { text: string; images: Image[]; isError?: boolean };
@@ -40,18 +41,13 @@ export class BrowserSites {
 	constructor(private readonly file: string) {}
 
 	private read(): { allowed: string[]; blocked: string[] } {
-		try {
-			const j = JSON.parse(readFileSync(this.file, "utf8")) as { allowed?: string[]; blocked?: string[] };
-			return { allowed: j.allowed ?? [], blocked: j.blocked ?? [] };
-		} catch {
-			return { allowed: [], blocked: [] };
-		}
+		const j = readJsonFile<{ allowed?: string[]; blocked?: string[] }>(this.file, () => ({}));
+		return { allowed: j.allowed ?? [], blocked: j.blocked ?? [] };
 	}
 
 	private write(value: { allowed: string[]; blocked: string[] }): void {
 		mkdirSync(dirname(this.file), { recursive: true });
-		writeFileSync(`${this.file}.tmp`, `${JSON.stringify(value, null, "\t")}\n`);
-		renameSync(`${this.file}.tmp`, this.file);
+		writeFileAtomic(this.file, `${JSON.stringify(value, null, "\t")}\n`);
 	}
 
 	list(): { site: string; level: "allowed" | "blocked" }[] {

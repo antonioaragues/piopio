@@ -4,8 +4,7 @@
  * the shared ModelRuntime, with its models read from `GET <address>/models`. The list (no secrets) lives in
  * `endpoints.json`; a key, when the server wants one, is a credential in the Keychain like any other provider's.
  */
-import { existsSync, readFileSync } from "node:fs";
-import { writeFileAtomic } from "./atomic.js";
+import { readJsonFile, writeFileAtomic } from "./atomic.js";
 
 export type EndpointModel = { id: string; contextWindow?: number; embedding?: boolean };
 export type EndpointFormat = "openai" | "anthropic";
@@ -43,13 +42,7 @@ export class Endpoints {
 	private items: Endpoint[] = [];
 
 	constructor(private readonly path?: string) {
-		if (path && existsSync(path)) {
-			try {
-				this.items = JSON.parse(readFileSync(path, "utf8")) as Endpoint[];
-			} catch {
-				this.items = [];
-			}
-		}
+		if (path) this.items = readJsonFile<Endpoint[]>(path, () => []);
 	}
 
 	list(): readonly Endpoint[] {

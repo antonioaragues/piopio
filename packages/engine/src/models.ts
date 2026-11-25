@@ -27,7 +27,7 @@ import { UsageLedger } from "./ledger.js";
 import { MonthBudget } from "./budget.js";
 import { OnDeviceModel, OnDeviceUnavailable } from "./on-device.js";
 import type { UtilityChoice } from "@piopio/protocol";
-import { writeFileAtomic } from "./atomic.js";
+import { readJsonFile, writeFileAtomic } from "./atomic.js";
 
 
 /** How often a model list asks pi to check its catalog (pi itself skips pi.dev when it asked in the last four hours). */
@@ -398,13 +398,7 @@ export class ModelHub {
 
 	private loadVisibility(): void {
 		const path = this.visibilityPath;
-		if (path && existsSync(path)) {
-			try {
-				this.hidden = JSON.parse(readFileSync(path, "utf8")) as Record<string, string[]>;
-			} catch {
-				this.hidden = {};
-			}
-		}
+		if (path) this.hidden = readJsonFile<Record<string, string[]>>(path, () => this.hidden);
 	}
 
 	setHidden(provider: string, hidden: string[]): void {

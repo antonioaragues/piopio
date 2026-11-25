@@ -11,6 +11,7 @@ import { basename, extname, join } from "node:path";
 import type { Attachment } from "@piopio/protocol";
 import { READ_CHARS, type AgentFileInfo, type AgentFileRead, type AgentFilesBridge } from "@piopio/runtime";
 import type { KeptAttachment } from "./attachment-files.js";
+import { readJsonFile, writeFileAtomic } from "./atomic.js";
 
 type Entry = { id: string; note?: string; mimeType?: string; addedAt: string; from?: string; view?: string };
 type Index = Record<string, Entry>;
@@ -202,20 +203,14 @@ export class AgentFileStore implements AgentFilesBridge {
 	}
 
 	private index(): Index {
-		try {
-			return JSON.parse(readFileSync(join(this.meta, "index.json"), "utf8")) as Index;
-		} catch {
-			return {};
-		}
+		return readJsonFile<Index>(join(this.meta, "index.json"), () => ({}));
 	}
 
 	private save(index: Index): void {
 		mkdirSync(this.meta, { recursive: true, mode: 0o700 });
 		// Entries for files that are gone (deleted in Finder) go too.
 		for (const name of Object.keys(index)) if (!existsSync(join(this.dir, name))) delete index[name];
-		const tmp = join(this.meta, `index.json.${process.pid}.tmp`);
-		writeFileSync(tmp, `${JSON.stringify(index, null, 2)}\n`);
-		renameSync(tmp, join(this.meta, "index.json"));
+		writeFileAtomic(join(this.meta, "index.json"), `${JSON.stringify(index, null, 2)}\n`);
 	}
 
 	/** Deleted files past their Undo go. */

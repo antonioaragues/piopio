@@ -8,7 +8,7 @@
  * replaced by a fix in the same turn. You add any other file by hand; Remove hides an item and never touches its file.
  */
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { ContainerRef, LibraryItem, LibraryKind, TimelineItem } from "@piopio/protocol";
 import { modelOf } from "@piopio/runtime";
@@ -17,6 +17,7 @@ import { agentUtility } from "./runtimes/agent.js";
 import { SearchIndex } from "./search.js";
 import { replacedVisuals } from "./tools/visuals.js";
 import { isAppFile } from "./apps.js";
+import { readJsonFile, writeFileAtomic } from "./atomic.js";
 
 /** Where an item came from, as the session manager knows it. */
 export type LibraryOrigin = {
@@ -114,14 +115,9 @@ export class Library {
 	) {
 		this.visualsDir = join(dirname(file), "library-visuals");
 		this.data = { version: 1, items: [], pins: [], hidden: [] };
-		if (existsSync(file)) {
-			try {
-				const read = JSON.parse(readFileSync(file, "utf8")) as Partial<File>;
-				this.data = { version: 1, items: read.items ?? [], pins: read.pins ?? [], hidden: read.hidden ?? [] };
-			} catch {
-				// A broken index is rebuilt from conversations at the next start; pins and removals are lost.
-			}
-		}
+		// A broken index is moved aside and rebuilt from conversations; its pins and removals stay in the file moved aside.
+		const read = readJsonFile<Partial<File>>(file, () => ({}));
+		this.data = { version: 1, items: read.items ?? [], pins: read.pins ?? [], hidden: read.hidden ?? [] };
 	}
 
 	/**
@@ -442,9 +438,7 @@ export class Library {
 	}
 
 	private save(): void {
-		const tmp = `${this.file}.tmp`;
-		writeFileSync(tmp, JSON.stringify(this.data), { mode: 0o600 });
-		renameSync(tmp, this.file);
+		writeFileAtomic(this.file, JSON.stringify(this.data), { mode: 0o600 });
 		this.onChange();
 	}
 }

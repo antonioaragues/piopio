@@ -5,7 +5,7 @@
  * session settings. The transcript is kept as Piopio's own copy (pi-shaped messages, as for Claude Code) with the
  * agent's session id, which is loaded again when the conversation reopens.
  */
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import type { ApprovalMode, Attachment, AttachmentInfo, ContainerRef, ModelRef, PromptResponse, SessionEvent, Snapshot } from "@piopio/protocol";
 import { AcpConnection, CLIENT_CAPABILITIES, type AcpAgent, type ConfigOption } from "../acp.js";
@@ -17,6 +17,7 @@ import { collectTools, PIOPIO_MCP, type CapturedTool } from "./claude-code-tools
 import type { ToolAsk } from "./claude-code.js";
 import { PromptBroker } from "./prompts.js";
 import { agentIdleMs, Emitter, IdleTimer, type Runtime, type SubmitOptions } from "./runtime.js";
+import { readJsonFile, writeFileAtomic } from "../atomic.js";
 
 type Stored = { version: 1; sessionId?: string; messages: PiMessage[] };
 type Input = { text: string; attachments: (Attachment & { stored?: string })[] };
@@ -153,20 +154,13 @@ export class AcpRuntime implements Runtime {
 	}
 
 	private static load(file: string): Stored {
-		if (!existsSync(file)) return { version: 1, messages: [] };
-		try {
-			const s = JSON.parse(readFileSync(file, "utf8")) as Stored;
-			return { version: 1, ...(s.sessionId ? { sessionId: s.sessionId } : {}), messages: Array.isArray(s.messages) ? s.messages : [] };
-		} catch {
-			return { version: 1, messages: [] };
-		}
+		const s = readJsonFile<Partial<Stored>>(file, () => ({}));
+		return { version: 1, ...(s.sessionId ? { sessionId: s.sessionId } : {}), messages: Array.isArray(s.messages) ? s.messages : [] };
 	}
 
 	private save(): void {
 		mkdirSync(dirname(this.options.file), { recursive: true });
-		const tmp = `${this.options.file}.tmp`;
-		writeFileSync(tmp, JSON.stringify(this.stored), { mode: 0o600 });
-		renameSync(tmp, this.options.file);
+		writeFileAtomic(this.options.file, JSON.stringify(this.stored), { mode: 0o600 });
 	}
 
 	snapshot(): Snapshot {

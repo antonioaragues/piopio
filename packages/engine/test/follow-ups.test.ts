@@ -23,5 +23,8 @@ test("Ask next: none after a card that asks already, nor after a note the user d
 	// An earlier turn's card doesn't count.
 	expect(followUpsFit([user("Design a dating app"), tool("side_offer"), user("Now the protocol"), answer])).toBe(true);
 	expect(followUpsFit([user("[Side] “About page” (bld_1) finished."), answer])).toBe(false);
+	// An automation's run: nobody asked, so nobody's waiting to reply (until you write in it yourself).
+	expect(followUpsFit([user("[Automation] “Morning brief” (every day at 8:00). Nobody started this conversation"), answer])).toBe(false);
+	expect(followUpsFit([user("[Automation] “Morning brief”"), answer, user("Add the weather"), answer])).toBe(true);
 	expect(followUpsFit([answer])).toBe(false);
 });

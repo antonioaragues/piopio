@@ -27,13 +27,19 @@ export function writeFileAtomic(path: string, data: string | Uint8Array, options
 /**
  * A JSON file read at startup, or `fallback` when there's none. One that doesn't parse is moved aside
  * (`<file>.corrupt-<time>`, for the user or support to recover) and the engine starts without it: thrown, it stopped
- * every start in a loop; reset in place, the next save wrote over what was left.
+ * every start in a loop; reset in place, the next save wrote over what was left. `null` counts as not parsing: no store
+ * writes it, and the callers read fields of what comes back.
+ *
+ * Every JSON file the engine writes and reads back goes through here (test/json-stores.test.ts checks it), and is
+ * written with `writeFileAtomic`.
  */
 export function readJsonFile<T>(file: string, fallback: () => T): T {
 	if (!existsSync(file)) return fallback();
 	const text = readFileSync(file, "utf8");
 	try {
-		return JSON.parse(text) as T;
+		const value = JSON.parse(text) as T | null;
+		if (value === null) throw new Error("it's null");
+		return value;
 	} catch (error) {
 		const aside = `${file}.corrupt-${new Date().toISOString().replace(/[:.]/g, "-")}`;
 		renameSync(file, aside);

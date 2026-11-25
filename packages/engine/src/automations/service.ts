@@ -6,13 +6,13 @@
  * before. A fire is a run: an agent's (its run machinery, 06 PR1) or Piopio's (a new conversation, in the project's
  * folder or loose). Rules live here, not in the prompts (26 §7.2): who may run what, where, and with which result.
  */
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { EngineError } from "../models.js";
 import { outsideText } from "@piopio/pi-extensions";
 import type { AutomationSummary } from "@piopio/runtime";
 import { DEFAULT_BUDGET, nameOf, nextOf, parseWhen, PIOPIO, resultLabel, systemZone, whenLabel, type Automation, type AutomationRun, type ResultTo, type RunStatus, type Trigger } from "./model.js";
-import { writeFileAtomic } from "../atomic.js";
+import { readJsonFile, writeFileAtomic } from "../atomic.js";
 import { AutomationClock } from "./clock.js";
 
 /** `cloud`: it runs in your cloud (docs/spec/30 K1), which keeps its own automations. */
@@ -93,8 +93,8 @@ export class Automations {
 	private readonly removed = new Map<string, Automation>();
 
 	constructor(private readonly host: AutomationsHost) {
-		this.store = { automations: [], fired: [], ...readJson<Partial<Store>>(host.file) };
-		this.runs = readJson<AutomationRun[]>(host.runsFile) ?? [];
+		this.store = { automations: [], fired: [], ...readJsonFile<Partial<Store>>(host.file, () => ({})) };
+		this.runs = readJsonFile<AutomationRun[]>(host.runsFile, () => []);
 	}
 
 	private now(): number {
@@ -647,13 +647,4 @@ export class Automations {
 /** An automation's trigger in time, as its clock task was made for: a changed one gets a new task. */
 function sigOf(a: Automation): string {
 	return `${a.cron ?? ""}|${a.at ?? ""}|${a.tz ?? ""}`;
-}
-
-function readJson<T>(file: string): T | undefined {
-	if (!existsSync(file)) return undefined;
-	try {
-		return JSON.parse(readFileSync(file, "utf8")) as T;
-	} catch {
-		return undefined;
-	}
 }

@@ -5,11 +5,10 @@
  * A small non-secret index (`credentials.json`: provider → credential type) answers `list()` and tells which
  * providers to ask the Keychain about, so availability checks never touch it for providers you haven't connected.
  */
-import { existsSync, readFileSync } from "node:fs";
 import type { Credential, CredentialInfo, CredentialStore } from "@earendil-works/pi-ai";
 import { SECRET_OPENROUTER } from "@piopio/protocol";
 import type { SecretBroker } from "./secrets.js";
-import { writeFileAtomic } from "./atomic.js";
+import { readJsonFile, writeFileAtomic } from "./atomic.js";
 
 export const credentialSecret = (providerId: string) => `provider.${providerId}.credential`;
 
@@ -23,13 +22,8 @@ export class KeychainCredentialStore implements CredentialStore {
 		private readonly indexPath?: string,
 	) {
 		this.index = {};
-		if (indexPath && existsSync(indexPath)) {
-			try {
-				this.index = JSON.parse(readFileSync(indexPath, "utf8")) as Record<string, Credential["type"]>;
-			} catch {
-				// a damaged index only loses the list; the Keychain items stay
-			}
-		}
+		// A damaged index is moved aside and the list starts empty; the Keychain items stay.
+		if (indexPath) this.index = readJsonFile<Record<string, Credential["type"]>>(indexPath, () => ({}));
 	}
 
 	async read(providerId: string): Promise<Credential | undefined> {

@@ -18,7 +18,7 @@ import type { Runtime, SubmitOptions } from "./runtimes/runtime.js";
 import { Emitter } from "./runtimes/runtime.js";
 import type { SecretBroker } from "./secrets.js";
 import { CloudflareApi, deploy, readBundle, type WranglerConfig } from "./cloud-deploy.js";
-import { writeFileAtomic } from "./atomic.js";
+import { readJsonFile, writeFileAtomic } from "./atomic.js";
 
 /** The Keychain item for the Worker's owner token. */
 export const SECRET_CLOUD = "CLOUD_OWNER_TOKEN";
@@ -91,12 +91,7 @@ export class CloudLink {
 	}
 
 	config(): CloudConfig | undefined {
-		if (!existsSync(this.options.file)) return undefined;
-		try {
-			return JSON.parse(readFileSync(this.options.file, "utf8")) as CloudConfig;
-		} catch {
-			return undefined;
-		}
+		return readJsonFile<CloudConfig | undefined>(this.options.file, () => undefined);
 	}
 
 	get connected(): boolean {
