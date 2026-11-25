@@ -7,7 +7,7 @@
  */
 import type { Context } from "@earendil-works/chord/context";
 import { Type } from "typebox";
-import { defineTask, defineTool, type ConversationId, type Harness, type JsonObject, type TaskId } from "@earendil-works/pi-durable";
+import { defineTask, defineTool, type ConversationId, type Harness, type JsonObject, type TaskId, UsageDoc } from "@earendil-works/pi-durable";
 import { contactFor, cronError, type AgentDefinition } from "./definition.js";
 import type { ResultCard, UndoKind } from "./safety.js";
 import { passedText } from "../context/clock.js";
@@ -361,16 +361,22 @@ export class Proactivity {
 		if (settled) this.host.onRun?.(settled);
 	}
 
-	/** What a conversation has cost so far (its active transcript, as the model sees it), and its last answer. */
+	/**
+	 * What a conversation has cost so far, and its last answer. The cost is pi-durable's usage document for it: every
+	 * response, summary and tool result that reported usage, also failed attempts and what a compaction summarized
+	 * away (the active transcript alone would miss those, and a run's budget with them).
+	 */
 	async spentIn(conversationId: string): Promise<{ costUsd: number; summary: string }> {
-		const conversation = await this.host.harness.conversation(Number(conversationId) as never, this.host.context);
-		const entries = conversation ? ((await conversation.context(this.host.context)).entries as unknown as readonly { kind: string; model?: { role: string; content?: unknown; usage?: { cost?: { total?: number } } }[] }[]) : [];
+		const id = Number(conversationId) as never;
+		const conversation = await this.host.harness.conversation(id, this.host.context);
+		const entries = conversation ? ((await conversation.context(this.host.context)).entries as unknown as readonly { kind: string; model?: { role: string; content?: unknown }[] }[]) : [];
+		const usage = conversation ? await this.host.harness.snapshot(UsageDoc, id, this.host.context) : undefined;
 		let costUsd = 0;
+		for (const u of [...Object.values(usage?.models ?? {}), ...Object.values(usage?.tools ?? {})]) costUsd += (u as { cost?: { total?: number } }).cost?.total ?? 0;
 		let summary = "";
 		for (const e of entries) {
 			const m = e.model?.[0];
 			if (m?.role !== "assistant") continue;
-			costUsd += m.usage?.cost?.total ?? 0;
 			const text = Array.isArray(m.content) ? (m.content as { type: string; text?: string }[]).filter((b) => b.type === "text").map((b) => b.text ?? "").join("") : "";
 			if (text.trim()) summary = text.trim();
 		}

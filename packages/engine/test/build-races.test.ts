@@ -94,6 +94,46 @@ test("the context panel counts the prepared request and waits for new usage afte
 	expect(updated?.breakdown?.groups.some((g) => g.kind === "attachments")).toBe(false);
 }, 20_000);
 
+test("a conversation's total doesn't drop when it compacts: it's pi's count of every entry, not a sum of the messages in view", async () => {
+	const a = await start();
+	const folder = realpathSync(mkdtempSync(join(tmpdir(), "piopio-total-")));
+	const { ref } = await a.client.call("sessions.create", { kind: "build", cwd: folder });
+	const faux = a.engine.hub.faux!;
+	const answered = (answer: string) => idle(a, ref, (s) => s.items.some((i) => i.kind === "assistant" && i.parts.some((p) => p.text === answer)));
+	let before!: Snapshot;
+	for (const answer of ["First answer.", "Next answer.", "Latest answer."]) {
+		faux.setResponses([fauxAssistantMessage(answer)]);
+		await a.client.call("sessions.submit", { ref, input: { text: "A longer conversation. ".repeat(2_500) } });
+		before = await answered(answer);
+	}
+	// The faux model reports its prompt as cache tokens.
+	expect(before.state.usage.cacheWriteTokens).toBeGreaterThan(0);
+	const seen = before.items.filter((i) => i.kind === "assistant").length;
+
+	faux.setResponses([fauxAssistantMessage("Summary of earlier messages.")]);
+	await a.client.call("sessions.compact", { ref });
+	const after = await idle(a, ref);
+	// The compaction took answers out of view, and their tokens are still counted (with the summary's own).
+	expect(after.items.filter((i) => i.kind === "assistant").length).toBeLessThan(seen);
+	expect(after.state.usage.cacheWriteTokens).toBeGreaterThanOrEqual(before.state.usage.cacheWriteTokens);
+	expect(after.state.usage.cacheReadTokens).toBeGreaterThanOrEqual(before.state.usage.cacheReadTokens);
+	expect(after.state.usage.outputTokens).toBeGreaterThanOrEqual(before.state.usage.outputTokens);
+
+	// The same after the engine reads the session again from its file.
+	a.client.close();
+	await a.engine.stop();
+	open.splice(open.indexOf(a), 1);
+	const paths = enginePaths(a.home);
+	const engine = new Engine({ paths, faux: true, piSessionDir: join(a.home, "pi-sessions"), piAgentDir: join(a.home, "pi-agent"), trashDir: join(a.home, "trash"), agentsDir: join(a.home, "Agents"), hooksPort: 0, allowPrivateFetch: true, log: () => {} });
+	await engine.listen();
+	const client = await TestClient.connect(paths.socket);
+	await client.call("engine.hello", { token: readFileSync(paths.tokenFile, "utf8").trim(), client: "test", protocolVersion: "1.0" });
+	const b = { home: a.home, engine, client };
+	open.push(b);
+	const reopened: Snapshot = await client.call("sessions.open", { ref });
+	expect(reopened.state.usage).toEqual(after.state.usage);
+}, 30_000);
+
 test("a message sent while the conversation compacts waits for it, instead of failing", async () => {
 	const a = await start();
 	const folder = realpathSync(mkdtempSync(join(tmpdir(), "piopio-compact-")));

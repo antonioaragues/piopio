@@ -23,7 +23,7 @@ import { backgroundExtension, confine, diagnosticsExtension, ProcessManager, pro
 import { NetworkFilter } from "../network-filter.js";
 import { codeReviewExtension, type ReviewBridge } from "../code-review.js";
 import { approvalsExtension, checkpointsExtension, goalExtension, notifyExtension, planExtension, presentExtension, sandboxExtension, subagentsExtension, todosExtension, type ApprovalMode, type Question, type Rule, type SubagentBridge, type Verdict } from "@piopio/pi-extensions";
-import type { ApprovalItem, ApprovalRule, BranchInfo, CheckpointItem, ContainerRef, FileChange, ModelRef, PromptResponse, SessionState, Snapshot } from "@piopio/protocol";
+import type { ApprovalItem, ApprovalRule, BranchInfo, CheckpointItem, ContainerRef, FileChange, ModelRef, PromptResponse, SessionState, Snapshot, Usage } from "@piopio/protocol";
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
@@ -571,7 +571,7 @@ export class BuildRuntime implements Runtime {
 		}
 		this.showTyped(false);
 		this.builder.annotateBranches(this.versions(), false);
-		this.builder.setState({ ...this.settings(), prompts: this.broker.list(), ...this.context() });
+		this.builder.setState({ ...this.settings(), prompts: this.broker.list(), ...this.context(), usage: this.usage() });
 		this.mapper = new SdkEventMapper(this.builder, messages.length);
 		if (emit) {
 			this.builder.flush();
@@ -603,6 +603,7 @@ export class BuildRuntime implements Runtime {
 			if (event.type === "message_end" || event.type === "agent_settled" || (event.type === "message_start" && event.message.role === "assistant")) {
 				this.builder.setState(this.context());
 			}
+			if (event.type === "message_end" || event.type === "tool_execution_end" || event.type === "agent_settled") this.syncUsage();
 			// A new message of yours may stand beside an earlier version (an edit, a retry): refresh the switchers once
 			// pi has written it (after its message_end).
 			if ((event.type === "message_start" && (event as { message?: PiMessage }).message?.role !== "user") || event.type === "agent_settled") {
@@ -613,6 +614,29 @@ export class BuildRuntime implements Runtime {
 			// Compaction replaces older messages with a summary: renumber from the session.
 			if (event.type === "compaction_end") this.rebuild(true);
 		});
+	}
+
+	/**
+	 * What the session has cost: pi's own stats, which count every entry of the session (also what a compaction
+	 * summarized away, another branch of the tree, and the summaries themselves), plus what its subagents cost (their
+	 * own sessions; the cost is on each `task` result). The timeline only holds the messages in view, so it can't say.
+	 */
+	private usage(): Usage {
+		const stats = this.session.getSessionStats();
+		let tasks = 0;
+		for (const entry of this.session.sessionManager.getEntries()) {
+			if (entry.type !== "message") continue;
+			const m = entry.message as { role: string; toolName?: string; details?: { costUsd?: unknown } };
+			if (m.role === "toolResult" && m.toolName === "task" && typeof m.details?.costUsd === "number") tasks += m.details.costUsd;
+		}
+		return { inputTokens: stats.tokens.input, outputTokens: stats.tokens.output, cacheReadTokens: stats.tokens.cacheRead, cacheWriteTokens: stats.tokens.cacheWrite, costUsd: stats.cost + tasks };
+	}
+
+	/** The total follows pi's stats (the builder's own sum only covers what it has seen). */
+	private syncUsage(): void {
+		const usage = this.usage();
+		const shown = this.builder.usage;
+		if (JSON.stringify(usage) !== JSON.stringify(shown)) this.builder.setState({ usage });
 	}
 
 	/** The context meter (BR7): tokens in the model's context window. */

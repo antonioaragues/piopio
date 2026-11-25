@@ -22,7 +22,7 @@ import { AGENT_ENTRY, AgentCore, type AgentCoreOptions, alwaysLabel, modelOf, ty
 import { BOT_TOKEN } from "../channels/telegram.js";
 import { buildInput } from "../input.js";
 import { EngineError, type ModelHub } from "../models.js";
-import { TimelineBuilder, toUsage, type PiMessage } from "../timeline/builder.js";
+import { emptyUsage, TimelineBuilder, toUsage, type PiMessage, type PiUsage } from "../timeline/builder.js";
 import { DurableViewMapper, type DurableView, type Entry } from "../timeline/pi-durable.js";
 import { groupSteps, StepsView } from "../timeline/steps.js";
 import { createWebExtension, type WebOptions } from "../tools/web.js";
@@ -534,6 +534,7 @@ export class AgentView implements Runtime {
 			if (call.kind !== "value") return;
 			const { appended, runEnded } = view.mapper.apply(call.value as unknown as DurableView);
 			for (const entry of appended) view.noteEntry(entry as RawEntry, true);
+			view.syncUsage(call.value as unknown as DurableView);
 			view.emit(view.builder.flush());
 			if (runEnded) void view.turnEnded();
 		});
@@ -544,6 +545,28 @@ export class AgentView implements Runtime {
 	private load(transcript: Entry[], first: DurableView): void {
 		const newer = this.mapper.load(transcript, first, false);
 		for (const entry of [...transcript, ...newer]) this.noteEntry(entry as RawEntry, false);
+		this.syncUsage(first);
+	}
+
+	/**
+	 * The conversation's total follows pi-durable's usage document: every response, summary and tool result that
+	 * reported usage, also failed attempts and what a compaction summarized away. The timeline only sums the entries in
+	 * the model's context, so it can't say.
+	 */
+	private syncUsage(view: DurableView): void {
+		const doc = view.docs["pi.usage"] as { models?: Record<string, PiUsage>; tools?: Record<string, PiUsage> } | undefined;
+		if (!doc) return;
+		const usage = emptyUsage();
+		for (const u of [...Object.values(doc.models ?? {}), ...Object.values(doc.tools ?? {})]) {
+			const add = toUsage(u);
+			if (!add) continue;
+			usage.inputTokens += add.inputTokens;
+			usage.outputTokens += add.outputTokens;
+			usage.cacheReadTokens += add.cacheReadTokens;
+			usage.cacheWriteTokens += add.cacheWriteTokens;
+			usage.costUsd += add.costUsd;
+		}
+		if (JSON.stringify(usage) !== JSON.stringify(this.builder.usage)) this.builder.setState({ usage });
 	}
 
 	get conversationId(): string {

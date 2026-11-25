@@ -148,6 +148,11 @@ export class TimelineBuilder {
 		}
 	}
 
+	/** The session's total as last set or summed. */
+	get usage(): Usage {
+		return this.state.usage;
+	}
+
 	/** Items in order (read-only use). */
 	get currentItems(): readonly TimelineItem[] {
 		return this.items;
