@@ -258,6 +258,16 @@ export class Agents {
 		this.host.onAutomationsMigrated(migrated.lines);
 	}
 
+	/** After the Mac slept: every open agent runs what fell due meanwhile. */
+	async woke(): Promise<void> {
+		for (const entry of [...this.host.all()].filter((e) => e.ref.kind === "agent" && !e.cloud && this.host.isOpen(e.ref.id))) {
+			await this.host
+				.agent(entry.ref)
+				.then((agent) => agent.woke())
+				.catch((error: unknown) => this.host.log(`Agent ${entry.title}: couldn't catch up after sleep: ${(error as Error).message}`));
+		}
+	}
+
 	/** Opens every agent, so their schedules, reminders and held messages run while the app is closed (06 §6). */
 	async startAgents(log: (line: string) => void): Promise<void> {
 		for (const entry of [...this.host.all()].filter((e) => e.ref.kind === "agent" && !e.cloud)) {

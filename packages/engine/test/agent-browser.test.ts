@@ -1,7 +1,7 @@
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, expect, test } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 import type { Snapshot } from "@piopio/protocol";
 import { enginePaths } from "../src/paths.js";
 import { Engine } from "../src/server.js";
@@ -183,5 +183,40 @@ test("a click that waits for the owner survives a restart, and Stop takes its re
 	await a.client.call("sessions.abort", { ref });
 	await until(owner, (xs) => approvals(xs).every((x) => x.status !== "pending"));
 	await expect(a.client.call("agents.decide", { ref, approvalId: second.approvalId, approve: true })).rejects.toThrow();
+	app.close();
+}, 60_000);
+
+// Node's timers stop while the Mac sleeps, so a deadline that passed during the sleep would be noticed late by as long
+// as it slept. On wake the engine calls pi-durable's `resume()` on each agent, which runs what's due.
+test("a request whose 24 hours passed while the Mac slept ends when it wakes", async () => {
+	// A wall clock the test can move. In place before the agent opens: pi-durable keeps the clock it's opened with.
+	const real = Date.now;
+	let ahead = 0;
+	const spy = vi.spyOn(Date, "now").mockImplementation(() => real() + ahead);
+	const a = await start();
+	const paths = enginePaths(a.home);
+	const app = await TestClient.connect(paths.socket);
+	await app.call("engine.hello", { token: readFileSync(paths.tokenFile, "utf8").trim(), client: "fake app", protocolVersion: "1.0", services: ["app.tool", "browser"] });
+	app.appTool = () => ({ ok: false, output: "", needsSite: "example.com" });
+	const { ref } = await a.client.call("agents.create", { name: "Scout", owner: "Antonio", model: { provider: "faux", id: "faux-1" } });
+	const got = await a.client.call("agents.get", { ref });
+	const def = got.definition as Record<string, any>;
+	await a.client.call("agents.save", { ref, definition: { ...def, tools: { ...def.tools, browser: { use: "asks" } } }, instructions: got.instructions });
+	const owner = () => a.client.call("sessions.open", { ref }).then((s: Snapshot) => s.items);
+	await a.client.call("sessions.submit", { ref, input: { text: call("browser_click", { ref: "e3" }) } });
+	await until(owner, (xs) => approvals(xs).some((x) => x.status === "pending"));
+
+	// The Mac sleeps for 25 hours: the wall clock jumps, and no timer fires.
+	ahead = 25 * 3600_000;
+	try {
+		await new Promise((r) => setTimeout(r, 500));
+		expect(approvals(await owner()).some((x) => x.status === "pending")).toBe(true);
+		a.engine.wake.check();
+		const items = await until(owner, (xs) => tools(xs).some((t) => t.status === "error"));
+		expect(tools(items)[0]).toMatchObject({ tool: "browser_click", status: "error", output: expect.stringContaining("no answer within 24 hours") });
+		expect(approvals(items).some((x) => x.status === "pending")).toBe(false);
+	} finally {
+		spy.mockRestore();
+	}
 	app.close();
 }, 60_000);

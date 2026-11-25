@@ -470,11 +470,12 @@ export class Engine {
 		await this.hooks.listen(this.options.hooksPort ?? (Number(process.env.PIOPIO_HOOKS_PORT) || DEFAULT_HOOKS_PORT)).catch((error) => this.log(`Webhook triggers are off: ${(error as Error).message}`));
 		// Automations' clock: what was due while the engine was off runs once (docs/spec/27 AU9).
 		this.automations.start();
-		// After a sleep: automations due meanwhile fire now (not up to an hour later), the time asleep doesn't count as
+		// After a sleep: automations and agents' own sleeps due meanwhile run now (not as late as it slept), the time asleep doesn't count as
 		// a conversation being stuck, and Telegram's polls and the cloud's sockets start again (they may be half-dead).
 		this.wake.onWake((sleptMs) => {
 			this.log(`Woke after about ${Math.round(sleptMs / 60_000)} min asleep: catching up.`);
 			this.automations?.woke();
+			void this.sessions.agents.woke();
 			this.watchdog.slept(sleptMs);
 			void this.telegram?.woke().catch(() => undefined);
 			this.cloud?.woke();

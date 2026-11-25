@@ -493,6 +493,15 @@ export class AgentRuntime implements Runtime {
 		return this.owner.removeQueued(queueId);
 	}
 
+	/**
+	 * After the Mac slept: pi-durable's sleeping tasks that fell due meanwhile run now (a schedule, a held message, an
+	 * approval's or a question's deadline). Their timers run on a clock that stops during sleep, so without this they
+	 * would be late by as long as it slept. `resume()` is pi's own call for a host that was woken.
+	 */
+	woke(): void {
+		this.harness.resume();
+	}
+
 	async close(): Promise<void> {
 		for (const view of await Promise.allSettled(this.views.values())) if (view.status === "fulfilled") await view.value.stop();
 		await this.harness.close(ctx);
