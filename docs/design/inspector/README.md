@@ -66,6 +66,9 @@ The changes fix these problems in the old panels:
   - Left: "Read", weight 600.
   - Right: `2 files · 144 commands ›` in #8A8A8A.
 - Clicking it opens the Files panel with the "Touched" filter on.
+- *Superseded 2026-11-25 by docs/design/read (option A): Read is one list of what you gave, the files it read and the
+  pages it read, the same in chats and projects. Commands left it, and "Show in Files ›" at the end of the list opens
+  Files on Touched.*
 
 **3. Plan.** It has three states:
 - **In progress**

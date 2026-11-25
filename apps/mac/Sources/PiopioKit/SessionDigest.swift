@@ -1,7 +1,7 @@
 import Foundation
 
-/// What Build's Summary column sorts a session into (docs/design/summary/ia.html): what it made (files it wrote, files
-/// it changed) and what it worked from (files you gave it, files it read, commands it ran).
+/// What the Summary column sorts a conversation into: what it made (files it wrote, files it changed) and what it worked
+/// from, Read (docs/design/read): the files you gave it, the files it opened, and the pages it read.
 public enum SessionDigest {
     // MARK: Made
 
@@ -48,9 +48,28 @@ public enum SessionDigest {
         public var read: [String] = []
         /// Files it wrote or edited with its own tools (not through commands), relative to the project.
         public var edited: [String] = []
-        /// Commands it ran (denied ones and those waiting for you don't count).
-        public var commands = 0
+        /// Pages it fetched and the sources its web searches returned (the search's summary is written from them), first
+        /// seen first, at most `maxPages`.
+        public var pages: [Page] = []
         public init() {}
+    }
+
+    public static let maxPages = 30
+
+    /// A page it read: its address and its title (the address when it has none).
+    public struct Page: Equatable, Hashable, Sendable {
+        public let url: String
+        public let title: String
+        public init(url: String, title: String) { self.url = url; self.title = title }
+        public var untitled: Bool { title == url }
+        /// "jobs.ashbyhq.com", without www.
+        public var host: String { URL(string: url)?.host()?.replacingOccurrences(of: "www.", with: "") ?? url }
+        /// The rest of the address after the site ("/acme/7c1e…"), for a page with no title.
+        public var path: String {
+            guard let parts = URLComponents(string: url) else { return "" }
+            let rest = parts.path + (parts.query.map { "?\($0)" } ?? "")
+            return rest == "/" ? "" : rest
+        }
     }
 
     /// - Parameters:
@@ -59,6 +78,11 @@ public enum SessionDigest {
     public static func inputs(items: [TimelineItem], cwd: String?, exists: (String) -> Bool) -> Inputs {
         var out = Inputs()
         var seenNames = Set<String>(), seenMentions = Set<String>(), seenRead = Set<String>(), seenEdited = Set<String>()
+        var seenPages = Set<String>()
+        func page(_ url: String?, _ title: String?) {
+            guard let url, out.pages.count < maxPages, seenPages.insert(url).inserted else { return }
+            out.pages.append(Page(url: url, title: title.flatMap { $0.isEmpty ? nil : $0 } ?? url))
+        }
         func tool(_ t: ToolItem) {
             switch t.tool {
             case "read":
@@ -69,8 +93,11 @@ public enum SessionDigest {
                 guard t.status == .done, let raw = t.args?["path"]?.stringValue else { return }
                 let path = relative(raw, cwd: cwd)
                 if seenEdited.insert(path).inserted { out.edited.append(path) }
-            case "bash":
-                if t.status != .denied && t.status != .pendingApproval { out.commands += 1 }
+            case "web_fetch":
+                guard t.status != .denied else { return }
+                page(t.details?["url"]?.stringValue ?? t.args?["url"]?.stringValue, t.details?["title"]?.stringValue)
+            case "web_search":
+                for result in t.details?["results"]?.arrayValue ?? [] { page(result["url"]?.stringValue, result["title"]?.stringValue) }
             default: break
             }
         }

@@ -193,7 +193,7 @@ struct BuildSessionView: View {
                                      onClose: { withAnimation(.easeOut(duration: 0.2)) { showInspector = false } })
                     case .inspector:
                         InspectorPanel(engine: engine, session: session, summary: summary, project: project, git: git, chatLens: chatLens,
-                                       committing: $committing, onReview: review, onRead: {
+                                       committing: $committing, onReview: review, onOpenFile: openFile, onShowInFiles: {
                                            filesFilter = .touched
                                            previewing = nil
                                            inspectorTab = .files

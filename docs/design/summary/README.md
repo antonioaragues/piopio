@@ -49,7 +49,7 @@ under Changed.
 - **Plan**: the checklist, "n of m".
 - **Context**: the meter is the header ("4% full", tokens in the tooltip, Compact). **You gave** = files sent with a
   message and paths you @mentioned (a file opens in the preview, a folder in Finder); **Follows** = AGENTS.md or
-  CLAUDE.md; **Read** = "N files" unfolding into the list, "and N commands".
+  CLAUDE.md; **Read** = "N files" unfolding into the list, "and N commands" (since 2026-11-25, docs/design/read).
 - **Setup**: Works in (reveals the folder), On (branch, "N to pull", the git menu, a worktree's base), Runs on, Uses
   (the apps and servers on; unfolds into the same per-session switches as before, or "No apps · Connect…"), Knows
   (pi's skills; unfolds into names and descriptions, "Type / … to use one"). The permissions menu left the column

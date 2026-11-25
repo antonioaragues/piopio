@@ -17,17 +17,20 @@ struct InspectorPanel: View {
     let chatLens: Bool
     @Binding var committing: Bool
     let onReview: (String?) -> Void
-    /// "Read" opens the Files panel on the files it touched.
-    let onRead: () -> Void
+    /// Read: a file it read or you mentioned, in the preview; "Show in Files", the Files panel on what it touched.
+    let onOpenFile: (String) -> Void
+    let onShowInFiles: () -> Void
     /// What the conversation left running and ran (docs/spec/43): the column's last block, nil when there's none.
     let background: BackgroundBlock?
     @State private var changesOpen: Bool
     @State private var files: [FileChange] = []
 
     init(engine: EngineController, session: ThreadModel, summary: SessionSummary, project: ProjectInfo?, git: GitModel?, chatLens: Bool,
-         committing: Binding<Bool>, onReview: @escaping (String?) -> Void, onRead: @escaping () -> Void, background: BackgroundBlock? = nil) {
+         committing: Binding<Bool>, onReview: @escaping (String?) -> Void, onOpenFile: @escaping (String) -> Void,
+         onShowInFiles: @escaping () -> Void, background: BackgroundBlock? = nil) {
         self.engine = engine; self.session = session; self.summary = summary; self.project = project; self.git = git
-        self.chatLens = chatLens; self._committing = committing; self.onReview = onReview; self.onRead = onRead
+        self.chatLens = chatLens; self._committing = committing; self.onReview = onReview
+        self.onOpenFile = onOpenFile; self.onShowInFiles = onShowInFiles
         self.background = background
         // PIOPIO_DEMO_INSPECTOR_CHANGES=1: captures open with Changes unfolded.
         let demo = ProcessInfo.processInfo.environment["PIOPIO_DEMO_INSPECTOR_CHANGES"] == "1"
@@ -38,7 +41,8 @@ struct InspectorPanel: View {
         VStack(spacing: 0) {
             ScrollView {
                 SessionTab(engine: engine, session: session, summary: summary, project: project, git: git, chatLens: chatLens,
-                           committing: $committing, files: files, changesOpen: $changesOpen, onReview: onReview, onRead: onRead,
+                           committing: $committing, files: files, changesOpen: $changesOpen, onReview: onReview, onOpenFile: onOpenFile,
+                           onShowInFiles: onShowInFiles,
                            background: background)
                     .padding(.top, 4)
             }
@@ -127,7 +131,8 @@ struct SessionTab: View {
     let files: [FileChange]
     @Binding var changesOpen: Bool
     let onReview: (String?) -> Void
-    let onRead: () -> Void
+    let onOpenFile: (String) -> Void
+    let onShowInFiles: () -> Void
     var background: BackgroundBlock?
 
     var body: some View {
@@ -139,7 +144,8 @@ struct SessionTab: View {
             setup.inspectorBlock()
             ToolsBlock(engine: engine, thread: session, summary: summary).inspectorBlock()
             SkillsBlock(thread: session).inspectorBlock()
-            read.inspectorBlock(last: chatLens && !tail)
+            ReadBlock(thread: session, cwd: summary.cwd, openFile: onOpenFile, showInFiles: onShowInFiles)
+                .inspectorBlock(last: chatLens && !tail)
             if !chatLens {
                 ChangesBlock(engine: engine, session: session, summary: summary, git: git, files: files,
                              commit: git?.status?.repo == true && (git?.changedCount ?? 0) > 0 ? { committing = true } : nil,
@@ -192,28 +198,6 @@ struct SessionTab: View {
                 Text("· no git").font(.system(size: 13)).foregroundStyle(Color.dsFg3)
             }
             Spacer(minLength: 0)
-        }
-    }
-
-    /// "Read  2 files · 144 commands ›": opens Files on what it touched.
-    private var read: some View {
-        let inputs = SessionDigest.inputs(items: session.document.items, cwd: summary.cwd, exists: { _ in true })
-        let files = inputs.read.count, commands = inputs.commands
-        var parts: [String] = []
-        if files > 0 { parts.append(files == 1 ? "1 file" : "\(files) files") }
-        if commands > 0 { parts.append(commands == 1 ? "1 command" : "\(commands) commands") }
-        return HStack(alignment: .firstTextBaseline) {
-            Text("Read").font(.system(size: 13, weight: .semibold))
-            Spacer(minLength: 8)
-            if parts.isEmpty {
-                Text("Nothing yet").font(.system(size: 13)).foregroundStyle(Color.dsFg3)
-            } else {
-                Button(action: onRead) {
-                    Text(parts.joined(separator: " · ") + " ›").font(.system(size: 13)).foregroundStyle(Color.dsFg3)
-                }
-                .buttonStyle(.plain)
-                .help("The files it read and changed, in Files")
-            }
         }
     }
 }
