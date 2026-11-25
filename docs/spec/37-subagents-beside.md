@@ -46,7 +46,7 @@ parent's row. Steering a subagent means leaving the conversation that started it
 
 ## 4. How it's built
 
-- **Engine** (`sessions.ts`): `progressLine` becomes plain language (SB3), from the tool and its arguments: `read`
+- **Engine** (`sessions/children.ts`, `progress-line.ts`): `progressLine` becomes plain language (SB3), from the tool and its arguments: `read`
   "Reading <file>", `edit`/`write` "Editing <file>", `grep` "Searching for <pattern>", `find`/`ls` "Looking through
   <dir>", `bash` its `description` if it has one, else a reading of its first command (cat/sed/head → "Reading
   <file>", rg/grep → "Searching for …", a test runner → "Running the tests", a build → "Building"), else "Running a

@@ -276,7 +276,7 @@ All seven went with the proposal.
 
 ## 10. SD1–SD2 as built (2026-11-17)
 
-- **Engine** (`sessions.ts`, `tools/side.ts`):
+- **Engine** (`sessions/children.ts`, `tools/side.ts`):
   - `startSide` makes a side conversation as an ordinary conversation of the parent's kind, in its project. It gets
     the parent's model, thinking, permissions, profile and tools turned off.
   - In a git project, when it isn't Read only, it gets a worktree on `side/<title>-<id>`. With `workOn: "here"` it
