@@ -31,6 +31,8 @@ import { replacedVisuals } from "../tools/visuals.js";
 import { Emitter, type Runtime, type SubmitOptions } from "./runtime.js";
 
 const ctx = BACKGROUND_CONTEXT;
+/** How much of a conversation a view loads: its newest entries (there is no loading earlier ones yet). */
+const MAX_HISTORY = 5_000;
 
 export type AgentOpenOptions = {
 	/** Connected apps: their tools, with changes going through the agent's approvals. */
@@ -425,10 +427,21 @@ export class AgentRuntime implements Runtime {
 		return this.options.connectTelegram?.(token);
 	}
 
-	/** The active transcript, then a watch of the conversation's state (read in that order, so the watch is newer). */
+	/**
+	 * The conversation's history, then a watch of its state (read in that order, so the watch is newer). The history
+	 * is pi-durable's raw entries, which a compaction never changes: reading the model's context here
+	 * (`Conversation.context()`) dropped from the chat everything a compaction had summarized. The newest
+	 * `MAX_HISTORY` entries, oldest first.
+	 */
 	async watch(conversation: Conversation): Promise<{ transcript: Entry[]; watch: ConversationWatch }> {
-		const transcript = (await conversation.context(ctx)).entries as unknown as Entry[];
-		return { transcript, watch: await conversation.watch(ctx) };
+		const newest: Entry[] = [];
+		let cursor: unknown;
+		do {
+			const page = await conversation.entries({ order: "descending" }, 500, cursor as never, ctx);
+			newest.push(...(page.items as unknown as Entry[]));
+			cursor = page.next;
+		} while (cursor && newest.length < MAX_HISTORY);
+		return { transcript: newest.slice(0, MAX_HISTORY).reverse(), watch: await conversation.watch(ctx) };
 	}
 
 	submission(id: string) {

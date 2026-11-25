@@ -12,7 +12,8 @@ import type { PiToolResult } from "./tool-details.js";
 const USER_ENTRY = "piopio.user";
 type UserData = { text: string; attachments?: AttachmentInfo[] };
 
-export type Entry = { id: string | number; kind: string; model?: PiMessage[]; data?: unknown };
+/** `head`: on a compaction, the first entry it kept as it was (what's older was summarized). */
+export type Entry = { id: string | number; kind: string; model?: PiMessage[]; data?: unknown; head?: string | number };
 
 /** Entries the model reads that the transcript doesn't show: what memory recalled for a message (docs/spec/38 R3). */
 const UNSEEN = new Set([RECALL_ENTRY]);
@@ -94,14 +95,20 @@ export class DurableViewMapper {
 	}
 
 	/**
-	 * The first state: the active transcript (`Conversation.context()`, read before the watch) and the watch's first
+	 * The first state: the conversation's history (its entries in order, read before the watch) and the watch's first
 	 * value, which may hold newer entries, an answer being streamed and running tools. Notices already in it (the last
 	 * run's failure) aren't shown again. Returns the entries the view added after the transcript.
+	 *
+	 * The history is everything said, not the model's context: a compaction summarizes older entries for the model and
+	 * leaves them where they were, so the reader still sees them, with a marker where the summary took over.
 	 */
 	load(transcript: readonly Entry[], view: DurableView, emit: boolean): Entry[] {
 		const { messages, ids } = messagesFromEntries(transcript);
 		this.builder.reset(messages, (i) => ids[i]!, emit);
-		for (const e of transcript) this.note(e, true);
+		for (const e of transcript) {
+			this.note(e, true);
+			if (e.kind === "pi.compaction") this.compacted(e, emit);
+		}
 		const live = (view.docs["pi.live"] ?? {}) as Live;
 		if (live.runFailure) this.noticed.add(`run:${live.runFailure.taskId}`);
 		if (live.compactionFailure) this.noticed.add(`compaction:${live.compactionFailure.taskId}`);
@@ -199,11 +206,7 @@ export class DurableViewMapper {
 	private entry(entry: Entry): void {
 		const b = this.builder;
 		this.note(entry, false);
-		if (entry.kind === "pi.compaction") {
-			const summary = (entry.data as { summary?: string } | undefined)?.summary;
-			if (summary) b.compaction(String(entry.id), summary);
-			return;
-		}
+		if (entry.kind === "pi.compaction") return this.compacted(entry, true);
 		const message = entry.model?.[0];
 		if (!message || UNSEEN.has(entry.kind)) return;
 		if (message.role === "user" && entry.kind === USER_ENTRY) {
@@ -227,6 +230,19 @@ export class DurableViewMapper {
 			const details = (m as { details?: unknown }).details;
 			this.end(m.toolCallId, contentText(m.content), m.isError ?? false, details === undefined ? undefined : { details });
 		}
+	}
+
+	/**
+	 * A compaction's marker, with its summary (the entry's own message, what the model reads in place of the older
+	 * entries), put before the first entry it kept: what's above was summarized for the model, what's below it still
+	 * reads as it was said.
+	 */
+	private compacted(entry: Entry, emit: boolean): void {
+		const summary = contentText((entry.model?.[0]?.content ?? "") as string | PiContentBlock[]).trim();
+		if (!summary) return;
+		const head = Number(entry.head);
+		const kept = Number.isFinite(head) ? this.builder.currentItems.find((i) => Number(i.id) >= head) : undefined;
+		this.builder.insert({ kind: "compaction", id: String(entry.id), at: kept?.at ?? new Date().toISOString(), summary }, kept?.id, emit);
 	}
 
 	private slot(slot: Slot): void {
