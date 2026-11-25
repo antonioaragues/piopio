@@ -215,10 +215,10 @@ private struct ApprovalsPane: View {
             SettingsHeader(title: "Approvals", summary: "What Build sessions may do without asking. Risky commands always ask.")
             CardTitle("All projects")
             ListCard {
-                ToggleRow(title: "Keep commands inside the project", subtitle: "They read and use the network freely, but writing outside the project asks", isOn: Binding(get: { engine.settings?.build?.sandbox ?? true }, set: { v in
+                ToggleRow(title: "Keep commands inside the project", subtitle: "They read and use the network (filtered in a project you haven't trusted), but writing outside the project asks", isOn: Binding(get: { engine.settings?.build?.sandbox ?? true }, set: { v in
                     Task { await engine.updateSettings(SettingsPatch(build: .init(sandbox: v))) }
                 }))
-                .help("Commands run in macOS's sandbox: they can read and use the network, but only write in the project, temporary folders and package caches. To write elsewhere they ask you first. Off, they run with full access.")
+                .help("Commands run in macOS's sandbox: they can read and use the network, but only write in the project, temporary folders and package caches. To write elsewhere they ask you first. In a project you haven't trusted, the network is filtered too: package registries, GitHub and the sites you allow. Off, they run with full access.")
                 ToggleRow(title: "Auto review", subtitle: "In Auto-edit, the model runs clearly safe commands instead of asking you", last: true, isOn: Binding(get: { engine.settings?.build?.autoReview ?? false }, set: { v in
                     Task { await engine.updateSettings(SettingsPatch(build: .init(autoReview: v))) }
                 }))
@@ -237,7 +237,7 @@ private struct ApprovalsPane: View {
             } else {
                 ListCard {
                     ForEach(Array(shown.enumerated()), id: \.element.id) { i, project in
-                        SettingsListRow(name: project.name, dot: project.needsTrust && project.trust == .undecided ? .dsAmber : nil, open: { open = project.id }) {
+                        SettingsListRow(name: project.name, dot: project.waitsForTrust ? .dsAmber : nil, open: { open = project.id }) {
                             MemoryTile(symbol: "folder", color: .gray)
                         } subtitle: {
                             Text(Self.line(project))
@@ -257,16 +257,27 @@ private struct ApprovalsPane: View {
         let rules = project.rules.count
         var parts = [ApprovalModeMenu.title(project.approvalMode)]
         if rules > 0 { parts.append("\(rules) rule\(rules == 1 ? "" : "s")") }
-        if project.needsTrust, project.trust == .undecided { parts.append("setup not decided") } else if project.trust == .untrusted { parts.append("not trusted") }
+        if project.waitsForTrust { parts.append("trust not decided") } else if project.trust == .untrusted { parts.append("not trusted") }
         return parts.joined(separator: " · ")
     }
 }
 
-/// One project's approvals: whether its .pi setup loads, the mode new sessions start in, and its "Always allow" rules.
+/// One project's approvals: whether it's trusted, the mode new sessions start in, and its "Always allow" rules.
 private struct ProjectApprovalsPage: View {
     let engine: EngineController
     let project: ProjectInfo
     let back: () -> Void
+
+    /// What trusting it changes here: its own setup loads, its commands' network opens, or both (docs/spec/39).
+    static func trustSubtitle(_ project: ProjectInfo) -> String {
+        let setup = "its .pi and Claude Code setup loads", network = "its commands reach any site, and Full auto is available"
+        switch (project.needsTrust, project.network == .filtered) {
+        case (true, true): return "Trusted: \(setup), \(network)"
+        case (false, true): return "Trusted: \(network)"
+        case (true, false): return "Trusted: \(setup) (extensions, hooks, MCP servers, prompts and skills)"
+        case (false, false): return "Whether its .pi and Claude Code setup loads"
+        }
+    }
 
     var body: some View {
         SettingsDetail(back: "Approvals", title: project.name, goBack: back) {
@@ -279,8 +290,8 @@ private struct ProjectApprovalsPage: View {
             VStack(alignment: .leading, spacing: 0) {
                 CardTitle("Sessions")
                 ListCard {
-                    if project.needsTrust || project.trust != .undecided {
-                        SettingRow(title: "Project setup", subtitle: "Its .pi extensions, MCP servers, prompts and skills") {
+                    if project.trustMatters || project.trust != .undecided {
+                        SettingRow(title: "Trust this project", subtitle: Self.trustSubtitle(project)) {
                             Picker("", selection: Binding(get: { project.trust }, set: { value in
                                 if value != .undecided { Task { await engine.setTrust(value == .trusted, for: project) } }
                             })) {
@@ -289,6 +300,7 @@ private struct ProjectApprovalsPage: View {
                                 if project.trust == .undecided { Text("Not decided").tag(ProjectInfo.Trust.undecided) }
                             }
                             .labelsHidden()
+                            .accessibilityLabel("Trust this project")
                             .fixedSize()
                         }
                     }

@@ -2,25 +2,27 @@ import PiopioKit
 import SwiftUI
 
 /// Edit… on a /learn card (docs/spec/14 M5, docs/design/learn): each thing's words and where it goes, or drop it.
-/// Save writes what's left; dropping everything dismisses the card.
+/// Save writes what's ready; one still missing something says what, and isn't written. Dropping everything dismisses
+/// the card.
 struct LearnEditSheet: View {
-    @State var edit: LearnEdit
+    let edit: LearnEdit
     let save: ([LearnItem]) -> Void
     let cancel: () -> Void
+    /// The items as rows with ids of their own: an item's id is made of its words, so it changes as you type, and a
+    /// row keyed by it would be a new row (losing the field you're typing in) at each key.
+    @State private var rows: [Row]
+    private struct Row: Identifiable { let id = UUID(); var item: LearnItem }
 
     init(edit: LearnEdit, save: @escaping ([LearnItem]) -> Void, cancel: @escaping () -> Void) {
-        _edit = State(initialValue: edit)
+        self.edit = edit
+        _rows = State(initialValue: edit.items.map { Row(item: $0) })
         self.save = save
         self.cancel = cancel
     }
 
-    /// What Save writes: items with words; a skill also needs a name and instructions.
-    private var kept: [LearnItem] {
-        edit.items.filter { item in
-            let has = { (s: String?) in !(s ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-            return has(item.text) && (item.to != .skill || (has(item.name) || has(item.addTo)) && has(item.body))
-        }
-    }
+    /// What Save writes: the items that aren't missing anything.
+    private var kept: [LearnItem] { rows.map(\.item).filter(\.missing.isEmpty) }
+    private var unfinished: Int { rows.count - kept.count }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -32,24 +34,30 @@ struct LearnEditSheet: View {
             .padding(.horizontal, 20).padding(.top, 18).padding(.bottom, 12)
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    ForEach($edit.items) { $item in row($item) }
+                    ForEach($rows) { $row in self.row($row.item) { rows.removeAll { $0.id == row.id } } }
                 }
                 .padding(.horizontal, 20).padding(.bottom, 12)
             }
             Divider()
             HStack(spacing: 10) {
+                if unfinished > 0 {
+                    Text(unfinished == 1 ? "1 isn't finished and won't be saved" : "\(unfinished) aren't finished and won't be saved")
+                        .font(.system(size: 12)).foregroundStyle(Color.dsAmber)
+                }
                 Spacer()
                 Button("Cancel", action: cancel).keyboardShortcut(.cancelAction)
-                Button(kept.isEmpty ? "Dismiss" : "Save \(kept.count)") { save(kept) }
+                // Dismiss only once you've dropped everything; while something's unfinished, Save waits for it.
+                Button(rows.isEmpty ? "Dismiss" : "Save \(kept.count)") { save(kept) }
                     .keyboardShortcut(.defaultAction)
                     .buttonStyle(PillStyle(kind: .strong, compact: true))
+                    .disabled(!rows.isEmpty && kept.isEmpty)
             }
             .padding(.horizontal, 20).padding(.vertical, 12)
         }
-        .frame(width: 560, height: min(620, CGFloat(170 + edit.items.reduce(0) { $0 + ($1.to == .skill ? 230 : 96) })))
+        .frame(width: 560, height: min(620, CGFloat(170 + rows.reduce(0) { $0 + ($1.item.to == .skill ? 230 : 96) })))
     }
 
-    private func row(_ item: Binding<LearnItem>) -> some View {
+    private func row(_ item: Binding<LearnItem>, drop: @escaping () -> Void) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
                 Picker("", selection: item.to) {
@@ -58,6 +66,7 @@ struct LearnEditSheet: View {
                     Text(item.wrappedValue.addTo.map { "Add to \($0)" } ?? "A skill").tag(LearnItem.Destination.skill)
                 }
                 .labelsHidden().fixedSize()
+                .accessibilityLabel("Where it goes")
                 if item.wrappedValue.to == .skill {
                     TextField("Name", text: Binding(get: { item.wrappedValue.addTo ?? item.wrappedValue.name ?? "" }, set: { item.wrappedValue.name = $0 }))
                         .textFieldStyle(.roundedBorder).frame(width: 170).disabled(item.wrappedValue.addTo != nil)
@@ -73,8 +82,9 @@ struct LearnEditSheet: View {
                         .help("The section of \(edit.file ?? "AGENTS.md") it goes under")
                 }
                 Spacer()
-                Button { edit.items.removeAll { $0.id == item.wrappedValue.id } } label: { Image(systemName: "xmark") }
+                Button(action: drop) { Image(systemName: "xmark") }
                     .buttonStyle(.plain).foregroundStyle(Color.dsFg3).help("Don't keep this")
+                    .accessibilityLabel("Don't keep this")
             }
             TextField(item.wrappedValue.to == .skill ? "Used when…" : "", text: item.text, axis: .vertical)
                 .textFieldStyle(.roundedBorder).lineLimit(1...4)
@@ -86,6 +96,8 @@ struct LearnEditSheet: View {
                     .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.dsLine, lineWidth: 0.5))
             }
             if let why = item.wrappedValue.why { Text(why).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3) }
+            let missing = item.wrappedValue.missing
+            if !missing.isEmpty { Text("Needs \(LearnItem.listed(missing))").font(.system(size: 11.5)).foregroundStyle(Color.dsAmber) }
         }
     }
 }

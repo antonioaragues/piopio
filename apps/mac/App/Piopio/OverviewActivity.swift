@@ -310,17 +310,26 @@ private struct ActivityRowView: View {
 
 /// The grid of days (OV5): a 7-row grid, a column a week, each square from `track` through four blue steps by how much
 /// happened that day (against the busiest one). Today is outlined. Until there's a year of history it shows the last
-/// 13 weeks, so it isn't a wall of empty squares. Month names above, a less→more key below; nothing else.
+/// 13 weeks, so it isn't a wall of empty squares. Month names above, a less→more key below; nothing else. A year (53
+/// weeks) is wider than the page at 14pt, so the squares get smaller to fit the width there is: the whole year shows.
 struct YearOfDays: View {
     let days: [ActivityDay]
-    private let cell: CGFloat = 14
     private let gap: CGFloat = 4
+    /// The width there is for the grid.
+    @State private var room: CGFloat = 760
+
+    /// A square's side for `weeks` columns in `room`: 14pt when they fit, smaller when they don't, never under 6pt.
+    static func cell(weeks: Int, room: CGFloat, gap: CGFloat = 4) -> CGFloat {
+        guard weeks > 0 else { return 14 }
+        return min(14, max(6, ((room + gap) / CGFloat(weeks) - gap).rounded(.down)))
+    }
 
     var body: some View {
         let shown = window
         let weeks = Self.columns(shown)
         let peak = max(shown.map(\.count).max() ?? 0, 1)
         let today = OverviewPage.dayKey(Date())
+        let cell = Self.cell(weeks: weeks.count, room: room, gap: gap)
         VStack(alignment: .leading, spacing: 5) {
             // Month names over the week a month starts in, when there's room.
             ZStack(alignment: .topLeading) {
@@ -335,7 +344,7 @@ struct YearOfDays: View {
                     VStack(spacing: gap) {
                         ForEach(0..<7, id: \.self) { d in
                             if let day = weeks[w][d] {
-                                square(level: level(day.count, peak: peak), today: day.day == today)
+                                square(level: level(day.count, peak: peak), today: day.day == today, cell: cell)
                                     .help("\(Self.label(day.day)) · \(Int(day.count)) message\(Int(day.count) == 1 ? "" : "s") and requests")
                             } else {
                                 Color.clear.frame(width: cell, height: cell)
@@ -352,6 +361,8 @@ struct YearOfDays: View {
             .font(.system(size: 11)).foregroundStyle(Color.dsFg3)
             .padding(.top, 3)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { room = $0 }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Days: \(shown.filter { $0.count > 0 }.count) with activity")
     }
@@ -374,11 +385,11 @@ struct YearOfDays: View {
         return out
     }
 
-    private func square(level: Int, today: Bool) -> some View {
-        RoundedRectangle(cornerRadius: 4, style: .continuous)
+    private func square(level: Int, today: Bool, cell: CGFloat) -> some View {
+        RoundedRectangle(cornerRadius: cell * 0.28, style: .continuous)
             .fill(DataColor.seq[level])
             .frame(width: cell, height: cell)
-            .overlay(RoundedRectangle(cornerRadius: 4, style: .continuous).strokeBorder(today ? Color.dsFg2 : .clear, lineWidth: 1.5))
+            .overlay(RoundedRectangle(cornerRadius: cell * 0.28, style: .continuous).strokeBorder(today ? Color.dsFg2 : .clear, lineWidth: 1.5))
     }
 
     private func level(_ count: Double, peak: Double) -> Int {

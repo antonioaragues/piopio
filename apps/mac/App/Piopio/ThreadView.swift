@@ -33,7 +33,6 @@ struct ThreadView: View {
     @State private var conversationWidth: Double = 1200
     /// The Browser's width as you last dragged it (every chat shares it).
     @AppStorage("browserWidth") private var browserPreferred = 440.0
-    @State private var browserDragStart: Double?
 
     /// The widest the Browser may be: the chat keeps at least 380pt.
     private var browserMax: Double { max(320, conversationWidth - 380) }
@@ -71,18 +70,7 @@ struct ThreadView: View {
 
     /// The Browser's leading edge: drag to resize it, between 320pt and what leaves the chat 380pt.
     private var browserResizeHandle: some View {
-        Rectangle().fill(Color.clear).frame(width: 7).contentShape(Rectangle())
-            .pointerStyle(.columnResize)
-            .gesture(DragGesture(coordinateSpace: .global).onChanged { value in
-                if browserDragStart == nil { browserDragStart = browserWidth }
-                browserPreferred = min(browserMax, max(320, (browserDragStart ?? browserWidth) - value.translation.width))
-            }.onEnded { _ in browserDragStart = nil })
-            .accessibilityLabel("Browser width").accessibilityValue("\(Int(browserWidth)) points")
-            .accessibilityAdjustableAction { direction in
-                browserPreferred = min(browserMax, max(320, browserWidth + (direction == .increment ? 40 : -40)))
-            }
-            .help("Drag to resize the browser")
-            .offset(x: -7)
+        ColumnResizeHandle(name: "Browser", width: browserWidth, range: 320...browserMax, preferred: $browserPreferred)
     }
 
     private var chatColumn: some View {
@@ -148,6 +136,12 @@ struct ThreadView: View {
             moveMenu
             ToolbarDivider()
             Menu {
+                // The strip's Keep, for when you've hidden it (it's back on your next visit).
+                if summary.hoursLeft() != nil {
+                    Button("Keep This Chat") { Task { try? await engine.keep(summary.ref); temporaryStripClosed = true } }
+                        .help("It stays with your other chats instead of being deleted")
+                    Divider()
+                }
                 ExportMenuItems(engine: engine, ref: summary.ref)
                 Divider()
                 Button("Cost…") { showCosts = true }

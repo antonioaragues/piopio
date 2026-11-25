@@ -82,7 +82,6 @@ struct BuildSessionView: View {
     @AppStorage("filesWidth") private var filesPreferred = 280.0
     @AppStorage("browserWidth") private var browserPreferred = 440.0
     @AppStorage("inspectorWidth") private var inspectorPreferred = 300.0
-    @State private var panelDragStart: Double?
     /// The narrowest each panel goes; below that line the window hides it instead.
     private var panelMin: Double { subagentOpen != nil ? 340 : inspectorTab == .browser ? 320 : inspectorTab == .files ? 240 : 280 }
     /// The widest the panel may be: the conversation keeps at least `minConversation`.
@@ -118,20 +117,10 @@ struct BuildSessionView: View {
 
     private var project: ProjectInfo? { engine.projects.first { $0.path == (summary.projectPath ?? summary.cwd) } }
 
-    /// The panel's leading edge: drag to resize it, between its narrowest and what leaves the conversation its room.
+    /// The column's leading edge: drag to resize it, between its narrowest and what leaves the conversation its room.
     private var panelResizeHandle: some View {
-        Rectangle().fill(Color.clear).frame(width: 7).contentShape(Rectangle())
-            .pointerStyle(.columnResize)
-            .gesture(DragGesture(coordinateSpace: .global).onChanged { value in
-                if panelDragStart == nil { panelDragStart = panelWidth }
-                panelPreferred = min(panelMax, max(panelMin, (panelDragStart ?? panelWidth) - value.translation.width))
-            }.onEnded { _ in panelDragStart = nil })
-            .accessibilityLabel("\(inspectorTab.title) width").accessibilityValue("\(Int(panelWidth)) points")
-            .accessibilityAdjustableAction { direction in
-                panelPreferred = min(panelMax, max(panelMin, panelWidth + (direction == .increment ? 40 : -40)))
-            }
-            .help("Drag to resize the \(inspectorTab.title.lowercased()) panel")
-            .offset(x: -7)
+        ColumnResizeHandle(name: subagentOpen != nil ? "Subagent" : inspectorTab.title, width: panelWidth, range: panelMin...panelMax,
+                           preferred: Binding(get: { panelPreferred }, set: { panelPreferred = $0 }))
     }
 
     var body: some View {
@@ -154,7 +143,7 @@ struct BuildSessionView: View {
                         .padding(.horizontal, 24).padding(.bottom, 8)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                if let project, project.trust == .undecided, project.needsTrust || project.network == .filtered {
+                if let project, project.waitsForTrust {
                     TrustBanner(engine: engine, project: project)
                         .padding(.horizontal, 24).padding(.bottom, 8)
                 }
@@ -219,11 +208,7 @@ struct BuildSessionView: View {
         // The model opened a page here: show the Browser view (docs/spec/22 §5).
         .onChange(of: BrowserCenter.shared.reveals[summary.ref.id]) { _, count in
             guard count != nil else { return }
-            withAnimation(.easeOut(duration: 0.15)) {
-                inspectorTab = .browser
-                showInspector = true
-                panelAutoHidden = false
-            }
+            withAnimation(.easeOut(duration: 0.15)) { reveal(.browser) }
         }
         .task { await session.open() }
         .task(id: summary.ref.id) {
@@ -249,8 +234,7 @@ struct BuildSessionView: View {
         .onReceive(NotificationCenter.default.publisher(for: .revealInInspector)) { note in
             guard let target = note.object as? RevealTarget, target.sessionId == session.ref.id, let cwd = summary.cwd else { return }
             previewing = target.path.hasPrefix(cwd + "/") ? String(target.path.dropFirst(cwd.count + 1)) : target.path
-            inspectorTab = .files
-            withAnimation(.easeOut(duration: 0.15)) { showInspector = true; panelAutoHidden = false }
+            withAnimation(.easeOut(duration: 0.15)) { reveal(.files) }
         }
         .task(id: summary.cwd) {
             guard let cwd = summary.cwd else { return }
@@ -424,10 +408,18 @@ struct BuildSessionView: View {
     /// subagent open there, it takes the column back.
     private func show(_ view: SessionPanel) {
         withAnimation(.easeOut(duration: 0.15)) {
-            if subagentOpen != nil { subagentOpen = nil; inspectorTab = view; showInspector = true; panelAutoHidden = false }
-            else if panelShown && inspectorTab == view { showInspector = false } else { inspectorTab = view; showInspector = true; panelAutoHidden = false }
+            if subagentOpen == nil && panelShown && inspectorTab == view { showInspector = false } else { reveal(view) }
         }
         rememberInspector()
+    }
+
+    /// The column on `view`, taken back from a subagent if one is open there: everything that shows a panel (its icon, a
+    /// file, a page the model opens) comes through here, so none of them changes a column you can't see.
+    private func reveal(_ view: SessionPanel) {
+        subagentOpen = nil
+        inspectorTab = view
+        showInspector = true
+        panelAutoHidden = false
     }
 
     private func rememberInspector() {
@@ -439,8 +431,7 @@ struct BuildSessionView: View {
     /// A file in the Files panel, in place of the tree.
     private func openFile(_ path: String) {
         previewing = path
-        inspectorTab = .files
-        withAnimation(.easeOut(duration: 0.15)) { showInspector = true; panelAutoHidden = false }
+        withAnimation(.easeOut(duration: 0.15)) { reveal(.files) }
         rememberInspector()
     }
 
@@ -993,6 +984,11 @@ struct FlowLayout: Layout {
 extension ProjectInfo {
     /// Full access has no sandbox and asks nothing, so only a project you've trusted gets it (docs/spec/39 §2).
     var allowsFullAccess: Bool { network != .filtered }
+    /// Trusting it would change something: its own setup loads (`needsTrust`), or its commands' network opens (docs/spec/39).
+    /// The trust banner and Settings › Approvals both ask by this.
+    var trustMatters: Bool { needsTrust || network == .filtered }
+    /// No decision yet, and one matters: the banner shows, and the project's row in Approvals has a dot.
+    var waitsForTrust: Bool { trust == .undecided && trustMatters }
     static let fullAccessNeedsTrust = "Needs a trusted project: trust it first (Settings › Approvals)"
 }
 

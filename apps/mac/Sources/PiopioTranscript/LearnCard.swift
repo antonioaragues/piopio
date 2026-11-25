@@ -203,7 +203,7 @@ struct LearnCardView: View {
                 TextButton(title: "Not now", help: "Fold it; save it later from here") { act(.learn(kind: "later", callId: callId)) }
                 TextButton(title: "Edit…", help: "Change, move or drop what it keeps") { act(.learn(kind: "edit", callId: callId)) }
                 Spacer(minLength: 8)
-                DarkButton(title: "Save", help: "Write it: \(rules.isEmpty ? "" : (file ?? "AGENTS.md"))\(!rules.isEmpty && !facts.isEmpty ? " and " : "")\(facts.isEmpty ? "" : "About me")") {
+                DarkButton(title: "Save", help: "Write it to \(LearnItem.destinations(items, file: file))") {
                     act(.learn(kind: "save", callId: callId))
                 }
             }

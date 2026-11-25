@@ -198,6 +198,33 @@ enum CardLayout {
     static let margin: CGFloat = 8
 }
 
+/// A right column's leading edge (docs/design/card-layout): drag it, or adjust it with VoiceOver, to resize the column
+/// between `range`. Every resizable column uses this one; each keeps its own width in `preferred`.
+struct ColumnResizeHandle: View {
+    /// What the column is, for VoiceOver and the tooltip: "Browser", "Files", "Subagent".
+    let name: String
+    /// The width the column has now.
+    let width: Double
+    let range: ClosedRange<Double>
+    @Binding var preferred: Double
+    @State private var dragStart: Double?
+
+    var body: some View {
+        Rectangle().fill(Color.clear).frame(width: 7).contentShape(Rectangle())
+            .pointerStyle(.columnResize)
+            .gesture(DragGesture(coordinateSpace: .global).onChanged { value in
+                if dragStart == nil { dragStart = width }
+                preferred = fit((dragStart ?? width) - value.translation.width)
+            }.onEnded { _ in dragStart = nil })
+            .accessibilityLabel("\(name) width").accessibilityValue("\(Int(width)) points")
+            .accessibilityAdjustableAction { direction in preferred = fit(width + (direction == .increment ? 40 : -40)) }
+            .help("Drag to resize the \(name.lowercased())")
+            .offset(x: -7)
+    }
+
+    private func fit(_ value: Double) -> Double { min(range.upperBound, max(range.lowerBound, value)) }
+}
+
 extension View {
     func contentCard(_ enabled: Bool = true) -> some View { modifier(ContentCard(enabled: enabled)) }
 

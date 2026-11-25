@@ -827,6 +827,8 @@ enum Suggestion: Hashable, Identifiable {
 /// Piopio's own commands (docs/spec/32 §4), the menu's first group in this order. Some act when picked (compact,
 /// review…); the others take words: picking one puts a chip in the box with its hint as the placeholder, and the
 /// message goes out as `/name words`.
+/// The engine's bundled templates (PIOPIO_PROMPTS, engine/src/runtimes/piopio-commands.ts) are all here with
+/// `engine: true`, so they show in this group, not with your templates: test/piopio-commands.test.ts checks it.
 struct BuiltInCommand: Hashable {
     let name: String
     let summary: String
@@ -843,6 +845,8 @@ struct BuiltInCommand: Hashable {
         BuiltInCommand(name: "goal", summary: "Keep working until a goal is met", icon: "scope", keywords: ["done", "until", "finish"], hint: "What done looks like…", engine: true),
         BuiltInCommand(name: "side", summary: "A side conversation for something else; this one goes on", icon: "bubble.left.and.text.bubble.right", keywords: ["btw", "aside", "meanwhile"], hint: "What the side conversation is about…"),
         BuiltInCommand(name: "automation", summary: "Make an automation: work that starts on its own, once or on a schedule", icon: "clock", keywords: ["schedule", "timer", "remind", "every", "later", "cron"], hint: "What, and when or how often…", engine: true),
+        BuiltInCommand(name: "learn", summary: "Keep what this conversation taught: a rule for this project, or something about you", icon: "sparkles", keywords: ["remember", "rule", "agents.md", "about me", "skill"], hint: "What to keep, or nothing to look back…", engine: true),
+        BuiltInCommand(name: "init", summary: "Write this project's AGENTS.md: how to build, test and run it, and its conventions", icon: "doc.text", keywords: ["agents.md", "instructions", "setup"], hint: "Anything it should know…", engine: true),
         BuiltInCommand(name: "grill-me", summary: "Pressure-test an idea: one question at a time until the plan is clear", icon: "questionmark.bubble", keywords: ["question", "interview", "idea", "pressure"], hint: "The idea to pressure-test…", engine: true),
         BuiltInCommand(name: "browser", summary: "Do it in the browser, where you can watch", icon: "globe", keywords: ["web", "page", "site"], hint: "What to do in the browser…", engine: true),
         BuiltInCommand(name: "compact", summary: "Summarize older messages to free context", icon: "arrow.down.right.and.arrow.up.left", keywords: ["context", "summarize"]),

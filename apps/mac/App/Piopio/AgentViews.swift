@@ -129,6 +129,11 @@ struct AgentPage: View {
     @State private var noCloud = false
     /// Run now failed: why.
     @State private var problem: String?
+    /// Its browser's width, shared with chats' (docs/spec/22 §5); the chat beside it keeps at least 380pt.
+    @AppStorage("browserWidth") private var browserPreferred = 440.0
+    @State private var chatWidth: Double = 1200
+    private var browserMax: Double { max(320, chatWidth - 380) }
+    private var browserWidth: Double { min(max(320, browserPreferred), browserMax) }
 
     /// Chat first, Setup for later (docs/spec/21 D3, design 2a). "Activity" is gone: runs are lines in the chat.
     enum Tab: String, CaseIterable { case chat = "Chat", activity = "Activity", setup = "Setup" }
@@ -155,9 +160,13 @@ struct AgentPage: View {
                         Divider()
                         BrowserPanel(refID: summary.ref.id, onStop: { Task { await engine.thread(summary.ref).stop() } },
                                      onClose: { BrowserCenter.shared.openPanels.remove(summary.ref.id) })
-                            .frame(width: 520)
+                            .frame(width: browserWidth)
+                            .overlay(alignment: .leading) {
+                                ColumnResizeHandle(name: "Browser", width: browserWidth, range: 320...browserMax, preferred: $browserPreferred)
+                            }
                     }
                 }
+                .onGeometryChange(for: Double.self) { $0.size.width } action: { chatWidth = $0 }
             }
         }
         .task(id: summary.updatedAt) { await load() }
@@ -206,7 +215,8 @@ struct AgentPage: View {
 
     private var watching: Bool { BrowserCenter.shared.openPanels.contains(summary.ref.id) }
 
-    /// Opens or closes its browser, in the profile its Setup gives it (so what you sign in to there is its own).
+    /// Opens or closes its browser, in the profile its Setup gives it (so what you sign in to there is its own). The
+    /// browser sits beside the chat, so from Setup, Watch goes to the chat with it open.
     private func toggleWatch() {
         let session = BrowserCenter.shared.session(summary.ref.id)
         session.isAgent = true
@@ -215,7 +225,9 @@ struct AgentPage: View {
             session.tabs.forEach { session.closeTab($0) }
             session.profile = profile
         }
-        if watching { BrowserCenter.shared.openPanels.remove(summary.ref.id) } else { BrowserCenter.shared.openPanels.insert(summary.ref.id) }
+        if watching && tab == .chat { BrowserCenter.shared.openPanels.remove(summary.ref.id); return }
+        BrowserCenter.shared.openPanels.insert(summary.ref.id)
+        tab = .chat
     }
 
     private func move() {
