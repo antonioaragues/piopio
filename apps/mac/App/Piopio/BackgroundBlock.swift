@@ -5,7 +5,7 @@ import SwiftUI
 /// Background (docs/spec/43, docs/design/background): the last block of a Build session's Summary column. What the
 /// conversation left running and what it ran, its background commands (TM4) and its subagents (37): running rows with
 /// the time ticking and Stop on hover, then "Finished N", folded, newest first, five then "and N more". Not drawn when
-/// there's nothing to list. Clear, in the head, takes what finished off the list (BG11).
+/// there's nothing to list. A trash can in the head takes what finished off the list (BG11).
 struct BackgroundBlock: View {
     let running: [BackgroundRow]
     let finished: [BackgroundRow]
@@ -15,7 +15,7 @@ struct BackgroundBlock: View {
     let stop: (BackgroundRow) -> Void
     /// A command's address: the project preview.
     let preview: (String) -> Void
-    /// Clear: what finished leaves the list (spec 43 BG11).
+    /// The trash can: what finished leaves the list (spec 43 BG11).
     let clear: () -> Void
     /// PIOPIO_DEMO_BACKGROUND_FINISHED=1: captures open with Finished unfolded.
     @State private var finishedOpen = ProcessInfo.processInfo.environment["PIOPIO_DEMO_BACKGROUND_FINISHED"] == "1"
@@ -75,8 +75,8 @@ struct BackgroundBlock: View {
         .onChange(of: conversationId) { _, id in folded = Self.remembered(id) }
     }
 
-    /// `BlockFold`'s head with Clear before the chevron while something has finished: "Background  2 running
-    /// Clear ⌄", or "3 finished Clear ⌄" when nothing runs. The title and the count fold it, as the chevron does.
+    /// `BlockFold`'s head with a trash can before the chevron while something has finished: "Background  2 running
+    /// 🗑 ⌄", or "3 finished 🗑 ⌄" when nothing runs. The title and the count fold it, as the chevron does.
     private func head(open: Binding<Bool>, help: String) -> some View {
         let toggle = { withAnimation(.easeOut(duration: 0.15)) { open.wrappedValue.toggle() } }
         return HStack(alignment: .firstTextBaseline, spacing: 6) {
@@ -94,9 +94,14 @@ struct BackgroundBlock: View {
             .help(help)
             .accessibilityValue(open.wrappedValue ? "Expanded" : "Collapsed")
             if !finished.isEmpty {
-                SummaryLink("Clear") { withAnimation(.easeOut(duration: 0.15)) { clear() } }
-                    .help("Remove the finished ones from this list (their output stays in the terminal)")
-                    .accessibilityLabel("Clear finished")
+                // A grey trash can, as quiet as the chevron; the tooltip says what it removes.
+                Button { withAnimation(.easeOut(duration: 0.15)) { clear() } } label: {
+                    Image(systemName: "trash").font(.system(size: 11)).foregroundStyle(Color.dsFg3)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Remove the finished ones from this list. Their output stays in the terminal.")
+                .accessibilityLabel("Remove finished")
             }
             Button(action: toggle) {
                 Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).foregroundStyle(Color.dsFg3)
