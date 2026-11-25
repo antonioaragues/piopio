@@ -9,6 +9,6 @@
    pattern people know from other chat apps.**
 
 As built: [spec 14 §8](../../spec/14-memory.md). Its mark is the mockup's dashed bubble: SF Symbols has none, so
-the app draws `bubble.left` dashed (`Image.temporaryChat` in Design.swift), used in the sidebar, the corner button, the
+the app masks gaps out of `bubble.left` itself (`TemporaryChatIcon` in Design.swift), so it's the chat icon exactly, only dashed,, used in the sidebar, the corner button, the
 New conversation page's mark, the strip and the menus. (From 2026-11-24 to 11-25 it was SF Symbols' `timer`.) New
 Temporary Chat is ⌃⌘N (⇧⌘N is New Project), and the corner's tooltip says so.

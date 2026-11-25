@@ -248,8 +248,9 @@ struct ConversationStart: View {
     /// The place's mark: a folder, or a conversation; a temporary chat's dashed bubble, tinted.
     private var mark: some View {
         let temp = temporary && project == nil
-        return (temp ? Image.temporaryChat(size: 19, weight: .light) : Image(systemName: project != nil ? "folder" : "bubble.left"))
-            .font(.system(size: 19, weight: .light))
+        return Group {
+            if temp { TemporaryChatIcon(size: 19, weight: .light) } else { Image(systemName: project != nil ? "folder" : "bubble.left").font(.system(size: 19, weight: .light)) }
+        }
             .foregroundStyle(temp ? Color.dsTemporary : Color.dsFg2)
             .frame(width: 44, height: 44)
             .background(temp ? Color.dsTemporaryTint : Color.dsChip, in: RoundedRectangle(cornerRadius: 12, style: .continuous))

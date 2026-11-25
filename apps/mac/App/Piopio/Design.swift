@@ -42,78 +42,67 @@ extension Color {
     })
 }
 
-/// A temporary chat's mark (docs/spec/14 M4): the conversation bubble (SF Symbols' `bubble.left`) drawn dashed, as SF
-/// Symbols has no dashed bubble. A template image the size `bubble.left` is at that point size, so it drops in where
-/// the symbol goes, takes `foregroundStyle`, and shows in menus.
+/// A temporary chat's mark (docs/spec/14 M4): the conversation bubble, dashed. SF Symbols has no dashed bubble, so
+/// this is the very `bubble.left` a chat shows, at the same size and weight and laid out the same, with gaps masked
+/// out of it: put side by side or on top of each other, the two only differ by the gaps.
+struct TemporaryChatIcon: View {
+    var size: CGFloat
+    var weight: Font.Weight = .regular
+
+    var body: some View {
+        Image(systemName: "bubble.left")
+            .font(.system(size: size, weight: weight))
+            .mask {
+                GeometryReader { g in
+                    TemporaryBubble.bands(width: g.size.width, height: g.size.height, size: size)
+                        .reduce(into: Path(CGRect(origin: .zero, size: g.size))) { $0.addRect($1) }
+                        .fill(style: FillStyle(eoFill: true))
+                }
+            }
+            .accessibilityLabel("Temporary chat")
+    }
+}
+
+/// The same mark as an image, for menus (an NSMenu item's icon must be an image): `bubble.left` with the same gaps cut.
 extension Image {
-    @MainActor static func temporaryChat(size: CGFloat, weight: Font.Weight = .regular) -> Image {
-        Image(nsImage: TemporaryBubble.image(size: size, weight: weight)).renderingMode(.template)
+    @MainActor static func temporaryChat(size: CGFloat) -> Image {
+        Image(nsImage: TemporaryBubble.image(size: size)).renderingMode(.template)
     }
 }
 
 enum TemporaryBubble {
-    @MainActor private static var cache: [String: NSImage] = [:]
-
-    @MainActor static func image(size: CGFloat, weight: Font.Weight) -> NSImage {
-        let key = "\(size)-\(weight)"
-        if let hit = cache[key] { return hit }
-        // bubble.left's geometry at 200 pt (its image is 266 × 237), on the stroke's centre line.
-        let s = size / 200
-        let line = 20 * s * (weight == .light ? 0.78 : weight == .medium ? 1.15 : weight == .semibold ? 1.3 : 1)
-        let image = NSImage(size: NSSize(width: 266 * s, height: 237 * s), flipped: true) { _ in
-            let p = NSBezierPath()
-            let (l, r, t, b, k): (CGFloat, CGFloat, CGFloat, CGFloat, CGFloat) = (40, 228, 32, 150, 32)
-            // From the tail's tip, so a dash always wraps it.
-            p.move(to: NSPoint(x: 90, y: 198))
-            p.line(to: NSPoint(x: 86, y: b))
-            p.line(to: NSPoint(x: l + k, y: b))
-            p.appendArc(withCenter: NSPoint(x: l + k, y: b - k), radius: k, startAngle: 90, endAngle: 180)
-            p.line(to: NSPoint(x: l, y: t + k))
-            p.appendArc(withCenter: NSPoint(x: l + k, y: t + k), radius: k, startAngle: 180, endAngle: 270)
-            p.line(to: NSPoint(x: r - k, y: t))
-            p.appendArc(withCenter: NSPoint(x: r - k, y: t + k), radius: k, startAngle: 270, endAngle: 0)
-            p.line(to: NSPoint(x: r, y: b - k))
-            p.appendArc(withCenter: NSPoint(x: r - k, y: b - k), radius: k, startAngle: 0, endAngle: 90)
-            p.line(to: NSPoint(x: 128, y: b))
-            p.close()
-            p.transform(using: AffineTransform(scaleByX: s, byY: s))
-            // Dashes like SF Symbols' own dashed shapes (rectangle.dashed): corners whole, short gaps mid-edge, and the
-            // tail one V from where it leaves the bubble. Gaps' centres along the outline from the tip, at 200 pt.
-            let gaps: [CGFloat] = [55, 139, 247, 309, 417, 510, 560].map { $0 * s }
-            let gap = line * 0.9, total = Self.length(of: p)
-            var dashes: [CGFloat] = [], from: CGFloat = -line / 2
-            for g in gaps {
-                dashes += [g - gap / 2 - from - line, gap + line]
-                from = g + gap / 2
-            }
-            dashes.append(total - from)
-            p.setLineDash(dashes, count: dashes.count, phase: 0)
-            p.lineWidth = line
-            p.lineCapStyle = .round
-            p.lineJoinStyle = .round
-            NSColor.black.setStroke()
-            p.stroke()
-            return true
-        }
-        image.isTemplate = true
-        image.accessibilityDescription = "Temporary chat"
-        cache[key] = image
-        return image
+    /// Gaps like SF Symbols' own dashed shapes (rectangle.dashed): short, mid-edge, the corners and the tail whole. Bands
+    /// across the stroke, placed on bubble.left's outline as fractions of its frame (266 × 237 at 200 pt; SwiftUI and
+    /// AppKit give it the same frame): one down each side, two along the top, one on the bottom right of the tail.
+    static func bands(width w: CGFloat, height h: CGFloat, size: CGFloat) -> [CGRect] {
+        let gap = max(1.5, size * 0.09)
+        return [
+            CGRect(x: 0, y: h * 91 / 237 - gap / 2, width: w * 72 / 266, height: gap),
+            CGRect(x: w * 196 / 266, y: h * 91 / 237 - gap / 2, width: w * 70 / 266, height: gap),
+            CGRect(x: w * 104 / 266 - gap / 2, y: 0, width: gap, height: h * 60 / 237),
+            CGRect(x: w * 164 / 266 - gap / 2, y: 0, width: gap, height: h * 60 / 237),
+            CGRect(x: w * 160 / 266 - gap / 2, y: h * 120 / 237, width: gap, height: h * 60 / 237),
+        ]
     }
 
-    private static func length(of path: NSBezierPath) -> CGFloat {
-        let flat = path.flattened
-        var total: CGFloat = 0, start = NSPoint.zero, last = NSPoint.zero
-        var pts = [NSPoint](repeating: .zero, count: 3)
-        for i in 0..<flat.elementCount {
-            switch flat.element(at: i, associatedPoints: &pts) {
-            case .moveTo: start = pts[0]; last = pts[0]
-            case .lineTo: total += hypot(pts[0].x - last.x, pts[0].y - last.y); last = pts[0]
-            case .closePath: total += hypot(start.x - last.x, start.y - last.y); last = start
-            default: break
-            }
+    @MainActor private static var cache: [CGFloat: NSImage] = [:]
+
+    @MainActor static func image(size: CGFloat) -> NSImage {
+        if let hit = cache[size] { return hit }
+        guard let symbol = NSImage(systemSymbolName: "bubble.left", accessibilityDescription: nil)?
+            .withSymbolConfiguration(.init(pointSize: size, weight: .regular)) else { return NSImage() }
+        let bands = Self.bands(width: symbol.size.width, height: symbol.size.height, size: size)
+        let image = NSImage(size: symbol.size, flipped: true) { rect in
+            symbol.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
+            NSColor.black.setFill()
+            for band in bands { band.fill(using: .destinationOut) }
+            return true
         }
-        return total
+        image.alignmentRect = symbol.alignmentRect
+        image.isTemplate = true
+        image.accessibilityDescription = "Temporary chat"
+        cache[size] = image
+        return image
     }
 }
 
