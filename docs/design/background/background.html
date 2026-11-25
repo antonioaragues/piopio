@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Piopio · Background work in Summary</title>
+<style>
+/* Spec 43 drawn in Piopio's grey ink (docs/design/grey), on the card layout (docs/design/card-layout):
+   the conversation in its card, the Summary column flat on the window beside it. */
+:root {
+  --canvas:#e9e8e4; --win:#fcfcfb; --side:#f4f4f2; --fg:#1f1f1e; --fg2:#6b6b67; --fg3:#9b9b96;
+  --line:rgba(0,0,0,.08); --sel:rgba(0,0,0,.06); --bubble:#f0f0ed; --field:#ffffff;
+  --inv:#1f1f1e; --invfg:#ffffff; --accent:#2f6fde; --page:#f7f7f5; --ok:#3a8a55; --bad:#c2493f; --warn:#b7791f;
+  --shadow:0 0 0 .5px rgba(0,0,0,.2),0 24px 70px rgba(0,0,0,.14);
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark) { :root {
+  --canvas:#0f0f0e; --win:#1e1e1d; --side:#191918; --fg:#ececea; --fg2:#a6a6a1; --fg3:#77776f;
+  --line:rgba(255,255,255,.09); --sel:rgba(255,255,255,.07); --bubble:#2b2b29; --field:#252524;
+  --inv:#ececea; --invfg:#1e1e1d; --accent:#6ea0ff; --page:#151514; --ok:#6cc28a; --bad:#ef7d72; --warn:#e0a84a;
+  --shadow:0 0 0 .5px rgba(255,255,255,.14),0 24px 70px rgba(0,0,0,.6); color-scheme:dark } }
+
+* { box-sizing:border-box }
+body { background:var(--page); color:var(--fg); font-family:var(--sans); font-size:15px; line-height:1.55; margin:0; padding:56px 16px 80px }
+.doc { max-width:720px; margin:0 auto; display:flex; flex-direction:column; gap:14px }
+h1 { font-size:34px; line-height:1.15; letter-spacing:-.8px; margin:0 }
+h2 { font-size:22px; letter-spacing:-.3px; margin:36px 0 0 }
+p, ul, ol { margin:0 } ul, ol { padding-left:20px } li { margin:3px 0 }
+.lede { font-size:17px; color:var(--fg2) }
+.eyebrow { font-size:12px; color:var(--fg3); letter-spacing:.04em; text-transform:uppercase }
+code { font-family:var(--mono); font-size:13px; background:var(--sel); border-radius:4px; padding:1px 4px }
+
+/* Controls above the window */
+.stage { max-width:1180px; margin:22px auto 8px }
+.controls { display:flex; flex-wrap:wrap; gap:10px 18px; justify-content:center; margin-bottom:12px; font-size:12.5px; color:var(--fg3); align-items:center }
+.seg { display:flex; gap:2px; background:var(--sel); border-radius:8px; padding:2px }
+.seg button { border:0; background:none; color:var(--fg2); font:inherit; padding:4px 11px; border-radius:6px; cursor:pointer }
+.seg button.on { background:var(--field); color:var(--fg); box-shadow:0 0 0 .5px var(--line) }
+
+/* The window */
+.window { display:flex; height:680px; background:var(--side); border-radius:12px; box-shadow:var(--shadow); overflow:hidden; font-size:13px }
+.sidebar { width:196px; flex:none; padding:16px 10px; color:var(--fg2) }
+.sidebar .row { padding:5px 8px; border-radius:7px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.sidebar .row.cur { background:var(--sel); color:var(--fg) }
+.sidebar .sec { font-size:11.5px; color:var(--fg3); margin:14px 8px 4px }
+.sidebar .child { padding-left:22px; font-size:12.5px }
+.main { flex:1; margin:8px 0 8px 0; background:var(--win); border-radius:10px; box-shadow:0 0 0 .5px var(--line); display:flex; flex-direction:column; min-width:0 }
+.window.closed .main { margin-right:8px }
+.bar { height:44px; flex:none; display:flex; align-items:center; padding:0 10px 0 16px; gap:4px; border-bottom:.5px solid var(--line) }
+.bar b { font-size:13.5px; font-weight:600; white-space:nowrap }
+.bar .sub { color:var(--fg3); font-size:12px; white-space:nowrap; margin-left:6px }
+.bar .sp { flex:1 }
+.icon { position:relative; width:28px; height:28px; border-radius:6px; display:grid; place-items:center; color:var(--fg2); cursor:pointer }
+.icon:hover { background:var(--sel) }
+.icon.on { background:var(--sel); color:var(--fg) }
+.icon svg { width:15px; height:15px; stroke:currentColor; fill:none; stroke-width:1.5 }
+.badge { position:absolute; top:1px; right:0; min-width:14px; height:14px; padding:0 3px; border-radius:7px; background:var(--fg2); color:var(--win); font-size:9.5px; font-weight:600; line-height:14px; text-align:center; font-variant-numeric:tabular-nums }
+.tip { position:absolute; top:34px; right:-6px; white-space:nowrap; background:var(--inv); color:var(--invfg); font-size:11.5px; padding:3px 8px; border-radius:6px; z-index:3; pointer-events:none }
+
+.scroll { flex:1; overflow:auto; padding:22px 0 12px }
+.col { max-width:560px; margin:0 auto; padding:0 20px; display:flex; flex-direction:column; gap:12px }
+.user { align-self:flex-end; background:var(--bubble); border-radius:12px; padding:9px 14px; max-width:80%; font-size:13.5px }
+.grey { color:var(--fg3); font-size:13px }
+.answer { font-size:14px; line-height:1.55 }
+.composer { margin:0 auto 14px; width:calc(100% - 40px); max-width:560px; background:var(--field); border:.5px solid var(--line); border-radius:16px; box-shadow:0 2px 10px rgba(0,0,0,.04); flex:none }
+.composer .in { padding:12px 14px 6px; color:var(--fg3) }
+.composer .chips { display:flex; gap:10px; padding:4px 10px 9px 14px; color:var(--fg2); font-size:12.5px; align-items:center }
+.composer .chips .sp { flex:1 }
+.send { width:26px; height:26px; border-radius:50%; background:var(--inv); color:var(--invfg); display:grid; place-items:center; font-size:11px }
+
+/* A subagent row in the transcript (docs/spec/37) */
+.sa { display:flex; align-items:center; gap:9px; padding:5px 8px; margin:0 -8px; border-radius:7px; min-width:0 }
+.sa .t { color:var(--fg); white-space:nowrap }
+.sa .l { color:var(--fg3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1; min-width:0 }
+
+/* Status glyphs: accent ring = running, green = done, red = failed, dashed = queued, grey square = stopped */
+.g { width:14px; height:14px; flex:none; border-radius:50%; display:inline-grid; place-items:center; font-size:9px; font-weight:700; color:#fff }
+.g.run { border:1.6px solid color-mix(in srgb, var(--accent) 25%, transparent); border-top-color:var(--accent); animation:spin .9s linear infinite }
+.g.done { background:var(--ok) } .g.done::after { content:"✓" }
+.g.fail { background:var(--bad) } .g.fail::after { content:"!" }
+.g.queued { border:1.4px dashed var(--fg3) }
+.g.stopped { border:1.4px solid var(--fg3) } .g.stopped::after { content:""; width:5px; height:5px; background:var(--fg3); border-radius:1px }
+@keyframes spin { to { transform:rotate(360deg) } }
+
+/* The Summary column: flat on the window, 300pt */
+.summary { width:300px; flex:none; display:flex; flex-direction:column; min-width:0 }
+.window.closed .summary { display:none }
+.sbody { flex:1; overflow:auto; padding:4px 18px 0 }
+.block { padding:16px 0; border-bottom:.5px solid var(--line) }
+.block:last-child { border-bottom:0 }
+.head { display:flex; align-items:baseline; gap:6px; cursor:pointer; user-select:none }
+.head b { font-weight:600; font-size:13px }
+.head .sp { flex:1 }
+.head .ans { color:var(--fg3); white-space:nowrap }
+.chev { color:var(--fg3); font-size:9px; display:inline-block; transition:transform .15s }
+.open > .head .chev { transform:rotate(90deg) }
+.kv { display:grid; grid-template-columns:72px 1fr; gap:8px; margin-top:10px }
+.kv span:nth-child(odd) { color:var(--fg3) }
+.sub-h { font-size:12px; color:var(--fg3); margin:10px 0 2px }
+
+/* Background rows */
+.bg-list { margin-top:8px }
+.bgr { position:relative; display:flex; gap:9px; align-items:flex-start; padding:5px 6px; margin:0 -6px; border-radius:6px; cursor:pointer }
+.bgr:hover { background:var(--sel) }
+.bgr .g { margin-top:2px }
+.bgr .txt { flex:1; min-width:0 }
+.bgr .name { color:var(--fg); white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.bgr .name.cmd { font-family:var(--mono); font-size:12px }
+.bgr .line { color:var(--fg3); font-size:11.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.bgr .line a { color:var(--accent); text-decoration:none }
+.bgr .line.alert { color:var(--warn) }
+.bgr .time { color:var(--fg3); font-size:12px; font-variant-numeric:tabular-nums; white-space:nowrap; margin-top:1px }
+.bgr .stop { display:none; width:20px; height:20px; border-radius:5px; place-items:center; color:var(--fg2); margin-top:-1px }
+.bgr .stop:hover { background:var(--sel); color:var(--fg) }
+.bgr .stop::after { content:""; width:7px; height:7px; background:currentColor; border-radius:1.5px }
+.bgr.running:hover .stop, .bgr.force .stop { display:grid }
+.bgr.running:hover .time, .bgr.force .time { display:none }
+.fold { display:flex; align-items:center; gap:6px; color:var(--fg2); margin-top:6px; cursor:pointer; user-select:none }
+.fold .chev { font-size:8px }
+.fold.open .chev { transform:rotate(90deg) }
+.more { color:var(--accent); font-size:12px; margin-top:4px; cursor:pointer }
+.footer { display:flex; align-items:center; gap:8px; padding:12px 18px; border-top:.5px solid var(--line); color:var(--fg3); font-size:12px }
+.footer .meter { width:32px; height:3px; border-radius:2px; background:var(--sel); position:relative; overflow:hidden }
+.footer .meter i { position:absolute; inset:0 auto 0 0; width:38%; background:var(--fg2) }
+.footer .sp { flex:1 }
+.footer .cost { color:var(--fg); font-variant-numeric:tabular-nums }
+
+/* Plan timeline, small */
+.plan { margin-top:10px; display:flex; flex-direction:column; gap:7px }
+.plan div { display:flex; gap:9px; align-items:center; color:var(--fg2) }
+.plan .d { color:var(--fg3) } .plan .n { color:var(--fg); font-weight:600 }
+.dot14 { width:12px; height:12px; border-radius:50%; flex:none; border:1.4px solid var(--fg3) }
+.dot14.d { background:var(--fg3) } .dot14.n { border:2px solid var(--fg) }
+
+/* The drawer, for "a click goes to where the work is" */
+.drawer { flex:none; height:150px; background:#1c1c1b; color:#e5e5ea; border-radius:0 0 10px 10px; font-family:var(--mono); font-size:11.5px; display:none; flex-direction:column }
+.drawer.show { display:flex }
+.drawer .tabs { display:flex; gap:4px; padding:6px 8px; border-bottom:.5px solid rgba(255,255,255,.08); font-family:var(--sans); font-size:12px }
+.drawer .tabs span { padding:2px 9px; border-radius:10px; color:rgba(229,229,234,.6) }
+.drawer .tabs span.on { background:rgba(255,255,255,.1); color:#e5e5ea }
+.drawer .tabs .sp { flex:1 }
+.drawer .tabs .act { color:rgba(229,229,234,.75) }
+.drawer pre { margin:0; padding:8px 12px; white-space:pre-wrap; overflow:auto; color:rgba(229,229,234,.85) }
+
+.note { font-size:12.5px; color:var(--fg3); text-align:center; margin-top:10px }
+.hide { display:none !important }
+</style>
+</head>
+<body>
+
+<div class="doc">
+  <div class="eyebrow">Design · spec 43 · 2026-11-25</div>
+  <h1>Background work in Summary</h1>
+  <p class="lede">One block in the Summary column for what this conversation left running and what it ran: its
+    background commands and its subagents. It has no panel of its own: it's a block like
+    Tools or Plan.</p>
+  <p>Use the controls to step through the states. Hover a running row to see Stop, and click a command to open its
+    terminal tab.</p>
+</div>
+
+<div class="stage">
+  <div class="controls">
+    <div class="seg" id="state">
+      <button data-v="running" class="on">Running</button>
+      <button data-v="failed">One failed</button>
+      <button data-v="finished">All finished</button>
+      <button data-v="closed">Column closed</button>
+      <button data-v="chat">In a chat</button>
+    </div>
+  </div>
+
+  <div class="window" id="win">
+    <div class="sidebar">
+      <div class="row">Home</div>
+      <div class="row">Needs you</div>
+      <div class="sec">piopio</div>
+      <div class="row cur" id="sideTitle">Fix the cart total</div>
+      <div class="row">Overview ledger</div>
+      <div class="row">Hooks design</div>
+      <div class="sec">Chats</div>
+      <div class="row">Trip to Lisbon</div>
+      <div class="row">Mortgage questions</div>
+    </div>
+
+    <div class="main">
+      <div class="bar">
+        <b id="convTitle">Fix the cart total</b><span class="sub" id="convSub">piopio · main</span>
+        <span class="sp"></span>
+        <div class="icon" title="Terminal" id="termIcon"><svg viewBox="0 0 16 16"><path d="M3 4l3 3-3 3M8 11h5"/></svg></div>
+        <div class="icon" title="Files"><svg viewBox="0 0 16 16"><path d="M3 2.5h6l4 4v7H3z M9 2.5v4h4"/></svg></div>
+        <div class="icon on" id="sumIcon"><svg viewBox="0 0 16 16"><rect x="2.5" y="2.5" width="11" height="11" rx="2"/><path d="M10 2.5v11"/></svg>
+          <span class="badge" id="badgeEl">2</span><span class="tip hide" id="tipEl">2 running in the background</span></div>
+      </div>
+
+      <div class="scroll"><div class="col" id="conv"></div></div>
+
+      <div class="composer">
+        <div class="in">Ask for a change…</div>
+        <div class="chips"><span>+</span><span>Ask first</span><span class="sp"></span><span>Sonnet 5.5</span><span class="send">↑</span></div>
+      </div>
+      <div class="drawer" id="drawer">
+        <div class="tabs"><span>zsh</span><span class="on">npm run dev · agent</span><span>npm test -- --watch · agent</span><span class="sp"></span><span class="act">Preview</span><span class="act">Send to agent</span><span class="act">Stop</span></div>
+        <pre>  VITE v6.2.0  ready in 412 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose
+11:42:08 [vite] page reload src/cart.ts</pre>
+      </div>
+    </div>
+
+    <div class="summary">
+      <div class="sbody" id="sbody"></div>
+      <div class="footer"><span class="meter"><i></i></span><span>38k of 200k ⌃</span><span class="sp"></span><span class="cost" id="cost">$0.14</span></div>
+    </div>
+  </div>
+  <p class="note" id="caption"></p>
+</div>
+
+<div class="doc">
+  <h2>What each part is</h2>
+  <ul>
+    <li><b>Head.</b> "Background · 2 running · 3 finished", with a chevron to fold it. It's open while something
+      runs. Your choice is remembered per conversation, as Changes is.</li>
+    <li><b>Rows.</b> The same glyphs as the subagent rows in the transcript. A command shows in monospace, with its
+      address as a link. A subagent shows its title and its plain-language line. The time
+      ticks each second on the right. On hover, Stop replaces the time.</li>
+    <li><b>Finished.</b> Folded, newest first, five then "and N more". Each row says how it ended: "exited 0",
+      "exit 1", "stopped", "done · $0.03".</li>
+    <li><b>Where it sits.</b> Always the last block, under Plan and above the footer, whether something runs or
+      not, so the blocks above never move. With nothing to show, there's no block.</li>
+    <li><b>Column closed.</b> A count on the Summary icon. The column doesn't open by itself.</li>
+    <li><b>A chat</b> has no commands, so it lists its subagents only, with no subheadings.</li>
+  </ul>
+</div>
+
+<script>
+const S = { state: "running", finishedOpen: false, drawer: false };
+const t0 = Date.now();
+const fmt = s => s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, "0")}s`;
+
+// The conversation's work. `since` is seconds already run when the page opened.
+const DATA = {
+  running: {
+    running: [
+      { kind: "cmd", g: "run", name: "npm run dev", line: '<a href="#">localhost:5173 ↗</a>', since: 64 },
+      { kind: "sub", g: "run", name: "Audit the OAuth flow", line: "Reading oauth.ts", since: 38 },
+    ],
+    finished: [
+      { kind: "cmd", g: "done", name: "npm test", line: "exited 0 · 2m 10s" },
+      { kind: "sub", g: "done", name: "Find every caller of total()", line: "done · 1m 52s · $0.03" },
+      { kind: "cmd", g: "stopped", name: "npx tsc --watch", line: "stopped · 40s" },
+    ],
+  },
+  failed: {
+    running: [
+      { kind: "cmd", g: "run", name: "npm run dev", line: '<a href="#">localhost:5173 ↗</a>', since: 251 },
+      { kind: "sub", g: "run", name: "Audit the OAuth flow", line: "looks stuck: nothing new for 10 minutes", lineClass: "alert", since: 640 },
+    ],
+    finished: [
+      { kind: "cmd", g: "fail", name: "npm run e2e", line: "exit 1 · 12s" },
+      { kind: "cmd", g: "done", name: "npm test", line: "exited 0 · 2m 10s" },
+      { kind: "sub", g: "done", name: "Find every caller of total()", line: "done · 1m 52s · $0.03" },
+      { kind: "cmd", g: "stopped", name: "npx tsc --watch", line: "stopped · 40s" },
+      { kind: "sub", g: "fail", name: "Check the Stripe webhooks", line: "failed · 40s" },
+      { kind: "cmd", g: "done", name: "npm install", line: "exited 0 · 18s" },
+    ],
+  },
+  finished: {
+    running: [],
+    finished: [
+      { kind: "cmd", g: "stopped", name: "npm run dev", line: "stopped · 14m 20s" },
+      { kind: "sub", g: "done", name: "Audit the OAuth flow", line: "done · 4m 31s · $0.06" },
+      { kind: "cmd", g: "done", name: "npm test", line: "exited 0 · 2m 10s" },
+    ],
+  },
+  chat: {
+    running: [
+      { kind: "sub", g: "run", name: "Compare three mortgage offers", line: "Reading bankinter.es", since: 52 },
+      { kind: "sub", g: "queued", name: "Summarise the notary fees", line: "queued · starts when one finishes", since: null },
+    ],
+    finished: [
+      { kind: "sub", g: "done", name: "Find the Euribor for November", line: "done · 41s · $0.01" },
+    ],
+  },
+};
+DATA.closed = DATA.running;
+
+function row(r, running) {
+  const time = running && r.since != null ? `<span class="time" data-since="${r.since}">${fmt(r.since)}</span>` : "";
+  const stop = running ? `<span class="stop" title="Stop"></span>` : "";
+  return `<div class="bgr ${running ? "running" : ""}" data-kind="${r.kind}" title="${r.kind === "cmd" ? "Open in the terminal" : "Open beside the conversation"}">
+    <span class="g ${r.g}"></span>
+    <div class="txt"><div class="name ${r.kind === "cmd" ? "cmd" : ""}">${r.name}</div><div class="line ${r.lineClass || ""}">${r.line}</div></div>
+    ${time}${stop}</div>`;
+}
+
+function grouped(list, running, kinds) {
+  const names = { cmd: "Commands", sub: "Subagents" };
+  if (kinds.size < 2) return list.map(r => row(r, running)).join("");
+  return ["cmd", "sub"].filter(k => list.some(r => r.kind === k))
+    .map(k => `<div class="sub-h">${names[k]}</div>` + list.filter(r => r.kind === k).map(r => row(r, running)).join("")).join("");
+}
+
+function backgroundBlock(d) {
+  const kinds = new Set([...d.running, ...d.finished].map(r => r.kind));
+  const n = d.running.length, f = d.finished.length;
+  const ans = [n ? `${n} running` : null, f ? `${f} finished` : null].filter(Boolean).join(" · ");
+  const shown = S.finishedOpen ? d.finished.slice(0, 5) : [];
+  const rest = d.finished.length - 5;
+  // Nothing running: the head is the fold itself ("3 finished ›").
+  if (!n) {
+    return `<div class="block ${S.finishedOpen ? "open" : ""}" id="bg"><div class="head" data-act="fold"><b>Background</b><span class="sp"></span><span class="ans">${ans}</span><span class="chev">▶</span></div>
+      ${S.finishedOpen ? `<div class="bg-list">${grouped(shown, false, kinds)}${rest > 0 ? `<div class="more">and ${rest} more</div>` : ""}</div>` : ""}</div>`;
+  }
+  return `<div class="block open" id="bg"><div class="head"><b>Background</b><span class="sp"></span><span class="ans">${ans}</span><span class="chev">▶</span></div>
+    <div class="bg-list">${grouped(d.running, true, kinds)}
+    ${f ? `<div class="fold ${S.finishedOpen ? "open" : ""}" data-act="fold"><span class="chev">▶</span>Finished ${f}</div>` : ""}
+    ${S.finishedOpen ? `<div style="margin-left:2px">${shown.map(r => row(r, false)).join("")}${rest > 0 ? `<div class="more">and ${rest} more</div>` : ""}</div>` : ""}
+    </div></div>`;
+}
+
+const chat = S => S.state === "chat";
+function setup() {
+  return chat(S) ? "" : `<div class="block"><div class="head"><b>Setup</b></div><div class="kv"><span>Project</span><span>piopio <span style="color:var(--fg3)">· main ⌄</span></span><span>Runs on</span><span>This Mac</span></div></div>`;
+}
+const tools = () => `<div class="block"><div class="head"><b>Tools</b><span class="sp"></span><span class="ans">${chat(S) ? "2 on" : "3 on"}</span><span class="chev">▶</span></div></div>`;
+const skills = () => `<div class="block"><div class="head"><b>Skills</b><span class="sp"></span><span class="ans">4 skills</span><span class="chev">▶</span></div></div>`;
+const read = () => `<div class="block"><div class="head"><b>Read</b><span class="sp"></span><span class="ans">${chat(S) ? "6 pages · 1 file" : "9 files · 14 commands ›"}</span>${chat(S) ? '<span class="chev">▶</span>' : ""}</div></div>`;
+const changes = () => chat(S) ? "" : `<div class="block"><div class="head"><b>Changes</b><span class="sp"></span><span class="ans">2 files · +18 −6</span><span class="chev">▶</span></div></div>`;
+function plan() {
+  if (chat(S)) return "";
+  const done = S.state === "finished";
+  return `<div class="block"><div class="head"><b>Plan</b><span class="sp"></span><span class="ans">${done ? "4 of 4 · 18 min" : "2 of 4"}</span></div>
+    <div class="plan">
+      <div class="d"><span class="dot14 d"></span>Start the dev server</div>
+      <div class="d"><span class="dot14 d"></span>Find why the total is wrong</div>
+      <div class="${done ? "d" : "n"}"><span class="dot14 ${done ? "d" : "n"}"></span>Fix total() and its callers</div>
+      <div class="${done ? "d" : ""}"><span class="dot14 ${done ? "d" : ""}"></span>Check in the preview</div>
+    </div></div>`;
+}
+
+function conversation() {
+  if (chat(S)) return `<div class="user">Help me compare these three mortgage offers and the costs on top.</div>
+    <div class="grey">Thought for 6s</div>
+    <div class="sa"><span class="g run"></span><span class="t">Compare three mortgage offers</span><span class="l">Reading bankinter.es</span></div>
+    <div class="sa"><span class="g queued"></span><span class="t">Summarise the notary fees</span><span class="l">queued · starts when one finishes</span></div>
+    <div class="answer">I've started two helpers: one reads each bank's offer, the other the notary and registry fees. I'll put the three side by side when they're back.</div>`;
+  const finished = S.state === "finished";
+  return `<div class="user">The cart total is wrong when there's a discount. Fix it and check it in the preview.</div>
+    <div class="grey">Thought for 9s, ran 3 commands</div>
+    <div class="answer">The dev server is up at localhost:5173. I've asked a helper to audit the OAuth flow while I look at the cart.</div>
+    <div class="sa"><span class="g ${finished ? "done" : "run"}"></span><span class="t">Audit the OAuth flow</span><span class="l">${finished ? "done · 4m 31s · $0.06" : "Reading oauth.ts"}</span></div>
+    <div class="grey">Edited cart.ts, checkout.ts · ran npm test</div>
+    <div class="answer">${finished ? "Fixed: <code>total()</code> applied the discount after tax. Tests pass and the preview shows €42.30. I stopped the dev server." : "Found it: <code>total()</code> applies the discount after tax. I'm fixing it and its two callers now."}</div>`;
+}
+
+function render() {
+  const d = DATA[S.state];
+  const win = document.getElementById("win");
+  win.classList.toggle("closed", S.state === "closed");
+  const bg = backgroundBlock(d);
+  // Background is always the last block (BG5).
+  document.getElementById("sbody").innerHTML = [setup(), tools(), skills(), read(), changes(), plan(), bg].join("");
+  document.getElementById("conv").innerHTML = conversation();
+  document.getElementById("convTitle").textContent = chat(S) ? "Mortgage questions" : "Fix the cart total";
+  document.getElementById("convSub").textContent = chat(S) ? "" : "piopio · main";
+  document.getElementById("sideTitle").classList.toggle("cur", !chat(S));
+  document.getElementById("cost").textContent = chat(S) ? "$0.04" : S.state === "finished" ? "$0.31" : "$0.14";
+  document.getElementById("termIcon").style.display = chat(S) ? "none" : "";
+
+  // The Summary icon: on when the column shows; a count only while the column is closed and something runs.
+  const closed = S.state === "closed";
+  const n = d.running.length;
+  document.getElementById("sumIcon").classList.toggle("on", !closed);
+  const b = document.getElementById("badgeEl");
+  b.classList.toggle("hide", !(closed && n));
+  b.textContent = n;
+  document.getElementById("tipEl").classList.toggle("hide", !closed);
+  document.getElementById("tipEl").textContent = `${n} running in the background`;
+  document.getElementById("drawer").classList.toggle("show", S.drawer && !chat(S));
+
+  const caps = {
+    running: "Background is always the last block, under Plan. Hover a row for Stop; click npm run dev for its terminal tab.",
+    failed: "A command exited with 1 and the Watchdog flags a subagent (amber). Finished shows five, then “and N more”.",
+    finished: "Everything has finished: the block folds to “3 finished”, in the same place.",
+    closed: "The column is closed by default. The Summary icon carries the running count; the column doesn't open by itself.",
+    chat: "A chat has no commands: only its subagents, with no subheadings because there's one kind.",
+  };
+  document.getElementById("caption").textContent = caps[S.state];
+}
+
+function tick() {
+  const s = Math.floor((Date.now() - t0) / 1000);
+  document.querySelectorAll(".time[data-since]").forEach(el => { el.textContent = fmt(+el.dataset.since + s); });
+}
+
+function seg(id, key) {
+  document.getElementById(id).addEventListener("click", e => {
+    const v = e.target.dataset.v; if (!v) return;
+    S[key] = v;
+    if (key === "state") { S.finishedOpen = v === "failed"; S.drawer = false; }
+    [...e.currentTarget.children].forEach(c => c.classList.toggle("on", c.dataset.v === v));
+    render(); tick();
+  });
+}
+seg("state", "state");
+
+document.getElementById("sbody").addEventListener("click", e => {
+  if (e.target.closest("[data-act=fold]")) { S.finishedOpen = !S.finishedOpen; render(); tick(); return; }
+  if (e.target.closest(".stop")) { e.target.closest(".bgr").remove(); return; }
+  const r = e.target.closest(".bgr");
+  if (r && r.dataset.kind === "cmd") { S.drawer = !S.drawer; render(); tick(); }
+});
+const icon = document.getElementById("sumIcon");
+icon.addEventListener("mouseenter", () => { if (S.state === "closed") document.getElementById("tipEl").classList.remove("hide"); });
+icon.addEventListener("mouseleave", () => { if (S.state === "closed") document.getElementById("tipEl").classList.add("hide"); });
+
+render();
+// The tooltip shows only on hover once the page is drawn.
+document.getElementById("tipEl").classList.add("hide");
+setInterval(tick, 1000);
+</script>
+</body>
+</html>
