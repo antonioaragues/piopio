@@ -850,7 +850,6 @@ struct AskBox: View {
                 return
             }
             pendingChat = ref; saveHomeDraft()
-            if temporary { ThreadView.justStarted.insert(ref.id) }
             let thread = engine.thread(ref)
             await thread.open()
             if await thread.send(message, attachments: attachments.map(\.attachment)) {

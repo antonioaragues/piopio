@@ -311,8 +311,8 @@ turning it on changed 2026-11-25 to round 2's option 1)**
   every ten minutes and five seconds after the engine starts; not while it's answering. Deleted as chats are: gone,
   not in the Trash.
 - **Where it shows:** in Conversations with the others, with a timer glyph and the hours left ("23h"); its draft row
-  reads "Temporary chat". Coming back to it, a strip under the toolbar says when it goes and what it doesn't do, with
-  Keep and ×; × hides it until the next return. Keep (also in the row's menu, `sessions.keep`) makes it a normal chat,
+  reads "Temporary chat". From its first message and each time you come back to it, a strip under the toolbar says
+  when it goes and what it doesn't do, with Keep and ×; × hides it until the next return. Keep (also in the row's menu, `sessions.keep`) makes it a normal chat,
   indexed from then, with About me and earlier conversations from its next message.
 - **Not built:** Keep from Quick Chat.
 

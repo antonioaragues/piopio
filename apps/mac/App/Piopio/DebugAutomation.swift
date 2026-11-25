@@ -114,8 +114,8 @@ enum DebugAutomation {
                 NotificationCenter.default.post(name: .selectItem, object: raw)
             }
         }
-        // PIOPIO_DEMO_TEMPORARY=box|new|chat (docs/spec/14 M4): Home's box with Temporary on; the New conversation page from
-        // New Temporary Chat; or a temporary chat with one message, left and opened again (its strip).
+        // PIOPIO_DEMO_TEMPORARY=box|new|first|chat (docs/spec/14 M4): Home's box with Temporary on; the New conversation page
+        // from New Temporary Chat; a temporary chat just after its first message; or one left and opened again.
         if let what = env["PIOPIO_DEMO_TEMPORARY"] {
             Task {
                 try? await Task.sleep(for: .seconds(3))
@@ -128,6 +128,7 @@ enum DebugAutomation {
                     await thread.open()
                     _ = await thread.send("I started the new blood pressure pills on Monday and I get dizzy when I stand up. Is that normal?")
                     try? await engine.refreshCatalog()
+                    if what == "first" { NotificationCenter.default.post(name: .selectThread, object: ref.id); return }
                     NotificationCenter.default.post(name: .selectItem, object: SidebarItem.home.raw)
                     try? await Task.sleep(for: .seconds(1.5))
                     NotificationCenter.default.post(name: .selectThread, object: ref.id)
