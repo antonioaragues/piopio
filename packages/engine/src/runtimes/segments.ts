@@ -9,7 +9,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import type { AssistantItem, Attachment, ContainerRef, ModelRef, SessionEvent, Snapshot, TimelineItem } from "@piopio/protocol";
 import { agentName, isCodingAgent } from "../coding-agents.js";
-import { TimelineBuilder, toUsage, type PiMessage } from "../timeline/builder.js";
+import { TimelineBuilder, toUsage, type PiMessage } from "@piopio/runtime";
 import { sdkMessages, SdkEventMapper } from "../timeline/pi-sdk.js";
 import type { Runtime, SubmitOptions } from "./runtime.js";
 

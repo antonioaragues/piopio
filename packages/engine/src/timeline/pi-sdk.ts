@@ -1,6 +1,6 @@
 /** Maps pi-coding-agent `AgentSessionEvent`s onto the timeline builder. */
 import { sdkUser, type ContentBlock } from "../input.js";
-import { contentText, customText, type PiContentBlock, type PiMessage, type TimelineBuilder } from "./builder.js";
+import { contentText, customText, type PiContentBlock, type PiMessage, type TimelineBuilder } from "@piopio/runtime";
 
 /** A session's messages for `TimelineBuilder.reset`: each user message as its words, with its files as chips. */
 export function sdkMessages(messages: readonly PiMessage[]): PiMessage[] {

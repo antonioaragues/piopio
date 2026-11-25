@@ -4,7 +4,7 @@
  */
 import type { SessionEvent, TimelineItem } from "@piopio/protocol";
 import { expect, test } from "vitest";
-import { TimelineBuilder } from "../src/timeline/builder.js";
+import { TimelineBuilder } from "@piopio/runtime";
 import { groupSteps, StepsView } from "../src/timeline/steps.js";
 
 /** What the app does with the events it receives. */

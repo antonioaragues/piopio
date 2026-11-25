@@ -22,7 +22,7 @@ import { CloudTelegram } from "./telegram.js";
 import type { Env } from "./env.js";
 import { createCloudModels, defaultModel } from "./models.js";
 import { REGISTRY_NAME } from "./registry-do.js";
-import { TimelineBuilder } from "./timeline/builder.js";
+import { TimelineBuilder } from "@piopio/runtime";
 import { agentItem } from "./timeline/agent-items.js";
 
 export const CLOUD_VERSION = "0.0.0";

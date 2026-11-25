@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { Apps, calendarSpan, isAppFile, parseManifest, parseTable, type AppView } from "../src/apps.js";
 import { kindOf } from "../src/library.js";
-import { endDetails } from "../src/timeline/tool-details.js";
+import { endDetails } from "@piopio/runtime";
 
 const PAGE = `<div id="out"></div><script>piopio.onData((data) => { document.getElementById("out").textContent = data.expenses.length; });</script>`;
 const CSV = "date,category,amount\n2026-10-01,Food,120.5\n2026-10-03,Rent,800\n2026-11-02,Food,95\n";

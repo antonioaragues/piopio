@@ -1,10 +1,10 @@
 import { readFileSync } from "node:fs";
 import type { SessionEvent, TimelineItem } from "@piopio/protocol";
 import { describe, expect, test } from "vitest";
-import { TimelineBuilder, type PiMessage } from "../src/timeline/builder.js";
+import { TimelineBuilder, type PiMessage } from "@piopio/runtime";
 import { DurableViewMapper, messagesFromEntries } from "@piopio/runtime";
 import { SdkEventMapper } from "../src/timeline/pi-sdk.js";
-import { endDetails, startDetails } from "../src/timeline/tool-details.js";
+import { endDetails, startDetails } from "@piopio/runtime";
 
 const load = (name: string) =>
 	readFileSync(new URL(`./fixtures/${name}.jsonl`, import.meta.url), "utf8")
@@ -218,4 +218,10 @@ describe("tool images", () => {
 		const tool = b.snapshot().items.find((i) => i.kind === "tool") as Extract<TimelineItem, { kind: "tool" }>;
 		expect(tool.images).toBeUndefined();
 	});
+});
+
+test("a denied call is recognized by the words the approvals extension writes (the two packages each say them)", async () => {
+	const { DENIED_PREFIX } = await import("@piopio/pi-extensions");
+	const { DENIED_RESULT_PREFIX } = await import("@piopio/runtime");
+	expect(DENIED_RESULT_PREFIX).toBe(DENIED_PREFIX);
 });

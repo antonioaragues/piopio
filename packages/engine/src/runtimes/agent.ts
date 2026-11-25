@@ -22,7 +22,7 @@ import { AGENT_ENTRY, AgentCore, type AgentCoreOptions, alwaysLabel, modelOf, ty
 import { BOT_TOKEN } from "../channels/telegram.js";
 import { buildInput } from "../input.js";
 import { EngineError, type ModelHub } from "../models.js";
-import { emptyUsage, TimelineBuilder, toUsage, type PiMessage, type PiUsage } from "../timeline/builder.js";
+import { emptyUsage, TimelineBuilder, toUsage, type PiMessage, type PiUsage } from "@piopio/runtime";
 
 import { groupSteps, StepsView } from "../timeline/steps.js";
 import { createWebExtension, type WebOptions } from "../tools/web.js";

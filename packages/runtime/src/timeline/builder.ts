@@ -5,12 +5,14 @@
 import type { AssistantItem, AssistantPart, AttachmentInfo, BranchInfo, SessionEvent, SessionState, Snapshot, TimelineItem, ToolDetails, ToolItem, Usage, ContainerRef, UserItem } from "@piopio/protocol";
 import { describeModelError } from "./errors.js";
 import { endDetails, startDetails, type PiToolResult } from "./tool-details.js";
-import { DENIED_PREFIX } from "@piopio/pi-extensions";
-import { contentText, type PiContentBlock, type PiMessage, type PiUsage } from "@piopio/runtime";
+import { contentText, type PiContentBlock, type PiMessage, type PiUsage } from "./messages.js";
 
-// The message views and the pi-durable mapper are shared (packages/runtime/src/timeline).
-export { contentText };
-export type { PiContentBlock, PiMessage, PiUsage };
+/**
+ * How a denied tool call's result starts (the approvals extension writes it, @piopio/pi-extensions `DENIED_PREFIX`).
+ * Said again here because this package, which the cloud bundles, can't depend on that one (it brings pi's coding
+ * agent); a test in the engine keeps the two the same.
+ */
+export const DENIED_RESULT_PREFIX = "The user denied this tool call";
 
 export const emptyUsage = (): Usage => ({ inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, costUsd: 0 });
 
@@ -381,6 +383,24 @@ export class TimelineBuilder {
 		this.insert(item, beforeId, emit);
 	}
 
+	/**
+	 * An item from an agent's own entries (a note, a message it sent on its own), where its time puts it: after
+	 * everything older. It may land before newer items when a transcript is loaded.
+	 */
+	place(item: TimelineItem, emit = true): void {
+		if (this.index.has(item.id)) return;
+		const at = Date.parse(item.at);
+		const i = this.items.findIndex((x) => Date.parse(x.at) > at);
+		const before = i < 0 ? undefined : this.items[i]!.id;
+		if (i < 0) this.push(item);
+		else {
+			this.items.splice(i, 0, item);
+			this.index.clear();
+			this.items.forEach((x, n) => this.index.set(x.id, n));
+		}
+		if (emit) this.pending.push({ type: "item.added", item: structuredClone(item), ...(before ? { before } : {}) });
+	}
+
 	/** Adds an item before `beforeId`, or at the end (items that don't come from the transcript's messages). */
 	insert(item: TimelineItem, beforeId?: string, emit = true): void {
 		if (this.index.has(item.id)) return;
@@ -456,7 +476,7 @@ function nestedItems(parent: ToolItem, record: unknown): ToolItem[] {
 
 /** A failed call that the user denied, or that a stop cut short, isn't an error of the tool. */
 function failedStatus(output: string | undefined): ToolItem["status"] {
-	if (output?.startsWith(DENIED_PREFIX)) return "denied";
+	if (output?.startsWith(DENIED_RESULT_PREFIX)) return "denied";
 	if (output === "Operation aborted") return "interrupted";
 	return "error";
 }

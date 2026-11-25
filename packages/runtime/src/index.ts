@@ -19,3 +19,6 @@ export * from "./context/extension.js";
 export * from "./channels/telegram.js";
 export * from "./timeline/messages.js";
 export * from "./timeline/durable-view.js";
+export * from "./timeline/builder.js";
+export * from "./timeline/tool-details.js";
+export * from "./timeline/errors.js";

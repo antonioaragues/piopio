@@ -29,7 +29,7 @@ import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import type { CheckpointStore } from "../checkpoints.js";
 import { EngineError, type ModelHub } from "../models.js";
-import { contentText, TimelineBuilder, type PiContentBlock, type PiMessage, type ToolImageKeeper } from "../timeline/builder.js";
+import { contentText, TimelineBuilder, type PiContentBlock, type PiMessage, type ToolImageKeeper } from "@piopio/runtime";
 import { sdkMessages, SdkEventMapper } from "../timeline/pi-sdk.js";
 import { chatPromptExtension } from "../tools/chat-prompt.js";
 import { sdkAsSent, sdkContent, sdkUser, sdkWithWords, TYPED_ENTRY, type ContentBlock, type SdkInput } from "../input.js";

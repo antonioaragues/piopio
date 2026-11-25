@@ -10,7 +10,7 @@ import { dirname } from "node:path";
 import type { ApprovalMode, Attachment, AttachmentInfo, ContainerRef, ModelRef, PromptResponse, Snapshot } from "@piopio/protocol";
 import { CLAUDE_CODE, CLAUDE_CODE_NAME, type AgentMessage, type AgentPermissionMode, type AgentQuery, type AgentUserMessage, type CanUseTool, type ClaudeCodeAgent } from "../coding-agents.js";
 import { EngineError } from "../models.js";
-import { TimelineBuilder, type PiContentBlock, type PiMessage, type PiUsage, type ToolImageKeeper } from "../timeline/builder.js";
+import { TimelineBuilder, type PiContentBlock, type PiMessage, type PiUsage, type ToolImageKeeper } from "@piopio/runtime";
 import type { ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import { collectTools, PIOPIO_MCP, PIOPIO_MCP_PREFIX, piopioServer } from "./claude-code-tools.js";
 import { CLAUDE_CODE_TOOLS_OFF, claudeCodeEnv } from "./claude-code-env.js";

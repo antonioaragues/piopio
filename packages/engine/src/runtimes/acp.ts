@@ -10,7 +10,7 @@ import { dirname } from "node:path";
 import type { ApprovalMode, Attachment, AttachmentInfo, ContainerRef, ModelRef, PromptResponse, SessionEvent, Snapshot } from "@piopio/protocol";
 import { AcpConnection, CLIENT_CAPABILITIES, type AcpAgent, type ConfigOption } from "../acp.js";
 import { EngineError } from "../models.js";
-import { emptyUsage, TimelineBuilder, type PiContentBlock, type PiMessage, type ToolImageKeeper } from "../timeline/builder.js";
+import { emptyUsage, TimelineBuilder, type PiContentBlock, type PiMessage, type ToolImageKeeper } from "@piopio/runtime";
 import type { ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import { bridgeScript, type ToolServer } from "../tool-server.js";
 import { collectTools, PIOPIO_MCP, type CapturedTool } from "./claude-code-tools.js";
