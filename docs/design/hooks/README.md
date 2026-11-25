@@ -21,8 +21,12 @@
 - **Methods:** `hooks.list` (with a project's Claude Code hooks to import), `hooks.save`, `hooks.toggle`,
   `hooks.delete` (to the Trash), `hooks.try` (once, on a file the glob matches), `hooks.importClaude`.
 - **App:** Settings › Extensions › Your hooks, above Your skills; a project's hooks in its page under Settings ›
-  Approvals, with the Claude Code import offer. The sheet builds the sentence (Before / After / When Piopio finishes,
-  then edits or writes / runs a command / any tool) and has Try it.
+  Approvals, with the Claude Code import offer. The sheet is design A's sentence: its moments are chips that open
+  their choices (Before / After / When Piopio finishes; edits or writes / runs a command / uses any tool; stop it /
+  run), and what it matches and runs are fields inside the sentence that grow as you type. Under it: Every project or a
+  project, Try it (then its result in place), Show the file, Cancel and Add. The first build of the sheet was a form
+  with the sentence only as a preview, a shortcut not flagged at the time; it was rebuilt the same day to match.
+  Captures: `PIOPIO_DEMO_SKILLS=1` with `PIOPIO_DEMO_HOOK_SHEET=edit|new`.
 - **Tests** (`test/user-hooks.test.ts`): sentence and round trip, files and toggling, the Claude Code mapping, and a
   real Build session where pi loads the generated files: a force push stopped, a write logged, a failing check sent
   back exactly three times. The three templates also type-check against pi's own types.
