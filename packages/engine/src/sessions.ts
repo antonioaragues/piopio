@@ -5,7 +5,7 @@
 import { browserCaller, type BrowserCall, type BrowserSites } from "./tools/browser-tools.js";
 import type { ConnectorHub } from "./connectors/hub.js";
 import { randomUUID } from "node:crypto";
-import { cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, watch, writeFileSync, type FSWatcher } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, watch, writeFileSync, type FSWatcher, statSync, utimesSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { getAgentDir, SessionManager } from "@earendil-works/pi-coding-agent";
@@ -668,6 +668,37 @@ export class Sessions {
 		this.search.setTitle(ref.id, entry.title, entry.updatedAt);
 		this.save();
 		this.changed(entry);
+		this.nameInPi(entry);
+	}
+
+	/**
+	 * A conversation's title also goes into its pi session, as pi's own name entry: pi's CLI then lists it by that name,
+	 * and `syncFolder`, which takes a name from the file, never brings an older one back. Only where pi keeps the
+	 * session (not an agent's, nor one a coding agent runs).
+	 */
+	private nameInPi(entry: CatalogEntry): void {
+		if (entry.ref.kind === "agent" || (entry.model && isCodingAgent(entry.model.provider))) return;
+		const title = entry.title;
+		const open = this.open.get(entry.ref.id);
+		if (open) {
+			void open.then((runtime) => {
+				const inner = innerOf(runtime);
+				if (inner instanceof BuildRuntime) inner.name(title);
+			}, () => undefined);
+			return;
+		}
+		const file = entry.sessionFile;
+		if (!file || !existsSync(file)) return;
+		try {
+			const manager = SessionManager.open(file);
+			if (manager.getSessionName() === title) return;
+			// A name isn't activity: the file keeps its date, so the conversation stays where it was in every list.
+			const { atimeMs, mtimeMs } = statSync(file);
+			manager.appendSessionInfo(title);
+			utimesSync(file, atimeMs / 1000, mtimeMs / 1000);
+		} catch (error) {
+			this.log(`Couldn't name the pi session of “${title}”: ${(error as Error).message}`);
+		}
 	}
 
 	/** Full-text search across sessions, with the catalog's titles and refs. */
@@ -3044,6 +3075,7 @@ export class Sessions {
 		if (firstInput && (entry.title === "New thread" || entry.title === "New session")) {
 			entry.title = titleFrom(firstInput) || entry.title;
 			this.search.setTitle(ref.id, entry.title, entry.updatedAt);
+			this.nameInPi(entry);
 		}
 		this.save();
 		this.changed(entry);

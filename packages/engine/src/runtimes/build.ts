@@ -177,6 +177,20 @@ export class BuildRuntime implements Runtime {
 		return this.session.sessionFile;
 	}
 
+	private pendingName?: string;
+
+	/**
+	 * The conversation's title, kept in pi's session too (its own name entry, what `/name` writes), so pi's CLI shows
+	 * the same one and a later sync from the file agrees. While the agent works it waits for the run to end: the entry
+	 * goes at the tip of the session.
+	 */
+	name(title: string): void {
+		this.pendingName = undefined;
+		if (!title || this.session.sessionName === title) return;
+		if (this.session.isStreaming) this.pendingName = title;
+		else this.session.setSessionName(title);
+	}
+
 	static async open(o: BuildOpenOptions): Promise<BuildRuntime> {
 		await o.hub.ensureCredential(o.model.provider);
 		const modelRuntime = await o.hub.buildRuntime();
@@ -607,6 +621,7 @@ export class BuildRuntime implements Runtime {
 				this.builder.setState(this.context());
 			}
 			if (event.type === "message_end" || event.type === "tool_execution_end" || event.type === "agent_settled") this.syncUsage();
+			if (event.type === "agent_settled" && this.pendingName) this.name(this.pendingName);
 			// A new message of yours may stand beside an earlier version (an edit, a retry): refresh the switchers once
 			// pi has written it (after its message_end).
 			if ((event.type === "message_start" && (event as { message?: PiMessage }).message?.role !== "user") || event.type === "agent_settled") {
