@@ -37,6 +37,8 @@ export class SearchIndex {
 	}
 
 	setDestination(id: string, ref: ContainerRef, title: string, at: string): void {
+		// A conversation kept out of the index leaves no trace in it, its title included (a temporary chat's is its first message).
+		if (this.skips(id)) return;
 		this.db.prepare("INSERT OR REPLACE INTO destinations VALUES (?, ?, ?, ?)").run(id, JSON.stringify(ref), title, at);
 	}
 	destination(id: string): { ref: ContainerRef; title: string; at: string } | undefined {

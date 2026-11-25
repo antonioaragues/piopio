@@ -290,7 +290,10 @@ describe("earlier conversations as background", () => {
 	test("a temporary chat isn't searched, looks in no other, and goes after 24 hours unless kept (14 M4)", async () => {
 		const a = await start();
 		type Entry = { temporary?: { expiresAt: string }; cwd?: string };
-		const sessions = a.engine.sessions as unknown as { entries: Map<string, Entry>; historyBridge(e: unknown): unknown; find(q: string): Promise<{ ref: { id: string } }[]>; expireTemporary(now?: number): Promise<number> };
+		const sessions = a.engine.sessions as unknown as { entries: Map<string, Entry>; historyBridge(e: unknown): unknown; find(q: string): Promise<{ ref: { id: string } }[]>; expireTemporary(now?: number): Promise<number>; search: { destination(id: string): unknown } };
+		// Re-audit 2026-11-25 V6: its title (its first message) stays out of the ledger and search, and backups leave it out.
+		const ledgerTitle = (id: string) => (a.engine.hub.ledger as unknown as { db: { prepare(sql: string): { get(...v: unknown[]): { title: string } | undefined } } }).db.prepare("SELECT title FROM ledger_sources WHERE key = ?").get(id)?.title;
+		const exclusions = () => JSON.parse(readFileSync(join(a.home, "backup-exclude.json"), "utf8")) as { conversations: string[]; paths: string[] };
 		await expect(a.client.call("sessions.create", { kind: "build", cwd: a.home, temporary: true })).rejects.toMatchObject({ data: { code: "INVALID" } });
 		const temp = (await a.client.call("sessions.create", { kind: "thread", temporary: true })).ref;
 		await a.client.call("sessions.subscribe", { ref: temp });
@@ -304,17 +307,31 @@ describe("earlier conversations as background", () => {
 		// Not in search, and it can't look in others.
 		expect((await sessions.find("sink")).map((h) => h.ref.id)).not.toContain(temp.id);
 		expect(sessions.historyBridge(sessions.entries.get(temp.id))).toBeUndefined();
+		expect(sessions.search.destination(temp.id)).toBeUndefined();
+		expect(ledgerTitle(temp.id)).toBe("Temporary chat");
+		expect(exclusions().conversations).toEqual([temp.id]);
+		expect(exclusions().paths).toEqual(expect.arrayContaining([sessions.entries.get(temp.id)!.cwd]));
 		// Kept: a normal chat, found from then on.
 		await a.client.call("sessions.keep", { ref: temp });
 		expect(sessions.entries.get(temp.id)!.temporary).toBeUndefined();
 		expect((await sessions.find("sink")).map((h) => h.ref.id)).toContain(temp.id);
+		expect(ledgerTitle(temp.id)).not.toBe("Temporary chat");
+		expect(exclusions()).toEqual({ conversations: [], paths: [] });
 		// Another one, past its time: deleted with its folder, not to the Trash.
 		const old = (await a.client.call("sessions.create", { kind: "thread", temporary: true })).ref;
 		const entry = sessions.entries.get(old.id)!;
+		await a.client.call("sessions.subscribe", { ref: old });
+		await a.client.call("sessions.submit", { ref: old, input: { text: "Paint the door blue." } });
+		await idle(a, old);
+		const listedPaths = exclusions().paths;
+		expect(listedPaths.filter((path) => existsSync(path)).length).toBeGreaterThan(1);
 		expect(await sessions.expireTemporary()).toBe(0);
 		expect(await sessions.expireTemporary(Date.parse(entry.temporary!.expiresAt) + 1)).toBe(1);
 		expect(sessions.entries.has(old.id)).toBe(false);
 		expect(existsSync(entry.cwd!)).toBe(false);
+		// What backups left out is exactly what deleting it removed: the two lists can't drift apart.
+		expect(listedPaths.filter((path) => existsSync(path))).toEqual([]);
+		expect(exclusions().conversations).toEqual([]);
 	});
 
 	test("Settings › Memory turns past conversations off: no tools, but @conversation still works", async () => {

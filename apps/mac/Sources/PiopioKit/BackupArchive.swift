@@ -16,7 +16,22 @@ public enum BackupArchive {
         public var errorDescription: String? { switch self { case .invalid(let message): message } }
     }
     private static var fm: FileManager { FileManager() }
-    private static let excluded: Set<String> = ["engine.sock", "engine.token", "engine.lock", "logs", "search.db", "search.db-wal", "search.db-shm"]
+    /// Never copied: what the engine makes again (its token, socket and lock, logs, the search index), the key that
+    /// signs webhook trigger URLs (whoever has it can fire your automations: a restore makes a new one, so those URLs
+    /// change), and the engine's list of what a backup leaves out (applied below, not kept).
+    private static let excluded: Set<String> = ["engine.sock", "engine.token", "engine.lock", "logs", "search.db", "search.db-wal", "search.db-shm", "hooks.key", exclusionsFile]
+    /// Written by the engine with its catalog (Sessions.saveBackupExclusions): temporary chats, meant to be gone in a
+    /// day (docs/spec/14 M4). Their catalog entries are left out of the backup, and every file the engine would delete
+    /// with them. The engine decides what's theirs, so this file and the engine's delete can't disagree.
+    static let exclusionsFile = "backup-exclude.json"
+    struct Exclusions: Decodable { var conversations: [String]; var paths: [String] }
+    private static func exclusions(_ home: URL) throws -> Exclusions {
+        let file = home.appending(path: exclusionsFile)
+        guard fm.fileExists(atPath: file.path) else { return Exclusions(conversations: [], paths: []) }
+        // Unreadable, it fails the backup rather than keeping what the user was told would be gone.
+        do { return try JSONDecoder().decode(Exclusions.self, from: Data(contentsOf: file)) } catch { throw Failure.invalid("Piopio's list of what a backup leaves out can't be read (\(exclusionsFile)). Open Piopio once to write it again, then back up.") }
+    }
+    private static func entryId(_ entry: [String: Any]) -> String? { (entry["ref"] as? [String: Any])?["id"] as? String }
     private static func directory(_ url: URL) throws {
         try fm.createDirectory(at: url, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
     }
@@ -71,11 +86,24 @@ public enum BackupArchive {
         defer { try? fm.removeItem(at: stage) }
         try directory(stage)
         let data = stage.appending(path: "data")
+        let leftOut = try exclusions(home)
         try copyTree(home, data, top: true)
+        for path in leftOut.paths {
+            let file = URL(fileURLWithPath: path)
+            guard inside(file, home) else { continue }
+            let relative = String(file.standardizedFileURL.path.dropFirst(home.standardizedFileURL.path.count + 1))
+            let staged = data.appending(path: relative)
+            if fm.fileExists(atPath: staged.path) { try fm.removeItem(at: staged) }
+        }
         var manifest = Manifest(version: 1, createdAt: .now, originalHome: home.path, files: [:], relocated: [:])
         let catalog = home.appending(path: "sessions.json")
         if fm.fileExists(atPath: catalog.path) {
-            let entries = try JSONSerialization.jsonObject(with: Data(contentsOf: catalog)) as? [[String: Any]] ?? []
+            let all = try JSONSerialization.jsonObject(with: Data(contentsOf: catalog)) as? [[String: Any]] ?? []
+            let gone = Set(leftOut.conversations)
+            let entries = all.filter { entryId($0).map { !gone.contains($0) } ?? true }
+            if entries.count != all.count {
+                try JSONSerialization.data(withJSONObject: entries, options: [.prettyPrinted, .sortedKeys]).write(to: data.appending(path: "sessions.json"), options: .atomic)
+            }
             for (index, entry) in entries.enumerated() {
                 for key in ["agentFolder", "sessionFile", "file"] {
                     guard let path = entry[key] as? String else { continue }

@@ -113,6 +113,11 @@ export class UsageLedger {
 
 	// ── Writing ──
 
+	/** Renames a container's sources ("<id>", and an agent's "<id>/<conversation>"), as a deleted one keeps its name. */
+	retitle(container: string, title: string): void {
+		this.db.prepare("UPDATE ledger_sources SET title = ? WHERE key = ? OR key LIKE ?").run(title, container, `${container}/%`);
+	}
+
 	/** Records every finished answer in `items` that reports usage. Returns how many were new. */
 	recordItems(source: LedgerSource, items: readonly TimelineItem[], fromFile = false): number {
 		if (!fromFile) this.recordActivity(source, items);

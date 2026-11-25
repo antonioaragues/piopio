@@ -77,6 +77,8 @@ import { Agents } from "./sessions/agents.js";
 
 /** A temporary chat lasts this long after its last message (docs/spec/14 M4). */
 export const TEMPORARY_MS = 24 * 60 * 60_000;
+/** What the usage ledger calls a temporary chat. */
+export const TEMPORARY_TITLE = "Temporary chat";
 
 /** Where Build sessions get their default approval mode and "always allow" rules (the projects). */
 export type ApprovalPolicy = {
@@ -268,8 +270,13 @@ export class Sessions {
 				// A side conversation or subagent the engine stopped in the middle of (a quit, a crash) won't go on by itself.
 				if (e.side && (e.side.state === "working" || e.side.state === "queued")) e.side.state = "stopped";
 				if (e.parent?.state === "working" || e.parent?.state === "queued") e.parent.state = "stopped";
-				// Temporary chats (docs/spec/14 M4) stay out of search and the Library.
-				if (e.temporary) this.search.skip(e.ref.id, true);
+				// Temporary chats (docs/spec/14 M4) stay out of search and the Library, and their titles out of the ledger and
+				// search's list of conversations, where engines before 2026-11-25 put them (re-audit V6).
+				if (e.temporary) {
+					this.search.skip(e.ref.id, true);
+					this.search.deleteContainer(e.ref.id);
+					this.hub.ledger.retitle(e.ref.id, TEMPORARY_TITLE);
+				}
 				this.entries.set(e.ref.id, e);
 			}
 		}
@@ -917,7 +924,9 @@ export class Sessions {
 			key,
 			container,
 			ref,
-			title: entry.title,
+			// A temporary chat's title is made from its first message: the ledger, kept for good, has its spend only
+			// (docs/spec/14 M4; re-audit 2026-11-25 V6). Keeping the chat names it on its next record.
+			title: own.temporary || root.temporary ? TEMPORARY_TITLE : entry.title,
 			sourceKind: root.ref.kind === "build" || root.helper ? "build" : own.ref.kind,
 			...(project ? { project } : {}),
 			...(agent ? { agent } : {}),
@@ -1121,7 +1130,8 @@ export class Sessions {
 		if (entry.ref.kind === "thread") {
 			// A chat's files are Piopio's own (chatsDir, scratchDir): they go, as a chat's history always did.
 			if (mine(entry.sessionFile)) rmSync(entry.sessionFile, { force: true });
-			if (entry.cwd && resolve(entry.cwd).startsWith(`${resolve(this.paths.scratchDir)}/`)) rmSync(entry.cwd, { recursive: true, force: true });
+			const folder = this.chatFolder(entry);
+			if (folder) rmSync(folder, { recursive: true, force: true });
 		} else if (mine(entry.sessionFile) && existsSync(entry.sessionFile)) moveToTrash(entry.sessionFile, this.piOverrides.trashDir ?? join(homedir(), ".Trash"));
 		if (entry.ref.kind === "agent") {
 			this.agentHost?.memory.builtin.dropBanks(`${entry.ref.id}/`);
@@ -2230,8 +2240,37 @@ export class Sessions {
 
 	private save(): void {
 		writeFileAtomic(this.paths.catalogIndex, JSON.stringify([...this.entries.values()], null, "\t"));
+		this.saveBackupExclusions();
+	}
+
+	/** A chat's own folder in Piopio's data (its scratch folder), which goes with it; undefined for any other. */
+	private chatFolder(entry: CatalogEntry): string | undefined {
+		return entry.ref.kind === "thread" && entry.cwd && resolve(entry.cwd).startsWith(`${resolve(this.paths.scratchDir)}/`) ? entry.cwd : undefined;
+	}
+
+	/**
+	 * What a backup leaves out (apps/mac BackupArchive, docs/backup.md): temporary chats, which are meant to be gone in a
+	 * day (docs/spec/14 M4; re-audit 2026-11-25 V6). Their catalog entries, and every file of theirs `delete` removes:
+	 * their history files, their folder and their attachments. Written with the catalog, so the list is never older
+	 * than it; the backup runs with the engine stopped.
+	 */
+	private lastExclusions = "";
+	private saveBackupExclusions(): void {
+		const temporary = [...this.entries.values()].filter((e) => e.temporary);
+		const paths = temporary.flatMap((e) => [
+			...historyFiles(e).flatMap((f) => [f, `${f}-wal`, `${f}-shm`]),
+			...(this.chatFolder(e) ? [this.chatFolder(e)!] : []),
+			attachmentsDir(this.paths.home, e.ref.id),
+		]);
+		const text = `${JSON.stringify({ conversations: temporary.map((e) => e.ref.id), paths }, null, "\t")}\n`;
+		if (text === this.lastExclusions) return;
+		writeFileAtomic(join(this.paths.home, BACKUP_EXCLUDE), text);
+		this.lastExclusions = text;
 	}
 }
+
+/** Beside the catalog: what a backup leaves out (Sessions.saveBackupExclusions). */
+export const BACKUP_EXCLUDE = "backup-exclude.json";
 
 /** Every file a conversation's history reads. */
 function historyFiles(e: CatalogEntry): string[] {

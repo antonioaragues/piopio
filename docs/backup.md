@@ -11,7 +11,11 @@ history. A referenced missing file or symbolic link causes a visible error. The 
 links into other folders. Complete engine data is copied, including any engine-managed isolated working copies.
 
 Excluded: engine authentication tokens/sockets/locks, logs, rebuildable search indexes, macOS Keychain secrets,
-external source project folders and remote memory services. Provider/connector metadata may be restored, but
+external source project folders and remote memory services. Temporary chats are left out too, with their files: they
+are meant to be gone within a day (the engine lists what is theirs in `backup-exclude.json`; the backup fails if that
+list can't be read). The key that signs webhook trigger URLs (`hooks.key`) is not copied, since whoever has it can fire
+your automations: after a restore Piopio makes a new one, so copy each webhook trigger's new URL into the service that
+calls it. Provider/connector metadata may be restored, but
 sign-ins may need reconnecting on another Mac. MCP/provider settings or conversation files may contain secrets
 entered by the user: the backup itself is personal, sensitive data, even though Keychain secrets are not exported.
 The development-only custom engine executable preference is not restored.
