@@ -212,7 +212,7 @@ struct TemporaryStrip: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: "timer").font(.system(size: 13)).foregroundStyle(Color.dsTemporary)
+            Image.temporaryChat(size: 13).foregroundStyle(Color.dsTemporary)
             (Text("Temporary chat. ").fontWeight(.semibold).foregroundStyle(Color.dsFg)
              + Text("Deleted in \(hours) hour\(hours == 1 ? "" : "s") unless you keep it. Other conversations can't search it, and nothing from it goes to About me.").foregroundStyle(Color.dsFg2))
                 .font(.system(size: 12))

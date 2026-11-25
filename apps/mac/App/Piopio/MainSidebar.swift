@@ -647,9 +647,9 @@ struct MainSidebar: View {
         let selected = item == .chat(thread.ref.id)
         return Button { item = .chat(thread.ref.id) } label: {
             HStack(spacing: 10) {
-                // A temporary chat (docs/spec/14 M4): the timer and the hours it has left.
+                // A temporary chat (docs/spec/14 M4): the dashed bubble and the hours it has left.
                 if thread.temporary != nil {
-                    Image(systemName: "timer").font(.system(size: 13)).foregroundStyle(Color.dsTemporary).frame(width: 18)
+                    Image.temporaryChat(size: 14).foregroundStyle(Color.dsTemporary).frame(width: 18)
                 } else { RowGlyph(symbol: "bubble.left") }
                 Text(thread.title).font(.system(size: 13)).foregroundStyle(Color.dsFg).lineLimit(1)
                 Spacer(minLength: 4)
@@ -688,7 +688,7 @@ struct MainSidebar: View {
             Button { item = .start(kind) } label: {
                 HStack(spacing: 10) {
                     if kind == .chat, drafts.temporaryChat {
-                        Image(systemName: "timer").font(.system(size: 13)).foregroundStyle(Color.dsTemporary).frame(width: 18)
+                        Image.temporaryChat(size: 14).foregroundStyle(Color.dsTemporary).frame(width: 18)
                     } else { RowGlyph(symbol: kind.symbol) }
                     Text(drafts.title(kind)).font(.system(size: 13)).foregroundStyle(Color.dsFg2).lineLimit(1)
                     Spacer(minLength: 4)
@@ -769,7 +769,7 @@ struct ComposeButton: View {
                 }
                 .keyboardShortcut("n")
                 Button { startTemporaryChat() } label: {
-                    Label("New Temporary Chat", systemImage: "timer")
+                    Label { Text("New Temporary Chat") } icon: { Image.temporaryChat(size: 13) }
                 }
                 .keyboardShortcut("n", modifiers: [.command, .control])
                 if areas.showsAgents {

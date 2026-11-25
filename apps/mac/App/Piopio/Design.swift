@@ -33,13 +33,88 @@ extension Color {
     static let dsAccentSoft = Color(nsColor: DS.accentSoft)
     static let dsAccentLine = Color(nsColor: DS.accentLine)
     static let dsYolkSoft = Color(nsColor: DS.yolkSoft)
-    /// Temporary chats (docs/spec/14 M4): a muted ochre for the timer, its chip and the strip, never for anything else.
+    /// Temporary chats (docs/spec/14 M4): a muted ochre for its dashed bubble, the corner button and the strip, never for anything else.
     static let dsTemporary = Color(nsColor: NSColor(name: nil) { a in
         a.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? NSColor(srgbRed: 0.85, green: 0.77, blue: 0.54, alpha: 1) : NSColor(srgbRed: 0.48, green: 0.42, blue: 0.23, alpha: 1)
     })
     static let dsTemporaryTint = Color(nsColor: NSColor(name: nil) { a in
         a.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? NSColor(srgbRed: 0.85, green: 0.77, blue: 0.54, alpha: 0.12) : NSColor(srgbRed: 0.965, green: 0.937, blue: 0.851, alpha: 1)
     })
+}
+
+/// A temporary chat's mark (docs/spec/14 M4): the conversation bubble (SF Symbols' `bubble.left`) drawn dashed, as SF
+/// Symbols has no dashed bubble. A template image the size `bubble.left` is at that point size, so it drops in where
+/// the symbol goes, takes `foregroundStyle`, and shows in menus.
+extension Image {
+    @MainActor static func temporaryChat(size: CGFloat, weight: Font.Weight = .regular) -> Image {
+        Image(nsImage: TemporaryBubble.image(size: size, weight: weight)).renderingMode(.template)
+    }
+}
+
+enum TemporaryBubble {
+    @MainActor private static var cache: [String: NSImage] = [:]
+
+    @MainActor static func image(size: CGFloat, weight: Font.Weight) -> NSImage {
+        let key = "\(size)-\(weight)"
+        if let hit = cache[key] { return hit }
+        // bubble.left's geometry at 200 pt (its image is 266 × 237), on the stroke's centre line.
+        let s = size / 200
+        let line = 20 * s * (weight == .light ? 0.78 : weight == .medium ? 1.15 : weight == .semibold ? 1.3 : 1)
+        let image = NSImage(size: NSSize(width: 266 * s, height: 237 * s), flipped: true) { _ in
+            let p = NSBezierPath()
+            let (l, r, t, b, k): (CGFloat, CGFloat, CGFloat, CGFloat, CGFloat) = (40, 228, 32, 150, 32)
+            // From the tail's tip, so a dash always wraps it.
+            p.move(to: NSPoint(x: 90, y: 198))
+            p.line(to: NSPoint(x: 86, y: b))
+            p.line(to: NSPoint(x: l + k, y: b))
+            p.appendArc(withCenter: NSPoint(x: l + k, y: b - k), radius: k, startAngle: 90, endAngle: 180)
+            p.line(to: NSPoint(x: l, y: t + k))
+            p.appendArc(withCenter: NSPoint(x: l + k, y: t + k), radius: k, startAngle: 180, endAngle: 270)
+            p.line(to: NSPoint(x: r - k, y: t))
+            p.appendArc(withCenter: NSPoint(x: r - k, y: t + k), radius: k, startAngle: 270, endAngle: 0)
+            p.line(to: NSPoint(x: r, y: b - k))
+            p.appendArc(withCenter: NSPoint(x: r - k, y: b - k), radius: k, startAngle: 0, endAngle: 90)
+            p.line(to: NSPoint(x: 128, y: b))
+            p.close()
+            p.transform(using: AffineTransform(scaleByX: s, byY: s))
+            // Dashes like SF Symbols' own dashed shapes (rectangle.dashed): corners whole, short gaps mid-edge, and the
+            // tail one V from where it leaves the bubble. Gaps' centres along the outline from the tip, at 200 pt.
+            let gaps: [CGFloat] = [55, 139, 247, 309, 417, 510, 560].map { $0 * s }
+            let gap = line * 0.9, total = Self.length(of: p)
+            var dashes: [CGFloat] = [], from: CGFloat = -line / 2
+            for g in gaps {
+                dashes += [g - gap / 2 - from - line, gap + line]
+                from = g + gap / 2
+            }
+            dashes.append(total - from)
+            p.setLineDash(dashes, count: dashes.count, phase: 0)
+            p.lineWidth = line
+            p.lineCapStyle = .round
+            p.lineJoinStyle = .round
+            NSColor.black.setStroke()
+            p.stroke()
+            return true
+        }
+        image.isTemplate = true
+        image.accessibilityDescription = "Temporary chat"
+        cache[key] = image
+        return image
+    }
+
+    private static func length(of path: NSBezierPath) -> CGFloat {
+        let flat = path.flattened
+        var total: CGFloat = 0, start = NSPoint.zero, last = NSPoint.zero
+        var pts = [NSPoint](repeating: .zero, count: 3)
+        for i in 0..<flat.elementCount {
+            switch flat.element(at: i, associatedPoints: &pts) {
+            case .moveTo: start = pts[0]; last = pts[0]
+            case .lineTo: total += hypot(pts[0].x - last.x, pts[0].y - last.y); last = pts[0]
+            case .closePath: total += hypot(start.x - last.x, start.y - last.y); last = start
+            default: break
+            }
+        }
+        return total
+    }
 }
 
 /// The app icon's chick, cropped round (docs/design v2 · brand moments), with an optional yolkSoft ring.

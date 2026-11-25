@@ -579,7 +579,7 @@ struct AskBox: View {
             }
             // Before Return: where it goes, and whether Piopio may change anything (18 §4). Nothing without a folder.
             if temporary, target == .chat {
-                Label { Text("Temporary · ").foregroundStyle(Color.dsFg) + Text(temporaryLine) } icon: { Image(systemName: "timer").foregroundStyle(Color.dsTemporary) }
+                Label { Text("Temporary · ").foregroundStyle(Color.dsFg) + Text(temporaryLine) } icon: { Image.temporaryChat(size: 12).foregroundStyle(Color.dsTemporary) }
                     .font(.system(size: 12)).foregroundStyle(Color.dsFg2)
                     .padding(.top, 10).padding(.leading, 6)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1046,8 +1046,7 @@ struct TemporaryCornerButton: View {
 
     var body: some View {
         Button { on.toggle(); NotificationCenter.default.post(name: .focusHome, object: nil) } label: {
-            Image(systemName: "timer")
-                .font(.system(size: 14, weight: on ? .medium : .regular))
+            Image.temporaryChat(size: 14, weight: on ? .medium : .regular)
                 .foregroundStyle(on ? Color.dsTemporary : hovering ? Color.dsFg : Color.dsFg2)
                 .frame(width: 28, height: 28)
                 .background(on ? Color.dsTemporaryTint : hovering ? Color.dsChip : .clear, in: RoundedRectangle(cornerRadius: DS.Radius.selector, style: .continuous))

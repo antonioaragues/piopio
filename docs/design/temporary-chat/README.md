@@ -8,6 +8,7 @@
    them and went back to round 1's chip in the box; on 2026-11-25 they switched to option 1, the corner button, as the
    pattern people know from other chat apps.**
 
-As built: [spec 14 §8](../../spec/14-memory.md). Different from the mockup: the sidebar uses SF Symbols' `timer`
-instead of a dashed bubble (there's no dashed bubble symbol), and so does the corner button; New Temporary Chat is
-⌃⌘N (⇧⌘N is New Project), and the corner's tooltip says so.
+As built: [spec 14 §8](../../spec/14-memory.md). Its mark is the mockup's dashed bubble: SF Symbols has none, so
+the app draws `bubble.left` dashed (`Image.temporaryChat` in Design.swift), used in the sidebar, the corner button, the
+New conversation page's mark, the strip and the menus. (From 2026-11-24 to 11-25 it was SF Symbols' `timer`.) New
+Temporary Chat is ⌃⌘N (⇧⌘N is New Project), and the corner's tooltip says so.

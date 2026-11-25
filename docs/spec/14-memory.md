@@ -298,10 +298,14 @@ added, after Q1:
 
 **The temporary chat (built 2026-11-24, design A of [docs/design/temporary-chat](../design/temporary-chat/Options.html);
 turning it on changed 2026-11-25 to round 2's option 1)**
-- **Turning it on:** a timer button in the page's top-right corner, on Home and on the New conversation page, the
+- **Its mark:** the conversation bubble, dashed (SF Symbols' `bubble.left`, drawn dashed by the app as SF Symbols has
+  no dashed bubble), in the ochre kept for temporary chats. It's on the corner button, the New conversation page's
+  mark, the line under the box, the sidebar row, the strip and New Temporary Chat in the menus. *(Until 2026-11-25 it
+  was a timer.)*
+- **Turning it on:** a button in the page's top-right corner, on Home and on the New conversation page, the
   place people know it from in other chat apps. It shows when there's no project (a temporary chat is a chat; a
   project's conversations aren't). Grey while off; tinted while on, when the New conversation page's mark turns into
-  the timer and its heading reads "Temporary chat". On, the line under the box says what it means, including that the
+  the temporary mark and its heading reads "Temporary chat". On, the line under the box says what it means, including that the
   model's provider still receives what you send. It's for that one chat: the next starts normal. New Temporary Chat
   (⌃⌘N, ⇧⌘N being New Project) is in the File menu and the sidebar's + menu. *(Until 2026-11-25 this was a chip in
   the box.)*
@@ -310,7 +314,7 @@ turning it on changed 2026-11-25 to round 2's option 1)**
 - **How long:** deleted 24 hours after your last message (`temporary.expiresAt`, pushed on each message), checked
   every ten minutes and five seconds after the engine starts; not while it's answering. Deleted as chats are: gone,
   not in the Trash.
-- **Where it shows:** in Conversations with the others, with a timer glyph and the hours left ("23h"); its draft row
+- **Where it shows:** in Conversations with the others, with its mark and the hours left ("23h"); its draft row
   reads "Temporary chat". From its first message and each time you come back to it, a strip under the toolbar says
   when it goes and what it doesn't do, with Keep and ×; × hides it until the next return. Keep (also in the row's menu, `sessions.keep`) makes it a normal chat,
   indexed from then, with About me and earlier conversations from its next message.
