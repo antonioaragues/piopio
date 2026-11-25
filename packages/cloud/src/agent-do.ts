@@ -671,15 +671,8 @@ export class AgentDO extends DurableObject<Env> {
 		if (await core.intercept(contactId, text)) return undefined;
 		await core.beforeTurn(contactId, Number(target.session) as never, text).catch(() => undefined);
 		const receipt = await this.harness.submit(text, { session: target.session, ...options });
-		// The answer comes later; keeping it doesn't hold the reply. An eviction before then loses only this memory.
-		this.ctx.waitUntil(
-			(async () => {
-				const result = await this.harness.wait(receipt.operationId, { session: target.session });
-				await core.afterTurn(contactId, text, result.text ?? "", { ref: `${this.agentId}:${target.conversation}` });
-				await core.safety.checkBudget().catch(() => undefined);
-				await this.wake.rearm();
-			})().catch(() => undefined),
-		);
+		// What follows the answer (its memory, the budget) is the agent's own durable task (@piopio/runtime, `turnEnded`):
+		// it runs after the reply and an eviction doesn't lose it.
 		return { operationId: receipt.operationId, session: target.session };
 	}
 

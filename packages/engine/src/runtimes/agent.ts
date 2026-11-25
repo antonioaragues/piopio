@@ -215,6 +215,19 @@ export class AgentRuntime implements Runtime {
 				options.onActivity?.();
 				options.onOutbound?.(to, text, from);
 			},
+			// A person's turn ended (the core's durable follow-up, runtime/src/agents/core.ts `turnEnded`): the answer goes
+			// back where the message came from, with the visuals it showed (docs/spec/25 §8).
+			onTurn: (turn) => {
+				// Only the last version of each: one a later call replaced isn't sent (docs/spec/25 §3.4).
+				const replaced = replacedVisuals(turn.items);
+				const visuals = turn.items.flatMap((i) => {
+					if (i.kind !== "tool" || i.tool !== "show_visual" || i.status === "error" || replaced.has(i.id)) return [];
+					const a = (i.args ?? {}) as { title?: unknown; html?: unknown };
+					return typeof a.html === "string" && a.html.trim() ? [{ title: typeof a.title === "string" && a.title.trim() ? a.title.trim() : "Visual", html: a.html }] : [];
+				});
+				options.onAnswer?.(turn.contactId, turn.said, turn.answer, visuals);
+				options.onActivity?.();
+			},
 			onApproval: (approval) => {
 				for (const view of runtime?.live ?? []) if (view.conversationId === approval.conversationId) view.approval(approval);
 				options.onApproval?.(approval);
@@ -495,8 +508,6 @@ export class AgentView implements Runtime {
 	private readonly steps = new StepsView((items) => this.group(items), () => this.items());
 	private watch?: ConversationWatch;
 	private readonly queueTexts = new Map<string, string>();
-	/** What the person said, for each turn still running (retained with the answer when it ends). */
-	private readonly pending: { said: string; itemCount: number }[] = [];
 	/** Messages the agent sent on its own (entry id → text and where from); shown as its, not the person's. */
 	private readonly outbound = new Map<string, { text: string; from: string; suggestions?: string[] }>();
 	/** This conversation's approvals, result cards (by tool call) and undo records. */
@@ -545,11 +556,10 @@ export class AgentView implements Runtime {
 		view.builder.flush();
 		watch.start(async (call) => {
 			if (call.kind !== "value") return;
-			const { appended, runEnded } = view.mapper.apply(call.value as unknown as DurableView);
+			const { appended } = view.mapper.apply(call.value as unknown as DurableView);
 			for (const entry of appended) view.noteEntry(entry as RawEntry, true);
 			view.syncUsage(call.value as unknown as DurableView);
 			view.emit(view.builder.flush());
-			if (runEnded) void view.turnEnded();
 		});
 		return view;
 	}
@@ -787,26 +797,6 @@ export class AgentView implements Runtime {
 		this.emit(this.builder.flush());
 	}
 
-	/** A turn ended: retain what was said and the answer (in the background; failures only lose that memory). */
-	private async turnEnded(): Promise<void> {
-		const turn = this.pending.shift();
-		if (!turn || !this.contactId) return;
-		const items = this.builder.snapshot().items.slice(turn.itemCount);
-		const answer = [...items].reverse().find((i) => i.kind === "assistant" && i.parts.some((p) => p.type === "text" && p.text.trim()));
-		const text = answer?.kind === "assistant" ? answer.parts.filter((p) => p.type === "text").map((p) => p.text).join("") : "";
-		// Only the last version of each: one a later call replaced isn't sent (docs/spec/25 §3.4).
-		const replaced = replacedVisuals(items);
-		const visuals = items.flatMap((i) => {
-			if (i.kind !== "tool" || i.tool !== "show_visual" || i.status === "error" || replaced.has(i.id)) return [];
-			const a = (i.args ?? {}) as { title?: unknown; html?: unknown };
-			return typeof a.html === "string" && a.html.trim() ? [{ title: typeof a.title === "string" && a.title.trim() ? a.title.trim() : "Visual", html: a.html }] : [];
-		});
-		this.agent.answered(this.contactId, turn.said, text, visuals);
-		await this.agent.core.afterTurn(this.contactId, turn.said, text, { ref: `person:${this.contactId}`, ...(answer ? { itemId: answer.id } : {}) }).catch(() => undefined);
-		await this.agent.core.safety.checkBudget().catch(() => undefined);
-		this.agent.activity();
-	}
-
 	snapshot(): Snapshot {
 		return { ...this.builder.snapshot(), items: this.group(this.items()) };
 	}
@@ -845,7 +835,6 @@ export class AgentView implements Runtime {
 				ctx,
 			);
 			this.queueTexts.set(String(submission.id), text);
-			this.pending.push({ said: text, itemCount: this.builder.snapshot().items.length });
 			this.mapper.refreshQueue();
 			this.emit(this.builder.flush());
 		} catch (error) {

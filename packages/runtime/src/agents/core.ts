@@ -7,11 +7,16 @@
  */
 import type { Context } from "@earendil-works/chord/context";
 import { Type } from "typebox";
-import { configure, defineDoc, defineExtension, defineTool, GenerationTask, hook, section, ToolTask, type ConversationId, type Extension, type Harness, type JsonObject } from "@earendil-works/pi-durable";
+import { configure, defineDoc, defineExtension, defineTask, defineTool, GenerationTask, hook, section, ToolTask, type ConversationId, type Extension, type Harness, type JsonObject } from "@earendil-works/pi-durable";
 import type { MemoryProvider, MemoryRecord } from "../memory/provider.js";
 import type { AgentDefinition, Contact } from "./definition.js";
 import { OUT_ENTRY, Proactivity, type AutomationsBridge, type ProactiveState, type Reminder, type RunRecord, type Watch } from "./proactive.js";
 import { defineSettledTask, type WatchKind } from "./settled.js";
+import { RECALL_ENTRY } from "./entries.js";
+import type { TimelineItem } from "@piopio/protocol";
+import { TimelineBuilder } from "../timeline/builder.js";
+import { messagesFromEntries, type Entry } from "../timeline/durable-view.js";
+import { contentText, type PiContentBlock } from "../timeline/messages.js";
 import { ApprovalDecided, Safety, type Approval, type ResultCard, type SafetyState, type UndoRecord } from "./safety.js";
 import { describeChange, learnFacts, unlearn, type Complete, type LearnedChange } from "../memory/learn.js";
 import { APPLE_TOOLS, AppUnavailable, appleTools, type AppToolResult } from "./apple.js";
@@ -23,6 +28,8 @@ import { filesSection, fileTools, type AgentFilesBridge } from "./files.js";
 type AgentState = ProactiveState & SafetyState & PeerState & {
 	/** contact id → conversation id. */
 	people: Record<string, string>;
+	/** conversation id → the answer (its entry id) of the last turn whose end was handled (`turnEnded`). */
+	turnsDone?: Record<string, number>;
 	/** conversation id → its pinned ("standing") memory, which the system section shows. What a message recalls goes in
 	 * the conversation, just before it (`RECALL_ENTRY`). */
 	recalled: Record<string, string>;
@@ -32,7 +39,7 @@ type AgentState = ProactiveState & SafetyState & PeerState & {
  * The memory recalled for the message that follows, as an entry of its own: the model sees it, the transcript doesn't.
  * Recalled into the system prompt instead, it changed the prompt on nearly every message (docs/spec/38 R3).
  */
-export const RECALL_ENTRY = "piopio.recall";
+export { RECALL_ENTRY } from "./entries.js";
 
 export const AgentStateDoc = defineDoc<AgentState>({ kind: "piopio.agent-state", version: 1, scope: "session", initial: () => ({ people: {}, recalled: {} }), checkpointWhen: () => false });
 
@@ -70,6 +77,11 @@ export function modelOf(id: string): { provider: string; modelId: string } {
 	return colon > 0 ? { provider: id.slice(0, colon), modelId: id.slice(colon + 1) } : { provider: "openrouter", modelId: id };
 }
 
+/** How a person's turn ended. `items`: the turn as a timeline (what was said, the steps, the answer), for the host to read visuals from. */
+export type TurnEnd = { contactId: string; conversationId: string; said: string; answer: string; answerId?: string; items: TimelineItem[] };
+/** One run of a person's conversation, by its entries (pi-durable's `RunSummary`). */
+type TurnInput = { conversationId: string; first: number; answer: number; last: number };
+
 export type AgentCoreOptions = {
 	harness: Harness;
 	definition: () => AgentDefinition;
@@ -103,6 +115,11 @@ export type AgentCoreOptions = {
 	learn?: Complete;
 	/** How long a conversation stays quiet before what was said is learned from (default 90 s; tests shorten it). */
 	learnQuietMs?: number;
+	/**
+	 * A person's turn ended with an answer: the host delivers it where the message came from (a channel) and shows the
+	 * activity. Called once per turn, also for one whose end a restart cut (it may then come late).
+	 */
+	onTurn?: (turn: TurnEnd) => void | Promise<void>;
 	/** Facts were learned, or a learning step failed (tests wait for it). */
 	onLearned?: (bank: string, changes: LearnedChange[]) => void;
 	/** This agent's paid requests outside the harness in a month (web search, utility model), for its budget. */
@@ -205,6 +222,7 @@ export class AgentCore {
 	readonly proactive: Proactivity;
 	readonly safety: Safety;
 	private readonly settledTask: ReturnType<typeof defineSettledTask>;
+	private readonly turnTask;
 	/** Tools that kept failing the same way this turn (context/failures.ts). */
 	readonly failures = new FailureGuard();
 	readonly peers: Peers;
@@ -217,6 +235,20 @@ export class AgentCore {
 		const now = () => (options.now?.() ?? new Date()).getTime();
 		const read = async () => ({ people: {}, recalled: {}, ...((await harness.snapshot(AgentStateDoc, context)) ?? {}) }) as AgentState;
 		const write = (change: (state: AgentState) => void) => harness.commit(async (tx) => change((await tx.doc(AgentStateDoc)) as never), context);
+		// What follows a person's turn (below, `turnEnded`), as a durable task of its own: pi-durable's `afterRun` hook
+		// starts it in the background, so the conversation is free as soon as it answered, and a restart doesn't lose it.
+		this.turnTask = defineTask<TurnInput, { phase: "run" }, null>({
+			name: "piopio.turn-end",
+			version: 1,
+			initial: () => ({ phase: "run" }),
+			phases: {
+				run: async (task, runtime, taskContext) => {
+					await this.turnEnded(task.input).catch(() => undefined);
+					await runtime.commit(() => ({ status: "terminal", outcome: { status: "completed", result: null } }), taskContext);
+				},
+			},
+			abort: async (_task, runtime, taskContext) => runtime.commit(() => ({ status: "terminal", outcome: { status: "aborted" } }), taskContext),
+		});
 		// Runs and messages from other agents: submitted and followed to their end by a durable task (settled.ts).
 		this.settledTask = defineSettledTask((kind, ref, status) => (kind === "run" ? this.proactive.settled(ref, status) : this.peers.answered(ref)));
 		const submitWatched = (conversationId: ConversationId, kind: WatchKind, ref: string, draft: object, change: (state: AgentState) => void) =>
@@ -597,6 +629,45 @@ export class AgentCore {
 		return (await this.options.harness.conversation(id, this.options.context))!;
 	}
 
+	/**
+	 * A person's turn ended (its `turnTask`): the host gets the answer to deliver, what was said and answered goes to
+	 * memory, and the budget is checked. Once per turn: a task run again after a crash finds it done.
+	 */
+	private async turnEnded(input: TurnInput): Promise<void> {
+		const { harness, context } = this.options;
+		const contact = await this.contactOf(input.conversationId);
+		if (!contact) return;
+		const done = (await harness.snapshot(AgentStateDoc, context))?.turnsDone?.[input.conversationId] ?? -1;
+		if (done >= input.answer) return;
+		const conversation = await harness.conversation(Number(input.conversationId) as never, context);
+		if (!conversation) return;
+		const page = await conversation.entries({ minEntryId: input.first as never, maxEntryId: input.last as never, order: "ascending" }, 1000, undefined, context);
+		const entries = page.items as unknown as Entry[];
+		// What the person said: their messages in this run (one, or more when they wrote while it worked).
+		const said = entries
+			.flatMap((e) => {
+				const m = e.model?.[0];
+				if (m?.role !== "user" || (e.kind !== "pi.user" && e.kind !== "piopio.user")) return [];
+				const typed = e.kind === "piopio.user" ? (e.data as { text?: unknown } | undefined)?.text : undefined;
+				return [typeof typed === "string" ? typed : contentText(m.content as string | PiContentBlock[])];
+			})
+			.join("\n");
+		// The turn as a timeline, as a chat shows it: the answer is its last one with words.
+		const builder = new TimelineBuilder({ kind: "agent", id: this.def.id });
+		const { messages, ids } = messagesFromEntries(entries);
+		builder.reset(messages, (i) => ids[i]!, false);
+		const items = [...builder.currentItems];
+		const last = [...items].reverse().find((i) => i.kind === "assistant" && i.parts.some((p) => p.type === "text" && p.text.trim()));
+		const answer = last?.kind === "assistant" ? last.parts.filter((p) => p.type === "text").map((p) => p.text).join("") : "";
+		await Promise.resolve(this.options.onTurn?.({ contactId: contact.id, conversationId: input.conversationId, said, answer, ...(last ? { answerId: last.id } : {}), items })).catch(() => undefined);
+		await this.afterTurn(contact.id, said, answer, { ref: `person:${contact.id}`, ...(last ? { itemId: last.id } : {}) }).catch(() => undefined);
+		await this.safety.checkBudget().catch(() => undefined);
+		await harness.commit(async (tx) => {
+			const doc = await tx.doc(AgentStateDoc);
+			doc.turnsDone = { ...(doc.turnsDone ?? {}), [input.conversationId]: input.answer };
+		}, context);
+	}
+
 	/** After a turn: the message and the answer go to the person's partition (ME2a). Never delays the reply. */
 	async afterTurn(contactId: string, said: string, answer: string, source: { ref: string; itemId?: string }): Promise<void> {
 		const contact = this.contact(contactId);
@@ -802,7 +873,7 @@ export class AgentCore {
 		return defineExtension({
 			name: "piopio-agent",
 			tools: [remember, recall, forget, ...files.all, setUp, askOwner, p.send, p.schedule, p.list, p.cancel, p.watch, p.automate, p.listAutomations, p.changeAutomation, p.cancelAutomation, ...this.apple, this.peers.tools.ask, this.peers.tools.tell],
-			tasks: [this.proactive.scheduleTask, this.proactive.outboxTask, this.settledTask],
+			tasks: [this.proactive.scheduleTask, this.proactive.outboxTask, this.settledTask, this.turnTask],
 			// Approvals, the pause and the budget apply to every tool call (06 §9).
 			hooks: [
 				hook(ToolTask, {
@@ -828,6 +899,16 @@ export class AgentCore {
 						core.failures.request(String(api.conversationId), request.messages as never[]);
 						const messages = dropEarlierReasoning(guardMessages(request.messages as never[], core.proactive.tz));
 						return messages === (request.messages as unknown) ? undefined : { messages };
+					},
+					// A person's turn answered: what follows it runs as a background task (`turnTask`), so nothing here
+					// keeps the conversation busy. Runs and other agents' messages have their own follow-up (settled.ts).
+					afterRun: async (run, api) => {
+						if (!(await core.contactOf(api.conversationId))) return undefined;
+						const input: TurnInput = { conversationId: String(api.conversationId), first: Number(run.first), answer: Number(run.answer), last: Number(run.last) };
+						await core.options.harness
+							.commit(async (tx) => void (await tx.createTask(core.turnTask, input, { ownership: { kind: "conversation" }, conversationId: api.conversationId, background: true })), core.options.context)
+							.catch(() => undefined);
+						return undefined;
 					},
 				}),
 			],

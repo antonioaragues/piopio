@@ -7,7 +7,7 @@
  * One mapper for every host of an agent (the Mac's engine, the cloud's Durable Object): each brings its own builder,
  * which this only knows as `MapperBuilder`, and says what it draws itself (`ownItem`).
  */
-import { RECALL_ENTRY } from "../agents/core.js";
+import { RECALL_ENTRY } from "../agents/entries.js";
 import { contentText, type PiContentBlock, type PiMessage } from "./messages.js";
 
 const USER_ENTRY = "piopio.user";

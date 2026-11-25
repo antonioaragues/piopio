@@ -68,6 +68,8 @@ export class AgentHost {
 			context,
 			onRun: onChange,
 			onStatus: onChange,
+			// After a person's turn: the object's next wake may have changed.
+			onTurn: () => onChange(),
 			...(onOutbound ? { onOutbound: (to: string, text: string) => onOutbound(to, text) } : {}),
 		});
 	}
