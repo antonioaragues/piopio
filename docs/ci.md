@@ -5,10 +5,11 @@
 | Job | Runs on | What it proves |
 |---|---|---|
 | `typescript` | GitHub's `ubuntu-latest` | The engine, runtime, extensions and cloud packages build, type-check and pass their scripted tests. No provider keys, no macOS. |
+| `typescript-macos` | your own Mac (self-hosted) | The same TypeScript suites on macOS, where the tests that skip themselves elsewhere run: the sandbox (Seatbelt), the network filter in Build, ports. |
 | `swift` | your own Mac (self-hosted) | `scripts/swift-test.sh`: `PiopioKit` and `PiopioTranscript` tests. |
 | `app` | your own Mac (self-hosted) | `scripts/build-app.sh`: engine bundle, generated Xcode project and `Piopio.app`, left in `apps/mac/App/build/Build/Products/Debug/` on that Mac. |
 
-**Pull requests never run the Swift jobs.** A pull request is unreviewed code, and the runner is the personal Mac. They only run on `main` (pushes) and on a manual dispatch — including a dispatch on `main`, which is the way to try a new runner without enabling anything.
+**Pull requests never run the jobs on your Mac** (`typescript-macos`, `swift`, `app`). A pull request is unreviewed code, and the runner is the personal Mac. They only run on `main` (pushes) and on a manual dispatch — including a dispatch on `main`, which is the way to try a new runner without enabling anything.
 
 ## Why the Swift jobs are off by default
 

@@ -24,6 +24,23 @@ jobs:
       - run: corepack pnpm typecheck
       - run: corepack pnpm test
 
+  # The TypeScript suites again, on macOS: the sandbox (Seatbelt), the network filter in Build, ports and the other tests
+  # that skip themselves elsewhere only run here (re-audit 2026-11-25: they never ran in CI). The whole suite, so a new
+  # macOS-only test is covered without a change here. Same runner and rules as the Swift jobs below.
+  typescript-macos:
+    if: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.PIOPIO_SWIFT_CI == 'true') || github.event_name == 'workflow_dispatch' }}
+    runs-on: [self-hosted, macOS, ARM64, piopio-macos-27]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+      - run: corepack enable
+      - run: corepack pnpm install --frozen-lockfile
+      - run: corepack pnpm build
+      - run: corepack pnpm test
+
   # The Swift side needs Xcode 27 on macOS 27, so it runs on the author's own Mac (docs/ci.md).
   # Off by default: without a runner registered with these labels the job would queue forever.
   # `workflow_dispatch` runs it anyway, to try the setup without enabling it for every push.
