@@ -2383,7 +2383,7 @@ public struct ActivityRow: Decodable, Sendable, Hashable, Identifiable {
     public var previous: Double?; public var unit: Unit?; public var detail: String?
 }
 public struct ActivityGroup: Decodable, Sendable, Hashable, Identifiable { public var id: String; public var title: String; public var rows: [ActivityRow] }
-public struct ActivityDay: Decodable, Sendable, Hashable { public var day: String; public var count: Double }
+public struct ActivityDay: Decodable, Sendable, Hashable { public var day: String; public var count: Double; public init(day: String, count: Double) { self.day = day; self.count = count } }
 public struct ActivityParams: Encodable, Sendable { public var range: SpendRange; public init(range: SpendRange) { self.range = range } }
 public struct ActivityResult: Decodable, Sendable {
     public var range: SpendRange; public var from: String; public var to: String

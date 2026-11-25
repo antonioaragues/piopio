@@ -203,6 +203,12 @@ private struct ApprovalsPane: View {
             }
         }
         .task { if engine.settings == nil { await engine.loadSettings() } }
+        .task {
+            // PIOPIO_DEMO_APPROVALS_PROJECT=<name>: captures open that project's page.
+            guard let name = ProcessInfo.processInfo.environment["PIOPIO_DEMO_APPROVALS_PROJECT"] else { return }
+            if engine.projects.isEmpty { await engine.loadProjects() }
+            open = engine.projects.first { $0.name == name }?.id
+        }
     }
 
     private var shown: [ProjectInfo] {

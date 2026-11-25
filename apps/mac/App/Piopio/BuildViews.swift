@@ -295,8 +295,14 @@ struct BuildSessionView: View {
         // Its subagents' rows say where each stands, and which one is open beside (docs/spec/37).
         .onChange(of: subagents, initial: true) { _, now in
             session.document.setSubagents(now, open: subagentShown)
-            // PIOPIO_DEMO_SUBAGENT=<n>: captures open the nth subagent beside once there is one.
-            if let n = ProcessInfo.processInfo.environment["PIOPIO_DEMO_SUBAGENT"].flatMap(Int.init), n > 0, subagentOpen == nil, now.count >= n { openSubagent(now[n - 1].id) }
+            // PIOPIO_DEMO_SUBAGENT=<n>: captures open the nth subagent beside once there is one (once only);
+            // PIOPIO_DEMO_SUBAGENT_FILE=<path>: then open that file, which takes the column back.
+            let env = ProcessInfo.processInfo.environment
+            if !Self.demoSubagentOpened, let n = env["PIOPIO_DEMO_SUBAGENT"].flatMap(Int.init), n > 0, now.count >= n {
+                Self.demoSubagentOpened = true
+                openSubagent(now[n - 1].id)
+                if let file = env["PIOPIO_DEMO_SUBAGENT_FILE"] { Task { try? await Task.sleep(for: .seconds(3)); openFile(file) } }
+            }
         }
         .onChange(of: subagentShown) { _, open in session.document.setSubagents(subagents, open: open) }
         .onReceive(NotificationCenter.default.publisher(for: .createPullRequest)) { note in
@@ -399,6 +405,8 @@ struct BuildSessionView: View {
         }
         withAnimation(.easeOut(duration: 0.15)) { subagentOpen = subagentOpen == id ? nil : id }
     }
+
+    @MainActor private static var demoSubagentOpened = false
 
     private static func inspectorChoice(_ id: String) -> Bool? {
         (UserDefaults.standard.dictionary(forKey: "inspectorOpen") as? [String: Bool])?[id]

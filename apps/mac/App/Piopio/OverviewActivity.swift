@@ -247,6 +247,14 @@ struct OverviewActivityTab: View {
         guard let client = engine.client else { error = "Connect to the engine to see what Piopio did."; return }
         do {
             activity = try await client.call("stats.activity", ActivityParams(range: range), as: ActivityResult.self)
+            // PIOPIO_DEMO_YEAR=1: captures show a full year of days (the grid at its widest).
+            if ProcessInfo.processInfo.environment["PIOPIO_DEMO_YEAR"] == "1" {
+                let calendar = Calendar.current, today = calendar.startOfDay(for: Date())
+                activity?.year = (0..<366).reversed().map { back in
+                    let day = calendar.date(byAdding: .day, value: -back, to: today) ?? today
+                    return ActivityDay(day: OverviewPage.dayKey(day), count: Double((back * 7919) % 13))
+                }
+            }
             error = nil
         } catch {
             if activity == nil { self.error = error.localizedDescription }
