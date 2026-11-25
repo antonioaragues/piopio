@@ -133,7 +133,7 @@ struct AboutMeEditor: View {
                     .padding(.horizontal, 14).frame(minHeight: 46)
                     RowDivider(inset: 14)
                 }
-                ToggleRow(title: "Learn from conversations", subtitle: "New facts show in the chat with Undo", isOn: Binding(get: { settings?.aboutMe.capture ?? false }, set: { v in
+                ToggleRow(title: "Suggest facts from chats", subtitle: "Each one waits for you to save it", isOn: Binding(get: { settings?.aboutMe.capture ?? false }, set: { v in
                     Task { await engine.updateSettings(SettingsPatch(aboutMe: .init(capture: v))) }
                 }))
                 HStack {

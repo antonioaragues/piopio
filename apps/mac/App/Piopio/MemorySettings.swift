@@ -153,7 +153,7 @@ struct MemoryPane: View {
         let agents = banks?.agents ?? []
         CardTitle("Learning")
         ListCard {
-            ToggleRow(title: "Chats add to About me", subtitle: "When you mention something lasting about yourself", last: agents.isEmpty, isOn: Binding(get: { settings?.aboutMe.capture ?? false }, set: { v in
+            ToggleRow(title: "Chats suggest facts", subtitle: "When you mention something lasting. Nothing is saved until you save it", last: agents.isEmpty, isOn: Binding(get: { settings?.aboutMe.capture ?? false }, set: { v in
                 Task { await engine.updateSettings(SettingsPatch(aboutMe: .init(capture: v))) }
             }))
             ForEach(Array(agents.enumerated()), id: \.element.id) { i, agent in

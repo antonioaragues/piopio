@@ -2157,6 +2157,7 @@ export class Sessions {
 	}
 
 	private aboutMeSdk?: ReturnType<typeof aboutMeSdkExtension>;
+	private aboutMeReadOnly?: ReturnType<typeof aboutMeSdkExtension>;
 	private expiry: ReturnType<typeof setInterval>;
 	/** Piopio's tools by address, for coding agents that take MCP servers that way (docs/spec/31 CA8). */
 	private toolServer?: ToolServer;
@@ -2225,14 +2226,15 @@ export class Sessions {
 		const { visuals } = this.visualsFor(entry.ref);
 		const history = this.historyBridge(entry);
 		const off = () => [...(entry.toolsOff ?? []), ...(entry.ref.kind === "thread" ? (this.chat?.mcpOff() ?? []).map((name) => `mcp:${name}`) : [])];
-		this.aboutMeSdk ??= this.chat ? aboutMeSdkExtension(this.chat.aboutMe, this.chat.settings) : undefined;
+		// A coding agent has no /learn card: it reads About me and proposes nothing (about-me.ts).
+		this.aboutMeReadOnly ??= this.chat ? aboutMeSdkExtension(this.chat.aboutMe, this.chat.settings, { proposes: false }) : undefined;
 		return [
 			...(browser ? [codingBrowserExtension(browser, (callId, signal) => (request) => decision(request, callId, signal), browserPreview)] : []),
 			...(this.connectors ? [codingConnectorsExtension(this.connectors, (callId, signal) => (request) => decision(request, callId, signal, request.canAllowAlways), (id) => off().includes(`connector:${id}`))] : []),
 			codingVisualsExtension(visuals),
 			...(this.appsFor(entry).apps ? [codingAppsExtension(this.apps!, this.appsFor(entry).apps!.where, (callId, signal) => (request) => decision(request, callId, signal, false))] : []),
 			...(history && !history.off() ? [historySdkExtension(history)] : []),
-			...(entry.ref.kind === "thread" && this.aboutMeSdk && !entry.temporary ? [this.aboutMeSdk] : []),
+			...(entry.ref.kind === "thread" && this.aboutMeReadOnly && !entry.temporary ? [this.aboutMeReadOnly] : []),
 			// A review on a coding agent reports its findings the same way (05-build "Review by an agent").
 			...(entry.reviewFor ? [codeReviewExtension(this.reviewBridge(entry))] : []),
 		];

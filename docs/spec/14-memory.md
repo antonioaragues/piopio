@@ -24,7 +24,7 @@ milestones. Nothing in the product changes yet.
 
 | Where | What it remembers | How | Gaps |
 |---|---|---|---|
-| **About me** (07-shared §5) | Facts about you, by section | Records in the `about-me` bank, tagged with the section. `remember_about_me` when learning is on. Shown to chats and notebooks, and to agents with `aboutMe.inAgents`. Settings › Chat. *(Since M3, built 2026-10-25, §7: About me's editor is in Settings › Memory.)* | Learned facts pile up: nothing notices that a new fact replaces an old one. |
+| **About me** (07-shared §5) | Facts about you, by section | Records in the `about-me` bank, tagged with the section. Written by you: in its editor, or by saving a fact a chat proposed on its /learn card (Chats suggest facts). Shown to chats and notebooks, and to agents with `aboutMe.inAgents`. Settings › Chat. *(Since M3, built 2026-10-25, §7: About me's editor is in Settings › Memory.)* | Learned facts pile up: nothing notices that a new fact replaces an old one. |
 | **Threads** | Nothing but About me | — | No recall across chats ("what did we decide last week about…"). |
 | **Notebooks** (04-chat §3.2) | A shared memory doc | Markdown with sections, revisions and authors, proposals from topics, the first 4,000 characters in each prompt. `search_space` is a substring/FTS search over topic histories. | Search misses paraphrases. |
 | **Agents** (06-agents §8) | Messages and facts per person | A bank per partition (`owner`, `shared`, `contacts/<id>`). Before each turn, `recall` puts up to 1,200 tokens in the system section. After it, the person's message and the answer are retained word for word. Tools: `remember`, `recall`, `forget`. The provider is chosen per agent (`memory.provider`). *(Since 38 R3, built 2026-11-22: what a message recalls is written as an entry of its own just before it, not in the system section; the `agent-memory` section keeps only how to use memory and the pinned records.)* | Banks grow with raw messages. A fact that changed is found next to its old value. No semantic recall. |
@@ -244,7 +244,10 @@ before Past chats (M4) starts indexing more of your data.
 - **History:** replaced facts keep `replacedBy` and `endedAt`, and recall leaves them out.
 - **Visible:** each step writes a `piopio.learned` entry, shown as a memory card ("Learned", "Updated memory: … (was: …)") with Undo, which restores what it replaced.
 - **Per agent:** `memory.learn` (default on).
-- **About me** keeps `remember_about_me` with add and remove; automatic extraction there is not built.
+- **About me** has no tool that writes it (2026-11-25, re-audit V8: it's in every conversation's prompt, so a page or
+  a message the model read could have put instructions there through `remember_about_me`). With Chats suggest facts on,
+  a chat proposes facts with `propose_learnings` on its /learn card (§9), written only when you save them. Agents and
+  chats on a coding agent, which have no card, read About me and add nothing (chosen 2026-11-25).
 
 **M3 · Settings › Memory**
 - **The section:** after Chat ([screenshots](../design/memory/screenshots)).

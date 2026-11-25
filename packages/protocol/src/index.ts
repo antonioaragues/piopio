@@ -578,7 +578,7 @@ export const EngineSettings = Type.Object({
 	aboutMe: Type.Object({
 		/** Shown to the agents. */
 		enabled: Type.Boolean(),
-		/** The agents may add facts (`remember_about_me`). */
+		/** Chats propose facts on the /learn card (`propose_learnings`); nothing is saved until you save it. Agents never add. */
 		capture: Type.Boolean(),
 		inThreads: Type.Boolean(),
 		/** Agents read it too (Settings › Chat, "Share with … + Agents"). */
