@@ -58,9 +58,12 @@ test("a store that doesn't parse is moved aside, and the next save doesn't write
 	const aside = readdirSync(dir).find((f) => f.startsWith("browser-sites.json.corrupt-"));
 	expect(aside && readFileSync(join(dir, aside), "utf8")).toBe('{"allowed": ["example.com"');
 
-	const endpoints = join(dir, "endpoints.json");
-	writeFileSync(endpoints, "null");
-	expect(new Endpoints(endpoints).list()).toEqual([]);
-	expect(readdirSync(dir).some((f) => f.startsWith("endpoints.json.corrupt-"))).toBe(true);
+	// pi's models.json is yours and pi's too: one with an error isn't moved aside, and isn't written over.
+	const models = join(dir, "models.json");
+	writeFileSync(models, '{"providers": {');
+	const endpoints = new Endpoints(models);
+	expect(endpoints.list()).toEqual([]);
+	expect(() => endpoints.write("custom-x", { baseUrl: "http://localhost:1/v1", api: "openai-completions", models: [] })).toThrow("left as it is");
+	expect(readFileSync(models, "utf8")).toBe('{"providers": {');
 	expect(statSync(join(dir, aside!)).size).toBeGreaterThan(0);
 });

@@ -11,7 +11,7 @@ import { fauxAssistantMessage, fauxProvider, fauxText, fauxThinking, fauxToolCal
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import type { ModelInfo, ModelRef, ProviderInfo } from "@piopio/protocol";
 import { credentialSecret, KeychainCredentialStore } from "./credentials.js";
-import { checkEndpoint, type Endpoint, endpointBilling, endpointConfig, type EndpointFormat, Endpoints, isEmbedding, isLocal } from "./endpoints.js";
+import { checkEndpoint, type Endpoint, endpointBilling, type KnownModel, type EndpointFormat, Endpoints, isEmbedding, isLocal, ModelsFileError, piProvider } from "./endpoints.js";
 import { billingLabel, connectMethods, FEATURED, SUBSCRIPTION_PROVIDERS, KEY_PAGES, maskKey, openaiApiAlias, POPULAR, PREFERRED_MODEL, providerFamilies, providerKind, UTILITY_MODEL, verifyKey } from "./providers.js";
 import type { SecretBroker } from "./secrets.js";
 import { withClaudeFlags } from "./openrouter-flags.js";
@@ -87,7 +87,8 @@ export class ModelHub {
 		this.acpAgents = fakeAcp || !options.faux ? ACP_AGENTS.map((spec) => new AcpAgent(spec, { fake: fakeAcp })) : [];
 		this.agentsOn ||= fakeAcp;
 		this.credentials = new KeychainCredentialStore(secrets, options.home ? join(options.home, "credentials.json") : undefined);
-		this.endpoints = new Endpoints(options.home ? join(options.home, "endpoints.json") : undefined);
+		// Custom endpoints are providers in pi's own models.json (endpoints.ts).
+		this.endpoints = new Endpoints(this.modelsPath);
 		this.extraCosts = new ExtraCosts(options.home ? join(options.home, "extra-costs.db") : undefined);
 		this.ledger = new UsageLedger(options.home ? join(options.home, "usage.db") : undefined);
 		this.ledger.planOf = (provider, usd) => this.billedToPlan(provider, usd);
@@ -111,7 +112,7 @@ export class ModelHub {
 		this.starting ??= ModelRuntime.create({
 			credentials: this.credentials,
 			// pi's own models.json, as pi's CLI reads it. Without pi's folder (unit tests): none.
-			modelsPath: piAgentDir ? join(piAgentDir, "models.json") : null,
+			modelsPath: this.modelsPath ?? null,
 			// The refreshed catalogs are kept in Piopio's folder, not beside pi's: OpenRouter's is narrowed to the key in
 			// the Keychain, which pi's CLI may not have.
 			...(piAgentDir && home ? { modelsStorePath: join(home, "models-store.json") } : {}),
@@ -125,9 +126,8 @@ export class ModelHub {
 			const openrouter = rt.getProvider("openrouter");
 			if (openrouter && !this.faux) rt.registerNativeProvider(withClaudeFlags(openrouter, this.anthropicCatalog(rt)));
 			if (this.faux) rt.registerNativeProvider(this.faux.provider);
-			for (const e of this.endpoints.list()) rt.registerProvider(e.id, endpointConfig(e) as never);
 			this.runtime = rt;
-			return rt;
+			return this.migrateEndpoints(rt).then(() => rt);
 		});
 		return this.starting;
 	}
@@ -137,6 +137,27 @@ export class ModelHub {
 		const anthropic = rt.getProvider("anthropic");
 		if (!anthropic) return [];
 		return (anthropic.getAllModels?.call(anthropic) ?? anthropic.getModels()) as readonly Model<Api>[];
+	}
+
+	/** pi's `models.json`: in pi's folder, so pi's CLI reads the same one; in the engine's home when there's none. */
+	private get modelsPath(): string | undefined {
+		const dir = this.options.piAgentDir ?? this.options.home;
+		return dir ? join(dir, "models.json") : undefined;
+	}
+
+	/** pi reads `models.json` again (after Piopio wrote an endpoint there). Nothing goes over the network. */
+	private async reloadModelsFile(rt: ModelRuntime): Promise<void> {
+		await rt.refresh({ allowNetwork: false }).catch(() => undefined);
+	}
+
+	/** Endpoints kept in Piopio's own `endpoints.json` until 2026-11-25 move into pi's `models.json`, once. */
+	private async migrateEndpoints(rt: ModelRuntime): Promise<void> {
+		if (!this.options.home) return;
+		try {
+			if (this.endpoints.migrate(join(this.options.home, "endpoints.json"), this.knownModels(rt)) > 0) await this.reloadModelsFile(rt);
+		} catch {
+			// models.json has an error: the old file stays, and they move at the next start after it's fixed.
+		}
 	}
 
 	private catalogRestored = false;
@@ -245,9 +266,7 @@ export class ModelHub {
 			const endpoint = this.endpoints.get(id);
 			const hidden = new Set(this.hidden[id] ?? []);
 			if (endpoint && provider) {
-				// Context sizes the server didn't report stay unknown (0) in the app (unless you set one).
-				const known = new Map(endpoint.models.map((m) => [m.id, m.contextWindow ?? endpoint.contextWindow ?? 0]));
-				out.push(...rt.getModels(id).filter((m) => !hidden.has(m.id)).map((m) => ({ ...toInfo(m, endpoint.name, endpointBilling(endpoint)), contextWindow: known.get(m.id) ?? 0 })));
+				out.push(...rt.getModels(id).filter((m) => !hidden.has(m.id)).map((m) => toInfo(m, endpoint.name, endpointBilling(endpoint))));
 				continue;
 			}
 			const credential = await this.credentials.read(id).catch(() => undefined);
@@ -325,14 +344,13 @@ export class ModelHub {
 				billing: endpointBilling(e),
 				...(problem ? { message: problem } : {}),
 				featured: false,
-				models: e.models.filter((m) => !m.embedding).length,
+				models: e.models.length,
 				endpoint: {
 					baseUrl: e.baseUrl,
 					local: isLocal(e.baseUrl),
 					keyless: e.keyless,
-					format: e.format ?? "openai",
+					format: e.format,
 					...(e.headers ? { headers: e.headers } : {}),
-					...(e.contextWindow ? { contextWindow: e.contextWindow } : {}),
 				},
 				kind: "custom",
 				...(!e.keyless ? await this.credentials.read(e.id).then((c) => (c?.type === "api_key" && c.key ? { keyHint: maskKey(c.key) } : {})).catch(() => ({})) : {}),
@@ -343,6 +361,28 @@ export class ModelHub {
 		return out;
 	}
 
+	/**
+	 * What pi's catalog knows about a model id, for a custom endpoint serving it under the same name: the id as it is
+	 * (`anthropic/claude-sonnet-5`, as OpenRouter and gateways name it) or its last part (`claude-sonnet-5`), without
+	 * regard to case. Several providers list the same model: it reads images or thinks only when all of them say so,
+	 * and its limits are the smallest. Other endpoints and the scripted model don't count.
+	 */
+	private knownModels(rt: ModelRuntime): (id: string) => KnownModel | undefined {
+		const last = (id: string) => id.toLowerCase().split("/").at(-1)!;
+		const byName = new Map<string, KnownModel>();
+		for (const p of rt.getProviders()) {
+			if (this.endpoints.get(p.id) || p.id === this.faux?.provider.id) continue;
+			for (const m of p.getModels()) {
+				const one: KnownModel = { vision: m.input.includes("image"), reasoning: Boolean(m.reasoning), contextWindow: m.contextWindow, maxTokens: m.maxTokens };
+				for (const key of new Set([m.id.toLowerCase(), last(m.id)])) {
+					const seen = byName.get(key);
+					byName.set(key, seen ? { vision: seen.vision && one.vision, reasoning: seen.reasoning && one.reasoning, contextWindow: Math.min(seen.contextWindow, one.contextWindow), maxTokens: Math.min(seen.maxTokens, one.maxTokens) } : one);
+				}
+			}
+		}
+		return (id) => byName.get(id.toLowerCase()) ?? byName.get(last(id));
+	}
+
 	/** Checks a server; on an update without a key, with the stored one. */
 	async checkEndpoint(baseUrl: string, key?: string, id?: string, options: { format?: EndpointFormat; headers?: Record<string, string> } = {}) {
 		const stored = !key && id ? await this.credentials.read(id).catch(() => undefined) : undefined;
@@ -351,8 +391,8 @@ export class ModelHub {
 	}
 
 	/**
-	 * Adds or updates a custom endpoint: checks it, stores its key in the Keychain, registers it with pi.
-	 * `force` saves it even when the server doesn't answer now (its models come with the next refresh).
+	 * Adds or updates a custom endpoint: checks it, stores its key in the Keychain, and writes its provider entry in
+	 * pi's `models.json`, which pi then reads again. `force` saves it even when the server doesn't answer now.
 	 */
 	async saveEndpoint(input: { id?: string; name: string; baseUrl: string; key?: string; format?: EndpointFormat; headers?: Record<string, string>; contextWindow?: number; hidden?: string[]; force?: boolean }): Promise<Endpoint> {
 		const rt = await this.ready();
@@ -364,28 +404,34 @@ export class ModelHub {
 		const check = await this.checkEndpoint(input.baseUrl, key, previous?.id, { format, ...(headers ? { headers } : {}) });
 		if (!check.ok && !input.force) throw new EngineError("INVALID", check.message);
 		const id = previous?.id ?? this.endpoints.newId(input.name);
-		if (key) await this.credentials.modify(id, async () => ({ type: "api_key", key }));
 		let baseUrl = input.baseUrl.trim().replace(/\/+$/, "");
 		if (!/^https?:\/\//.test(baseUrl)) baseUrl = `http://${baseUrl}`;
-		const endpoint: Endpoint = {
-			id,
-			name: input.name.trim() || (check.ok ? new URL(check.baseUrl).host : "Custom endpoint"),
-			baseUrl: check.ok ? check.baseUrl : baseUrl,
-			keyless: !key && (previous?.keyless ?? true),
-			models: check.ok ? check.models : (previous?.models ?? []),
-			addedAt: previous?.addedAt ?? new Date().toISOString(),
-			format,
-			...(headers && Object.keys(headers).length ? { headers } : {}),
-			...((input.contextWindow ?? previous?.contextWindow) ? { contextWindow: input.contextWindow ?? previous?.contextWindow } : {}),
-		};
-		this.endpoints.save(endpoint);
+		const entry = piProvider(
+			this.endpoints.raw(id),
+			{
+				name: input.name.trim() || (check.ok ? new URL(check.baseUrl).host : "Custom endpoint"),
+				baseUrl: check.ok ? check.baseUrl : baseUrl,
+				// An entry written by hand with another API keeps it unless you pick a format here.
+				...(input.format || !previous ? { format } : {}),
+				keyless: !key && (previous?.keyless ?? true),
+				...(headers ? { headers } : {}),
+			},
+			check.ok ? check.models : undefined,
+			{ ...(input.contextWindow ? { contextWindow: input.contextWindow } : {}), known: this.knownModels(rt) },
+		);
+		try {
+			this.endpoints.write(id, entry);
+		} catch (error) {
+			if (error instanceof ModelsFileError) throw new EngineError("INVALID", error.message);
+			throw error;
+		}
+		if (key) await this.credentials.modify(id, async () => ({ type: "api_key", key }));
+		await this.reloadModelsFile(rt);
 		if (input.hidden) this.setHidden(id, input.hidden);
-		if (!check.ok) this.problems.set(id, check.message);
-		if (rt.getProvider(id)) rt.unregisterProvider(id);
-		rt.registerProvider(id, endpointConfig(endpoint) as never);
 		if (check.ok) this.problems.delete(id);
+		else this.problems.set(id, check.message);
 		await this.connected();
-		return endpoint;
+		return this.endpoints.get(id)!;
 	}
 
 	// ── Keys and visibility (Settings › Models) ──
@@ -408,14 +454,10 @@ export class ModelHub {
 		if (path) writeFileAtomic(path, `${JSON.stringify(this.hidden, null, "\t")}\n`, { mode: 0o600 });
 	}
 
-	/** Every model a connected provider offers, with whether it's hidden (endpoints: embeddings too). */
+	/** Every model a connected provider offers, with whether it's hidden. */
 	async providerModels(provider: string): Promise<{ id: string; name: string; contextWindow: number; hidden: boolean; embedding?: boolean }[]> {
 		const rt = await this.ready();
 		const hidden = new Set(this.hidden[provider] ?? []);
-		const endpoint = this.endpoints.get(provider);
-		if (endpoint) {
-			return endpoint.models.map((m) => ({ id: m.id, name: m.id, contextWindow: m.contextWindow ?? endpoint.contextWindow ?? 0, hidden: hidden.has(m.id) || Boolean(m.embedding), ...(m.embedding ? { embedding: true } : {}) }));
-		}
 		return rt.getModels(provider).map((m) => ({ id: m.id, name: m.name, contextWindow: m.contextWindow, hidden: hidden.has(m.id), ...(isEmbedding(m.id) ? { embedding: true } : {}) }));
 	}
 
@@ -449,9 +491,15 @@ export class ModelHub {
 
 	async removeEndpoint(id: string): Promise<void> {
 		const rt = await this.ready();
-		if (rt.getProvider(id)) rt.unregisterProvider(id);
-		if (!this.endpoints.get(id)?.keyless) await this.credentials.delete(id);
-		this.endpoints.remove(id);
+		const keyless = this.endpoints.get(id)?.keyless;
+		try {
+			this.endpoints.write(id, undefined);
+		} catch (error) {
+			if (error instanceof ModelsFileError) throw new EngineError("INVALID", error.message);
+			throw error;
+		}
+		if (!keyless) await this.credentials.delete(id);
+		await this.reloadModelsFile(rt);
 		this.problems.delete(id);
 		await this.connected();
 	}

@@ -2599,13 +2599,17 @@ describe("custom endpoints (docs/spec/10-model-providers, P1)", () => {
 		const providers = (await a.client.call("providers.list", {})).providers as { id: string; status: string; billing?: string; endpoint?: unknown }[];
 		expect(providers.find((p) => p.id === id)).toMatchObject({ status: "connected", billing: "On this Mac", endpoint: { baseUrl: `${srv.url}/v1`, local: true, keyless: true } });
 		const { models } = await a.client.call("models.list", {});
-		expect(models.filter((m: { provider: string }) => m.provider === id).map((m: { id: string; contextWindow: number }) => [m.id, m.contextWindow])).toEqual([["llama-3.3-70b", 131072], ["qwen3", 0]]);
+		expect(models.filter((m: { provider: string }) => m.provider === id).map((m: { id: string; contextWindow: number }) => [m.id, m.contextWindow])).toEqual([["llama-3.3-70b", 131072], ["qwen3", 128000]]);
+		// It is a provider in pi's own models.json, so pi's CLI has it too.
+		const piModels = JSON.parse(readFileSync(join(a.home, "pi-agent", "models.json"), "utf8")) as { providers: Record<string, { name: string; baseUrl: string; api: string; apiKey?: string; models: { id: string }[] }> };
+		expect(piModels.providers[id]).toMatchObject({ name: "LiteLLM (home)", baseUrl: `${srv.url}/v1`, api: "openai-completions", apiKey: "none", models: [{ id: "llama-3.3-70b" }, { id: "qwen3" }] });
 		// Survives a restart, then goes away entirely.
 		await stop(a);
 		const b = await start(a.home);
 		expect(((await b.client.call("providers.list", {})).providers as { id: string }[]).some((p) => p.id === id)).toBe(true);
 		await b.client.call("endpoints.remove", { id });
 		expect(((await b.client.call("providers.list", {})).providers as { id: string }[]).some((p) => p.id === id)).toBe(false);
+		expect(readFileSync(join(a.home, "pi-agent", "models.json"), "utf8")).not.toContain(id);
 		srv.close();
 	}, 30_000);
 
@@ -2616,7 +2620,10 @@ describe("custom endpoints (docs/spec/10-model-providers, P1)", () => {
 		await expect(a.client.call("endpoints.save", { name: "Work", baseUrl: `${srv.url}/v1`, key: "wrong" })).rejects.toMatchObject({ data: { code: "INVALID" } });
 		const { id } = await a.client.call("endpoints.save", { name: "Work", baseUrl: `${srv.url}/v1`, key: "sk-lite" });
 		expect(JSON.parse(a.client.secrets[`provider.${id}.credential`]!)).toMatchObject({ type: "api_key", key: "sk-lite" });
-		expect(readFileSync(join(a.home, "endpoints.json"), "utf8")).not.toContain("sk-lite");
+		const inPi = readFileSync(join(a.home, "pi-agent", "models.json"), "utf8");
+		expect(inPi).toContain(id);
+		expect(inPi).not.toContain("sk-lite");
+		expect(inPi).not.toContain("apiKey");
 		await a.client.call("endpoints.save", { id, name: "Work server", baseUrl: `${srv.url}/v1` });
 		const p = ((await a.client.call("providers.list", {})).providers as { id: string; name: string; endpoint?: { keyless: boolean } }[]).find((x) => x.id === id);
 		expect(p).toMatchObject({ name: "Work server", endpoint: { keyless: false } });
@@ -3127,7 +3134,8 @@ describe("Settings › Models redesign (provider keys, visibility, custom endpoi
 		expect(requests.at(-1)).toMatchObject({ "x-api-key": "k1", "x-team": "piopio" });
 		const { id } = await a.client.call("endpoints.save", { name: "Gateway", baseUrl: url, key: "k1", format: "anthropic", headers: { "x-team": "piopio" }, contextWindow: 200000 });
 		const provider = ((await a.client.call("providers.list", {})).providers as { id: string; endpoint?: unknown; models: number }[]).find((p) => p.id === id);
-		expect(provider).toMatchObject({ models: 1, endpoint: { format: "anthropic", headers: { "x-team": "piopio" }, contextWindow: 200000 } });
+		// The context size you set is each model's own in pi's models.json (below), not a setting of the endpoint.
+		expect(provider).toMatchObject({ models: 1, endpoint: { format: "anthropic", headers: { "x-team": "piopio" } } });
 		const models = (await a.client.call("models.list", {})).models.filter((m: { provider: string }) => m.provider === id);
 		expect(models.map((m: { id: string; contextWindow: number }) => [m.id, m.contextWindow])).toEqual([["claude-local", 200000]]);
 		expect(a.engine.hub.models.getProvider(id)?.getModels()[0]).toMatchObject({ api: "anthropic-messages" });

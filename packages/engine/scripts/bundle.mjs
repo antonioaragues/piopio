@@ -59,6 +59,8 @@ const common = {
 	// resolving them from a node_modules folder that the app doesn't ship.
 	// Google's OAuth client secret (docs/spec/12 §2) comes from the environment, so it never sits in git.
 	define: { PI_BUNDLED_NODE: "true", PIOPIO_ENGINE_VERSION: JSON.stringify(version), PIOPIO_GOOGLE_CLIENT_SECRET: JSON.stringify(process.env.PIOPIO_GOOGLE_CLIENT_SECRET ?? "") },
+	// jsonc-parser's default entry is a UMD file whose own `require` calls a bundle can't follow; its ESM build can.
+	alias: { "jsonc-parser": "jsonc-parser/lib/esm/main.js" },
 	legalComments: "linked",
 	logLevel: "warning",
 };

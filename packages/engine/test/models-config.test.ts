@@ -2,7 +2,7 @@
  * Models follow pi's own configuration (docs/spec/10 §14): the `models.json` in pi's folder, and pi's catalog on
  * pi.dev for models newer than the pi this build ships.
  */
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
@@ -87,4 +87,86 @@ test("Claude through OpenRouter keeps its mid-conversation flag when pi refreshe
 	expect(flag()).toBe(true);
 	await rt.refresh({ providers: ["openrouter"], allowNetwork: false });
 	expect(flag()).toBe(true);
+});
+
+test("a custom endpoint is a provider in pi's models.json: its models' abilities from the server or pi's catalog, your edits kept", async () => {
+	const base = await new ModelHub(new SecretBroker({}), { faux: true, home: scratch("endpoint-base") }).ready();
+	// A model pi knows, as a gateway would name it.
+	const known = base.getProvider("anthropic")!.getModels().find((m) => m.reasoning && m.input.includes("image"))!;
+	const gateway = `Anthropic/${known.id.toUpperCase()}`;
+	const served = [{ id: gateway }, { id: "llava-local", architecture: { input_modalities: ["text", "image"] }, supported_parameters: ["tools"] }, { id: "plain-local" }, { id: "bge-embed" }];
+	const server = createServer((req, res) => (req.url === "/v1/models" ? res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ data: served })) : res.writeHead(404).end()));
+	await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+	const baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+	const piAgentDir = scratch("endpoint-pi");
+	const file = join(piAgentDir, "models.json");
+	// The file is yours: a comment, and a provider of your own.
+	writeFileSync(file, `{\n\t// my own servers\n\t"providers": {\n\t\t"mine": { "baseUrl": "http://127.0.0.1:9/v1", "api": "openai-completions", "apiKey": "k", "models": [{ "id": "m1" }] }\n\t}\n}\n`);
+	try {
+		const hub = new ModelHub(new SecretBroker({}), { faux: true, home: scratch("endpoint-home"), piAgentDir });
+		const endpoint = await hub.saveEndpoint({ name: "Gateway", baseUrl });
+		expect(endpoint.id).toBe("custom-gateway");
+		const rt = await hub.ready();
+		const model = (id: string) => {
+			const m = rt.getModel(endpoint.id, id)!;
+			return { images: m.input.includes("image"), thinks: m.reasoning };
+		};
+		// From pi's catalog, by the same id whatever its case or prefix; its output limit too.
+		expect(model(gateway)).toEqual({ images: true, thinks: true });
+		expect(rt.getModel(endpoint.id, gateway)!.maxTokens).toBeGreaterThan(16_384);
+		// From the server's own list.
+		expect(model("llava-local")).toEqual({ images: true, thinks: false });
+		// Unknown to both: text only. Embedding models aren't chat models.
+		expect(model("plain-local")).toEqual({ images: false, thinks: false });
+		expect(rt.getModel(endpoint.id, "bge-embed")).toBeUndefined();
+
+		// Written into the file beside what was there, which stays as it was. The one you wrote by hand is listed too.
+		const text = readFileSync(file, "utf8");
+		expect(text).toContain("// my own servers");
+		expect(text).toContain('"mine": { "baseUrl": "http://127.0.0.1:9/v1"');
+		expect((await hub.listProviders(() => false)).filter((p) => p.kind === "custom").map((p) => p.id).sort()).toEqual(["custom-gateway", "mine"]);
+
+		// You correct a model by hand; the server gains one. Saving again keeps your correction and adds the new one.
+		writeFileSync(file, readFileSync(file, "utf8").replace(/("id": "plain-local",[^}]*?"reasoning": )false/s, "$1true"));
+		served.push({ id: "new-local" });
+		await hub.saveEndpoint({ id: endpoint.id, name: "Gateway (work)", baseUrl });
+		expect(model("plain-local")).toEqual({ images: false, thinks: true });
+		expect(model("new-local")).toEqual({ images: false, thinks: false });
+		expect(rt.getProvider(endpoint.id)?.name).toBe("Gateway (work)");
+		expect(readFileSync(file, "utf8")).toContain("// my own servers");
+
+		// Removed: only its own entry goes.
+		await hub.removeEndpoint(endpoint.id);
+		expect(rt.getProvider(endpoint.id)).toBeUndefined();
+		expect(readFileSync(file, "utf8")).toContain('"mine"');
+		expect(readFileSync(file, "utf8")).not.toContain("custom-gateway");
+	} finally {
+		server.close();
+	}
+});
+
+test("endpoints kept in Piopio's own endpoints.json move into pi's models.json at the next start", async () => {
+	const home = scratch("endpoint-old-home");
+	const piAgentDir = scratch("endpoint-old-pi");
+	writeFileSync(
+		join(home, "endpoints.json"),
+		JSON.stringify([
+			{ id: "custom-ollama", name: "Ollama", baseUrl: "http://localhost:11434/v1", keyless: true, models: [{ id: "gemma3:27b", contextWindow: 32_768 }, { id: "nomic-embed", embedding: true }], addedAt: "2026-10-22T00:00:00Z" },
+			{ id: "custom-work", name: "Work", baseUrl: "https://llm.example.com/v1", keyless: false, models: [{ id: "big" }], addedAt: "2026-10-22T00:00:00Z", format: "anthropic", headers: { "x-team": "a" }, contextWindow: 64_000 },
+		]),
+	);
+	const hub = new ModelHub(new SecretBroker({}), { faux: true, home, piAgentDir });
+	const rt = await hub.ready();
+	expect(rt.getModel("custom-ollama", "gemma3:27b")).toMatchObject({ contextWindow: 32_768, api: "openai-completions" });
+	expect(rt.getModel("custom-ollama", "nomic-embed")).toBeUndefined();
+	expect(rt.getModel("custom-work", "big")).toMatchObject({ contextWindow: 64_000, api: "anthropic-messages", baseUrl: "https://llm.example.com" });
+	const written = JSON.parse(readFileSync(join(piAgentDir, "models.json"), "utf8")) as { providers: Record<string, { apiKey?: string; headers?: object }> };
+	expect(written.providers["custom-ollama"]!.apiKey).toBe("none");
+	// A server with a key: the key stays in the Keychain, under the same id.
+	expect(written.providers["custom-work"]).toMatchObject({ headers: { "x-team": "a" } });
+	expect(written.providers["custom-work"]!.apiKey).toBeUndefined();
+	expect(hub.endpoints.list().map((e) => [e.id, e.keyless, e.format])).toEqual([["custom-ollama", true, "openai"], ["custom-work", false, "anthropic"]]);
+	// Once: the old file is set aside.
+	expect(existsSync(join(home, "endpoints.json"))).toBe(false);
+	expect(existsSync(join(home, "endpoints.json.migrated"))).toBe(true);
 });

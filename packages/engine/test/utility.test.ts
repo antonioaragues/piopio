@@ -37,7 +37,7 @@ function hubWith(helper: string | undefined, connect: { openrouter?: boolean; lo
 	const home = mkdtempSync(join(tmpdir(), "piopio-hub-"));
 	if (connect.openrouter) writeFileSync(join(home, "credentials.json"), JSON.stringify({ openrouter: "api_key" }));
 	const hub = new ModelHub(new SecretBroker({}), { home, onDevice: new OnDeviceModel(helper) });
-	if (connect.local) hub.endpoints.save({ id: "lmstudio", name: "LM Studio", baseUrl: "http://127.0.0.1:1234/v1", keyless: true, models: [{ id: "qwen3-8b" }], addedAt: new Date().toISOString() });
+	if (connect.local) hub.endpoints.write("lmstudio", { name: "LM Studio", baseUrl: "http://127.0.0.1:1234/v1", api: "openai-completions", apiKey: "none", models: [{ id: "qwen3-8b" }] });
 	return hub;
 }
 
