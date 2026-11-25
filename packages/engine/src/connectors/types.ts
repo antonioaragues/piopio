@@ -97,7 +97,9 @@ export type McpToolInfo = {
 };
 
 /** Calls one of the account's MCP tools; resolves to the text the model reads. */
-export type McpCall = (tool: string, args: Record<string, unknown>) => Promise<{ text: string; isError: boolean }>;
+/** An image a tool answered with (a screenshot, a chart), as the server sent it, within pi-mcp's size limit. */
+export type ToolImage = { data: string; mimeType: string };
+export type McpCall = (tool: string, args: Record<string, unknown>) => Promise<{ text: string; isError: boolean; images?: ToolImage[] }>;
 
 /**
  * An app whose tools come from its own MCP server (docs/spec/12 §4): Piopio signs in through the server's OAuth

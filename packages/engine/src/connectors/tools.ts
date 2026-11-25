@@ -8,7 +8,7 @@ import { Type, type TSchema } from "typebox";
 import type { Account, ConnectorHub } from "./hub.js";
 import { callTitle, modelName, splitTools } from "./mcp-remote.js";
 import { effective, type Access } from "./permissions.js";
-import type { Calendar, CalendarEvent, EventInput, Mailbox, McpToolInfo } from "./types.js";
+import type { Calendar, CalendarEvent, EventInput, Mailbox, McpToolInfo, ToolImage } from "./types.js";
 
 export type { Access };
 
@@ -27,8 +27,14 @@ export type ConnectorTool = {
 	deferred?: boolean;
 	/** The app it belongs to, for tool search ("linear": its tools, its description). */
 	namespace?: { name: string; description: string };
-	run(args: Record<string, unknown>, confirm: Confirm): Promise<{ text: string; isError?: boolean }>;
+	run(args: Record<string, unknown>, confirm: Confirm): Promise<{ text: string; isError?: boolean; images?: ToolImage[] }>;
 };
+
+/** A tool's answer as content blocks, for either runtime: its text (when it has any), then its images. */
+export function resultContent(r: { text: string; images?: ToolImage[] }): ({ type: "text"; text: string } | { type: "image"; data: string; mimeType: string })[] {
+	const images = (r.images ?? []).map((i) => ({ type: "image" as const, data: i.data, mimeType: i.mimeType }));
+	return r.text || !images.length ? [{ type: "text", text: r.text }, ...images] : images;
+}
 
 const zone = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
 const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: zone() });
@@ -345,7 +351,7 @@ function mcpTools(hub: ConnectorHub, scope: "chat" | "agent", off: (connector: s
 			const declined = await gate(confirm, name, def.id, tool.access, callTitle(def, tool, args), args);
 			if (declined) return { text: declined };
 			const result = await account.call(tool.name, args);
-			return { text: result.text, ...(result.isError ? { isError: true } : {}) };
+			return { text: result.text, ...(result.isError ? { isError: true } : {}), ...(result.images ? { images: result.images } : {}) };
 		};
 
 		return on.map((tool): ConnectorTool => {

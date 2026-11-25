@@ -2862,6 +2862,8 @@ describe("connected apps (docs/spec/12-connectors C1)", () => {
 	}, 30_000);
 
 	/** A fake Linear: OAuth discovery, dynamic client registration, authorize and token, and an MCP server that needs the token. */
+	/** A 1×1 PNG. */
+	const PIXEL = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
 	async function fakeLinear(options: { token?: string; tools?: unknown[]; answers?: Record<string, string> } = {}) {
 		const { createServer } = await import("node:http");
 		const calls: { method: string; tool?: string; args?: unknown; auth?: string }[] = [];
@@ -2909,6 +2911,7 @@ describe("connected apps (docs/spec/12-connectors C1)", () => {
 					const name = msg.params?.name;
 					if (name && options.answers?.[name]) return reply({ content: [{ type: "text", text: options.answers[name] }] });
 					if (name === "get_user") return reply({ content: [{ type: "text", text: JSON.stringify({ id: "u-42", name: "Toño", email: "me@example.com" }) }] });
+					if (name === "list_issues" && msg.params?.arguments?.query === "chart") return reply({ content: [{ type: "text", text: "Open issues by week" }, { type: "image", mimeType: "image/png", data: PIXEL }] });
 					if (name === "list_issues") return reply({ content: [{ type: "text", text: "ENG-1 Fix the login (In Progress)" }] });
 					if (name === "save_issue") return reply({ content: [{ type: "text", text: `Created ENG-2 ${String(msg.params?.arguments?.title)}` }] });
 					if (name === "get_document") return reply({ content: [{ type: "text", text: `Doc ${String(msg.params?.arguments?.id)}: the plan` }] });
@@ -2959,6 +2962,13 @@ describe("connected apps (docs/spec/12-connectors C1)", () => {
 		expect(search?.output).toContain("linear_get_document");
 		await a.client.call("sessions.submit", { ref, input: { text: `call: linear_get_document | {"id":"d1"}` } });
 		expect((await finishedTools(a, ref, 3))[2]?.output).toBe("Doc d1: the plan");
+
+		// An image in a tool's answer reaches the model as an image, not as the word "[image]" in its text.
+		const pictures = (await a.client.call("sessions.create", { kind: "thread" })).ref;
+		await a.client.call("sessions.submit", { ref: pictures, input: { text: `call: linear_list_issues | {"query":"chart"}` } });
+		await finishedTools(a, pictures, 1);
+		const result = (await a.engine.sessions.runtime(pictures) as unknown as { session: { messages: { role: string; content: { type: string; data?: string }[] }[] } }).session.messages.find((m) => m.role === "toolResult")!;
+		expect(result.content).toEqual([{ type: "text", text: "Open issues by week" }, { type: "image", mimeType: "image/png", data: PIXEL }]);
 
 		// Deleting is off, so it isn't offered at all.
 		const hub = a.engine.connectors;

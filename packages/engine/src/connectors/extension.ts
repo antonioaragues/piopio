@@ -6,7 +6,7 @@ import { awaitWithContext, type Context } from "@earendil-works/chord/context";
 import { defineTool as defineCodingTool, type ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import { defineExtension, defineTool, section } from "@earendil-works/pi-durable";
 import type { ConnectorHub } from "./hub.js";
-import { connectorsSection, connectorTools, offeredNow, type Confirm } from "./tools.js";
+import { connectorsSection, connectorTools, offeredNow, resultContent, type Confirm } from "./tools.js";
 import { promptSection, type PromptEvent } from "../tools/prompt-sections.js";
 
 export const CONNECTORS_EXTENSION = "piopio-connectors";
@@ -28,7 +28,7 @@ export function durableConnectorsExtension(hub: ConnectorHub, scope: "chat" | "a
 				try {
 					const confirm = confirmFor({ conversationId: String(api.conversationId), callId: api.callId, context });
 					const r = await tool.run(args as Record<string, unknown>, confirm);
-					return { output: [{ type: "text", text: r.text }], ...(r.isError ? { isError: true } : {}) };
+					return { output: resultContent(r), ...(r.isError ? { isError: true } : {}) };
 				} catch (error) {
 					return { output: [{ type: "text", text: (error as Error).message }], isError: true };
 				}
@@ -89,7 +89,7 @@ export function codingConnectorsExtension(hub: ConnectorHub, confirmFor: (callId
 					async execute(callId, params, signal) {
 						try {
 							const r = await tool.run(params as Record<string, unknown>, confirmFor(callId, signal));
-							return { content: [{ type: "text", text: r.text }], details: {}, ...(r.isError ? { isError: true } : {}) };
+							return { content: resultContent(r), details: {}, ...(r.isError ? { isError: true } : {}) };
 						} catch (error) {
 							return { content: [{ type: "text", text: (error as Error).message }], details: {}, isError: true };
 						}

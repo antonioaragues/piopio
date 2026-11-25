@@ -277,12 +277,15 @@ export class McpAccount {
 			this.reset();
 			throw this.explain(error);
 		}
+		// pi-mcp turns the server's answer into what a model takes (text and images) and bounds it. Images go on as
+		// images: the model sees them where it can, and pi shows a placeholder to one that can't.
 		const content = await limitMcpContent(toLlmContent(result));
 		const text = content.content
-			.map((c) => (c.type === "text" ? c.text : "[image]"))
+			.flatMap((c) => (c.type === "text" ? [c.text] : []))
 			.join("\n")
 			.trim();
-		return { text: text || (result.isError ? "The tool failed without saying why." : "Done."), isError: result.isError === true };
+		const images = content.content.flatMap((c) => (c.type === "image" ? [{ data: c.data, mimeType: c.mimeType }] : []));
+		return { text: text || (result.isError ? "The tool failed without saying why." : images.length ? "" : "Done."), isError: result.isError === true, ...(images.length ? { images } : {}) };
 	};
 
 	async close(): Promise<void> {

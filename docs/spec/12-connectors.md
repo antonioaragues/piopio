@@ -174,6 +174,15 @@ google-calendar/
 - **Which actions change things:** the connector marks each tool as reading or changing (or sending, or deleting). That's what decides whether Piopio asks first. When a connector doesn't say, Piopio assumes it changes things and asks.
 - **Plumbing:** pi's own MCP client (`@earendil-works/pi-mcp`, already installed) connects and signs in; the sign-in steps show in the same sheet as model providers; the tools reach chats, notebooks and agents (pi-durable) and Build (pi) from one place, found through tool search when there are many.
   > **Since 18 §15 (2026-11-15):** a chat is a pi SDK session, not pi-durable; only agents run on pi-durable. Notebooks are gone (18 §11).
+  > **Why the apps' tools are Piopio's own tools and not pi's MCP extension (looked at again 2026-11-26).** pi-coding-agent has a built-in MCP extension, and Build and chats load it for the servers in `mcp.json`. The connector apps don't go through it, on purpose:
+  > - Agents run on pi-durable, which has no MCP extension. Their tools have to be made by hand from pi-mcp's client, as pi-mcp's README describes. Moving only Build and chats to pi's extension would leave two implementations of the same apps, with different tool names in each.
+  > - What Piopio adds sits around each call: several accounts of one app behind one set of tools (the `account` argument), a permission per kind of action with an approval card, and tokens in the Keychain. In pi's extension that would be one server per account, a name map from `mcp__<server>__<tool>`, and a `tool_call` gate.
+  > - Kept from pi: pi-mcp's client, its OAuth helpers, its content conversion and size limit, and pi's `tool_search` and deferred exposure. Since 2026-11-26 an image in a tool's answer goes on to the model as an image (it was flattened to the word "[image]").
+  >
+  > Still worth doing with pi, and what each needs from it:
+  > - **An MCP extension for pi-durable.** With it, both runtimes could share pi's, and the points above would be worth solving once.
+  > - **Keychain tokens and in-app sign-in for your own MCP servers** (today: `mcp-auth.json` in pi's folder, and "sign in with `pi mcp` in a terminal"). `createMcpExtension` takes a `credentials` store, but pi doesn't export its class (`McpOAuthCredentialStore`) or `signInMcpServer`, and the package's exports block reaching them. Ask upstream to export both.
+  > - **Resources and structured results** from the apps' servers: pi's extension has them; the hand-made tools carry text and images only.
 - **Adding your own:** Settings › Connectors › "Add a custom connector…" takes an MCP server address or a connector folder. The existing "MCP servers" settings move here.
 
 ## 5. Marketplace (later, not now)
