@@ -9,7 +9,8 @@ import { contentText, type PiContentBlock, type PiMessage, type TimelineBuilder 
 import type { TimelineItem } from "@piopio/protocol";
 
 
-export type Entry = { id: string | number; kind: string; model?: PiMessage[]; data?: unknown };
+/** `head`: on a compaction, the first entry it kept as it was (what's older was summarized). */
+export type Entry = { id: string | number; kind: string; model?: PiMessage[]; data?: unknown; head?: string | number };
 
 /** An agent's own entries (@piopio/runtime's NOTICE_ENTRY and OUT_ENTRY): drawn as a note and as its message. */
 const NOTICE = "piopio.notice";
@@ -110,6 +111,7 @@ export class DurableViewMapper {
 			this.note(e, true);
 			const item = agentItem(e);
 			if (item) this.builder.place(item, false);
+			if (e.kind === "pi.compaction") this.compacted(e, false);
 		}
 		if (emit) this.builder.resnapshot();
 		const live = (view.docs["pi.live"] ?? {}) as Live;
@@ -211,11 +213,7 @@ export class DurableViewMapper {
 		this.note(entry, false);
 		const own = agentItem(entry);
 		if (own) return void b.place(own);
-		if (entry.kind === "pi.compaction") {
-			const summary = (entry.data as { summary?: string } | undefined)?.summary;
-			if (summary) b.compaction(String(entry.id), summary);
-			return;
-		}
+		if (entry.kind === "pi.compaction") return this.compacted(entry, true);
 		const message = entry.model?.[0];
 		if (!message) return;
 		if (message.role === "user") b.user(String(entry.id), contentText(message.content as string | PiContentBlock[]), message.timestamp as number | undefined);
@@ -234,6 +232,19 @@ export class DurableViewMapper {
 			}
 			this.end(m.toolCallId, contentText(m.content), m.isError ?? false);
 		}
+	}
+
+	/**
+	 * A compaction's marker, with its summary (the entry's own message, what the model reads in place of the older
+	 * entries), put before the first entry it kept: what's above was summarized for the model, what's below it still
+	 * reads as it was said. As in the engine's mapper (packages/engine/src/timeline/pi-durable.ts).
+	 */
+	private compacted(entry: Entry, emit: boolean): void {
+		const summary = contentText((entry.model?.[0]?.content ?? "") as string | PiContentBlock[]).trim();
+		if (!summary) return;
+		const head = Number(entry.head);
+		const kept = Number.isFinite(head) ? this.builder.currentItems.find((i) => Number(i.id) >= head) : undefined;
+		this.builder.insert({ kind: "compaction", id: String(entry.id), at: kept?.at ?? new Date().toISOString(), summary }, kept?.id, emit);
 	}
 
 	private slot(slot: Slot): void {

@@ -147,6 +147,24 @@ export class TimelineBuilder {
 		if (emit) this.pending.push({ type: "item.added", item: structuredClone(item), ...(before ? { before } : {}) });
 	}
 
+	/** Adds an item before `beforeId`, or at the end (a marker that belongs at a place in the transcript). */
+	insert(item: TimelineItem, beforeId?: string, emit = true): void {
+		if (this.index.has(item.id)) return;
+		const at = beforeId ? this.index.get(beforeId) : undefined;
+		if (at === undefined) this.push(item);
+		else {
+			this.items.splice(at, 0, item);
+			this.index.clear();
+			this.items.forEach((x, n) => this.index.set(x.id, n));
+		}
+		if (emit) this.pending.push({ type: "item.added", item: structuredClone(item), ...(at !== undefined ? { before: beforeId! } : {}) });
+	}
+
+	/** Items in order (read-only use). */
+	get currentItems(): readonly TimelineItem[] {
+		return this.items;
+	}
+
 	system(id: string, level: "info" | "warn" | "error", text: string): void {
 		const item: TimelineItem = { kind: "system", id, at: iso(), level, text };
 		this.push(item);

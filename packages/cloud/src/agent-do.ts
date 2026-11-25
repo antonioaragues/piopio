@@ -7,6 +7,7 @@
  * behind them are in memory only: after any wake (WebSocket message, alarm, request) the object
  * reopens them and sends each subscriber a `resnapshot`.
  */
+import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { createRegistry, Harness, type ConversationWatch } from "@earendil-works/pi-durable";
 import { methods, PROTOCOL_VERSION, type JsonRpcId, type MethodName, type ModelRef, type Params, type Result, type SessionEvent } from "@piopio/protocol";
 import { PiHarness, ROOT_SESSION, type PiSession } from "agents/harness/pi";
@@ -43,6 +44,23 @@ class RpcError extends Error {
 	}
 }
 
+/** How much of a conversation a view loads: its newest entries (there is no loading earlier ones yet). */
+const MAX_HISTORY = 5_000;
+
+/** A session's history: pi-durable's raw entries, the newest `MAX_HISTORY`, oldest first. */
+async function history(pi: Harness, session: string): Promise<Entry[] | undefined> {
+	const conversation = await pi.conversation(Number(session) as never, BACKGROUND_CONTEXT);
+	if (!conversation) return undefined;
+	const newest: Entry[] = [];
+	let cursor: unknown;
+	do {
+		const page = await conversation.entries({ order: "descending" }, 500, cursor as never, BACKGROUND_CONTEXT);
+		newest.push(...(page.items as unknown as Entry[]));
+		cursor = page.next;
+	} while (cursor && newest.length < MAX_HISTORY);
+	return newest.slice(0, MAX_HISTORY).reverse();
+}
+
 /** One pi session's state folded into a timeline, shared by its subscribers. */
 class SessionView {
 	readonly listeners = new Map<string, (events: SessionEvent[]) => void>();
@@ -51,9 +69,13 @@ class SessionView {
 		private readonly watch: ConversationWatch,
 	) {}
 
-	/** The active transcript is read before the watch, so the watch's first value is as new or newer. */
-	static async open(agentId: string, conversation: string, pi: PiSession, model: ModelRef): Promise<SessionView> {
-		const transcript = (await pi.messages()) as unknown as Entry[];
+	/**
+	 * The history is read before the watch, so the watch's first value is as new or newer. It is the conversation's raw
+	 * entries, which a compaction never changes: the session's `messages()` is the model's context, so a chat read from
+	 * it lost everything a compaction had summarized (as the engine's did, packages/engine/src/runtimes/agent.ts).
+	 */
+	static async open(agentId: string, conversation: string, pi: PiSession, model: ModelRef, history: () => Promise<Entry[] | undefined>): Promise<SessionView> {
+		const transcript = (await history().catch(() => undefined)) ?? ((await pi.messages()) as unknown as Entry[]);
 		const watch = await pi.watch();
 		const builder = new TimelineBuilder({ kind: "agent", id: agentId, conversationId: conversation });
 		const mapper = new DurableViewMapper(builder);
@@ -665,7 +687,7 @@ export class AgentDO extends DurableObject<Env> {
 	private async attach(connection: Connection, sub: Subscription): Promise<SessionView> {
 		let opening = this.views.get(sub.session);
 		if (!opening) {
-			opening = SessionView.open(this.agentId, sub.conversation ?? sub.session, this.harness.session(sub.session), this.modelRef());
+			opening = SessionView.open(this.agentId, sub.conversation ?? sub.session, this.harness.session(sub.session), this.modelRef(), async () => history((await this.agent()).pi, sub.session));
 			opening.catch(() => this.views.delete(sub.session));
 			this.views.set(sub.session, opening);
 		}
