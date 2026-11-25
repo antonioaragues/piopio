@@ -24,6 +24,8 @@ public struct BackgroundRow: Sendable, Hashable, Identifiable {
     /// The Watchdog's note is the line (amber).
     public var alerting = false
 
+    /// When it ended, for the order and for Clear: its end, else its start.
+    var finishedAt: Date { endedAt ?? startedAt ?? .distantPast }
     /// Running or waiting to: it has Stop, and its time ticks (queued has no time yet).
     public var running: Bool { state == "working" || state == "queued" }
     /// The time that ticks on the right while it works: "1m 04s".
@@ -34,14 +36,16 @@ public struct BackgroundRow: Sendable, Hashable, Identifiable {
 }
 
 public enum BackgroundWork {
-    /// The block's rows: running ones oldest first (commands, then subagents), finished ones newest first.
-    public static func rows(processes: [BackgroundProcess], subagents: [SubagentInfo]) -> (running: [BackgroundRow], finished: [BackgroundRow]) {
+    /// The block's rows: running ones oldest first (commands, then subagents), finished ones newest first. Finished
+    /// ones that ended by `clearedAt` (you cleared them) aren't listed; a subagent you ask again ends later and is back.
+    public static func rows(processes: [BackgroundProcess], subagents: [SubagentInfo], clearedAt: Date? = nil) -> (running: [BackgroundRow], finished: [BackgroundRow]) {
         let all = processes.map(row) + subagents.map(row)
         let running = all.filter(\.running).sorted { a, b in
             if a.kind != b.kind { return a.kind == .command }
             return (a.startedAt ?? .distantFuture) < (b.startedAt ?? .distantFuture)
         }
-        let finished = all.filter { !$0.running }.sorted { ($0.endedAt ?? $0.startedAt ?? .distantPast) > ($1.endedAt ?? $1.startedAt ?? .distantPast) }
+        let finished = all.filter { row in !row.running && !(clearedAt.map { row.finishedAt <= $0 } ?? false) }
+            .sorted { $0.finishedAt > $1.finishedAt }
         return (running, finished)
     }
 

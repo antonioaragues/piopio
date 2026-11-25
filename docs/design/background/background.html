@@ -120,6 +120,7 @@ code { font-family:var(--mono); font-size:13px; background:var(--sel); border-ra
 .fold .chev { font-size:8px }
 .fold.open .chev { transform:rotate(90deg) }
 .more { color:var(--accent); font-size:12px; margin-top:4px; cursor:pointer }
+.clear { color:var(--accent); font-size:12px; cursor:pointer; margin-left:2px }
 .footer { display:flex; align-items:center; gap:8px; padding:12px 18px; border-top:.5px solid var(--line); color:var(--fg3); font-size:12px }
 .footer .meter { width:32px; height:3px; border-radius:2px; background:var(--sel); position:relative; overflow:hidden }
 .footer .meter i { position:absolute; inset:0 auto 0 0; width:38%; background:var(--fg2) }
@@ -220,11 +221,13 @@ code { font-family:var(--mono); font-size:13px; background:var(--sel); border-ra
 <div class="doc">
   <h2>What each part is</h2>
   <ul>
-    <li><b>Head.</b> "Background · 2 running · 3 finished", with a chevron to fold it. It's open while something
+    <li><b>Head.</b> "Background · 2 running" ("3 finished" once nothing runs), Clear, and a chevron to fold it. It's open while something
       runs. Your choice is remembered per conversation, as Changes is.</li>
     <li><b>Rows.</b> The same glyphs as the subagent rows in the transcript. A command shows in monospace, with its
       address as a link. A subagent shows its title and its plain-language line. The time
       ticks each second on the right. On hover, Stop replaces the time.</li>
+    <li><b>Clear.</b> In the head while something has finished: the finished rows leave the list, the running ones
+      stay. A command's output stays in its terminal tab.</li>
     <li><b>Finished.</b> Folded, newest first, five then "and N more". Each row says how it ended: "exited 0",
       "exit 1", "stopped", "done · $0.03".</li>
     <li><b>Where it sits.</b> Always the last block, under Plan and above the footer, whether something runs or
@@ -305,15 +308,18 @@ function grouped(list, running, kinds) {
 function backgroundBlock(d) {
   const kinds = new Set([...d.running, ...d.finished].map(r => r.kind));
   const n = d.running.length, f = d.finished.length;
-  const ans = [n ? `${n} running` : null, f ? `${f} finished` : null].filter(Boolean).join(" · ");
+  // While something runs, "Finished N" is its own row: the head counts only what runs.
+  const ans = n ? `${n} running` : `${f} finished`;
   const shown = S.finishedOpen ? d.finished.slice(0, 5) : [];
   const rest = d.finished.length - 5;
+  // Clear (BG11): takes what finished off the list; running rows stay.
+  const clear = f ? `<span class="clear" data-act="clear">Clear</span>` : "";
   // Nothing running: the head is the fold itself ("3 finished ›").
   if (!n) {
-    return `<div class="block ${S.finishedOpen ? "open" : ""}" id="bg"><div class="head" data-act="fold"><b>Background</b><span class="sp"></span><span class="ans">${ans}</span><span class="chev">▶</span></div>
+    return `<div class="block ${S.finishedOpen ? "open" : ""}" id="bg"><div class="head" data-act="fold"><b>Background</b><span class="sp"></span><span class="ans">${ans}</span>${clear}<span class="chev">▶</span></div>
       ${S.finishedOpen ? `<div class="bg-list">${grouped(shown, false, kinds)}${rest > 0 ? `<div class="more">and ${rest} more</div>` : ""}</div>` : ""}</div>`;
   }
-  return `<div class="block open" id="bg"><div class="head"><b>Background</b><span class="sp"></span><span class="ans">${ans}</span><span class="chev">▶</span></div>
+  return `<div class="block open" id="bg"><div class="head"><b>Background</b><span class="sp"></span><span class="ans">${ans}</span>${clear}<span class="chev">▶</span></div>
     <div class="bg-list">${grouped(d.running, true, kinds)}
     ${f ? `<div class="fold ${S.finishedOpen ? "open" : ""}" data-act="fold"><span class="chev">▶</span>Finished ${f}</div>` : ""}
     ${S.finishedOpen ? `<div style="margin-left:2px">${shown.map(r => row(r, false)).join("")}${rest > 0 ? `<div class="more">and ${rest} more</div>` : ""}</div>` : ""}
@@ -407,6 +413,7 @@ function seg(id, key) {
 seg("state", "state");
 
 document.getElementById("sbody").addEventListener("click", e => {
+  if (e.target.closest("[data-act=clear]")) { DATA[S.state].finished = []; S.finishedOpen = false; render(); tick(); return; }
   if (e.target.closest("[data-act=fold]")) { S.finishedOpen = !S.finishedOpen; render(); tick(); return; }
   if (e.target.closest(".stop")) { e.target.closest(".bgr").remove(); return; }
   const r = e.target.closest(".bgr");

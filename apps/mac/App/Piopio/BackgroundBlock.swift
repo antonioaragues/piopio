@@ -5,7 +5,7 @@ import SwiftUI
 /// Background (docs/spec/43, docs/design/background): the last block of a Build session's Summary column. What the
 /// conversation left running and what it ran, its background commands (TM4) and its subagents (37): running rows with
 /// the time ticking and Stop on hover, then "Finished N", folded, newest first, five then "and N more". Not drawn when
-/// there's nothing to list.
+/// there's nothing to list. Clear, in the head, takes what finished off the list (BG11).
 struct BackgroundBlock: View {
     let running: [BackgroundRow]
     let finished: [BackgroundRow]
@@ -15,6 +15,8 @@ struct BackgroundBlock: View {
     let stop: (BackgroundRow) -> Void
     /// A command's address: the project preview.
     let preview: (String) -> Void
+    /// Clear: what finished leaves the list (spec 43 BG11).
+    let clear: () -> Void
     /// PIOPIO_DEMO_BACKGROUND_FINISHED=1: captures open with Finished unfolded.
     @State private var finishedOpen = ProcessInfo.processInfo.environment["PIOPIO_DEMO_BACKGROUND_FINISHED"] == "1"
     @State private var all = false
@@ -31,12 +33,10 @@ struct BackgroundBlock: View {
         VStack(alignment: .leading, spacing: 0) {
             if running.isEmpty {
                 // Nothing runs: the head is the fold of what finished ("3 finished ›").
-                BlockFold(title: "Background", line: BackgroundWork.summary(running: 0, finished: finished.count), open: $finishedOpen,
-                          help: finishedOpen ? "Hide what ran" : "The commands and subagents this conversation ran")
+                head(open: $finishedOpen, help: finishedOpen ? "Hide what ran" : "The commands and subagents this conversation ran")
                 if finishedOpen { finishedList.padding(.top, 8) }
             } else {
-                BlockFold(title: "Background", line: BackgroundWork.summary(running: running.count, finished: finished.count), open: openBinding,
-                          help: isOpen ? "Hide the background work" : "What this conversation left running")
+                head(open: openBinding, help: isOpen ? "Hide the background work" : "What this conversation left running")
                 if isOpen {
                     VStack(alignment: .leading, spacing: 0) {
                         // The time ticks each second while something works.
@@ -75,6 +75,40 @@ struct BackgroundBlock: View {
         .onChange(of: conversationId) { _, id in folded = Self.remembered(id) }
     }
 
+    /// `BlockFold`'s head with Clear before the chevron while something has finished: "Background  2 running
+    /// Clear ⌄", or "3 finished Clear ⌄" when nothing runs. The title and the count fold it, as the chevron does.
+    private func head(open: Binding<Bool>, help: String) -> some View {
+        let toggle = { withAnimation(.easeOut(duration: 0.15)) { open.wrappedValue.toggle() } }
+        return HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Button(action: toggle) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text("Background").font(.system(size: 13, weight: .semibold))
+                    Spacer(minLength: 8)
+                    // While something runs, "Finished N" is a row of its own, so the head counts only what runs.
+                    Text(BackgroundWork.summary(running: running.count, finished: running.isEmpty ? finished.count : 0))
+                        .font(.system(size: 13)).foregroundStyle(Color.dsFg3).lineLimit(1)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(help)
+            .accessibilityValue(open.wrappedValue ? "Expanded" : "Collapsed")
+            if !finished.isEmpty {
+                SummaryLink("Clear") { withAnimation(.easeOut(duration: 0.15)) { clear() } }
+                    .help("Remove the finished ones from this list (their output stays in the terminal)")
+                    .accessibilityLabel("Clear finished")
+            }
+            Button(action: toggle) {
+                Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).foregroundStyle(Color.dsFg3)
+                    .rotationEffect(.degrees(open.wrappedValue ? 90 : 0))
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(help)
+            .accessibilityHidden(true)
+        }
+    }
+
     private var isOpen: Bool { !(folded ?? false) }
     private var openBinding: Binding<Bool> {
         Binding(get: { isOpen }, set: { open in
@@ -99,6 +133,17 @@ struct BackgroundBlock: View {
         ForEach(list) { row in
             BackgroundRowView(row: row, now: now, open: { open(row) }, stop: { stop(row) }, preview: preview)
         }
+    }
+
+    /// When you last cleared this conversation's finished work: what had ended by then isn't listed.
+    static func clearedAt(_ id: String) -> Date? {
+        ((UserDefaults.standard.dictionary(forKey: "backgroundClearedAt") as? [String: Double])?[id]).map(Date.init(timeIntervalSince1970:))
+    }
+
+    static func clear(_ id: String, at date: Date = .now) {
+        var all = (UserDefaults.standard.dictionary(forKey: "backgroundClearedAt") as? [String: Double]) ?? [:]
+        all[id] = date.timeIntervalSince1970
+        UserDefaults.standard.set(all, forKey: "backgroundClearedAt")
     }
 
     // Folded per conversation, as Changes is (`inspectorChangesOpen`); only a fold is kept.

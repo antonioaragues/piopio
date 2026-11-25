@@ -60,3 +60,17 @@ private func at(_ s: String) -> Date { ISODate.parse(s)! }
     #expect(BackgroundWork.summary(running: 0, finished: 3) == "3 finished")
     #expect(BackgroundWork.summary(running: 1, finished: 0) == "1 running")
 }
+
+@Test func clearHidesWhatHadFinishedButNotWhatRunsOrEndsLater() {
+    let processes = [
+        process("p1", "npm run dev", .running),
+        process("p2", "npm test", .exited, exit: 0, ended: "2026-11-25T10:02:10.000Z"),
+    ]
+    var subagent = SubagentInfo(id: "s1", title: "Audit", state: "done", startedAt: at("2026-11-25T10:00:00.000Z"), endedAt: at("2026-11-25T10:03:00.000Z"))
+    let cleared = at("2026-11-25T10:05:00.000Z")
+    let after = BackgroundWork.rows(processes: processes, subagents: [subagent], clearedAt: cleared)
+    #expect(after.running.map(\.id) == ["p1"] && after.finished.isEmpty)
+    // Asked again after the clear, the subagent ends later: it's listed again.
+    subagent.startedAt = at("2026-11-25T10:06:00.000Z"); subagent.endedAt = at("2026-11-25T10:07:00.000Z")
+    #expect(BackgroundWork.rows(processes: processes, subagents: [subagent], clearedAt: cleared).finished.map(\.id) == ["s1"])
+}

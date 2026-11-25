@@ -113,6 +113,8 @@ struct BuildSessionView: View {
     @AppStorage("buildTerminal") private var showTerminal = false
     /// The background command whose tab the drawer shows (TM4), set by its tab or its row in Background (docs/spec/43).
     @State private var drawerProcess: String?
+    /// When you last cleared Background's finished rows in this conversation (docs/spec/43 BG11).
+    @State private var backgroundClearedAt: Date?
 
     private var project: ProjectInfo? { engine.projects.first { $0.path == (summary.projectPath ?? summary.cwd) } }
 
@@ -225,6 +227,7 @@ struct BuildSessionView: View {
         }
         .task { await session.open() }
         .task(id: summary.ref.id) {
+            backgroundClearedAt = BackgroundBlock.clearedAt(summary.ref.id)
             showInspector = Self.inspectorChoice(summary.ref.id) ?? hasChanges
             // PIOPIO_DEMO_PANEL=files | files:touched | files:<path> | inspector: captures open on that panel.
             if let demo = ProcessInfo.processInfo.environment["PIOPIO_DEMO_PANEL"] {
@@ -360,7 +363,7 @@ struct BuildSessionView: View {
 
     /// Background (docs/spec/43): its commands and subagents, for the Summary column's last block; nil when there's none.
     private var background: BackgroundBlock? {
-        let rows = BackgroundWork.rows(processes: session.processes, subagents: subagents)
+        let rows = BackgroundWork.rows(processes: session.processes, subagents: subagents, clearedAt: backgroundClearedAt)
         guard BackgroundBlock.shows(running: rows.running, finished: rows.finished) else { return nil }
         return BackgroundBlock(running: rows.running, finished: rows.finished, conversationId: summary.ref.id, open: { row in
             switch row.kind {
@@ -381,6 +384,10 @@ struct BuildSessionView: View {
         }, preview: { address in
             guard let url = URL(string: address) else { return }
             BrowserCenter.shared.session(summary.ref.id).openPreview(url, profile: summary.projectPath ?? summary.cwd ?? "")
+        }, clear: {
+            let now = Date()
+            BackgroundBlock.clear(summary.ref.id, at: now)
+            backgroundClearedAt = now
         })
     }
 

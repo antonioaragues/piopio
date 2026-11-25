@@ -40,7 +40,8 @@ the answer to that question belongs there too.
 | BG7 | **A click goes to where the work is.** A command opens the terminal drawer on its tab. A subagent opens beside the conversation (37 SB4); because that column is the same one, Summary steps aside as it does today. A command's address opens the preview (22 §6.1). |
 | BG8 | **Visible with the column closed.** The Summary column is closed by default. While something runs, the toolbar's Summary icon carries a small count ("2"), in grey ink, not a dot (the user, 2026-11-25), and a tooltip ("2 running in the background"). The column doesn't open by itself for this. |
 | BG9 | **Stop works as it does today, without asking.** Stopping a command is `sessions.processStop`, as the drawer's Stop is. Stopping a subagent is `sessions.abort` on its session, as its own composer's Stop is: the turn ends, and the session stays. |
-| BG10 | **How long it's kept.** Finished commands stay in the list as long as the engine keeps them in `state.processes`: until the session closes or the engine quits (TM4). Subagents stay because they're sessions. |
+| BG10 | **How long it's kept.** Finished commands stay in the list as long as the engine keeps them in `state.processes`: until the session closes or the engine quits (TM4). Subagents stay because they're sessions. Until you clear them (BG11). |
+| BG11 | **Clear** (the user, 2026-11-25: "I don't want them there forever"). A blue Clear link in the block's head, before the chevron, while something has finished, takes every finished row off the list. Running rows stay. It's this list only: a command's output stays in its drawer tab and in `process_list` for the agent, and a subagent stays a session. Per conversation, kept across launches (`backgroundClearedAt`): what had ended by the time you cleared isn't listed; a subagent you ask again ends later, so it's back. With nothing running, clearing leaves no block (BG4). |
 
 ## 3. What you see
 
@@ -52,7 +53,7 @@ Setup
 Plan                                    2 of 4
   …
 ────────────────────────────────────────────
-Background                         2 running ⌄
+Background                   2 running  Clear ⌄
   Commands
   ◌  npm run dev               1m 04s  ■
      localhost:5173 ↗
@@ -64,7 +65,8 @@ Background                         2 running ⌄
 38k of 200k                              $0.14
 ```
 
-- **Head:** "Background", then "2 running" (plus "· 3 finished" when there are some), and the fold chevron. It's
+- **Head:** "Background", then "2 running" (or "3 finished" when nothing runs: while something runs, "Finished 3"
+  is a row of its own), Clear when something has finished, and the fold chevron. It's
   open by default while something runs, and the choice is remembered per conversation, as Changes is
   (`inspectorChangesOpen`).
 - **Command rows** take the drawer's label (`BuildTerminal.label`: the command when it's short, else the agent's
@@ -128,4 +130,7 @@ Background                         2 running ⌄
   the block under Changes with both subheadings, the times ticking, `localhost:5173 ↗`, "Finished 1" unfolded
   (`PIOPIO_DEMO_BACKGROUND_FINISHED=1`) with "exit 1 · 1s" in red, and the closed column's "2" on the Summary icon.
   Not clicked in a live window: Stop, a row opening the drawer or a subagent, and the address opening the preview.
-
+- **Clear** (BG11, the same day): the head is `BlockFold`'s with a `SummaryLink` between the counts and the chevron;
+  `BackgroundWork.rows(…, clearedAt:)` leaves out what had ended by then, tested in
+  `clearHidesWhatHadFinishedButNotWhatRunsOrEndsLater`. At 300 pt "2 running · 1 finished" and Clear didn't fit, so
+  the head counts only what runs while something does. Captured; Clear not clicked in a live window.
