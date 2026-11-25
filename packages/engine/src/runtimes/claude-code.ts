@@ -13,6 +13,7 @@ import { EngineError } from "../models.js";
 import { TimelineBuilder, type PiContentBlock, type PiMessage, type PiUsage, type ToolImageKeeper } from "../timeline/builder.js";
 import type { ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import { collectTools, PIOPIO_MCP, PIOPIO_MCP_PREFIX, piopioServer } from "./claude-code-tools.js";
+import { CLAUDE_CODE_TOOLS_OFF, claudeCodeEnv } from "./claude-code-env.js";
 import { PromptBroker } from "./prompts.js";
 import { agentIdleMs, Emitter, IdleTimer, type Runtime, type SubmitOptions } from "./runtime.js";
 
@@ -369,6 +370,9 @@ export class ClaudeCodeRuntime implements Runtime {
 				// project's only when it's trusted: its hooks and MCP servers run code on this Mac.
 				settingSources: this.options.projectTrusted?.() === false ? ["user"] : ["user", "project", "local"],
 				stderr: (data: string) => (this.stderr = (this.stderr + data).slice(-2000)),
+				// Its environment and the tools of its own Piopio can't show (claude-code-env.ts).
+				env: claudeCodeEnv(),
+				disallowedTools: CLAUDE_CODE_TOOLS_OFF,
 			},
 		});
 		void this.pump(this.query);

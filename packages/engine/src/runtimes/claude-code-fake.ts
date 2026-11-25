@@ -17,7 +17,12 @@ let counter = 0;
 /** Each query is one Claude Code process: "process?" says which, and whether it resumed a session. */
 let queries = 0;
 
-export const fakeClaudeQuery: QueryFn = ({ prompt, options }) => new FakeQuery(prompt, options);
+/** The options each fake query was started with, newest last (tests read what Piopio passes the SDK). */
+export const fakeQueryOptions: Record<string, unknown>[] = [];
+export const fakeClaudeQuery: QueryFn = ({ prompt, options }) => {
+	fakeQueryOptions.push(options as Record<string, unknown>);
+	return new FakeQuery(prompt, options);
+};
 
 export const FAKE_MODELS: AgentModel[] = [
 	{ value: "opus", displayName: "Opus 5.5", description: "Best for everyday, complex tasks" },

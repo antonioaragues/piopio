@@ -105,12 +105,17 @@ the runs found:
 - **E1 · Claude Code as the reviewer reported to its own `ReportFindings`.** Claude Code 2.1.319 has a built-in tool
   of that name, and the reviewer called it instead of Piopio's `report_findings` (MCP). The finding was right
   (`src/cart.ts:5`, bug, the fix), but it never reached Piopio, so the review ended "without reporting findings". It
-  happens on some runs and not others.
+  happens on some runs and not others. *Fixed 2026-11-25:* Piopio turns Claude Code's own `ReportFindings` off
+  (`disallowedTools`, runtimes/claude-code-env.ts); not re-run yet.
 - **E2 · Antigravity's review in Read only ends at once.** Its one command (`git status; git branch -a; git diff
   main..simplify-total`, in its own `plan` mode) failed with no output, and the turn ended without
-  `report_findings`. Every try failed the same way.
+  `report_findings`. Every try failed the same way. *Still open:* it needs a live run to see why Antigravity's plan
+  mode fails the command.
 - **E3 · Piopio's `bash` runs zsh with `nomatch`.** `grep -rn "total(" --include=*.ts .` failed with "no matches
-  found: --include=*.ts" (Claude Code's reviewer, E1's run). The agents write bash.
+  found: --include=*.ts" (Claude Code's reviewer, E1's run). The agents write bash. *Cause, found 2026-11-25:* it was
+  Claude Code's own Bash tool, which uses your shell (zsh); Piopio's `bash` is /bin/bash. *Fixed:* Claude Code gets a
+  `CLAUDE_ENV_FILE` that turns `nomatch` off in zsh only (runtimes/claude-code-env.ts, tested in zsh and bash); not
+  re-run with a real Claude Code yet.
 - **Not checked yet:** whether the Fix turn changed other files. Claude Code's Fix, in one try, also added a test file and
   a `test` script, so a "nothing else changed" check would belong here.
 

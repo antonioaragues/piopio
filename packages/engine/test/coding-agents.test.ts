@@ -7,6 +7,7 @@ import { afterEach, beforeAll, describe, expect, test } from "vitest";
 import { claudeBilling, ClaudeCodeAgent } from "../src/coding-agents.js";
 import { enginePaths } from "../src/paths.js";
 import { editPatch, permissionMode, piopioTool } from "../src/runtimes/claude-code.js";
+import { fakeQueryOptions } from "../src/runtimes/claude-code-fake.js";
 import { Engine } from "../src/server.js";
 import { TestClient } from "./client.js";
 
@@ -97,6 +98,11 @@ describe.each(["thread", "build"] as const)("a %s on Claude Code", (kind) => {
 
 		await b.client.call("sessions.delete", { ref });
 		expect(existsSync(join(a.home, "chats", "agents", `${ref.id}.json`))).toBe(false);
+		// Re-audit 2026-11-25 evals E1 and E3: its own ReportFindings is off, and its Bash gets Piopio's shell setup.
+		const options = fakeQueryOptions.at(-1)!;
+		expect(options.disallowedTools).toEqual(["ReportFindings"]);
+		expect((options.env as Record<string, string>).CLAUDE_ENV_FILE).toMatch(/env\.sh$/);
+		expect((options.env as Record<string, string>).PATH).toBe(process.env.PATH);
 	});
 });
 
