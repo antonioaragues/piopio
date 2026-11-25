@@ -290,6 +290,59 @@ test("a fire due when the engine starts waits for the app to unlock the keys", a
 	service.stop();
 });
 
+test("each time automation is one sleeping pi-durable task: a new time replaces it, pausing or removing ends it, a restart keeps it", async () => {
+	const home = mkdtempSync(join(tmpdir(), "piopio-auto-clock-"));
+	const make = () =>
+		new Automations({
+			file: join(home, "automations.json"),
+			runsFile: join(home, "automation-runs.json"),
+			clockFile: join(home, "automations-clock.sqlite"),
+			log: () => {},
+			agent: () => undefined,
+			project: () => undefined,
+			runAgent: async () => ({ runId: "r", conversationId: "c", status: "done" }),
+			runPiopio: async () => "ses_1",
+			changed: () => {},
+			watchesChanged: () => {},
+		});
+	type Node = { id: number; kind: string; state: { status: string; until?: number } };
+	type Graph = { value: { tasks: Record<string, Node> }; stop(): Promise<unknown> };
+	const { BACKGROUND_CONTEXT } = await import("@earendil-works/chord/context");
+	const tasks = async (service: Automations) => {
+		const clock = (await (service as unknown as { clock: Promise<{ harness: { watchTaskGraph(c: unknown): Promise<Graph> } }> }).clock)!;
+		const graph = await clock.harness.watchTaskGraph(BACKGROUND_CONTEXT);
+		const nodes = Object.values(graph.value.tasks).filter((t) => t.kind === "piopio.automation");
+		await graph.stop();
+		return nodes;
+	};
+	const sleepingUntil = (service: Automations, ...until: (number | undefined)[]) =>
+		until_(() => tasks(service), (t) => t.length === until.length && t.every((x) => x.state.status === "sleeping") && JSON.stringify(t.map((x) => x.state.until).sort()) === JSON.stringify([...until].sort()));
+	const until_ = until as <T>(get: () => Promise<T>, ok: (v: T) => boolean) => Promise<T>;
+
+	let service = make();
+	const weekly = service.add({ runsAs: "piopio", when: "0 9 * * 1", prompt: "Weekly brief" }, "you");
+	service.start();
+	await sleepingUntil(service, weekly.next);
+	// A new time: the task that slept until the old one goes, one sleeps until the new one.
+	const before = weekly.next;
+	const moved = service.update(weekly.id, { when: "0 10 * * 2" });
+	expect(moved.next).not.toBe(before);
+	await sleepingUntil(service, moved.next);
+	const daily = service.add({ runsAs: "piopio", when: "0 8 * * *", prompt: "Morning brief" }, "you");
+	await sleepingUntil(service, moved.next, daily.next);
+	service.update(daily.id, { enabled: false });
+	const [kept] = await sleepingUntil(service, moved.next);
+	// A restart: the sleep was stored, so the same task is still there, and nothing is made twice.
+	await service.stop();
+	service = make();
+	service.start();
+	const after = await sleepingUntil(service, moved.next);
+	expect(after.map((t) => t.id)).toEqual([kept!.id]);
+	service.remove(weekly.id);
+	await until_(() => tasks(service), (t) => t.length === 0);
+	await service.stop();
+});
+
 test("a webhook's {{body}} isn't part of its name", () => {
 	expect(nameOf("A new order came in from the shop form: {{body}}. Tell Toño in one line.")).toBe("A new order came in from the shop form");
 	expect(nameOf("{{body}}")).toBe("Automation");

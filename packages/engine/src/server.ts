@@ -320,6 +320,7 @@ export class Engine {
 		this.automations = new Automations({
 			file: join(options.paths.home, "automations.json"),
 			runsFile: join(options.paths.home, "automation-runs.json"),
+			clockFile: join(options.paths.home, "automations-clock.sqlite"),
 			log: this.log,
 			agent: (id) => {
 				const a = this.sessions.agentList().find((x) => x.id === id);
@@ -914,7 +915,7 @@ export class Engine {
 		this.cloud?.close();
 		this.telegram?.stop();
 		this.watchers?.stop();
-		this.automations?.stop();
+		await this.automations?.stop().catch(() => undefined);
 		this.apps?.stop();
 		this.work?.stop();
 		this.watchdog?.stop();

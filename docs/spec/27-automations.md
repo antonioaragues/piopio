@@ -158,8 +158,18 @@ The mockup differs from this spec in two places, and the handoff should follow t
 
 - **One store.** `<home>/automations.json` holds the automations. `<home>/automation-runs.json` holds their runs, the
   last 100 per automation. Both are written the way `work.json` is.
-- **One scheduler.** One pi-durable task per time automation (`automation:<id>`), sleeping until `next` (PR6). Every
-  fire is idempotent, keyed by `id + fireTime`.
+- **One scheduler.** One pi-durable task per time automation (`piopio.automation`, PR6), sleeping until `next`. Every
+  fire is idempotent, keyed by `id + fireTime`. As built (2026-11-26, `automations/clock.ts`):
+  - The tasks live in a Harness of the engine's own, `<home>/automations-clock.sqlite`, that runs tasks only: no
+    models, no conversation anyone talks to. The list and each `next` stay in `automations.json`; the file holds only
+    the sleeps, and they are made again from the list (a file that won't open falls back to memory).
+  - A task carries the automation's id and its trigger. Changing the time, pausing or removing an automation ends its
+    task; a new or resumed one gets a task. A fire cut off by a crash runs again, and the fire key keeps it to once.
+  - Waking is the host's, through pi-durable's `onWake`: it says when the earliest sleep is due and the engine arms
+    one timer for it, again after the Mac wakes and at least every hour. The first build had its own `setTimeout`
+    clock over the list instead; this replaced it.
+  - Not on pi-durable: the budget check of a run that is a Piopio conversation (every 15 s while one works). Those
+    runs are Build sessions, outside any Harness.
 - **One set of watchers.** `AgentWatchers` (`watchers.ts`) becomes the automations' watchers: folders and email for
   every automation, whoever runs it. The work runner's routine watching goes.
 - **Webhooks.** The hooks endpoint gains `POST /hooks/a/<automationId>/<token>`. The old URLs (`/hooks/<agentId>/

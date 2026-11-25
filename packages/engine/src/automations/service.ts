@@ -1,6 +1,7 @@
 /**
- * Automations (docs/spec/27 §5): one store, one clock, one set of watchers, one way to fire. A time automation sleeps
- * until its next fire (a fire missed while the engine was off runs once when it's back); folder and email ones are
+ * Automations (docs/spec/27 §5): one store, one clock, one set of watchers, one way to fire. A time automation is a
+ * pi-durable task that sleeps until its next fire (`clock.ts`; a fire missed while the engine was off runs once when
+ * it's back); folder and email ones are
  * handed to the watchers; webhook ones are called through the hooks endpoint, at their own address or one they had
  * before. A fire is a run: an agent's (its run machinery, 06 PR1) or Piopio's (a new conversation, in the project's
  * folder or loose). Rules live here, not in the prompts (26 §7.2): who may run what, where, and with which result.
@@ -12,6 +13,7 @@ import { outsideText } from "@piopio/pi-extensions";
 import type { AutomationSummary } from "@piopio/runtime";
 import { DEFAULT_BUDGET, nameOf, nextOf, parseWhen, PIOPIO, resultLabel, systemZone, whenLabel, type Automation, type AutomationRun, type ResultTo, type RunStatus, type Trigger } from "./model.js";
 import { writeFileAtomic } from "../atomic.js";
+import { AutomationClock } from "./clock.js";
 
 /** `cloud`: it runs in your cloud (docs/spec/30 K1), which keeps its own automations. */
 export type AgentInfo = { id: string; name: string; telegram: boolean; cloud?: boolean };
@@ -19,6 +21,8 @@ export type AgentInfo = { id: string; name: string; telegram: boolean; cloud?: b
 export type AutomationsHost = {
 	file: string;
 	runsFile: string;
+	/** Where the clock keeps its sleeps (pi-durable, SQLite); in memory without one. */
+	clockFile?: string;
 	log(line: string): void;
 	/** One of your agents. */
 	agent(id: string): AgentInfo | undefined;
@@ -80,7 +84,7 @@ const OUTSIDE: Record<string, string> = {
 export class Automations {
 	private store: Store;
 	private runs: AutomationRun[];
-	private timer?: NodeJS.Timeout;
+	private clock?: Promise<AutomationClock | undefined>;
 	private budgetTimer?: NodeJS.Timeout;
 	private stopped = false;
 	/** Agent runs that settled before `fire` recorded them (a fast run), by "<agent>/<run>". */
@@ -527,52 +531,62 @@ export class Automations {
 			}
 		}
 		if (changed) this.save();
-		this.arm();
+		this.clock = AutomationClock.open({
+			...(this.host.clockFile ? { file: this.host.clockFile } : {}),
+			...(this.host.now ? { now: this.host.now } : {}),
+			log: (line) => this.host.log(line),
+			wanted: () => this.store.automations.filter((a) => this.sleeps(a)).map((a) => ({ id: a.id, sig: sigOf(a) })),
+			next: (id, sig) => {
+				const a = this.find(id);
+				return a && this.sleeps(a) && sigOf(a) === sig ? a.next : undefined;
+			},
+			fire: (id, at) => this.due(id, at).catch((error: unknown) => this.host.log(`Automation ${id}: ${(error as Error).message}`)),
+		}).catch((error: unknown) => {
+			this.host.log(`Automations' clock didn't start: ${(error as Error).message}`);
+			return undefined;
+		});
+		this.sync();
 		this.watchBudgets();
 	}
 
+	/** A time automation that waits for its next fire. */
+	private sleeps(a: Automation): boolean {
+		return a.enabled && a.on === "time" && a.next !== undefined;
+	}
+
+	/** The list changed: the clock's tasks follow it. Nothing to do before `start` (the list is read then). */
+	private sync(): void {
+		void this.clock?.then((clock) => (this.stopped ? undefined : clock?.reconcile()));
+	}
+
 	/**
-	 * After the Mac slept: the timer was armed on a clock that stopped meanwhile, so what fell due while it slept would
-	 * have waited up to an hour more. Armed again, it fires what's due now.
+	 * After the Mac slept: the clock's timer was armed on a clock that stopped meanwhile, so what fell due while it
+	 * slept would have waited up to an hour more. Armed again, it fires what's due now.
 	 */
 	woke(): void {
-		this.arm();
+		void this.clock?.then((clock) => clock?.woke());
 	}
 
-	stop(): void {
+	async stop(): Promise<void> {
 		this.stopped = true;
-		clearTimeout(this.timer);
 		clearInterval(this.budgetTimer);
+		this.budgetTimer = undefined;
+		const clock = await this.clock;
+		this.clock = undefined;
+		await clock?.close();
 	}
 
-	/** Sleeps until the next time automation (at most an hour, so a changed clock is picked up). */
-	private arm(): void {
-		clearTimeout(this.timer);
-		if (this.stopped) return;
-		const next = Math.min(...this.store.automations.filter((a) => a.enabled).map((a) => a.next ?? Infinity));
-		if (!Number.isFinite(next)) return;
-		this.timer = setTimeout(() => void this.tick().catch((error: unknown) => this.host.log(`Automations: ${(error as Error).message}`)), Math.min(Math.max(next - this.now(), 0), 3_600_000));
-		this.timer.unref?.();
-	}
-
-	/** Fires what's due, then sets each one's next. A once that has fired is done and goes. */
-	private async tick(): Promise<void> {
-		const now = this.now();
-		const due = this.store.automations.filter((a) => a.enabled && a.next !== undefined && a.next <= now);
+	/** A time automation's moment came (its task woke): it fires, and its next is set. A once that has fired goes. */
+	private async due(id: string, at: number): Promise<void> {
 		// Right after the engine starts, the app may not have handed over the keys yet: wait for it (at most a minute).
-		if (due.length) await this.host.ready?.();
-		for (const a of due) {
-			const at = a.next!;
-			a.next = nextOf(a, now);
-			await this.fire(a.id, "time", undefined, `time:${Math.floor(at / 60_000)}`).catch((error: unknown) => this.host.log(`Automation ${a.id}: ${(error as Error).message}`));
-		}
-		if (due.length) {
-			const done = this.store.automations.filter((a) => a.on === "time" && a.at !== undefined && a.next === undefined);
-			if (done.length) this.store.automations = this.store.automations.filter((a) => !done.includes(a));
-			this.save();
-			this.host.changed();
-		}
-		this.arm();
+		await this.host.ready?.();
+		const a = this.find(id);
+		if (!a || !this.sleeps(a)) return;
+		a.next = nextOf(a, this.now());
+		await this.fire(a.id, "time", undefined, `time:${Math.floor(at / 60_000)}`).catch((error: unknown) => this.host.log(`Automation ${a.id}: ${(error as Error).message}`));
+		if (a.at !== undefined && a.next === undefined) this.store.automations = this.store.automations.filter((x) => x !== a);
+		this.save();
+		this.host.changed();
 	}
 
 	/** While a Piopio run works, its cost is checked: over its budget, it stops and says so (AU8). */
@@ -605,7 +619,7 @@ export class Automations {
 
 	private saved(watches: boolean): void {
 		this.save();
-		this.arm();
+		this.sync();
 		this.host.changed();
 		if (watches) this.host.watchesChanged();
 	}
@@ -628,6 +642,11 @@ export class Automations {
 		this.saveRuns();
 		this.saved(automations.some((a) => a.on === "folder" || a.on === "email"));
 	}
+}
+
+/** An automation's trigger in time, as its clock task was made for: a changed one gets a new task. */
+function sigOf(a: Automation): string {
+	return `${a.cron ?? ""}|${a.at ?? ""}|${a.tz ?? ""}`;
 }
 
 function readJson<T>(file: string): T | undefined {
