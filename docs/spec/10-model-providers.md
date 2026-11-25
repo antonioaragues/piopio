@@ -1,6 +1,6 @@
 # 10 — Multi-provider model support
 
-Requirements written by the user outside this repo and handed over on 2026-10-22 (roadmap backlog D2). P0 built 2026-10-22 (§11), with custom endpoints (P1) the same day; Settings › Models redesigned 2026-10-23 (§12); OpenRouter's live model list added 2026-10-26 (§13). The inspection is §9.
+Requirements written by the user outside this repo and handed over on 2026-10-22 (roadmap backlog D2). P0 built 2026-10-22 (§11), with custom endpoints (P1) the same day; Settings › Models redesigned 2026-10-23 (§12); OpenRouter's live model list added 2026-10-26 (§13) and removed 2026-11-26, when pi's own `models.json` and catalog began to be followed (§14). The inspection is §9.
 
 ## 1. Background and research findings
 Piopio uses pi as its agent harness but exposes OpenRouter as the only model provider. pi already implements most of what multiple providers need:
@@ -208,6 +208,8 @@ Built from the design handoff in [docs/design/models](../design/models/IMPLEMENT
 - https://pi.dev/changelog/releases/0.80.8
 
 ## 13. OpenRouter models newer than pi (2026-10-26)
+> **Removed 2026-11-26 (§14).** pi now publishes a newer catalog on pi.dev and Piopio follows it, so `openrouter-live.ts` and `openrouter-models.json` are gone. What follows is how it was.
+
 - **Why a model can be missing:** pi ships OpenRouter's models as a list fixed at its release (`pi-ai/providers/data/openrouter.json`), and its refresh only narrows that list to what your key may use. A model OpenRouter adds later never shows. Example: `deepseek/deepseek-v4.1-flash-1017` (released 17 October) wasn't in pi 1.3.0.
 - **The upgrade:** pi moved to 1.4.0, which lists it. The migration:
   - durable sleeps (`sleepUntil`) for schedules and the outbox, with sleeping tasks counted as live;
@@ -218,3 +220,17 @@ Built from the design handoff in [docs/design/models](../design/models/IMPLEMENT
   - **From the catalog:** reasoning levels and compatibility flags, taken from the model of the same maker with the closest id.
   - **When:** the first model list waits for it, and Refresh in the picker forces it; otherwise a stale list updates in the background.
 - **Checked on 2026-10-26:** five models on top of pi 1.4.0 (`openai/gpt-6.1-terra`, `moonshotai/kimi-k3.1-pro`, `minimax/minimax-m3.1-flash`, …). A real request through pi's runtime to `minimax/minimax-m3.1-flash` answered.
+
+## 14. pi's own model configuration (2026-11-26)
+
+Since the first scaffold the engine created pi's model runtime with its `models.json` and its catalog refresh switched off, without a recorded reason. Both are pi's own mechanisms, and both are on now.
+
+- **`models.json` in pi's folder applies here too**, as it does in pi's CLI: providers it adds, a built-in provider's base URL or headers, and `modelOverrides` (a model's name, limits, cost or `compat`). It is read at start and again on Refresh.
+  - A provider that only exists in `models.json` is in the runtime, but the picker still lists the providers you connected in Settings › Models (FR2: billing stays explicit). Listing those too is a separate decision.
+- **Models newer than this pi come from pi's catalog on pi.dev**, for every built-in provider, not only OpenRouter. pi asks at most every four hours and keeps what it got; OpenRouter's is then narrowed to what your key may use.
+  - Kept in `<home>/models-store.json`, not beside pi's own: OpenRouter's list is narrowed to the key in the Keychain, which pi's CLI may not have.
+  - The first model list after a start restores the kept catalog and asks in the background; Refresh in the picker waits for it. Nothing is asked before the engine serves, in tests, or with the scripted model.
+- **Checked on 2026-11-25:** pi.dev's OpenRouter catalog was a day old and lacked 3 of OpenRouter's 410 tool-calling models, all two days old or less.
+- **§13's live list is removed** (decided by the user, 2026-11-26). With pi's catalog on, it only added the newest few models, with flags guessed from a sibling model. A brand-new OpenRouter model now shows a day or two later, with pi's real flags. Its cache file is deleted at start.
+- **What stays from that module:** the one flag pi's OpenRouter catalog lacks for Claude (`supportsMidConvoSystemMessages`, 38 §8 R2), now alone in `openrouter-flags.ts`. Checked 2026-11-25: none of pi.dev's 32 `anthropic/*` OpenRouter entries has it. It goes when pi's catalog carries it.
+- **Not changed:** custom endpoints keep their own `endpoints.json` and Keychain keys (§11). pi's `models.json` could describe them, but it holds keys in a file.

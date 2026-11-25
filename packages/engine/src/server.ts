@@ -85,6 +85,8 @@ export type EngineOptions = {
 	faux?: boolean;
 	piSessionDir?: string;
 	piAgentDir?: string;
+	/** Follow pi's model catalog on pi.dev (models newer than this pi). The app's engine turns it on; tests don't. */
+	remoteCatalog?: boolean;
 	/** Where deleted build session files go (tests); default ~/.Trash. */
 	trashDir?: string;
 	/** Where agent folders go (tests); default ~/Piopio/Agents or PIOPIO_AGENTS_DIR. */
@@ -169,7 +171,7 @@ export class Engine {
 		this.log = options.log ?? ((line) => process.stderr.write(`${line}\n`));
 		ensureDirs(options.paths);
 		this.inputReceipts = new InputReceipts(join(options.paths.home, "requests.db"));
-		this.hub = new ModelHub(this.secrets, { faux: options.faux ?? false, home: options.paths.home });
+		this.hub = new ModelHub(this.secrets, { faux: options.faux ?? false, home: options.paths.home, piAgentDir: options.piAgentDir ?? getAgentDir(), ...(options.remoteCatalog ? { remoteCatalog: true } : {}) });
 		this.connectors = new ConnectorHub(this.secrets, {
 			home: options.paths.home,
 			...(options.connectorEndpoints ? { endpoints: options.connectorEndpoints } : {}),

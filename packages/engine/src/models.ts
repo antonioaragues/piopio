@@ -4,7 +4,7 @@
  * Keychain (`KeychainCredentialStore`). Providers are whatever pi supports; the OpenAI API alias lets an
  * OpenAI key sit next to ChatGPT sign-in.
  */
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { fauxAssistantMessage, fauxProvider, fauxText, fauxThinking, fauxToolCall, type Model, type Api, type Provider } from "@earendil-works/pi-ai";
@@ -14,7 +14,7 @@ import { credentialSecret, KeychainCredentialStore } from "./credentials.js";
 import { checkEndpoint, type Endpoint, endpointBilling, endpointConfig, type EndpointFormat, Endpoints, isEmbedding, isLocal } from "./endpoints.js";
 import { billingLabel, connectMethods, FEATURED, SUBSCRIPTION_PROVIDERS, KEY_PAGES, maskKey, openaiApiAlias, POPULAR, PREFERRED_MODEL, providerFamilies, providerKind, UTILITY_MODEL, verifyKey } from "./providers.js";
 import type { SecretBroker } from "./secrets.js";
-import { OpenRouterLive } from "./openrouter-live.js";
+import { withClaudeFlags } from "./openrouter-flags.js";
 import { CLAUDE_CODE, ClaudeCodeAgent } from "./coding-agents.js";
 import { ACP_AGENTS, AcpAgent } from "./acp.js";
 
@@ -29,6 +29,9 @@ import { OnDeviceModel, OnDeviceUnavailable } from "./on-device.js";
 import type { UtilityChoice } from "@piopio/protocol";
 import { writeFileAtomic } from "./atomic.js";
 
+
+/** How often a model list asks pi to check its catalog (pi itself skips pi.dev when it asked in the last four hours). */
+const CATALOG_CHECK_MS = 3_600_000;
 
 export class ModelHub {
 	readonly extraCosts: ExtraCosts;
@@ -61,7 +64,18 @@ export class ModelHub {
 
 	constructor(
 		private readonly secrets: SecretBroker,
-		private readonly options: { faux?: boolean; home?: string; onDevice?: OnDeviceModel; claudeCode?: ClaudeCodeAgent } = {},
+		private readonly options: {
+			faux?: boolean;
+			home?: string;
+			onDevice?: OnDeviceModel;
+			claudeCode?: ClaudeCodeAgent;
+			/** pi's folder: its `models.json` (your own providers, base URLs and model overrides) applies here too. */
+			piAgentDir?: string;
+			/** Follow pi's model catalog on pi.dev (models newer than this pi, for every provider). Off in tests. */
+			remoteCatalog?: boolean;
+			/** Where that catalog is asked for (tests); default pi.dev. */
+			catalogBaseUrl?: string;
+		} = {},
 	) {
 		this.onDevice = options.onDevice ?? new OnDeviceModel();
 		// The real Claude Code is looked for except in faux runs (tests, captures), which get the pretend one on request.
@@ -81,6 +95,8 @@ export class ModelHub {
 		this.budget = new MonthBudget(options.home ? join(options.home, "budget.json") : undefined, this.ledger);
 		this.ledger.onWrite = () => this.budget.written();
 		this.loadVisibility();
+		// What OpenRouter's own model list was cached in before pi's catalog was followed (docs/spec/10 §14).
+		if (options.home) rmSync(join(options.home, "openrouter-models.json"), { force: true });
 		if (options.faux) {
 			// PIOPIO_FAUX_MODEL_NAME: captures of a long model name (the composer in a narrow column, docs/spec/37).
 			const name = process.env.PIOPIO_FAUX_MODEL_NAME;
@@ -91,16 +107,23 @@ export class ModelHub {
 
 	/** Creates the runtime once; every other method waits for it. */
 	ready(): Promise<ModelRuntime> {
-		this.starting ??= ModelRuntime.create({ credentials: this.credentials, modelsPath: null, refreshOnCreate: false }).then((rt) => {
+		const { piAgentDir, home } = this.options;
+		this.starting ??= ModelRuntime.create({
+			credentials: this.credentials,
+			// pi's own models.json, as pi's CLI reads it. Without pi's folder (unit tests): none.
+			modelsPath: piAgentDir ? join(piAgentDir, "models.json") : null,
+			// The refreshed catalogs are kept in Piopio's folder, not beside pi's: OpenRouter's is narrowed to the key in
+			// the Keychain, which pi's CLI may not have.
+			...(piAgentDir && home ? { modelsStorePath: join(home, "models-store.json") } : {}),
+			// Nothing over the network, or from the Keychain, before the engine serves: `followCatalog` does it later.
+			refreshOnCreate: false,
+			...(this.options.catalogBaseUrl ? { catalogBaseUrl: this.options.catalogBaseUrl } : {}),
+		}).then((rt) => {
 			const openai = rt.getProvider("openai");
 			if (openai?.auth.apiKey) rt.registerNativeProvider(openaiApiAlias(openai));
-			// OpenRouter models newer than pi's catalog, from the last list fetched (openrouter-live.ts).
+			// Claude through OpenRouter: the one flag pi's catalog lacks there (openrouter-flags.ts).
 			const openrouter = rt.getProvider("openrouter");
-			if (openrouter && !this.faux) {
-				this.openrouterBase = openrouter;
-				this.live.recompute(openrouter.getModels());
-				rt.registerNativeProvider(this.live.wrap(openrouter, this.anthropicCatalog(rt)));
-			}
+			if (openrouter && !this.faux) rt.registerNativeProvider(withClaudeFlags(openrouter, this.anthropicCatalog(rt)));
 			if (this.faux) rt.registerNativeProvider(this.faux.provider);
 			for (const e of this.endpoints.list()) rt.registerProvider(e.id, endpointConfig(e) as never);
 			this.runtime = rt;
@@ -116,25 +139,26 @@ export class ModelHub {
 		return (anthropic.getAllModels?.call(anthropic) ?? anthropic.getModels()) as readonly Model<Api>[];
 	}
 
-	/** pi's own OpenRouter provider, before the live models were added to it. */
-	private openrouterBase?: Provider;
-	private liveCatalog?: OpenRouterLive;
-	private get live(): OpenRouterLive {
-		return (this.liveCatalog ??= new OpenRouterLive(this.options.home ? join(this.options.home, "openrouter-models.json") : undefined));
-	}
+	private catalogRestored = false;
+	private catalogChecked = 0;
 
 	/**
-	 * Adds OpenRouter models that pi's catalog doesn't have yet. The first time, and when the app asks to refresh, it
-	 * waits for OpenRouter's list; otherwise a list older than six hours is fetched in the background.
+	 * pi's own catalog refresh, for the connected providers: models.json is read again, the catalog kept from last time
+	 * is restored, and pi.dev is asked for a newer one (pi asks at most every four hours; OpenRouter's is then narrowed
+	 * to what your key may use). The first list after a start waits for the kept catalog only; the network runs in the
+	 * background unless you asked to refresh.
 	 */
-	private async updateLive(rt: ModelRuntime, force: boolean): Promise<void> {
-		const base = this.openrouterBase;
-		if (!base) return;
-		const apply = (changed: boolean) => {
-			if (changed) rt.registerNativeProvider(this.live.wrap(base, this.anthropicCatalog(rt)));
-		};
-		const update = this.live.update(base.getModels(), { force }).then(apply);
-		if (force || this.live.models.length === 0) await update;
+	private async followCatalog(rt: ModelRuntime, connected: Set<string>, force: boolean): Promise<void> {
+		const providers = [...connected].filter((id) => !this.endpoints.get(id) && id !== "faux" && rt.getProvider(id));
+		if (!providers.length) return;
+		if (!this.catalogRestored) {
+			this.catalogRestored = true;
+			await rt.refresh({ providers, allowNetwork: false }).catch(() => undefined);
+		}
+		if (!force && Date.now() - this.catalogChecked < CATALOG_CHECK_MS) return;
+		this.catalogChecked = Date.now();
+		const network = rt.refresh({ providers, ...(force ? { force: true } : {}) }).catch(() => undefined);
+		if (force) await network;
 	}
 
 	/** The shared runtime (pi-ai `Models`). The engine awaits `ready()` before serving, so it's always there. */
@@ -194,8 +218,8 @@ export class ModelHub {
 	async listModels(refresh = false): Promise<ModelInfo[]> {
 		const rt = await this.ready();
 		const ids = await this.connected();
-		if (refresh && ids.has("openrouter")) await rt.refresh({ providers: ["openrouter"] }).catch(() => undefined);
-		if (ids.has("openrouter")) await this.updateLive(rt, refresh);
+		if (this.options.remoteCatalog) await this.followCatalog(rt, ids, refresh);
+		else if (refresh && ids.has("openrouter")) await rt.refresh({ providers: ["openrouter"] }).catch(() => undefined);
 		const out: ModelInfo[] = [];
 		if (this.faux) out.push(...rt.getModels("faux").map((m) => toInfo(m, "Faux", undefined)));
 		for (const id of ids) {

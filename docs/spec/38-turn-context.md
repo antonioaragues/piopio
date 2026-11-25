@@ -203,7 +203,7 @@ second mode for R1 (recorded with `resolveTranscript(…, true)`, the in-place f
   system prompt section …". OpenRouter takes it (HTTP 200), the cache holds across it (14,849 tokens read, 0 written),
   and the model uses it (it answers the question from the update). Placed before the question, it works too. Folded
   into the leading prompt, as before, the first time it misses the cache entirely (0 read, 14,876 written).
-- **The flag.** Piopio's OpenRouter wrapper (`openrouter-live.ts`) gives each model OpenRouter serves through the
+- **The flag.** Piopio's OpenRouter wrapper (`openrouter-flags.ts`; `openrouter-live.ts` until 2026-11-26) gives each model OpenRouter serves through the
   Anthropic Messages API the `supportsMidConvoSystemMessages` that pi's own catalog has for the same model on
   Anthropic's API (`anthropic/claude-haiku-5.5` → `claude-haiku-5-5`). Nothing else changes, and Piopio keeps no list of
   its own. A test checks pi's two catalogs still line up.

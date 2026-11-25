@@ -33,6 +33,7 @@ const engine = new Engine({
 	paths,
 	log,
 	faux: process.env.PIOPIO_FAUX === "1",
+	remoteCatalog: process.env.PIOPIO_FAUX !== "1",
 	...(process.env.PIOPIO_PI_SESSION_DIR ? { piSessionDir: process.env.PIOPIO_PI_SESSION_DIR } : {}),
 	...(process.env.PIOPIO_PI_AGENT_DIR ? { piAgentDir: process.env.PIOPIO_PI_AGENT_DIR } : {}),
 	// Dev and captures with the scripted model only: point connected apps at a fake server (JSON, see ConnectorEndpoints).
