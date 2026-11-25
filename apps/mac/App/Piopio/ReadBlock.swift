@@ -6,8 +6,9 @@ import SwiftUI
 /// Read (docs/design/read, option A): what the answer is based on, the same block in a chat's column and a project's.
 /// Folded: "2 you gave · 9 files · 4 pages". Open (remembered for every conversation), one list with a subheading per
 /// source: **You gave** (attachments, then the paths you @mentioned), **Files** (what it opened with its read tool;
-/// projects only), **Pages** (what it fetched, and what its searches found). Six of each, then "and N more". A click
-/// opens the thing itself; only "Show in Files ›", at the end in a project, goes to another panel.
+/// projects only), **Pages** (what it fetched, and what its searches found). Files show the first six: the rest are in
+/// "Show in Files ›", at the end in a project, the only link to another panel. Pages show six, then "and N more". A
+/// row's click opens the thing itself.
 /// Commands aren't here: they're actions, not sources (the timeline, and Background while they run).
 struct ReadBlock: View {
     let thread: ThreadModel
@@ -61,11 +62,10 @@ struct ReadBlock: View {
             }
             if !files.isEmpty {
                 BlockSubheading("Files")
-                ForEach(shown(files, "files"), id: \.self) { path in
+                ForEach(files.prefix(Self.shortList), id: \.self) { path in
                     let (dir, name) = Self.split(path)
                     ReadRow(icon: "doc", title: name, detail: dir, trailing: Self.kind(path), help: "Open \(path)") { openRead(path) }
                 }
-                more(files.count, "files")
             }
             if !found.pages.isEmpty {
                 BlockSubheading("Pages")
