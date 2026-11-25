@@ -14,9 +14,9 @@ and projects use the same definition; a project just has more sources.
   30. Opens in the browser.
 
 **The block.** Folded: "2 you gave · 9 files · 4 pages". Open (remembered for every conversation, `readOpen`): a
-subheading per group, six rows each. Files stop at six: the rest are behind "Show in Files ›" at the end, which opens
-Files on Touched (2026-11-25: "and N more" there was a second way to the same list). Pages, which have no panel,
-show six then "and N more".
+subheading per group, six rows each. Files stop at six: the rest are behind "Show more in Files ›" at the end
+("Show in Files ›" when none are left out), which opens Files on Touched (2026-11-25: "and N more" there was a second
+way to the same list). Pages, which have no panel, show six then "and N more".
 A row click never goes to another panel; only that link does.
 
 **Not in Read.** Commands are actions, not sources: the timeline, and Background while they run. What it changed is

@@ -7,7 +7,8 @@ import SwiftUI
 /// Folded: "2 you gave · 9 files · 4 pages". Open (remembered for every conversation), one list with a subheading per
 /// source: **You gave** (attachments, then the paths you @mentioned), **Files** (what it opened with its read tool;
 /// projects only), **Pages** (what it fetched, and what its searches found). Files show the first six: the rest are in
-/// "Show in Files ›", at the end in a project, the only link to another panel. Pages show six, then "and N more". A
+/// "Show more in Files ›" ("Show in Files ›" when none are left out), at the end in a project, the only link to
+/// another panel. Pages show six, then "and N more". A
 /// row's click opens the thing itself.
 /// Commands aren't here: they're actions, not sources (the timeline, and Background while they run).
 struct ReadBlock: View {
@@ -78,7 +79,7 @@ struct ReadBlock: View {
                 more(found.pages.count, "pages")
             }
             if let showInFiles, !files.isEmpty {
-                SummaryLink("Show in Files ›", action: showInFiles)
+                SummaryLink(files.count > Self.shortList ? "Show more in Files ›" : "Show in Files ›", action: showInFiles)
                     .help("The project's tree, with what it read and changed")
                     .padding(.top, 10)
             }
