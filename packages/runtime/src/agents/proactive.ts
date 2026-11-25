@@ -16,6 +16,8 @@ import { cronLabel, dayOf, inWindow, nextDay, nextFire, nextHeartbeat, windowEnd
 export type RunKind = "schedule" | "heartbeat" | "reminder" | "trigger" | "manual" | "automation";
 export type RunRecord = {
 	id: string;
+	/** A durable task reports how it ends (`settled.ts`); absent on runs started before that. */
+	watched?: boolean;
 	kind: RunKind;
 	/** The schedule, reminder or trigger id. */
 	source: string;
@@ -119,6 +121,8 @@ export interface ProactiveHost {
 	person(contactId: string): Promise<{ id: ConversationId; submit: (input: never, context: Context) => Promise<unknown> }>;
 	/** A new conversation with the agent's model and tools. */
 	newConversation(): Promise<ConversationId>;
+	/** Submits `draft` there under a durable watcher that reports how it settles (`settled.ts`); `change` goes in the same commit. */
+	submitWatched(conversationId: ConversationId, kind: "run", ref: string, draft: JsonObject, change: (state: ProactiveState) => void): Promise<void>;
 	/** Memory for a run: what's relevant to its prompt, from the owner's and shared partitions. */
 	recallForRun(conversationId: ConversationId, prompt: string): Promise<void>;
 	/** Whether the agent may work now (pause, budget: 06 §9). */
@@ -316,24 +320,25 @@ export class Proactivity {
 			return skipped;
 		}
 		const conversationId = await this.host.newConversation();
-		const run: RunRecord = { id: runId(key), kind, source, prompt, firedAt: new Date(this.host.now()).toISOString(), conversationId: String(conversationId), ...(deliverTo ? { deliverTo } : {}), status: "running", sent: 0, ...extras(extra) };
-		await this.host.write((s) => {
+		const run: RunRecord = { id: runId(key), watched: true, kind, source, prompt, firedAt: new Date(this.host.now()).toISOString(), conversationId: String(conversationId), ...(deliverTo ? { deliverTo } : {}), status: "running", sent: 0, ...extras(extra) };
+		await this.host.recallForRun(conversationId, prompt).catch(() => undefined);
+		// The run's record and the task that submits its prompt and reports its end go in one commit. No process
+		// waits for the answer, and a restart loses nothing.
+		await this.host.submitWatched(conversationId, "run", run.id, { type: "input", content: prompt, requestId: key }, (s) => {
 			s.runs = [...(s.runs ?? []), run].slice(-MAX_RUNS);
 		});
-		await this.host.recallForRun(conversationId, prompt).catch(() => undefined);
-		const conversation = await this.host.harness.conversation(conversationId, this.host.context);
-		const submission = (await conversation!.submit({ type: "input", content: prompt, requestId: key } as never, this.host.context)) as { wait(c: Context): Promise<{ status: string }> };
 		this.host.onRun?.(run);
-		void submission.wait(this.host.context).then(
-			(settled) => this.settle(run.id, settled.status === "done" ? "done" : "failed"),
-			() => undefined,
-		);
 		return run;
 	}
 
-	/** Brings back the wait on runs a previous engine left running. */
+	/** A run's submission settled (its watcher says so): done with an answer, failed otherwise. */
+	settled(runId: string, status: string): Promise<void> {
+		return this.settle(runId, status === "done" ? "done" : "failed");
+	}
+
+	/** Runs left running by an engine from before runs had a watcher: followed in memory, as they were. */
 	async resumeRuns(): Promise<void> {
-		for (const run of ((await this.host.read()).runs ?? []).filter((r) => r.status === "running")) {
+		for (const run of ((await this.host.read()).runs ?? []).filter((r) => r.status === "running" && !r.watched)) {
 			const conversation = await this.host.harness.conversation(Number(run.conversationId) as never, this.host.context);
 			if (!conversation) continue;
 			void conversation.waitForIdle(this.host.context).then(() => this.settle(run.id, "done"), () => undefined);

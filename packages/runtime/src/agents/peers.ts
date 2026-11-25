@@ -64,7 +64,8 @@ export const AgentReplied = defineSignal({ name: "piopio.agent-replied", version
 type Ask = { requestId: string; envelopeId: string; to: AgentRef; conversationId: string; question: string; status: "waiting" | "late" | "done"; taskId?: string };
 /** What a parked `ask_agent` call resumes with. */
 type AskCheckpoint = { requestId: string; envelopeId: string; traceId: string; to: AgentRef };
-type Serving = { envelopeId: string; from: AgentRef; conversationId: string; mode: "ask" | "tell"; requestId?: string; traceId: string; hop: number; done?: boolean };
+/** `watched`: a durable task reports when it's answered (`settled.ts`); absent on messages taken before that. */
+type Serving = { envelopeId: string; from: AgentRef; conversationId: string; mode: "ask" | "tell"; requestId?: string; traceId: string; hop: number; done?: boolean; watched?: boolean };
 
 export type PeerState = {
 	/** peer agent id → the conversation with it. */
@@ -97,6 +98,8 @@ export interface PeerHost {
 	traceCost(traceId: string): Promise<number>;
 	/** The conversation with another agent, made on first contact; `side` makes a fresh one for nested messages. */
 	conversation(peerId: string, side?: boolean): Promise<{ id: ConversationId; submit: (input: never, context: Context) => Promise<{ wait(c: Context): Promise<{ status: string }> }> }>;
+	/** Submits `draft` there under a durable watcher that reports when it settles (`settled.ts`); `change` goes in the same commit. */
+	submitWatched(conversationId: ConversationId, kind: "peer", ref: string, draft: object, change: (state: PeerState) => void): Promise<void>;
 	/** Whether the agent may work now (pause, budget). */
 	gate(): Promise<{ ok: true } | { ok: false; message: string }>;
 	askTimeoutMs: number;
@@ -250,31 +253,32 @@ export class Peers {
 		const nested = main !== undefined && ((await this.host.read()).serving ?? []).some((s) => !s.done && s.conversationId === main && s.traceId === envelope.traceId);
 		const conversation = await this.host.conversation(envelope.from.id, nested);
 		const conversationId = String(conversation.id);
-		await this.host.write((s) => {
-			s.inbound = { ...(s.inbound ?? {}), [conversationId]: { traceId: envelope.traceId, hop: envelope.hop, envelopeId: envelope.id } };
-			s.serving = [...(s.serving ?? []), { envelopeId: envelope.id, from: envelope.from, conversationId, mode: envelope.mode as "ask" | "tell", ...(envelope.requestId ? { requestId: envelope.requestId } : {}), traceId: envelope.traceId, hop: envelope.hop }].slice(-MAX_LOG);
-		});
 		await this.log({ id: envelope.id, traceId: envelope.traceId, hop: envelope.hop, ...(envelope.parent ? { parent: envelope.parent } : {}), mode: envelope.mode, from: envelope.from, to: envelope.to, text: envelope.text, at: envelope.at, status: envelope.mode === "ask" ? "waiting" : "sent", side: "in" });
 		await this.host.recall?.(conversation.id, envelope.text).catch(() => undefined);
-		const submission = await conversation.submit({ type: "input", content: envelope.text, entry: { kind: AGENT_ENTRY, data: envelope }, whenBusy: "followUp", requestId: `amsg:${envelope.id}` } as never, this.host.context);
-		void submission.wait(this.host.context).then(
-			() => this.answered(envelope.id),
-			() => undefined,
-		);
+		// What's being answered and the task that submits it and reports its answer go in one commit. No process
+		// waits meanwhile, and after a restart the answer still goes back.
+		await this.host.submitWatched(conversation.id, "peer", envelope.id, { type: "input", content: envelope.text, entry: { kind: AGENT_ENTRY, data: envelope }, whenBusy: "followUp", requestId: `amsg:${envelope.id}` }, (s) => {
+			s.inbound = { ...(s.inbound ?? {}), [conversationId]: { traceId: envelope.traceId, hop: envelope.hop, envelopeId: envelope.id } };
+			s.serving = [...(s.serving ?? []), { envelopeId: envelope.id, watched: true, from: envelope.from, conversationId, mode: envelope.mode as "ask" | "tell", ...(envelope.requestId ? { requestId: envelope.requestId } : {}), traceId: envelope.traceId, hop: envelope.hop }].slice(-MAX_LOG);
+		});
 	}
 
-	/** A message was answered: the answer goes back (asks), and the cost is logged. */
-	private async answered(envelopeId: string): Promise<void> {
+	/**
+	 * A message was answered (its watcher says so): the answer goes back (asks), and the cost is logged. May run again
+	 * after a crash: the answer goes back before the message is marked done, and the asker takes a reply only once.
+	 */
+	async answered(envelopeId: string): Promise<void> {
 		const serving = (await this.host.read()).serving?.find((s) => s.envelopeId === envelopeId);
 		if (!serving || serving.done) return;
 		const { answer, costUsd } = await this.answerOf(serving.conversationId, envelopeId);
-		await this.host.write((s) => {
-			const x = s.serving?.find((y) => y.envelopeId === envelopeId);
-			if (x) x.done = true;
-			s.serving = (s.serving ?? []).filter((y) => !y.done);
-		});
+		const done = () =>
+			this.host.write((s) => {
+				const x = s.serving?.find((y) => y.envelopeId === envelopeId);
+				if (x) x.done = true;
+				s.serving = (s.serving ?? []).filter((y) => !y.done);
+			});
 		await this.patchLog(envelopeId, "in", { status: serving.mode === "ask" ? (answer ? "replied" : "no_reply") : "sent", ...(answer ? { reply: answer } : {}), costUsd });
-		if (serving.mode !== "ask") return;
+		if (serving.mode !== "ask") return done();
 		const reply: Envelope = {
 			id: this.id("amsg"),
 			mode: "reply",
@@ -288,6 +292,7 @@ export class Peers {
 			at: new Date(this.host.now()).toISOString(),
 		};
 		await this.host.deliver(serving.from.id, reply).catch(() => undefined);
+		await done();
 	}
 
 	/** The last answer after a message in a conversation, and what producing it cost. */
@@ -310,10 +315,10 @@ export class Peers {
 		return { answer, costUsd };
 	}
 
-	/** After a restart: messages left being answered are followed again. */
+	/** Messages left being answered by an engine from before they had a watcher: followed in memory, as they were. */
 	async resume(): Promise<void> {
 		for (const s of (await this.host.read()).serving ?? []) {
-			if (s.done) continue;
+			if (s.done || s.watched) continue;
 			const conversation = await this.host.harness.conversation(Number(s.conversationId) as never, this.host.context);
 			if (!conversation) continue;
 			void conversation.waitForIdle(this.host.context).then(() => this.answered(s.envelopeId), () => undefined);

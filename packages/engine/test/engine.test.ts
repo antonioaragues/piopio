@@ -2048,6 +2048,30 @@ describe("Agents: proactivity (milestone 4.3)", () => {
 		expect(lines).toEqual(["From Stretch · wrote to you", "From New activity · nothing new, didn't write", "From Away note · wrote to you", "Run now · nothing new, didn't write", "Run now · nothing new, didn't write"]);
 		expect(outbound(items)).toHaveLength(2);
 	}, 60_000);
+
+	test("a run's end is reported by a pi-durable task asleep on its submission: a restart mid-run still ends it done, with its answer", async () => {
+		let a = await start();
+		const { ref } = await a.client.call("agents.create", { name: "Helper", owner: "Antonio", model: { provider: "faux", id: "faux-1" } });
+		// Long enough to still be answering when the engine stops (the faux model streams 40 tokens a second).
+		const long = Array.from({ length: 120 }, (_, i) => `word${i}`).join(" ");
+		const { runId } = await a.client.call("agents.runNow", { ref, prompt: long });
+		type Graph = { value: { tasks: Record<string, { kind: string; state: { status: string; signals?: { signal: string }[] } }> }; stop(): Promise<unknown> };
+		const watcher = async () => {
+			const { harness, context } = (await a.engine.sessions.agent(ref)).core.safety["host"] as unknown as { harness: { watchTaskGraph(context: unknown): Promise<Graph> }; context: unknown };
+			const graph = await harness.watchTaskGraph(context);
+			const found = Object.values(graph.value.tasks).find((t) => t.kind === "piopio.settled");
+			await graph.stop();
+			return found?.state;
+		};
+		expect(await until(watcher, (s) => s?.status === "sleeping")).toMatchObject({ signals: [{ signal: "pi.submission-settled" }] });
+		expect((await a.client.call("agents.runs", { ref })).runs.find((r: { id: string }) => r.id === runId)).toMatchObject({ status: "running" });
+		await stop(a);
+		a = await start(a.home);
+		const runs = await until(() => a.client.call("agents.runs", { ref }) as Promise<Runs>, (r) => r.runs.find((x) => x.id === runId)?.status === "done", 40_000);
+		expect(runs.runs.find((x) => x.id === runId)!.summary).toMatch(/^Echo: word0 word1/);
+		expect(await watcher()).toBeUndefined();
+		await stop(a);
+	}, 90_000);
 });
 
 describe("Agents: approvals, budgets and the Inbox (milestone 4.4)", () => {

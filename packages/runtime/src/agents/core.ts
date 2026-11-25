@@ -11,6 +11,7 @@ import { configure, defineDoc, defineExtension, defineTool, GenerationTask, hook
 import type { MemoryProvider, MemoryRecord } from "../memory/provider.js";
 import type { AgentDefinition, Contact } from "./definition.js";
 import { OUT_ENTRY, Proactivity, type AutomationsBridge, type ProactiveState, type Reminder, type RunRecord, type Watch } from "./proactive.js";
+import { defineSettledTask, type WatchKind } from "./settled.js";
 import { ApprovalDecided, Safety, type Approval, type ResultCard, type SafetyState, type UndoRecord } from "./safety.js";
 import { describeChange, learnFacts, unlearn, type Complete, type LearnedChange } from "../memory/learn.js";
 import { APPLE_TOOLS, AppUnavailable, appleTools, type AppToolResult } from "./apple.js";
@@ -203,6 +204,7 @@ export class AgentCore {
 	readonly extension: Extension;
 	readonly proactive: Proactivity;
 	readonly safety: Safety;
+	private readonly settledTask: ReturnType<typeof defineSettledTask>;
 	/** Tools that kept failing the same way this turn (context/failures.ts). */
 	readonly failures = new FailureGuard();
 	readonly peers: Peers;
@@ -215,6 +217,13 @@ export class AgentCore {
 		const now = () => (options.now?.() ?? new Date()).getTime();
 		const read = async () => ({ people: {}, recalled: {}, ...((await harness.snapshot(AgentStateDoc, context)) ?? {}) }) as AgentState;
 		const write = (change: (state: AgentState) => void) => harness.commit(async (tx) => change((await tx.doc(AgentStateDoc)) as never), context);
+		// Runs and messages from other agents: submitted and followed to their end by a durable task (settled.ts).
+		this.settledTask = defineSettledTask((kind, ref, status) => (kind === "run" ? this.proactive.settled(ref, status) : this.peers.answered(ref)));
+		const submitWatched = (conversationId: ConversationId, kind: WatchKind, ref: string, draft: object, change: (state: AgentState) => void) =>
+			harness.commit(async (tx) => {
+				change((await tx.doc(AgentStateDoc)) as never);
+				await tx.createTask(this.settledTask, { kind, ref, draft: draft as JsonObject }, { ownership: { kind: "conversation" }, conversationId, background: true });
+			}, context);
 		this.safety = new Safety({
 			harness,
 			context,
@@ -258,6 +267,7 @@ export class AgentCore {
 			recordUndo: (kind, data, title, conversationId) => this.safety.recordUndo(kind, data, title, conversationId),
 			person: (id) => this.conversation(id) as never,
 			newConversation: () => this.newConversation(),
+			submitWatched: submitWatched as never,
 			recallForRun: (conversationId, prompt) => this.recallInto(conversationId, ["owner", "shared"], prompt),
 			...(options.watchUrl ? { watchUrl: options.watchUrl } : {}),
 			...(options.onWatches ? { onWatches: options.onWatches } : {}),
@@ -292,6 +302,7 @@ export class AgentCore {
 			deliver: (to, envelope) => (options.peers ? options.peers.deliver(to, envelope) : Promise.reject(new Error("No other agents here."))),
 			traceCost: (traceId) => options.peers?.traceCost(traceId) ?? Promise.resolve(0),
 			conversation: (peerId, side) => (side ? this.sideConversation(peerId) : this.agentConversation(peerId)) as never,
+			submitWatched: submitWatched as never,
 			gate: () => this.safety.gate(),
 			askTimeoutMs: options.askTimeoutMs ?? 10 * 60_000,
 			recall: (conversationId, text) => this.recallInto(conversationId, ["shared"], text),
@@ -788,7 +799,7 @@ export class AgentCore {
 		return defineExtension({
 			name: "piopio-agent",
 			tools: [remember, recall, forget, ...files.all, setUp, askOwner, p.send, p.schedule, p.list, p.cancel, p.watch, p.automate, p.listAutomations, p.changeAutomation, p.cancelAutomation, ...this.apple, this.peers.tools.ask, this.peers.tools.tell],
-			tasks: [this.proactive.scheduleTask, this.proactive.outboxTask],
+			tasks: [this.proactive.scheduleTask, this.proactive.outboxTask, this.settledTask],
 			// Approvals, the pause and the budget apply to every tool call (06 §9).
 			hooks: [
 				hook(ToolTask, {
