@@ -109,6 +109,15 @@ import Testing
     #expect(parts[2].chip == "notes.md")
 }
 
+@Test func theActivityLineCountsOnlyWhatLoaded() {
+    let page = { (id: String, status: ToolItem.Status) in
+        ToolItem(id: id, at: "", callId: id, tool: "web_fetch", args: .object(["url": .string("https://\(id).example")]), status: status)
+    }
+    let missing = ToolItem(id: "r", at: "", callId: "r", tool: "read", args: .object(["path": .string("/p/gone.md")]), status: .error)
+    let steps = StepsItem(id: "s", at: "", tools: [page("a", .error), page("b", .error), page("c", .done), missing])
+    #expect(ItemRenderer.activityParts(steps, root: "/p").map(\.text) == ["Read 1 page", "3 steps failed"])
+}
+
 @Test func screenshotsAStepReadShowOnItsActivityLine() throws {
     let json = #"{"kind":"steps","id":"s","at":"","tools":[{"id":"t","at":"","callId":"c","tool":"read","args":{"path":"/tmp/probe.png"},"status":"done","images":[{"name":"probe.png","kind":"image","mimeType":"image/png","stored":"tools/c-1.png"}]}]}"#
     guard case .steps(let steps) = try JSONDecoder().decode(TimelineItem.self, from: Data(json.utf8)) else { Issue.record("not steps"); return }

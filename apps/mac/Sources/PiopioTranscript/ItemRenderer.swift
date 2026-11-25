@@ -489,7 +489,8 @@ nonisolated struct ItemRenderer: Sendable {
         if let thinking = s.thinking, !thinking.isEmpty { parts.append(ActivityPart(text: thought(s.thinkingMs).lowercased())) }
         func paths(_ kinds: Set<String>) -> [String] {
             var seen: [String] = []
-            for t in tools where kinds.contains(t.tool) && t.status != .denied {
+            // A file it failed to read or change wasn't read or changed: "1 step failed" says so (as Read does).
+            for t in tools where kinds.contains(t.tool) && t.status != .denied && t.status != .error {
                 let path = relative(t.args?["path"]?.stringValue ?? "", root: root)
                 if !path.isEmpty, !seen.contains(path) { seen.append(path) }
             }
@@ -579,7 +580,8 @@ nonisolated struct ItemRenderer: Sendable {
         if commands > 0 { out.append("\(commands) command\(commands == 1 ? "" : "s")") }
         let searches = tools.filter { $0.tool == "web_search" }.count
         if searches > 0 { out.append(searches == 1 ? "searched the web" : "searched the web \(searches) times") }
-        let pages = tools.filter { $0.tool == "web_fetch" }.count
+        // A page that didn't load wasn't read (as Read counts them); "1 step failed" says so.
+        let pages = tools.filter { $0.tool == "web_fetch" && $0.status != .error }.count
         if pages > 0 { out.append("read \(pages) page\(pages == 1 ? "" : "s")") }
         // Connected apps (docs/spec/12-connectors): what was done, in words.
         let apps: [(Set<String>, String, String)] = [

@@ -28,6 +28,7 @@ import Testing
         .steps(StepsItem(id: "s1", at: "", tools: [
             ToolItem(id: "t3", at: "", callId: "c3", tool: "read", args: .object(["path": .string("README.md")]), status: .done),
             ToolItem(id: "t4", at: "", callId: "c4", tool: "read", args: .object(["path": .string("src/app.swift")]), status: .done),
+            ToolItem(id: "t7", at: "", callId: "c7", tool: "read", args: .object(["path": .string("src/gone.swift")]), status: .error),
             ToolItem(id: "t5", at: "", callId: "c5", tool: "bash", args: .object(["command": .string("rm -rf /")]), status: .denied),
             ToolItem(id: "t6", at: "", callId: "c6", tool: "bash", args: .object(["command": .string("make")]), status: .pendingApproval),
         ])),

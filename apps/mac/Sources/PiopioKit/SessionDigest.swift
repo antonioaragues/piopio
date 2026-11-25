@@ -86,7 +86,8 @@ public enum SessionDigest {
         func tool(_ t: ToolItem) {
             switch t.tool {
             case "read":
-                guard let raw = t.args?["path"]?.stringValue, t.status != .denied else { return }
+                // A file it failed to read wasn't read.
+                guard let raw = t.args?["path"]?.stringValue, t.status != .denied, t.status != .error else { return }
                 let path = relative(raw, cwd: cwd)
                 if seenRead.insert(path).inserted { out.read.append(path) }
             case "edit", "write":
