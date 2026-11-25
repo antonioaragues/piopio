@@ -262,11 +262,18 @@ export class Projects {
 		return this.entryFor(cwd)?.prEvents ?? "tell";
 	}
 
-	/** The check to run after the agent's edits in `cwd`'s project (05-build "Diagnostics"): set, detected, or none. */
+	/**
+	 * The check to run after the agent's edits in `cwd`'s project (05-build "Diagnostics"): the one set in Project
+	 * settings, else one detected from its files, else none. A detected check runs the repository's own scripts
+	 * (`npm run typecheck` is whatever its package.json says) without asking, so it's only detected once the project
+	 * is trusted: not in one whose network is still filtered (docs/spec/39: from elsewhere, not trusted yet), nor in a
+	 * folder that isn't a project unless pi or Claude Code trust it (re-audit 2026-11-25 V2).
+	 */
 	checkFor(cwd: string): string | undefined {
 		const entry = this.entryFor(cwd);
-		if (!entry) return detectCheck(cwd);
+		if (!entry) return this.trustedElsewhere(cwd) ? detectCheck(cwd) : undefined;
 		if (entry.check !== undefined) return entry.check || undefined;
+		if (entry.network === "filtered") return undefined;
 		return detectCheck(entry.path);
 	}
 

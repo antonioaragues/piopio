@@ -19,7 +19,7 @@ import {
 	type AgentSession,
 	type ExtensionFactory,
 } from "@earendil-works/pi-coding-agent";
-import { backgroundExtension, confine, diagnosticsExtension, ProcessManager, proxyEnv, sandboxRoots, seatbeltProfile, sandboxUnavailable, type BackgroundProcess, type FilteredNetwork } from "@piopio/pi-extensions";
+import { backgroundExtension, confine, diagnosticsExtension, ProcessManager, proxyEnv, sandboxProfile, sandboxUnavailable, type BackgroundProcess, type FilteredNetwork } from "@piopio/pi-extensions";
 import { NetworkFilter } from "../network-filter.js";
 import { codeReviewExtension, type ReviewBridge } from "../code-review.js";
 import { approvalsExtension, checkpointsExtension, goalExtension, notifyExtension, planExtension, presentExtension, sandboxExtension, subagentsExtension, todosExtension, type ApprovalMode, type Question, type Rule, type SubagentBridge, type Verdict } from "@piopio/pi-extensions";
@@ -258,21 +258,6 @@ export class BuildRuntime implements Runtime {
 					{ shellPath: () => settingsManager.getShellPath(), processes: () => processes },
 				),
 				backgroundExtension(() => processes),
-				// The project's check after the agent's edits, confined like its commands (05-build "Diagnostics").
-				...(o.checkCommand
-					? [
-							diagnosticsExtension({
-								command: o.checkCommand,
-								shell: () => settingsManager.getShellPath() ?? process.env.SHELL ?? "/bin/sh",
-								wrap: (command, cwd) => {
-									const confined = (o.sandbox?.() ?? true) && o.approvals.mode() !== "full_auto" && process.platform === "darwin" && !sandboxUnavailable();
-									// Filtered like the session's commands: through its proxy, or nowhere outside this Mac.
-									const filtered = o.network?.filtered() ?? false;
-									return confined ? confine(command, seatbeltProfile(sandboxRoots(cwd), undefined, undefined, filtered), settingsManager.getShellPath() ?? process.env.SHELL ?? "/bin/sh", undefined, filtered && filterPort ? proxyEnv(filterPort) : {}) : command;
-								},
-							}),
-						]
-					: []),
 				approvalsExtension({
 					mode: o.approvals.mode,
 					// Host rules are the network filter's (docs/spec/39), not a tool's.
@@ -351,6 +336,24 @@ export class BuildRuntime implements Runtime {
 						};
 					},
 				}),
+				// The project's check after the agent's edits, confined like its commands (05-build "Diagnostics"). After
+				// approvals and plan mode: it runs the check as a baseline on the first edit's tool_call, and pi stops at
+				// the first handler that blocks, so a denied or plan-mode edit never runs the project's scripts
+				// (re-audit 2026-11-25 V2). Keep it after every extension that can block an edit.
+				...(o.checkCommand
+					? [
+							diagnosticsExtension({
+								command: o.checkCommand,
+								shell: () => settingsManager.getShellPath() ?? process.env.SHELL ?? "/bin/sh",
+								wrap: (command, cwd) => {
+									const confined = (o.sandbox?.() ?? true) && o.approvals.mode() !== "full_auto" && process.platform === "darwin" && !sandboxUnavailable();
+									// Filtered like the session's commands: through its proxy, or nowhere outside this Mac.
+									const filtered = o.network?.filtered() ?? false;
+									return confined ? confine(command, sandboxProfile(cwd, { filtered }), settingsManager.getShellPath() ?? process.env.SHELL ?? "/bin/sh", undefined, filtered && filterPort ? proxyEnv(filterPort) : {}) : command;
+								},
+							}),
+						]
+					: []),
 				subagentsExtension(o.runTask ? { run: o.runTask, ...(o.tasks ?? {}), ...(o.externalAgents?.length ? { agents: o.externalAgents } : {}) } : undefined),
 				notifyExtension(notifyBridge(o, broker, () => runtime)),
 				// Last: pi's tools list and rules for Piopio's preamble, from the tools the others turned on.

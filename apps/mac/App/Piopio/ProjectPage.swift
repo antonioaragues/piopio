@@ -404,6 +404,8 @@ struct CheckAfterEditsRow: View {
 
     private var line: String {
         switch check.source {
+        // A detected check runs the repository's own scripts, so the engine waits for trust (projects.ts checkFor).
+        case .auto where project.network == .filtered && check.command != nil: return "Runs \(check.command!) once you trust this project"
         case .auto, .set: return check.command.map { "Runs \($0)" } ?? "Nothing to run: set a command"
         case .off: return "The agent sees errors only when it runs a build"
         }

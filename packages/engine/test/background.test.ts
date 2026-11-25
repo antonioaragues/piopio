@@ -1,5 +1,5 @@
 /** Background commands in a Build session (docs/spec/05-build §9 TM4, roadmap PAR2), with the scripted model. */
-import { mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { SessionEvent, Snapshot } from "@piopio/protocol";
@@ -216,5 +216,36 @@ describe("the project's check after edits (05-build Diagnostics, roadmap PAR5)",
 		await stateWhere(a, sub, (s) => s.status === "idle" && states(a, sub).length > 0);
 		await new Promise((r) => setTimeout(r, 500));
 		expect((await notes()).length).toBe(1);
+	});
+
+	// Re-audit 2026-11-25 V2: the detected check (the repository's own scripts) ran as a baseline on the first edit,
+	// before its approval card and even when the edit was denied.
+	test("a detected check doesn't run in a project that isn't trusted yet, nor before an edit is approved", { timeout: 60_000 }, async () => {
+		const a = await start();
+		const folder = realpathSync(mkdtempSync(join(tmpdir(), "piopio-check-untrusted-")));
+		const ran = join(folder, "ran.txt");
+		writeFileSync(join(folder, "package.json"), JSON.stringify({ scripts: { typecheck: `node -e "require('fs').appendFileSync('ran.txt','x')"` } }));
+		const { project } = await a.client.call("projects.add", { path: folder });
+		expect(project.network).toBe("filtered");
+		const { ref } = await a.client.call("sessions.create", { kind: "build", cwd: folder });
+		const sub = (await a.client.call("sessions.subscribe", { ref })).subscriptionId as string;
+		await a.client.call("sessions.submit", { ref, input: { text: "write: src/a.ts | export const a = 1" } });
+		await stateWhere(a, sub, (s) => s.status === "idle" && states(a, sub).length > 1);
+		expect(existsSync(join(folder, "src", "a.ts"))).toBe(true);
+		expect(existsSync(ran)).toBe(false);
+
+		// Trusted, in Ask: the edit waits for its card, and denying it runs nothing.
+		await a.client.call("projects.configure", { id: project.id, trust: true });
+		const asked = (await a.client.call("sessions.create", { kind: "build", cwd: folder })).ref;
+		const askedSub = (await a.client.call("sessions.subscribe", { ref: asked })).subscriptionId as string;
+		await a.client.call("sessions.configure", { ref: asked, approvalMode: "ask" });
+		await a.client.call("sessions.submit", { ref: asked, input: { text: "write: src/b.ts | export const b = 1" } });
+		const waiting = await stateWhere(a, askedSub, (s) => s.status === "waiting_approval");
+		// Give a baseline that ran first time to write its file.
+		await new Promise((r) => setTimeout(r, 1500));
+		expect(existsSync(ran)).toBe(false);
+		await a.client.call("sessions.respond", { ref: asked, promptId: waiting.prompts![0]!.id, response: { decision: "deny" } });
+		await stateWhere(a, askedSub, (s) => s.status === "idle");
+		expect(existsSync(ran)).toBe(false);
 	});
 });
