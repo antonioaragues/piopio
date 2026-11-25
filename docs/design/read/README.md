@@ -10,7 +10,8 @@ and projects use the same definition; a project just has more sources.
   (an attachment in its viewer), a folder in Finder.
 - **Files** (projects only): what it opened with its read tool, first read first. Opens in the preview beside the
   conversation; a path outside the project shows in Finder.
-- **Pages**: pages it fetched, and the sources its web searches returned, at most 30. Opens in the browser.
+- **Pages**: pages it fetched (a fetch that failed doesn't count), and the sources its web searches returned, at most
+  30. Opens in the browser.
 
 **The block.** Folded: "2 you gave · 9 files · 4 pages". Open (remembered for every conversation, `readOpen`): a
 subheading per group, six rows then "and N more". In a project, "Show in Files ›" at the end opens Files on Touched.
@@ -24,3 +25,6 @@ Changes. AGENTS.md belongs to Setup; skills have their own block.
 **Changed from before.** A project's Read was a count ("2 files · 144 commands ›") that jumped to Files; a chat's
 listed attachments and pages with "4 pages · 1 file". The data now comes from one place, `SessionDigest.inputs`
 (pages joined it, the commands count left it); `ChatResults` and `ChatReadBlock` are gone.
+
+Captures (2026-11-25, faux model): `app/project.png` (two mentions, ten files read, "and 4 more", Show in Files) and
+`app/chat.png` (an attachment and the one page of three that loaded).

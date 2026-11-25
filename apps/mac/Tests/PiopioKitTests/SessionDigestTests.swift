@@ -52,6 +52,7 @@ import Testing
                      details: .object(["type": .string("page"), "url": .string("https://www.visitlisboa.com/march"), "title": .string("Lisbon in March")])),
             ToolItem(id: "t3", at: "", callId: "c3", tool: "web_fetch", args: .object(["url": .string("https://oceanario.pt/tickets?day=12")]), status: .done),
             ToolItem(id: "t4", at: "", callId: "c4", tool: "web_fetch", args: .object(["url": .string("https://evil.example")]), status: .denied),
+            ToolItem(id: "t6", at: "", callId: "c6", tool: "web_fetch", args: .object(["url": .string("https://down.example")]), status: .error),
             ToolItem(id: "t5", at: "", callId: "c5", tool: "bash", args: .object(["command": .string("curl https://x.y")]), status: .done),
         ])),
     ]

@@ -48,7 +48,7 @@ public enum SessionDigest {
         public var read: [String] = []
         /// Files it wrote or edited with its own tools (not through commands), relative to the project.
         public var edited: [String] = []
-        /// Pages it fetched and the sources its web searches returned (the search's summary is written from them), first
+        /// Pages it fetched (that loaded) and the sources its web searches returned (the search's summary is written from them), first
         /// seen first, at most `maxPages`.
         public var pages: [Page] = []
         public init() {}
@@ -94,7 +94,8 @@ public enum SessionDigest {
                 let path = relative(raw, cwd: cwd)
                 if seenEdited.insert(path).inserted { out.edited.append(path) }
             case "web_fetch":
-                guard t.status != .denied else { return }
+                // A page that didn't load wasn't read.
+                guard t.status == .done else { return }
                 page(t.details?["url"]?.stringValue ?? t.args?["url"]?.stringValue, t.details?["title"]?.stringValue)
             case "web_search":
                 for result in t.details?["results"]?.arrayValue ?? [] { page(result["url"]?.stringValue, result["title"]?.stringValue) }
