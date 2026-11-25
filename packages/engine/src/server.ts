@@ -4,7 +4,7 @@ import { join, resolve } from "node:path";
 import { appendFileSync, existsSync, unlinkSync, chmodSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { createServer, type Server } from "node:net";
-import { methods, PROTOCOL_VERSION, reverseMethods, type MethodName, type Params, type Result } from "@piopio/protocol";
+import { CALL_TIMEOUT_MS, methods, PROTOCOL_VERSION, reverseMethods, SLOW_METHODS, type MethodName, type Params, type Result } from "@piopio/protocol";
 import { Value } from "typebox/value";
 import { EngineError, ModelHub } from "./models.js";
 import { activity } from "./activity.js";
@@ -709,6 +709,19 @@ export class Engine {
 		if (existsSync(this.options.paths.socket)) unlinkSync(this.options.paths.socket);
 	}
 
+	/** A call that took more than half the app's wait, and isn't one that's slow by nature: worth knowing (protocol SLOW_METHODS). */
+	private async timed<T>(method: MethodName, run: () => Promise<T>): Promise<T> {
+		const started = Date.now();
+		try {
+			return await run();
+		} finally {
+			const ms = Date.now() - started;
+			if (ms > CALL_TIMEOUT_MS / 2 && !(SLOW_METHODS as readonly string[]).includes(method)) {
+				this.log(`${method} took ${Math.round(ms / 1000)} s; the app stops waiting at ${CALL_TIMEOUT_MS / 1000} s. If it's slow by nature, add it to SLOW_METHODS (packages/protocol).`);
+			}
+		}
+	}
+
 	private accept(holder: RpcConnectionFor): void {
 		let authed = false;
 		const owned = new Set<string>();
@@ -752,7 +765,7 @@ export class Engine {
 				return this.hello();
 			}
 			if (!authed) throw new EngineError("AUTH", "Call engine.hello first.");
-			const execute = () => this.handle(method as MethodName, params, conn, owned);
+			const execute = () => this.timed(method as MethodName, () => this.handle(method as MethodName, params, conn, owned));
 			if (method === "sessions.submit" || method === "sessions.edit") {
 				const request = params as { clientRequestId?: string };
 				if (request.clientRequestId) return this.inputReceipts.run(request.clientRequestId, { method, params }, execute);

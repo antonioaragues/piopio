@@ -21,6 +21,7 @@ The single contract between clients (Mac app, later the iOS app) and engines (Lo
 - **Idempotency:** every mutating call accepts `clientRequestId`. It maps onto pi-durable `requestId` / `operationId`.
 - **Errors:** JSON-RPC error codes plus a `data.code` string (`NOT_FOUND`, `BUSY`, `AUTH`, `ENGINE_UNAVAILABLE`, `MODEL_ERROR`, `INVALID`, `CONFLICT`, `QUOTA`).
 - **Time:** ISO-8601 UTC strings.
+- **Waiting (re-audit 2026-11-25):** a client gives up on an answer after `CALL_TIMEOUT_MS` (60 s), or `SLOW_CALL_TIMEOUT_MS` (30 min) for the methods in `SLOW_METHODS`, the ones that do their work before answering (an install, a clone, a deploy, the network). All three are in `packages/protocol/src/index.ts` and in the schema (`x-callTimeouts`). The Mac app's call then fails with `TIMEOUT`, and a late answer is dropped. The engine logs a method outside the list that took more than half the short limit.
 
 ## 3. Methods (v1 surface)
 

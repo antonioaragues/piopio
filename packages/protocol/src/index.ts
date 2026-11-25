@@ -2501,6 +2501,42 @@ export const methods = {
 } satisfies Record<string, { params: TSchema; result: TSchema }>;
 
 export type MethodName = keyof typeof methods;
+
+/**
+ * How long a client waits for an answer, so an engine that's stuck doesn't leave a call (and the screen behind it)
+ * waiting for good. The methods that do their work before answering (an install, a clone, a deploy, the network) get
+ * the long limit; a sign-in answers at once and goes on in the background, so it isn't one of them. The Mac app's
+ * EngineClient uses these (ProtocolContractTests checks it against protocol.schema.json), and the engine logs a call
+ * outside the list that took more than half the short limit: if it's slow by nature, it belongs here.
+ */
+export const CALL_TIMEOUT_MS = 60_000;
+export const SLOW_CALL_TIMEOUT_MS = 30 * 60_000;
+export const SLOW_METHODS = [
+	"agents.deploy",
+	"agents.export",
+	"agents.retire",
+	"agents.runNow",
+	"apps.refresh",
+	"automations.run",
+	"cloud.connect",
+	"cloud.setup",
+	"cloud.update",
+	"endpoints.check",
+	"endpoints.detect",
+	"git.commit",
+	"git.sync",
+	"github.clone",
+	"github.repos",
+	"mcp.probe",
+	"memory.export",
+	"packages.install",
+	"packages.preview",
+	"packages.update",
+	"providers.models",
+	"providers.verifyKey",
+	"sessions.export",
+	"stats.export",
+] as const satisfies readonly MethodName[];
 export type Params<M extends MethodName> = Static<(typeof methods)[M]["params"]>;
 export type Result<M extends MethodName> = Static<(typeof methods)[M]["result"]>;
 

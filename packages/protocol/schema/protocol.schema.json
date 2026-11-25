@@ -2,6 +2,36 @@
 	"$schema": "https://json-schema.org/draft/2020-12/schema",
 	"title": "Piopio Engine Protocol",
 	"version": "1.0",
+	"x-callTimeouts": {
+		"defaultMs": 60000,
+		"slowMs": 1800000,
+		"slowMethods": [
+			"agents.deploy",
+			"agents.export",
+			"agents.retire",
+			"agents.runNow",
+			"apps.refresh",
+			"automations.run",
+			"cloud.connect",
+			"cloud.setup",
+			"cloud.update",
+			"endpoints.check",
+			"endpoints.detect",
+			"git.commit",
+			"git.sync",
+			"github.clone",
+			"github.repos",
+			"mcp.probe",
+			"memory.export",
+			"packages.install",
+			"packages.preview",
+			"packages.update",
+			"providers.models",
+			"providers.verifyKey",
+			"sessions.export",
+			"stats.export"
+		]
+	},
 	"definitions": {
 		"ContainerRef": {
 			"type": "object",

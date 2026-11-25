@@ -27,7 +27,9 @@ export function protocolSchema(): Record<string, unknown> {
 	}
 	// What the engine sends unasked: the app decodes several with `try?`, so a mismatch drops them without a word.
 	for (const [name, params] of Object.entries(P.notifications)) definitions[`${name}.notification`] = params;
-	return { $schema: "https://json-schema.org/draft/2020-12/schema", title: "Piopio Engine Protocol", version: P.PROTOCOL_VERSION, definitions };
+	// How long a client waits (index.ts SLOW_METHODS): the Mac app's EngineClient is checked against this.
+	const callTimeouts = { defaultMs: P.CALL_TIMEOUT_MS, slowMs: P.SLOW_CALL_TIMEOUT_MS, slowMethods: [...P.SLOW_METHODS].sort() };
+	return { $schema: "https://json-schema.org/draft/2020-12/schema", title: "Piopio Engine Protocol", version: P.PROTOCOL_VERSION, "x-callTimeouts": callTimeouts, definitions };
 }
 
 /** The file's text: tabs, a final new line. */

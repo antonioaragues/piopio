@@ -71,3 +71,30 @@ private final class FakeEngine: @unchecked Sendable {
     #expect(reply?.contains(#""id":"r1""#) == true)
     await client.close()
 }
+
+/// An engine that's stuck (connected, but not answering) used to leave a call waiting for good, and the screen behind
+/// it with it (re-audit 2026-11-25 §5.2). Now the call ends with TIMEOUT, a late answer is dropped, and the next call works.
+@Test func aCallTheEngineDoesNotAnswerEndsWithATimeout() async throws {
+    let path = "/tmp/pk-\(UUID().uuidString.prefix(8)).sock"
+    let engine = try FakeEngine(path: path)
+    defer { engine.close() }
+    let client = EngineClient(socketPath: path, limits: (normal: .milliseconds(300), slow: .seconds(30)))
+    try await client.connect()
+    struct Empty: Codable, Sendable {}
+    struct Status: Decodable { let uptimeMs: Double }
+    do {
+        _ = try await client.call("engine.status", Empty(), as: Status.self)
+        Issue.record("it answered")
+    } catch let error as EngineError {
+        #expect(error.code == "TIMEOUT")
+    }
+    let first = await Task.detached { engine.readLine(timeout: 5) }.value
+    #expect(first?.contains(#""id":1"#) == true)
+    // The late answer, then the next call's.
+    async let next = client.call("engine.status", Empty(), as: Status.self)
+    let second = await Task.detached { engine.readLine(timeout: 5) }.value
+    #expect(second?.contains(#""id":2"#) == true)
+    engine.send(#"{"jsonrpc":"2.0","id":1,"result":{"uptimeMs":1}}"# + "\n" + #"{"jsonrpc":"2.0","id":2,"result":{"uptimeMs":2}}"# + "\n")
+    #expect(try await next.uptimeMs == 2)
+    await client.close()
+}

@@ -33,12 +33,18 @@ public actor EngineClient {
     private var framer = LineFramer()
     private var nextId = 1
     private var pending: [Int: CheckedContinuation<Data, Error>] = [:]
+    /// Each waiting call's time limit, cancelled when it's answered.
+    private var deadlines: [Int: Task<Void, Never>] = [:]
     private var reverseHandler: ReverseRequestHandler?
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
 
-    public init(socketPath: String) {
+    private let limits: (normal: Duration, slow: Duration)
+
+    /// `limits` is for tests: the app waits as long as the protocol says (`callTimeout`, `slowCallTimeout`).
+    public init(socketPath: String, limits: (normal: Duration, slow: Duration) = (EngineClient.callTimeout, EngineClient.slowCallTimeout)) {
         self.socketPath = socketPath
+        self.limits = limits
         (sessionEvents, eventsContinuation) = AsyncStream.makeStream(bufferingPolicy: .unbounded)
         (catalogChanges, catalogContinuation) = AsyncStream.makeStream(bufferingPolicy: .unbounded)
         (projectChanges, projectsContinuation) = AsyncStream.makeStream(bufferingPolicy: .bufferingNewest(1))
@@ -82,13 +88,32 @@ public actor EngineClient {
         return try await call("engine.hello", HelloParams(token: token, client: client, protocolVersion: protocolVersion, services: services), as: HelloResult.self)
     }
 
+    /// How long a call waits for its answer: the protocol's CALL_TIMEOUT_MS, SLOW_CALL_TIMEOUT_MS and SLOW_METHODS
+    /// (packages/protocol/src/index.ts). ProtocolContractTests checks these against protocol.schema.json.
+    public static let callTimeout: Duration = .milliseconds(60_000)
+    public static let slowCallTimeout: Duration = .milliseconds(1_800_000)
+    public static let slowMethods: Set<String> = [
+        "agents.deploy", "agents.export", "agents.retire", "agents.runNow", "apps.refresh", "automations.run",
+        "cloud.connect", "cloud.setup", "cloud.update", "endpoints.check", "endpoints.detect", "git.commit", "git.sync",
+        "github.clone", "github.repos", "mcp.probe", "memory.export", "packages.install", "packages.preview",
+        "packages.update", "providers.models", "providers.verifyKey", "sessions.export", "stats.export",
+    ]
+
+    /// A call, and its answer. An engine that doesn't answer in time (stuck, not gone: a closed connection fails every
+    /// call at once) ends it with `TIMEOUT`; a late answer is dropped.
     public func call<P: Encodable & Sendable, R: Decodable>(_ method: String, _ params: P, as: R.Type = R.self) async throws -> R {
         guard let connection else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
         let id = nextId
         nextId += 1
         let body = try encoder.encode(Request(id: id, method: method, params: params))
+        let limit = Self.slowMethods.contains(method) ? limits.slow : limits.normal
         let line = try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Data, Error>) in
             pending[id] = cont
+            deadlines[id] = Task { [weak self] in
+                try? await Task.sleep(for: limit)
+                guard !Task.isCancelled else { return }
+                await self?.fail(id, EngineError(code: "TIMEOUT", message: "The engine didn't answer \(method) in \(limit.components.seconds) s."))
+            }
             send(body, on: connection, failing: id)
         }
         return try decoder.decode(ResultEnvelope<R>.self, from: line).result
@@ -113,6 +138,7 @@ public actor EngineClient {
     }
 
     private func fail(_ id: Int, _ error: Error) {
+        deadlines.removeValue(forKey: id)?.cancel()
         pending.removeValue(forKey: id)?.resume(throwing: error)
     }
 
@@ -187,6 +213,7 @@ public actor EngineClient {
                     Task { await self.answerReverse(id: id, method: method, line: line) }
                 }
             } else if case .int(let id)? = head.id, let cont = pending.removeValue(forKey: id) {
+                deadlines.removeValue(forKey: id)?.cancel()
                 if let error = head.error {
                     cont.resume(throwing: EngineError(code: error.data?.code ?? "INTERNAL", message: error.message))
                 } else {
@@ -215,6 +242,8 @@ public actor EngineClient {
     private func failAll(_ error: Error) {
         let waiting = pending
         pending.removeAll()
+        for deadline in deadlines.values { deadline.cancel() }
+        deadlines.removeAll()
         for cont in waiting.values { cont.resume(throwing: error) }
         eventsContinuation.finish()
         catalogContinuation.finish()

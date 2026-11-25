@@ -286,3 +286,18 @@ private func failures(_ name: String, _ type: any Decodable.Type, _ all: [String
     }
     #expect(problems.isEmpty, "\(problems.joined(separator: "\n"))")
 }
+
+/// How long the app waits for an answer is the protocol's (packages/protocol/src/index.ts SLOW_METHODS): the limits and
+/// the slow methods here are the schema's.
+@Test func callTimeoutsAreTheProtocols() throws {
+    struct Timeouts: Decodable { let defaultMs: Int; let slowMs: Int; let slowMethods: [String] }
+    struct Schema: Decodable {
+        let timeouts: Timeouts
+        enum CodingKeys: String, CodingKey { case timeouts = "x-callTimeouts" }
+    }
+    let data = try Data(contentsOf: repository.appending(path: "packages/protocol/schema/protocol.schema.json"))
+    let t = try JSONDecoder().decode(Schema.self, from: data).timeouts
+    #expect(EngineClient.callTimeout == .milliseconds(t.defaultMs))
+    #expect(EngineClient.slowCallTimeout == .milliseconds(t.slowMs))
+    #expect(EngineClient.slowMethods == Set(t.slowMethods))
+}
