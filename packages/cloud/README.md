@@ -163,7 +163,8 @@ verified in workerd via Miniflare with the faux model (`test/agent.test.ts`, 3 t
   - ~~approval expiry (24 h)~~: since 2026-11-26 a call waiting for approval is parked at pi-durable's gate with the
     24 h as its `until`, so it is one of pi's own sleeps and reaches the alarm through `onWake` (not run on Cloudflare
     yet);
-  - `ask_agent` timeouts;
+  - ~~`ask_agent` timeouts~~: since 2026-11-26 the call is parked on a pi-durable signal with the timeout as its
+    `until`, the same way (not run on Cloudflare yet);
   - the heartbeat's budget check.
 - **Real traffic:** turns go through test routes here. The protocol (`agents.*` over the socket) and channel webhooks
   come in 5.1 and 5.3.

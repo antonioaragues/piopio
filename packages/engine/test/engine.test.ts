@@ -2352,6 +2352,50 @@ describe("Agents: agent-to-agent (milestone 4.6)", () => {
 		const recall = mine.filter((i) => i.kind === "steps").flatMap((s) => (s.kind === "steps" ? s.tools : [])).find((t) => t.tool === "recall")!;
 		expect(recall.output).toContain("The travel budget is 500 euros");
 	}, 120_000);
+
+	test("ask_agent waits parked on a pi-durable signal: it survives a restart, and an answer after the timeout comes back as a new message", async () => {
+		const faux = { provider: "faux", id: "faux-1" };
+		// Long enough that the other agent is still answering (the faux model streams 40 tokens a second).
+		const long = Array.from({ length: 120 }, (_, i) => `word${i}`).join(" ");
+		const pair = async (a: Ctx) => {
+			const make = async (name: string) => (await a.client.call("agents.create", { name, owner: "Antonio", model: faux })).ref as { kind: "agent"; id: string };
+			const scout = await make("Scout"), ledger = await make("Ledger");
+			const got = await a.client.call("agents.get", { ref: scout });
+			expect(await a.client.call("agents.save", { ref: scout, definition: { ...got.definition, tools: { builtin: ["memory"], agents: [ledger.id] } }, instructions: got.instructions })).toEqual({ saved: true, errors: [] });
+			return { scout, ledger };
+		};
+		const items = (a: Ctx, ref: object) => () => a.client.call("sessions.open", { ref }).then((s: Snapshot) => s.items);
+		type Graph = { value: { tasks: Record<string, { state: { status: string } }> }; stop(): Promise<unknown> };
+		const sleeping = async (a: Ctx, ref: { kind: "agent"; id: string }) => {
+			const { harness, context } = (await a.engine.sessions.agent(ref)).core.peers["host"] as unknown as { harness: { watchTaskGraph(context: unknown): Promise<Graph> }; context: unknown };
+			const graph = await harness.watchTaskGraph(context);
+			const found = Object.values(graph.value.tasks).find((t) => t.state.status === "sleeping");
+			await graph.stop();
+			return found?.state;
+		};
+
+		// A restart while it waits: the call stays parked, and the answer reaches it (not a late message).
+		let a = await start(undefined, true, { agentAskTimeoutMs: 60_000 });
+		let { scout, ledger } = await pair(a);
+		await a.client.call("sessions.submit", { ref: scout, input: { text: call("ask_agent", { agent: "Ledger", message: long }) } });
+		expect(await until(() => sleeping(a, scout), (s) => s !== undefined)).toMatchObject({ status: "sleeping", signals: [{ signal: "piopio.agent-replied" }] });
+		await stop(a);
+		a = await start(a.home, true, { agentAskTimeoutMs: 60_000 });
+		await items(a, { ...ledger, conversationId: `agent:${scout.id}` })();
+		let mine = await until(items(a, scout), (xs) => xs.at(-1)?.kind === "assistant" && msgs(xs)[0]?.status === "replied", 40_000);
+		expect(msgs(mine)).toHaveLength(1);
+		expect(msgs(mine)[0]).toMatchObject({ direction: "out", mode: "ask", status: "replied", reply: `Echo: ${long}` });
+		await stop(a);
+
+		// The timeout: the call ends with no answer, and the answer comes back later as a message of its own.
+		a = await start(undefined, true, { agentAskTimeoutMs: 300 });
+		({ scout, ledger } = await pair(a));
+		await a.client.call("sessions.submit", { ref: scout, input: { text: call("ask_agent", { agent: "Ledger", message: long }) } });
+		mine = await until(items(a, scout), (xs) => msgs(xs).some((m) => m.direction === "in" && m.mode === "reply"), 40_000);
+		expect(msgs(mine).find((m) => m.direction === "out")).toMatchObject({ mode: "ask", status: "no_reply" });
+		expect(msgs(mine).find((m) => m.direction === "in")).toMatchObject({ fromAgent: { name: "Ledger" }, text: `Echo: ${long}` });
+		await stop(a);
+	}, 120_000);
 });
 
 describe("Folded transcripts (docs/design v2)", () => {

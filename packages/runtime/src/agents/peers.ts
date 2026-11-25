@@ -2,17 +2,19 @@
  * Agent-to-agent (docs/spec/06-agents §7 AA1–AA7). Agents in the same engine reach each other in-process: A's
  * message lands in B's conversation with A (`agent:<A>`), where B answers it like any input.
  *
- * - `ask_agent` waits for B's answer (10 minutes by default); a later answer comes back to A's conversation as a
- *   follow-up. `tell_agent` doesn't wait.
+ * - `ask_agent` waits for B's answer (10 minutes by default) parked: the tool call sleeps on a pi-durable signal with
+ *   the timeout as its deadline, so no process waits and a restart keeps it waiting. A later answer comes back to A's
+ *   conversation as a follow-up. `tell_agent` doesn't wait.
  * - A may write to B only if B is in A's `tools.agents` and B accepts A (`acceptFrom`, default: every agent).
  * - Every message carries `{traceId, hop}`: hop 5 is refused, a pair may exchange 30 messages an hour, and a trace
  *   may spend $0.50 across all its agents (AA4). Each side keeps a log of what it sent and answered, from which the
  *   engine draws the trace tree (AA5).
- * - Answers in progress survive a restart: B answers when it comes back, and A gets it as a late reply.
+ * - Answers in progress survive a restart: B answers when it comes back, and A's parked call gets it; if that call
+ *   is over (timed out, stopped, cut off), A gets it as a late reply.
  */
-import { awaitWithContext, type Context } from "@earendil-works/chord/context";
+import type { Context } from "@earendil-works/chord/context";
 import { Type } from "typebox";
-import { defineTool, type ConversationId, type Harness } from "@earendil-works/pi-durable";
+import { defineSignal, defineTool, type ConversationId, type Harness } from "@earendil-works/pi-durable";
 import type { AgentDefinition } from "./definition.js";
 
 export const AGENT_ENTRY = "piopio.agent-msg";
@@ -55,7 +57,13 @@ export type PeerLog = {
 	side: "out" | "in";
 };
 
-type Ask = { requestId: string; envelopeId: string; to: AgentRef; conversationId: string; question: string; status: "waiting" | "late" | "done" };
+/** Wakes an `ask_agent` call parked for an answer, under the ask's request id. The answer itself is in the peer log. */
+export const AgentReplied = defineSignal({ name: "piopio.agent-replied", version: 1, schema: Type.Object({}) });
+
+/** `taskId`: the tool task parked for the answer. An ask without one (stored before asks parked) only gets late replies. */
+type Ask = { requestId: string; envelopeId: string; to: AgentRef; conversationId: string; question: string; status: "waiting" | "late" | "done"; taskId?: string };
+/** What a parked `ask_agent` call resumes with. */
+type AskCheckpoint = { requestId: string; envelopeId: string; traceId: string; to: AgentRef };
 type Serving = { envelopeId: string; from: AgentRef; conversationId: string; mode: "ask" | "tell"; requestId?: string; traceId: string; hop: number; done?: boolean };
 
 export type PeerState = {
@@ -102,9 +110,6 @@ const MAX_LOG = 500;
 const HOUR = 3600_000;
 
 export class Peers {
-	private readonly waiters = new Map<string, (reply: string) => void>();
-	/** Answers that arrived before their ask started waiting. */
-	private readonly early = new Map<string, string>();
 	readonly tools;
 
 	constructor(private readonly host: PeerHost) {
@@ -158,7 +163,7 @@ export class Peers {
 	}
 
 	/** Builds, checks (hops, rate, trace budget) and delivers a message. */
-	private async send(mode: "ask" | "tell", ref: string, text: string, conversationId: string): Promise<{ envelope: Envelope; to: AgentRef }> {
+	private async send(mode: "ask" | "tell", ref: string, text: string, conversationId: string, taskId?: string): Promise<{ envelope: Envelope; to: AgentRef }> {
 		const target = await this.resolve(ref);
 		const state = await this.host.read();
 		const context = state.inbound?.[conversationId];
@@ -187,7 +192,7 @@ export class Peers {
 		};
 		await this.host.write((s) => void (s.peerSent = { ...(s.peerSent ?? {}), [target.id]: [...recent, now] }));
 		await this.log({ id: envelope.id, traceId, hop, ...(envelope.parent ? { parent: envelope.parent } : {}), mode, from: this.me, to, text, at: envelope.at, status: mode === "ask" ? "waiting" : "sent", side: "out" });
-		if (mode === "ask") await this.host.write((s) => void (s.asks = [...(s.asks ?? []), { requestId: envelope.requestId!, envelopeId: envelope.id, to, conversationId, question: text, status: "waiting" as const }].slice(-MAX_LOG)));
+		if (mode === "ask") await this.host.write((s) => void (s.asks = [...(s.asks ?? []), { requestId: envelope.requestId!, envelopeId: envelope.id, to, conversationId, question: text, status: "waiting" as const, ...(taskId ? { taskId } : {}) }].slice(-MAX_LOG)));
 		try {
 			await this.host.deliver(target.id, envelope);
 		} catch (error) {
@@ -198,20 +203,20 @@ export class Peers {
 		return { envelope, to };
 	}
 
-	/** B's answer arrived: to the waiting tool call, or as a follow-up in A's conversation. */
+	/** B's answer arrived: to the parked tool call, or as a follow-up in A's conversation. */
 	async receiveReply(envelope: Envelope): Promise<void> {
 		const ask = (await this.host.read()).asks?.find((a) => a.requestId === envelope.requestId);
 		if (!ask) return;
+		// The answer is kept in the log, where the woken call reads it: a signal's value lives in the task record, so it
+		// only carries the wake.
 		await this.patchLog(ask.envelopeId, "out", { status: "replied", reply: envelope.text });
-		if (ask.status === "waiting") {
-			await this.host.write((s) => void (s.asks = (s.asks ?? []).filter((a) => a.requestId !== ask.requestId)));
-			const waiter = this.waiters.get(ask.requestId);
-			if (waiter) waiter(envelope.text);
-			else this.early.set(ask.requestId, envelope.text);
-			return;
-		}
-		// Too late for the tool call (timed out, or the engine restarted): it comes back as a new message.
 		await this.host.write((s) => void (s.asks = (s.asks ?? []).filter((a) => a.requestId !== ask.requestId)));
+		if (ask.taskId) {
+			// pi-durable keeps a signal that arrives before the call sleeps on it, and refuses one for a call that's over.
+			const result = await this.host.harness.signal(Number(ask.taskId) as never, AgentReplied, ask.requestId, {}, this.host.context);
+			if (result === "delivered" || result === "duplicate") return;
+		}
+		// Too late for the tool call (timed out, stopped, or cut off by a restart): it comes back as a new message.
 		const conversation = await this.host.harness.conversation(Number(ask.conversationId) as never, this.host.context);
 		if (!conversation) return;
 		await conversation.submit(
@@ -313,10 +318,8 @@ export class Peers {
 			if (!conversation) continue;
 			void conversation.waitForIdle(this.host.context).then(() => this.answered(s.envelopeId), () => undefined);
 		}
-		// Asks whose tool call ended with the engine: their answers come back as follow-ups.
-		await this.host.write((s) => {
-			for (const a of s.asks ?? []) if (a.status === "waiting") a.status = "late";
-		});
+		// Asks need nothing here: a parked call sleeps through the restart, and the answer to one that was cut off is
+		// refused by its task and comes back as a follow-up (`receiveReply`).
 	}
 
 	async logs(): Promise<PeerLog[]> {
@@ -333,16 +336,30 @@ export class Peers {
 			description: "Ask another of the owner's agents something and wait for its answer (up to a few minutes; a later answer comes back here as a new message).",
 			parameters: Type.Object({ agent: agentParam, message: Type.String() }),
 			execute: async (args, api, context) => {
-				let sent: { envelope: Envelope; to: AgentRef };
-				try {
-					sent = await self.send("ask", args.agent, args.message, String(api.conversationId));
-				} catch (error) {
-					return { output: [{ type: "text", text: (error as Error).message }], isError: true };
+				const parked = api.checkpoint as AskCheckpoint | undefined;
+				if (api.wake === undefined || !parked) {
+					// A fresh call: send, then park until the answer's signal or the timeout. No process waits meanwhile.
+					let sent: { envelope: Envelope; to: AgentRef };
+					try {
+						sent = await self.send("ask", args.agent, args.message, String(api.conversationId), String(api.taskId));
+					} catch (error) {
+						return { output: [{ type: "text", text: (error as Error).message }], isError: true };
+					}
+					const { envelope, to } = sent;
+					const checkpoint: AskCheckpoint = { requestId: envelope.requestId!, envelopeId: envelope.id, traceId: envelope.traceId, to };
+					return { sleep: { signals: [AgentReplied.key(checkpoint.requestId)], until: api.now() + self.host.askTimeoutMs, checkpoint } } as never;
 				}
-				const { envelope, to } = sent;
-				const reply = await self.wait(envelope.requestId!, context);
-				const details = { to, envelopeId: envelope.id, traceId: envelope.traceId, mode: "ask", ...(reply !== undefined ? { reply, status: "replied" } : { status: "no_reply" }) };
+				// Woken: by the answer (kept in the log), or by the timeout.
+				const { to, envelopeId, traceId, requestId } = parked;
+				const woke = await api.readSignal(AgentReplied, requestId, context);
+				const reply = woke !== undefined && "value" in woke ? (await self.host.read()).peerLog?.find((e) => e.id === envelopeId && e.side === "out")?.reply : undefined;
+				const details = { to, envelopeId, traceId, mode: "ask", ...(reply !== undefined ? { reply, status: "replied" } : { status: "no_reply" }) };
 				return { output: [{ type: "text", text: reply !== undefined ? reply : `No answer from ${to.name} yet. When it answers, it comes back to this conversation.` }], details: details as never };
+			},
+			// Stopped while it waited: the question is dropped, so a later answer doesn't start a turn nobody asked for.
+			cancel: async (_args, api) => {
+				const parked = api.checkpoint as AskCheckpoint | undefined;
+				if (parked) await self.host.write((s) => void (s.asks = (s.asks ?? []).filter((a) => a.requestId !== parked.requestId)));
 			},
 		});
 		const tell = defineTool({
@@ -359,27 +376,5 @@ export class Peers {
 			},
 		});
 		return { ask, tell };
-	}
-
-	/** Waits for an ask's answer up to the timeout; undefined when it's late. */
-	private async wait(requestId: string, context: Context): Promise<string | undefined> {
-		const early = this.early.get(requestId);
-		if (early !== undefined) {
-			this.early.delete(requestId);
-			return early;
-		}
-		let timer: ReturnType<typeof setTimeout> | undefined;
-		const answer = new Promise<string | undefined>((resolve) => {
-			this.waiters.set(requestId, resolve);
-			timer = setTimeout(() => resolve(undefined), this.host.askTimeoutMs);
-		});
-		try {
-			const reply = await awaitWithContext(answer, context);
-			if (reply === undefined) await this.host.write((s) => void (s.asks ?? []).filter((a) => a.requestId === requestId).forEach((a) => (a.status = "late")));
-			return reply;
-		} finally {
-			clearTimeout(timer);
-			this.waiters.delete(requestId);
-		}
 	}
 }
