@@ -7,6 +7,7 @@ import { homedir } from "node:os";
 import { createServer, type Server } from "node:net";
 import { methods, PROTOCOL_VERSION, reverseMethods, SECRET_OPENROUTER, type MethodName, type Params, type Result } from "@piopio/protocol";
 import { Value } from "typebox/value";
+import { physical, projectPath } from "@piopio/pi-extensions";
 import { EngineError, keyHint, ModelHub, providerUsage } from "./models.js";
 import { rangeBounds, type LedgerNames } from "./ledger.js";
 import { suggestions } from "./suggest.js";
@@ -676,17 +677,24 @@ export class Engine {
 		}
 	}
 
-	/** Where hooks live (PAR6): pi's extension folders, yours or a project's. */
+	/**
+	 * Where hooks live (PAR6): pi's extension folders, yours or a project's. A project's must really be in the project
+	 * (paths.ts `projectPath`): through a repository's `.pi/extensions -> ~/.pi/agent/extensions`, a hook written for
+	 * one project would run in all of them, trusted or not.
+	 */
 	private hooksDir(project?: string): string {
-		return project ? join(project, ".pi", "extensions") : join(this.chatResources.agentDir, "extensions");
+		if (!project) return join(this.chatResources.agentDir, "extensions");
+		const dir = projectPath(project, join(".pi", "extensions"));
+		if (!dir) throw new EngineError("INVALID", "This project's .pi/extensions is a link to a folder outside it, so Piopio won't put hooks there.");
+		return dir;
 	}
 
-	/** A hook file Piopio may change: a hook-*.ts in your extensions folder or a known project's. */
+	/** A hook file Piopio may change: a hook-*.ts whose folder really is your extensions folder or a known project's. */
 	private ownHook(path: string): void {
-		const dir = resolve(dirname(path));
+		const dir = physical(dirname(path));
 		const name = basename(path);
 		const project = this.projectOf(path);
-		const allowed = [this.hooksDir(), ...(project ? [this.hooksDir(project)] : [])].map((d) => resolve(d));
+		const allowed = [this.hooksDir(), ...(project ? [this.hooksDir(project)] : [])].map((d) => physical(d));
 		if (!/^hook-.+\.ts(\.off)?$/.test(name) || !allowed.includes(dir) || !existsSync(path)) throw new EngineError("INVALID", "That isn't one of your hooks.");
 	}
 
@@ -720,7 +728,8 @@ export class Engine {
 
 	/** Where your skills may be written: every project's folders, and one project's when given (backlog D9). */
 	private skillRoots(project?: string): string[] {
-		return [skillsRoot(this.chatResources.agentDir), join(homedir(), ".agents", "skills"), ...(project ? [skillsRoot(this.chatResources.agentDir, project), join(project, ".agents", "skills")] : [])];
+		const own = project ? [join(".pi", "skills"), join(".agents", "skills")].flatMap((rel) => projectPath(project, rel) ?? []) : [];
+		return [skillsRoot(this.chatResources.agentDir), join(homedir(), ".agents", "skills"), ...own];
 	}
 
 	/** The known project a skill's file is in, if any. */
@@ -1326,7 +1335,8 @@ export class Engine {
 				const p = params as Params<"hooks.list">;
 				const hooks = [
 					...listHooks(this.hooksDir()).map((h) => ({ ...h, where: "yours" as const })),
-					...(p.project ? listHooks(this.hooksDir(p.project)).map((h) => ({ ...h, where: "project" as const })) : []),
+					// A project whose .pi/extensions leads outside it has no hooks of its own to show (hooksDir refuses it).
+					...(p.project && projectPath(p.project, join(".pi", "extensions")) ? listHooks(this.hooksDir(p.project)).map((h) => ({ ...h, where: "project" as const })) : []),
 				];
 				const claude = p.project ? claudeHooks(p.project).map((spec) => ({ spec, sentence: hookSentence(spec) })) : [];
 				return { hooks, claude } satisfies Result<"hooks.list">;

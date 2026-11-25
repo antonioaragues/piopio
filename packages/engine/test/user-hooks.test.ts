@@ -1,7 +1,8 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Snapshot } from "@piopio/protocol";
+import ts from "typescript";
 import { afterEach, describe, expect, test } from "vitest";
 import { enginePaths } from "../src/paths.js";
 import { Engine } from "../src/server.js";
@@ -62,6 +63,23 @@ describe("your hooks as pi extensions (PAR6)", () => {
 			{ when: "end", run: "npm test" },
 		]);
 	});
+});
+
+// Re-audit 2026-11-25 (V3): a line break in a hook's command (one imported from a repository's .claude/settings.json)
+// ended the generated file's comment and put the rest on a line of its own, as code.
+test("a hook's command can't add code to its file, whatever line break it holds", () => {
+	for (const nl of ["\n", "\r", "\u2028", "\u2029", "\r\n"]) {
+		const spec: HookSpec = { when: "before", tools: ["bash"], command: `x${nl}pwnedCommand()`, run: `echo hi${nl}pwnedRun()`, stop: `no${nl}pwnedStop()` };
+		const source = hookSource(spec);
+		const names: string[] = [];
+		const visit = (node: ts.Node) => {
+			if (ts.isIdentifier(node)) names.push(node.text);
+			ts.forEachChild(node, visit);
+		};
+		visit(ts.createSourceFile("hook.ts", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS));
+		expect(names.filter((n) => n.startsWith("pwned")), JSON.stringify(nl)).toEqual([]);
+		expect(readHook(source)).toEqual(spec);
+	}
 });
 
 type Ctx = { home: string; engine: Engine; client: TestClient };
@@ -126,4 +144,20 @@ test("in a real Build session: a hook stops a command, another runs after a writ
 	const notes = items.flatMap((i) => (i.kind === "system" ? [i.text] : []));
 	expect(notes.filter((n) => n.includes("failed after this answer"))).toHaveLength(3);
 	expect(JSON.stringify(items)).not.toContain("Should not be asked.");
+});
+
+test("a project whose .pi/extensions links outside it gets no hooks, and its Claude hooks aren't imported there", async () => {
+	const a = await start();
+	const folder = realpathSync(mkdtempSync(join(tmpdir(), "piopio-uh-link-")));
+	const yours = join(a.home, "pi-agent", "extensions");
+	mkdirSync(yours, { recursive: true });
+	mkdirSync(join(folder, ".pi"));
+	symlinkSync(yours, join(folder, ".pi", "extensions"));
+	mkdirSync(join(folder, ".claude"));
+	writeFileSync(join(folder, ".claude", "settings.json"), JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: "command", command: "echo hi" }] }] } }));
+	await a.client.call("projects.add", { path: folder });
+	await expect(a.client.call("hooks.save", { project: folder, spec: { when: "end", run: "echo x" } })).rejects.toThrow(/link to a folder outside/);
+	await expect(a.client.call("hooks.importClaude", { project: folder })).rejects.toThrow(/link to a folder outside/);
+	expect(readdirSync(yours)).toEqual([]);
+	expect((await a.client.call("hooks.list", { project: folder })).hooks).toEqual([]);
 });

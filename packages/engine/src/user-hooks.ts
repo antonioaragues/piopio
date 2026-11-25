@@ -31,6 +31,15 @@ export type HookSpec = {
 };
 
 const MARK = "// piopio-hook ";
+
+/**
+ * Text that goes on one `//` line of the generated file. JavaScript ends a comment at \n, \r, U+2028 and U+2029: a
+ * command holding one (a hook imported from a repository's .claude/settings.json) would put the rest of it on a line of
+ * its own, as code that runs unsandboxed when pi loads the file (re-audit 2026-11-25 V3).
+ */
+const oneLine = (text: string) => text.replace(/[\r\n\u2028\u2029]+/g, " ");
+/** JSON for a comment line or an expression: JSON.stringify leaves U+2028 and U+2029 unescaped. */
+const lineJson = (value: unknown) => JSON.stringify(value).replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029");
 const TOOL_WORDS: Record<HookTool, string> = { edit: "edits", write: "writes", bash: "runs a command", any: "uses any tool" };
 
 /** The sentence a hook reads as (Settings and the file's first line). */
@@ -62,16 +71,16 @@ export function hookName(h: HookSpec): string {
 
 /** The extension file for a hook: self-contained, so the pi CLI runs it without Piopio. */
 export function hookSource(h: HookSpec): string {
-	const spec = JSON.stringify({ when: h.when, ...(h.tools ? { tools: h.tools } : {}), ...(h.files ? { files: h.files } : {}), ...(h.command ? { command: h.command } : {}), ...(h.run ? { run: h.run } : {}), ...(h.stop ? { stop: h.stop } : {}) });
+	const spec = lineJson({ when: h.when, ...(h.tools ? { tools: h.tools } : {}), ...(h.files ? { files: h.files } : {}), ...(h.command ? { command: h.command } : {}), ...(h.run ? { run: h.run } : {}), ...(h.stop ? { stop: h.stop } : {}) });
 	const label = h.run?.split(/\s+/)[0] ?? "your hook";
-	const head = `// Piopio hook · ${hookSentence(h)}
+	const head = `// Piopio hook · ${oneLine(hookSentence(h))}
 ${MARK}${spec}
 // Made in Piopio (Settings › Extensions › Your hooks). Change the code and Piopio lists it as code instead.
 import { spawn } from "node:child_process";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 const HOOK = ${spec} as { when: string; tools?: string[]; files?: string; command?: string; run?: string; stop?: string };
-const LABEL = ${JSON.stringify(label)};
+const LABEL = ${lineJson(label)};
 
 /** A glob as a pattern: * within a name, ** across folders; a pattern with no "/" matches the name alone. */
 function glob(pattern: string, anything = false): RegExp {

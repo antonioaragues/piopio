@@ -5,6 +5,7 @@
  */
 import { existsSync, mkdirSync, readFileSync, renameSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import { physical, projectPath, under } from "@piopio/pi-extensions";
 import { writeFileAtomic } from "./atomic.js";
 import { EngineError } from "./models.js";
 
@@ -47,15 +48,21 @@ export function parseSkill(text: string): SkillFile {
 	return out;
 }
 
-/** Where a skill of yours goes: every project, or one project's `.pi/skills`. */
+/**
+ * Where a skill of yours goes: every project, or one project's `.pi/skills`, which must really be in the project
+ * (paths.ts `projectPath`: a repository's `.pi/skills -> ~/.pi/agent/skills` would make a project's skill everyone's).
+ */
 export function skillsRoot(agentDir: string, project?: string): string {
-	return project ? join(project, ".pi", "skills") : join(agentDir, "skills");
+	if (!project) return join(agentDir, "skills");
+	const root = projectPath(project, join(".pi", "skills"));
+	if (!root) throw new EngineError("INVALID", "This project's .pi/skills is a link to a folder outside it, so Piopio won't write skills there.");
+	return root;
 }
 
-/** Whether Piopio may write this SKILL.md: one in your skill folders or a project's, not a package's. */
+/** Whether Piopio may write this SKILL.md: where it really is lies in one of your skill folders, not a package's. */
 export function editable(path: string, roots: readonly string[]): boolean {
-	const p = resolve(path);
-	return p.endsWith("/SKILL.md") && roots.some((r) => p.startsWith(`${resolve(r)}/`));
+	const p = physical(path);
+	return p.endsWith("/SKILL.md") && roots.some((r) => under(p, physical(r)) && p !== physical(r));
 }
 
 /**

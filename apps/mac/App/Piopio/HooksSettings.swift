@@ -76,7 +76,12 @@ struct HooksCard: View {
             Text("This project has Claude Code hooks").font(.system(size: 13, weight: .semibold))
             Text(".claude/settings.json has \(claude.count). Piopio can write them as pi extensions here, so Piopio and the pi CLI run them too.")
                 .font(.system(size: 12)).foregroundStyle(Color.dsFg2)
-            ForEach(claude, id: \.self) { c in Text(c.sentence).font(.system(size: 11.5, design: .monospaced)).foregroundStyle(Color.dsFg2).lineLimit(1) }
+            // In full, never cut: these come from the repository and run as your own code once imported (re-audit
+            // 2026-11-25 V3). A command spread over lines shows every line.
+            ForEach(claude, id: \.self) { c in
+                Text(c.sentence).font(.system(size: 11.5, design: .monospaced)).foregroundStyle(Color.dsFg2)
+                    .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+            }
             HStack {
                 Spacer()
                 Button("Import \(claude.count) hook\(claude.count == 1 ? "" : "s")") { importClaude(project) }.buttonStyle(PillStyle(kind: .strong, compact: true))
