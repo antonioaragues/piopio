@@ -58,11 +58,15 @@ test("a definition's model matches provider/id, else the same id or last part, t
 		{ provider: "openrouter", id: "anthropic/claude-haiku-4.5" },
 		{ provider: "anthropic", id: "claude-haiku-4.5" },
 		{ provider: "openai", id: "gpt-5.5" },
+		{ provider: "claude-code", id: "haiku", agent: true },
 	];
 	expect(matchModel("openai/gpt-5.5", models)).toEqual({ provider: "openai", id: "gpt-5.5" });
 	expect(matchModel("claude-haiku-4.5", models, "openrouter")).toEqual({ provider: "openrouter", id: "anthropic/claude-haiku-4.5" });
 	expect(matchModel("claude-haiku-4.5", models, "anthropic")).toEqual({ provider: "anthropic", id: "claude-haiku-4.5" });
 	expect(matchModel("no-such-model", models)).toBeUndefined();
+	// A coding agent's model would make the child a Claude Code conversation: never matched.
+	expect(matchModel("haiku", models)).toBeUndefined();
+	expect(matchModel("claude-code/haiku", models)).toBeUndefined();
 });
 
 test("tool patterns match names as pi's allowlist does", () => {

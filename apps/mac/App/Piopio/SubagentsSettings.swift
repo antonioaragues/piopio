@@ -44,7 +44,12 @@ struct YourSubagentsCard: View {
             FinePrint("Saved in ~/.pi/agent/agents, where pi's subagents find them too. A conversation hands one work when its description fits the task, or when you ask for it by name.")
                 .padding(.top, 10)
         }
-        .task { await load() }
+        .task {
+            await load()
+            // PIOPIO_DEMO_SUBAGENT=<name>|new: captures open that subagent's sheet, or a new one.
+            guard let demo = ProcessInfo.processInfo.environment["PIOPIO_DEMO_SUBAGENT"] else { return }
+            editing = SubagentEditTarget(path: demo == "new" ? nil : subagents.first { $0.name == demo }?.path)
+        }
         .sheet(item: $editing) { target in
             SubagentSheet(engine: engine, path: target.path) { editing = nil; Task { await load() } }
         }
@@ -113,7 +118,8 @@ struct SubagentSheet: View {
                                     .toggleStyle(.checkbox).font(.system(size: 12, design: .monospaced))
                             }
                         }
-                        TextField("Others, by name (web_*, mcp__github__*)", text: $otherTools).textFieldStyle(.roundedBorder).font(.system(size: 12))
+                        // Verbatim: as a LocalizedStringKey, `*…*` and `__…__` are Markdown and the asterisks vanish.
+                        TextField("", text: $otherTools, prompt: Text(verbatim: "Others, by name (web_*, mcp__github__*)")).textFieldStyle(.roundedBorder).font(.system(size: 12))
                     }
                 }
             }

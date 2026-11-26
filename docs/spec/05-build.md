@@ -78,8 +78,15 @@ session you can open, the parent's approval mode, its cost on the parent, at mos
   project's (pi's `appendSystemPrompt`), headed "You are working as the subagent "scout"". `tools` is pi's allowlist
   (`tools` at `createAgentSession`); the approval mode's own additions (web tools, Read only's) stay within it, and the
   parent's turned-off tools stay off. `model` is matched against the models on this Mac: `provider/id` exactly, else the
-  same id or its last part, the conversation's provider first; none matches, it uses the conversation's model. The
-  child's summary carries `parent.agent`, its name.
+  same id or its last part, the conversation's provider first, never a coding agent's (on Claude Code's `haiku` the
+  child would be a Claude Code conversation); none matches, it uses the conversation's model. The child's summary
+  carries `parent.agent`, its name.
+- **Tried for real (2026-11-26):** a Build session on Fable 5.2 (OpenRouter) asked to hand a question to `scout`
+  (`read, grep, find, ls`, `model: claude-haiku-5.5`) called `task` with `agent: "scout"`; the child ran on
+  `anthropic/claude-haiku-5.5` for $0.0013 (the same job on Fable: $0.085), used only `ls`, `find` and `read`, kept to
+  its instructions (four bullets with file paths), and the answer came back right. With `claude-haiku-4.5`, which
+  OpenRouter doesn't offer here, it ran on the conversation's model, as designed. Captures of the card and both sheets
+  (`PIOPIO_DEMO_SUBAGENT=<name>|new` opens one) found the "Others" placeholder losing its asterisks to Markdown; fixed.
 - **Not yet:** `/learn` proposing a subagent; the subagent's name on the task card and its row; a project's subagents in
   its settings; Claude Code's `.claude/agents` (its tool names differ). Sending a named task to Claude Code or Codex.
 

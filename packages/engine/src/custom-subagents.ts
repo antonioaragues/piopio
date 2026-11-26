@@ -112,11 +112,13 @@ export function writeSubagent(root: string, draft: SubagentDraft, previous?: str
 /**
  * A definition's `model` as one of the models on this Mac: `provider/id` exactly, else the same id (or the same last
  * part, as `claude-haiku-4.5` for `anthropic/claude-haiku-4.5`), the conversation's provider first. Undefined: none
- * matches, and the subagent runs on the conversation's model.
+ * matches, and the subagent runs on the conversation's model. A coding agent's models (Claude Code's `haiku`) are left
+ * out: on one of them the child would be a Claude Code conversation, not a Piopio subagent with these tools.
  */
-export function matchModel(text: string, models: readonly { provider: string; id: string }[], near?: string): { provider: string; id: string } | undefined {
+export function matchModel(text: string, all: readonly { provider: string; id: string; agent?: boolean }[], near?: string): { provider: string; id: string } | undefined {
 	const want = text.trim().toLowerCase();
 	if (!want) return undefined;
+	const models = all.filter((m) => !m.agent);
 	const exact = models.find((m) => `${m.provider}/${m.id}`.toLowerCase() === want);
 	if (exact) return { provider: exact.provider, id: exact.id };
 	const last = (id: string) => id.toLowerCase().split("/").at(-1)!;
