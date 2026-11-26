@@ -5,22 +5,14 @@
  * session settings. The transcript is kept as Piopio's own copy (pi-shaped messages, as for Claude Code) with the
  * agent's session id, which is loaded again when the conversation reopens.
  */
-import { mkdirSync } from "node:fs";
-import { dirname } from "node:path";
-import type { ApprovalMode, Attachment, AttachmentInfo, ContainerRef, ModelRef, PromptResponse, SessionEvent, Snapshot } from "@piopio/protocol";
 import { AcpConnection, CLIENT_CAPABILITIES, type AcpAgent, type ConfigOption } from "../acp.js";
 import { EngineError } from "../models.js";
-import { emptyUsage, TimelineBuilder, type PiContentBlock, type PiMessage, type ToolImageKeeper } from "@piopio/runtime";
+import { emptyUsage, type PiContentBlock } from "@piopio/runtime";
 import type { ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import { bridgeScript, type ToolServer } from "../tool-server.js";
 import { collectTools, PIOPIO_MCP, type CapturedTool } from "./claude-code-tools.js";
 import type { ToolAsk } from "./claude-code.js";
-import { PromptBroker } from "./prompts.js";
-import { agentIdleMs, Emitter, IdleTimer, type Runtime, type SubmitOptions } from "./runtime.js";
-import { readJsonFile, writeFileAtomic } from "../atomic.js";
-
-type Stored = { version: 1; sessionId?: string; messages: PiMessage[] };
-type Input = { text: string; attachments: (Attachment & { stored?: string })[] };
+import { CodingAgentRuntime, type CodingAgentOptions, type Input } from "./coding-agent-runtime.js";
 type Streaming = { id: string; index: number; blocks: PiContentBlock[]; lastKind?: "text" | "thinking"; part: number };
 type ToolState = { name: string; args: Record<string, unknown>; at: number; terminal: string; exitCode?: number; done: boolean };
 /** A tool call as ACP describes it (`tool_call` and `tool_call_update`). */
@@ -36,23 +28,13 @@ type AcpToolCall = {
 	_meta?: { terminal_output_delta?: { data?: string }; terminal_exit?: { exit_code?: number } };
 };
 
-export type AcpOpenOptions = {
-	ref: ContainerRef;
+export type AcpOpenOptions = CodingAgentOptions & {
 	cwd: string;
-	model: ModelRef;
-	thinking?: string;
-	file: string;
 	agent: AcpAgent;
-	approvalMode: () => ApprovalMode;
-	/** A chat (no project): its own folder, in Auto-edit. */
-	chat?: boolean;
-	keepImages?: ToolImageKeeper;
 	onAttention?: (message: string) => void;
 	/** Piopio's own tools (docs/spec/31 CA8), served to the agent as the MCP server "piopio" by `toolServer`. */
 	tools?: (ask: ToolAsk) => ExtensionFactory[];
 	toolServer?: ToolServer;
-	/** How long the agent's process may sit idle before it's ended (its session loaded again on the next message). */
-	idleMs?: number;
 };
 
 const WRITES = new Set(["edit", "delete", "move", "execute"]);
@@ -93,55 +75,28 @@ function patchOf(content: AcpToolCall["content"]): string | undefined {
 	return hunks.length ? hunks.join("\n") : undefined;
 }
 
-export class AcpRuntime implements Runtime {
-	readonly ref: ContainerRef;
-	private readonly builder: TimelineBuilder;
-	private readonly emitter = new Emitter();
-	private readonly broker = new PromptBroker();
-	private stored: Stored;
-	private model: ModelRef;
-	private thinking?: string;
+export class AcpRuntime extends CodingAgentRuntime {
 	private conn?: AcpConnection;
 	private sessionId?: string;
 	private config: ConfigOption[] = [];
 	/** While the agent replays a loaded session: its updates are history Piopio already has. */
 	private loading = false;
-	private busy = false;
-	private stopping = false;
 	private current?: Streaming;
-	private followUps: Input[] = [];
 	private readonly tools = new Map<string, ToolState>();
 	private starting?: Promise<void>;
 	/** Piopio's tools for this conversation, and their address at the tool server. */
 	private piopio?: { tools: CapturedTool[]; url: string; close: () => void; prompt: () => Promise<string> };
-	/** Calls to Piopio's tools the agent announced and the tool server hasn't run yet (their ids key the cards). */
-	private piopioCalls: { id: string; name: string; input: string }[] = [];
 	/** What Piopio's tools answered, by call: the card's output when the agent doesn't report it (Antigravity). */
 	private readonly piopioResults = new Map<string, string>();
-	private turnAbort = new AbortController();
-	/** Ends the agent's process when the conversation has been idle a while, if it can load its session again. */
-	private idle: IdleTimer;
+	/** The agent can load its session again: only then does its process end when the conversation is idle. */
 	private canLoad = false;
 
+	protected get provider(): string {
+		return this.options.agent.spec.id;
+	}
+
 	private constructor(private readonly options: AcpOpenOptions) {
-		this.ref = options.ref;
-		this.model = options.model;
-		if (options.thinking) this.thinking = options.thinking;
-		this.builder = new TimelineBuilder(options.ref);
-		if (options.keepImages) this.builder.keepImages = options.keepImages;
-		this.stored = AcpRuntime.load(options.file);
-		this.builder.reset(this.stored.messages, (i) => `m${i}`, false);
-		this.builder.setState({ status: "idle", model: this.model, prompts: [], ...(this.thinking ? { thinking: this.thinking } : {}), ...(options.chat ? {} : { approvalMode: options.approvalMode() }) });
-		this.idle = new IdleTimer(options.idleMs ?? agentIdleMs(), () => {
-			if (this.busy || this.starting || this.broker.list().length) return this.idle.arm();
-			void this.endConnection();
-		});
-		this.builder.flush();
-		this.broker.onChange = (prompts, changed, added) => {
-			if (changed.callId) this.builder.toolStatus(changed.callId, added ? "pending_approval" : "running");
-			this.builder.setState({ prompts, status: prompts.length ? "waiting_approval" : this.busy ? "running" : "idle" });
-			this.emit();
-		};
+		super(options);
 		this.broker.onAdded = (prompt) => options.onAttention?.(prompt.title);
 	}
 
@@ -149,34 +104,8 @@ export class AcpRuntime implements Runtime {
 		return new AcpRuntime(options);
 	}
 
-	private get name(): string {
+	protected get agentName(): string {
 		return this.options.agent.spec.name;
-	}
-
-	private static load(file: string): Stored {
-		const s = readJsonFile<Partial<Stored>>(file, () => ({}));
-		return { version: 1, ...(s.sessionId ? { sessionId: s.sessionId } : {}), messages: Array.isArray(s.messages) ? s.messages : [] };
-	}
-
-	private save(): void {
-		mkdirSync(dirname(this.options.file), { recursive: true });
-		writeFileAtomic(this.options.file, JSON.stringify(this.stored), { mode: 0o600 });
-	}
-
-	snapshot(): Snapshot {
-		return this.builder.snapshot();
-	}
-
-	onEvents(listener: (events: SessionEvent[]) => void): () => void {
-		return this.emitter.on(listener);
-	}
-
-	private emit(): void {
-		this.emitter.emit(this.builder.flush());
-	}
-
-	respond(promptId: string, response: PromptResponse): void {
-		this.broker.respond(promptId, response);
 	}
 
 	// ── The session ──────────────────────────────────────────────────────────
@@ -191,8 +120,8 @@ export class AcpRuntime implements Runtime {
 	private async startSession(): Promise<void> {
 		const status = await this.options.agent.status();
 		const cmd = this.options.agent.command();
-		if (!cmd || !status.path) throw new EngineError("AUTH", `${this.name} isn't installed on this Mac. Install it, or pick another model.`);
-		if (!status.signedIn) throw new EngineError("AUTH", status.problem ?? `${this.name} is signed out. Run \`${this.options.agent.spec.signIn}\` in Terminal to sign in, or pick another model.`);
+		if (!cmd || !status.path) throw new EngineError("AUTH", `${this.agentName} isn't installed on this Mac. Install it, or pick another model.`);
+		if (!status.signedIn) throw new EngineError("AUTH", status.problem ?? `${this.agentName} is signed out. Run \`${this.options.agent.spec.signIn}\` in Terminal to sign in, or pick another model.`);
 		const conn = new AcpConnection(cmd.command, cmd.args, this.options.cwd);
 		this.conn = conn;
 		conn.onNotification = (method, params) => {
@@ -286,15 +215,6 @@ export class AcpRuntime implements Runtime {
 		return this.piopio.tools.find((t) => call.name === t.name || title === t.name || new RegExp(`^(?:mcp[._])?piopio(?:\\.|__|_)${t.name}(?:\\(|$)`).test(title))?.name;
 	}
 
-	/** The agent's tool call for this run of one of Piopio's tools (same name and arguments, else same name). */
-	private callIdFor(name: string, args: Record<string, unknown>): string {
-		const json = JSON.stringify(args);
-		const i = this.piopioCalls.findIndex((c) => c.name === name && c.input === json);
-		const at = i >= 0 ? i : this.piopioCalls.findIndex((c) => c.name === name);
-		if (at < 0) return `piopio-${Date.now()}`;
-		return this.piopioCalls.splice(at, 1)[0]!.id;
-	}
-
 	/** Changes one of the session's settings when the agent offers that value. */
 	private async setOption(id: string, value: string | undefined, force = false): Promise<void> {
 		const option = this.config.find((o) => o.id === id || o.category === id);
@@ -319,36 +239,8 @@ export class AcpRuntime implements Runtime {
 
 	// ── Turns ────────────────────────────────────────────────────────────────
 
-	async submit(text: string, options: SubmitOptions): Promise<{ disposition: "started" | "queued" }> {
-		const input: Input = { text, attachments: options.attachments ?? [] };
-		if (this.busy) {
-			if (options.whenBusy === "reject") throw new EngineError("BUSY", `${this.name} is still working.`);
-			this.followUps.push(input);
-			this.builder.setState({ queue: this.followUps.map((f, i) => ({ id: `q${i}`, mode: "followUp" as const, text: f.text })) });
-			this.emit();
-			return { disposition: "queued" };
-		}
-		await this.start(input);
-		return { disposition: "started" };
-	}
-
-	private async start(input: Input): Promise<void> {
-		this.idle.disarm();
-		this.busy = true;
-		const index = this.stored.messages.length;
-		const attachments: AttachmentInfo[] = input.attachments.map((a) => ({ name: a.name, kind: a.kind, ...(a.mimeType ? { mimeType: a.mimeType } : {}), ...(a.stored ? { stored: a.stored } : {}) }));
-		const now = Date.now();
-		this.stored.messages.push({ role: "user", content: input.text, timestamp: now, ...(attachments.length ? { attachments } : {}) } as PiMessage);
-		this.save();
-		this.builder.user(`m${index}`, input.text, now, attachments);
-		this.builder.setState({ status: "running" });
-		this.emit();
-		try {
-			await this.ensureSession();
-		} catch (error) {
-			this.fail((error as Error).message);
-			return;
-		}
+	protected async send(input: Input): Promise<void> {
+		await this.ensureSession();
 		const prompt = [
 			...input.attachments.map((a) => (a.kind === "image" ? { type: "image", data: a.data, mimeType: a.mimeType } : { type: "resource", resource: { uri: `file:///${encodeURIComponent(a.path ?? a.name)}`, mimeType: a.mimeType ?? "text/plain", text: a.text } })),
 			{ type: "text", text: input.text },
@@ -358,17 +250,6 @@ export class AcpRuntime implements Runtime {
 			.catch((error: Error) => this.fail(error.message));
 	}
 
-	private fail(message: string): void {
-		this.endAssistant();
-		this.builder.system(`e${Date.now()}`, "error", `${this.name}: ${message}`);
-		this.busy = false;
-		this.stopping = false;
-		this.followUps = [];
-		this.builder.setState({ status: "idle", queue: [] });
-		this.emit();
-		this.armIdle();
-	}
-
 	private turnEnded(result: { stopReason?: string; usage?: Record<string, number> }): void {
 		this.endAssistant();
 		// A command still going when the turn ends (a dev server the agent left serving) didn't fail: it shows what it
@@ -376,7 +257,7 @@ export class AcpRuntime implements Runtime {
 		for (const [id, t] of this.tools) {
 			if (t.done) continue;
 			const running = t.name === "bash" && result.stopReason !== "cancelled";
-			if (running) t.terminal = `${t.terminal}${t.terminal && !t.terminal.endsWith("\n") ? "\n" : ""}Still running in ${this.name} when its turn ended.`;
+			if (running) t.terminal = `${t.terminal}${t.terminal && !t.terminal.endsWith("\n") ? "\n" : ""}Still running in ${this.agentName} when its turn ended.`;
 			this.endTool(id, { toolCallId: id, status: running ? "completed" : "failed" }, t);
 		}
 		// The plan pays (CA6): tokens, no spending.
@@ -389,23 +270,19 @@ export class AcpRuntime implements Runtime {
 			this.builder.setState({ usage: { ...cur, inputTokens: cur.inputTokens + usage.input, outputTokens: cur.outputTokens + usage.output, cacheReadTokens: cur.cacheReadTokens + usage.cacheRead, cacheWriteTokens: cur.cacheWriteTokens + usage.cacheWrite } });
 			this.save();
 		}
-		if (result.stopReason === "refusal") this.builder.system(`e${Date.now()}`, "warn", `${this.name} declined to go on.`);
-		else if (result.stopReason === "max_tokens" || result.stopReason === "max_turn_requests") this.builder.system(`e${Date.now()}`, "warn", `${this.name} stopped: it reached its limit for one turn.`);
-		this.busy = false;
-		this.stopping = false;
-		this.piopioCalls = [];
-		this.builder.setState({ status: this.broker.list().length ? "waiting_approval" : "idle" });
-		this.emit();
-		const next = this.followUps.shift();
-		if (next) {
-			this.builder.setState({ queue: this.followUps.map((f, i) => ({ id: `q${i}`, mode: "followUp" as const, text: f.text })) });
-			void this.start(next);
-		} else this.armIdle();
+		if (result.stopReason === "refusal") this.builder.system(`e${Date.now()}`, "warn", `${this.agentName} declined to go on.`);
+		else if (result.stopReason === "max_tokens" || result.stopReason === "max_turn_requests") this.builder.system(`e${Date.now()}`, "warn", `${this.agentName} stopped: it reached its limit for one turn.`);
+		this.finishTurn();
 	}
 
 	/** Only an agent that loads its sessions again is ended when idle: one that can't would forget the conversation. */
-	private armIdle(): void {
+	protected armIdle(): void {
 		if (this.conn && this.canLoad && this.stored.sessionId) this.idle.arm();
+	}
+
+	protected endIdle(): void {
+		if (this.starting) return this.idle.arm();
+		void this.endConnection();
 	}
 
 	/** Ends the agent's process; Piopio's tool server stays, for the session loaded on the next message. */
@@ -443,7 +320,7 @@ export class AcpRuntime implements Runtime {
 		this.builder.assistantDelta(s.part, kind, text);
 	}
 
-	private endAssistant(): void {
+	protected endAssistant(): void {
 		const s = this.current;
 		if (!s) return;
 		this.current = undefined;
@@ -569,40 +446,23 @@ export class AcpRuntime implements Runtime {
 
 	// ── Controls ─────────────────────────────────────────────────────────────
 
-	async abort(): Promise<void> {
-		this.turnAbort.abort();
-		this.turnAbort = new AbortController();
-		if (this.busy) this.stopping = true;
-		this.followUps = [];
-		this.broker.cancelAll();
-		this.builder.setState({ queue: [] });
-		this.emit();
+	protected async interrupt(): Promise<void> {
 		if (this.conn && this.sessionId) this.conn.notify("session/cancel", { sessionId: this.sessionId });
 	}
 
-	async configure(change: { model?: ModelRef; thinking?: string; approvalMode?: ApprovalMode }): Promise<void> {
-		if (change.model) {
-			if (change.model.provider !== this.options.agent.spec.id) throw new EngineError("INVALID", `This conversation runs in ${this.name}.`);
-			this.model = change.model;
-			await this.setOption("model", change.model.id);
-			this.builder.setState({ model: this.model });
-		}
-		if (change.thinking) {
-			if (change.thinking === "default") delete this.thinking;
-			else this.thinking = change.thinking;
-			await this.applyThinking();
-			this.builder.setState(this.thinking ? { thinking: this.thinking } : {});
-		}
-		if (change.approvalMode && !this.options.chat) {
-			await this.applyMode();
-			this.builder.setState({ approvalMode: change.approvalMode });
-		}
-		this.emit();
+	protected setAgentModel(id: string): Promise<void> {
+		return this.setOption("model", id);
 	}
 
-	async close(): Promise<void> {
-		this.idle.disarm();
-		this.broker.cancelAll();
+	protected setAgentThinking(): Promise<void> {
+		return this.applyThinking();
+	}
+
+	protected setAgentMode(): Promise<void> {
+		return this.applyMode();
+	}
+
+	protected async closeAgent(): Promise<void> {
 		const conn = this.conn;
 		this.conn = undefined;
 		if (conn && this.sessionId) await conn.request("session/close", { sessionId: this.sessionId }, 3000).catch(() => undefined);

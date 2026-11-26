@@ -5,35 +5,19 @@
  * and keeps Piopio's copy of the transcript (pi-shaped messages, as `TimelineBuilder` reads them) with Claude Code's
  * session id, so a reopened conversation shows its history and continues the same Claude Code session.
  */
-import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import type { ApprovalMode, Attachment, AttachmentInfo, ContainerRef, ModelRef, PromptResponse, Snapshot } from "@piopio/protocol";
+import type { ApprovalMode, PromptResponse } from "@piopio/protocol";
 import { CLAUDE_CODE, CLAUDE_CODE_NAME, type AgentMessage, type AgentPermissionMode, type AgentQuery, type AgentUserMessage, type CanUseTool, type ClaudeCodeAgent } from "../coding-agents.js";
 import { EngineError } from "../models.js";
-import { TimelineBuilder, type PiContentBlock, type PiMessage, type PiUsage, type ToolImageKeeper } from "@piopio/runtime";
+import type { PiContentBlock, PiUsage } from "@piopio/runtime";
 import type { ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import { collectTools, PIOPIO_MCP, PIOPIO_MCP_PREFIX, piopioServer } from "./claude-code-tools.js";
 import { CLAUDE_CODE_TOOLS_OFF, claudeCodeEnv } from "./claude-code-env.js";
-import { PromptBroker } from "./prompts.js";
-import { agentIdleMs, Emitter, IdleTimer, type Runtime, type SubmitOptions } from "./runtime.js";
-import { readJsonFile, writeFileAtomic } from "../atomic.js";
+import { CodingAgentRuntime, type CodingAgentOptions, type Input } from "./coding-agent-runtime.js";
 
-type Stored = { version: 1; sessionId?: string; messages: PiMessage[] };
-type Input = { text: string; attachments: (Attachment & { stored?: string })[] };
-
-export type ClaudeCodeOpenOptions = {
-	ref: ContainerRef;
+export type ClaudeCodeOpenOptions = CodingAgentOptions & {
 	cwd: string;
-	model: ModelRef;
-	thinking?: string;
-	/** Piopio's copy of the transcript (JSON). */
-	file: string;
 	agent: ClaudeCodeAgent;
-	/** The conversation's approval mode, read when a session starts and when it changes (CA4). */
-	approvalMode: () => ApprovalMode;
-	/** A chat (no project): runs in its own folder, in Auto-edit, with no approval mode to show. */
-	chat?: boolean;
-	keepImages?: ToolImageKeeper;
 	/** Something waits on the user (an approval, a question), for notifications. */
 	onAttention?: (kind: "approval" | "question", message: string) => void;
 	/**
@@ -46,8 +30,6 @@ export type ClaudeCodeOpenOptions = {
 	 * without it they do. Untrusted, only the user's own setup applies.
 	 */
 	projectTrusted?: () => boolean;
-	/** How long Claude Code's process may sit idle before it's ended (resumed on the next message); AGENT_IDLE_MS. */
-	idleMs?: number;
 };
 
 /** How one of Piopio's tools asks the user (a connector's change, acting on a site): through the composer tray. */
@@ -196,56 +178,26 @@ class Inbox implements AsyncIterable<AgentUserMessage> {
 
 type Streaming = { id: string; index: number; messageId?: string; blocks: PiContentBlock[]; usage?: PiUsage; error?: string };
 
-export class ClaudeCodeRuntime implements Runtime {
-	readonly ref: ContainerRef;
-	private readonly builder: TimelineBuilder;
-	private readonly emitter = new Emitter();
-	private readonly broker = new PromptBroker();
-	private stored: Stored;
-	private model: ModelRef;
-	private thinking?: string;
+export class ClaudeCodeRuntime extends CodingAgentRuntime {
 	private query?: AgentQuery;
 	private inbox?: Inbox;
 	private current?: Streaming;
-	private followUps: Input[] = [];
 	private readonly toolStarted = new Map<string, { name: string; input: Record<string, unknown>; at: number }>();
 	private stderr = "";
-	private busy = false;
 	/**
 	 * Claude Code signed in with an API key (not a plan): what it reports spending is spending (docs/spec/31 CA6 covers
 	 * plans). `spent` is the query's running total already counted; the SDK's `total_cost_usd` is cumulative per query.
 	 */
 	private billed = false;
 	private spent = 0;
-	/** Stopped by the user: the turn's "interrupted" result isn't an error. */
-	private stopping = false;
 	/** The thinking level changed: Claude Code's session restarts (resumed) with the new effort after this turn. */
 	private restart = false;
-	/** Calls to Piopio's tools Claude Code made and the MCP server hasn't run yet: their ids key the transcript's cards. */
-	private piopioCalls: { id: string; name: string; input: string }[] = [];
-	private turnAbort = new AbortController();
-	/** Ends Claude Code's process when the conversation has been idle a while (AGENT_IDLE_MS). */
-	private idle: IdleTimer;
+
+	protected readonly agentName = CLAUDE_CODE_NAME;
+	protected readonly provider = CLAUDE_CODE;
 
 	private constructor(private readonly options: ClaudeCodeOpenOptions) {
-		this.ref = options.ref;
-		this.model = options.model;
-		if (options.thinking) this.thinking = options.thinking;
-		this.builder = new TimelineBuilder(options.ref);
-		if (options.keepImages) this.builder.keepImages = options.keepImages;
-		this.stored = ClaudeCodeRuntime.load(options.file);
-		this.builder.reset(this.stored.messages, (i) => `m${i}`, false);
-		this.builder.setState({ status: "idle", model: this.model, prompts: [], ...(this.thinking ? { thinking: this.thinking } : {}), ...(options.chat ? {} : { approvalMode: options.approvalMode() }) });
-		this.idle = new IdleTimer(options.idleMs ?? agentIdleMs(), () => {
-			if (this.busy || this.broker.list().length) return this.idle.arm();
-			this.endQuery();
-		});
-		this.builder.flush();
-		this.broker.onChange = (prompts, changed, added) => {
-			if (changed.callId) this.builder.toolStatus(changed.callId, added ? "pending_approval" : "running");
-			this.builder.setState({ prompts, status: prompts.length ? "waiting_approval" : this.busy ? "running" : "idle" });
-			this.emit();
-		};
+		super(options);
 		this.broker.onAdded = (prompt) => options.onAttention?.(prompt.kind === "question" ? "question" : "approval", prompt.title);
 	}
 
@@ -253,68 +205,13 @@ export class ClaudeCodeRuntime implements Runtime {
 		return new ClaudeCodeRuntime(options);
 	}
 
-	private static load(file: string): Stored {
-		const s = readJsonFile<Partial<Stored>>(file, () => ({}));
-		return { version: 1, ...(s.sessionId ? { sessionId: s.sessionId } : {}), messages: Array.isArray(s.messages) ? s.messages : [] };
-	}
-
-	private save(): void {
-		mkdirSync(dirname(this.options.file), { recursive: true });
-		writeFileAtomic(this.options.file, JSON.stringify(this.stored), { mode: 0o600 });
-	}
-
 	/** Claude Code's own session id, once it started one. */
 	get sessionId(): string | undefined {
 		return this.stored.sessionId;
 	}
 
-	snapshot(): Snapshot {
-		return this.builder.snapshot();
-	}
-
-	onEvents(listener: (events: import("@piopio/protocol").SessionEvent[]) => void): () => void {
-		return this.emitter.on(listener);
-	}
-
-	private emit(): void {
-		this.emitter.emit(this.builder.flush());
-	}
-
-	respond(promptId: string, response: PromptResponse): void {
-		this.broker.respond(promptId, response);
-	}
-
-	async submit(text: string, options: SubmitOptions): Promise<{ disposition: "started" | "queued" }> {
-		const input: Input = { text, attachments: options.attachments ?? [] };
-		if (this.busy) {
-			if (options.whenBusy === "reject") throw new EngineError("BUSY", `${CLAUDE_CODE_NAME} is still working.`);
-			// Steering and follow-ups both wait for the turn to end (A1).
-			this.followUps.push(input);
-			this.builder.setState({ queue: this.followUps.map((f, i) => ({ id: `q${i}`, mode: "followUp" as const, text: f.text })) });
-			this.emit();
-			return { disposition: "queued" };
-		}
-		await this.start(input);
-		return { disposition: "started" };
-	}
-
-	private async start(input: Input): Promise<void> {
-		this.idle.disarm();
-		this.busy = true;
-		const index = this.stored.messages.length;
-		const attachments: AttachmentInfo[] = input.attachments.map((a) => ({ name: a.name, kind: a.kind, ...(a.mimeType ? { mimeType: a.mimeType } : {}), ...(a.stored ? { stored: a.stored } : {}) }));
-		const now = Date.now();
-		this.stored.messages.push({ role: "user", content: input.text, timestamp: now, ...(attachments.length ? { attachments } : {}) } as PiMessage);
-		this.save();
-		this.builder.user(`m${index}`, input.text, now, attachments);
-		this.builder.setState({ status: "running" });
-		this.emit();
-		try {
-			await this.ensureQuery();
-		} catch (error) {
-			this.fail((error as Error).message);
-			return;
-		}
+	protected async send(input: Input): Promise<void> {
+		await this.ensureQuery();
 		this.inbox!.push({ type: "user", message: { role: "user", content: this.content(input) }, parent_tool_use_id: null });
 	}
 
@@ -392,16 +289,6 @@ export class ClaudeCodeRuntime implements Runtime {
 		}
 	}
 
-	private fail(message: string): void {
-		this.endAssistant();
-		this.builder.system(`e${Date.now()}`, "error", `${CLAUDE_CODE_NAME}: ${message}`);
-		this.busy = false;
-		this.followUps = [];
-		this.builder.setState({ status: "idle", queue: [] });
-		this.emit();
-		if (this.query) this.idle.arm();
-	}
-
 	private apply(m: AgentMessage): void {
 		if (m.parent_tool_use_id) return; // a subagent's inner messages (Claude Code's Task tool): its result arrives as the tool's output
 		if (m.type === "system" && m.subtype === "init") this.billed = billedByKey(m.apiKeySource);
@@ -467,7 +354,7 @@ export class ClaudeCodeRuntime implements Runtime {
 	}
 
 	/** Completes the answer being written, then shows its tool calls as running. */
-	private endAssistant(): void {
+	protected endAssistant(): void {
 		const s = this.current;
 		if (!s) return;
 		this.current = undefined;
@@ -511,25 +398,24 @@ export class ClaudeCodeRuntime implements Runtime {
 	private result(m: AgentMessage): void {
 		this.endAssistant();
 		if (this.billed && typeof m.total_cost_usd === "number") this.charge(m.total_cost_usd);
-		if (this.stopping) this.stopping = false;
-		else if (m.subtype !== "success" || m.is_error === true) {
+		if (!this.stopping && (m.subtype !== "success" || m.is_error === true)) {
 			const errors = Array.isArray(m.errors) ? (m.errors as string[]).join(" ") : "";
 			const text = errors || (typeof m.result === "string" ? m.result : "") || `${CLAUDE_CODE_NAME} couldn't finish.`;
 			if (m.subtype !== "success") this.builder.system(`e${Date.now()}`, "error", `${CLAUDE_CODE_NAME}: ${text}`);
 		}
-		this.busy = false;
-		this.piopioCalls = [];
 		if (this.restart) {
 			this.restart = false;
 			this.endQuery();
 		}
-		this.builder.setState({ status: this.broker.list().length ? "waiting_approval" : "idle" });
-		this.emit();
-		const next = this.followUps.shift();
-		if (next) {
-			this.builder.setState({ queue: this.followUps.map((f, i) => ({ id: `q${i}`, mode: "followUp" as const, text: f.text })) });
-			void this.start(next);
-		} else if (this.query) this.idle.arm();
+		this.finishTurn();
+	}
+
+	protected armIdle(): void {
+		if (this.query) this.idle.arm();
+	}
+
+	protected endIdle(): void {
+		this.endQuery();
 	}
 
 	/** What a result's running total adds (a /clear inside Claude Code starts it again), on the turn's last answer. */
@@ -599,15 +485,6 @@ export class ClaudeCodeRuntime implements Runtime {
 	/** One of Piopio's tools asks the user. */
 	private ask: ToolAsk = (request, signal) => this.broker.ask({ kind: "approval", title: request.title, tool: request.tool, callId: request.callId }, signal);
 
-	/** The tool call Claude Code made for this run of one of Piopio's tools (same name and arguments, else same name). */
-	private callIdFor(name: string, args: Record<string, unknown>): string {
-		const json = JSON.stringify(args);
-		const i = this.piopioCalls.findIndex((c) => c.name === name && c.input === json);
-		const at = i >= 0 ? i : this.piopioCalls.findIndex((c) => c.name === name);
-		if (at < 0) return `piopio-${Date.now()}`;
-		return this.piopioCalls.splice(at, 1)[0]!.id;
-	}
-
 	/** Ends Claude Code's session; the next message starts it again, resumed (a new effort, docs/spec/31). */
 	private endQuery(): void {
 		this.inbox?.end();
@@ -616,45 +493,25 @@ export class ClaudeCodeRuntime implements Runtime {
 		this.inbox = undefined;
 	}
 
-	async abort(): Promise<void> {
-		this.turnAbort.abort();
-		this.turnAbort = new AbortController();
-		if (this.busy) this.stopping = true;
-		this.followUps = [];
-		this.broker.cancelAll();
-		this.builder.setState({ queue: [] });
-		this.emit();
+	protected async interrupt(): Promise<void> {
 		await this.query?.interrupt().catch(() => undefined);
 	}
 
-	async configure(change: { model?: ModelRef; thinking?: string; approvalMode?: ApprovalMode }): Promise<void> {
-		if (change.model) {
-			if (change.model.provider !== CLAUDE_CODE) throw new EngineError("INVALID", `This conversation runs in ${CLAUDE_CODE_NAME}. Start a new conversation to use another model.`);
-			this.model = change.model;
-			await this.query?.setModel(change.model.id).catch(() => undefined);
-			this.builder.setState({ model: this.model });
-		}
-		if (change.thinking) {
-			if (change.thinking === "default") delete this.thinking;
-			else this.thinking = change.thinking;
-			// Effort is set when Claude Code's session starts: it starts again (resumed) for the next message.
-			if (this.busy) this.restart = true;
-			else this.endQuery();
-			this.builder.setState(this.thinking ? { thinking: this.thinking } : {});
-		}
-		if (change.approvalMode && !this.options.chat) {
-			await this.query?.setPermissionMode(permissionMode(change.approvalMode)).catch(() => undefined);
-			this.builder.setState({ approvalMode: change.approvalMode });
-		}
-		this.emit();
+	protected async setAgentModel(id: string): Promise<void> {
+		await this.query?.setModel(id).catch(() => undefined);
 	}
 
-	async close(): Promise<void> {
-		this.idle.disarm();
-		this.broker.cancelAll();
-		this.inbox?.end();
-		this.query?.close();
-		this.query = undefined;
-		this.inbox = undefined;
+	/** Effort is set when Claude Code's session starts: it starts again (resumed) for the next message. */
+	protected async setAgentThinking(): Promise<void> {
+		if (this.busy) this.restart = true;
+		else this.endQuery();
+	}
+
+	protected async setAgentMode(mode: ApprovalMode): Promise<void> {
+		await this.query?.setPermissionMode(permissionMode(mode)).catch(() => undefined);
+	}
+
+	protected async closeAgent(): Promise<void> {
+		this.endQuery();
 	}
 }

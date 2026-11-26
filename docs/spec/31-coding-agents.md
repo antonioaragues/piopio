@@ -222,6 +222,11 @@ Decided 2026-11-20 with the user on [picker.html](../design/agent-runtimes/picke
   real: a Build session on each in Ask mode wrote a file once allowed (Antigravity asked to write, Codex to run
   `printf`), and after an engine restart each remembered the file. Captures: `PIOPIO_FAKE_ACP=1`
   (`runtimes/acp-fake-agent.ts`).
+- **One lifecycle (2026-11-26):** what both runtimes do the same way is `runtimes/coding-agent-runtime.ts`
+  (`CodingAgentRuntime`): Piopio's copy of the transcript, the user's message going in, follow-ups waiting for the
+  turn, the turn's end, a failed turn's error line, Stop, changing model, thinking and mode, and matching a run of
+  Piopio's tools to the agent's call. `ClaudeCodeRuntime` and `AcpRuntime` extend it with talking to their agent.
+  Asking an ACP conversation for another provider's model now says to start a new conversation too.
 
 - **Piopio's tools in Antigravity CLI and Codex (CA8, 2026-11-20):** `tool-server.ts` serves each open conversation's
   tools on a loopback-only HTTP server at a secret address (`/mcp/<secret>`, MCP Streamable HTTP without sessions). Codex
