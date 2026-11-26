@@ -33,8 +33,8 @@ only you can do.
 
 ## 2. What is open
 
-- **Decided, not built:** Piopio Server PS0–PS3 (33), cloud K2–K7 (30), MCP server MS0–MS4 (41), voice VC0–VC4 (42),
-  Show me how SH0–SH4 (40), computer use U0–U4 (23), memory M4–M6 (14), connectors C2–C3 (12).
+- **Decided, not built:** Piopio Server PS0–PS3 (33), cloud K2–K7 (30), MCP server MS0–MS4 (41), coding agents A5 (31),
+  voice VC0–VC4 (42), Show me how SH0–SH4 (40), computer use U0–U4 (23), memory M4–M6 (14), connectors C2–C3 (12).
 - **Drafted, not confirmed:** auto model (28), provider order (29), listeners and steps (36), the rest of apps (35
   L2–L5), turn context T0–T4 (38, partly built).
 - **Built, not proven:** everything in status.md's "Acceptance still pending" column.
@@ -54,7 +54,7 @@ Fourteen items (Cloudflare added the same day), not in priority order, and one r
 | **Piopio Server** | 33 | Nothing | PS0–PS3 |
 | **Cloudflare** | 30 | K0; K1 in workerd, not on the account | K1 on the account and its gaps (30 §13), K2 chats, K4 capabilities, K5 the Mac Bridge, K6 the cloud browser, K7 Build in containers |
 | **Companion app** (iPhone) | 30 §6, K3 | Nothing | The gateway, pairing, device tokens, Home, transcript, composer and tray, push |
-| **MCP** | 41 | Nothing | MS0–MS4: Piopio as an MCP server, on the Mac, then on the server, then the CLI |
+| **MCP** | 41 | Nothing | MS0–MS4: Piopio as an MCP server, on the Mac, then on the server, then the CLI. 31's A5 is built with MS0 (41 PM11) |
 | **Show me how** | 40 | Nothing | SH0–SH4 |
 | **Computer use** | 23 | The spike (11) | U0–U4; four questions open in 23 §10 |
 | **Connectors** | 12 | C1, Linear, tool search | C2–C3; Piopio's Google app reviewed, the Microsoft app registered |
@@ -175,6 +175,11 @@ Durations assume one person. They are set by use and by outside parties, not by 
 - **PS0** (after the spike on splitting `agent-do.ts`), **PS1** Rent one, **PS2** over SSH, **PS3** chats, Build, Chromium
   and local MCP on the server.
 - **MCP:** MS0–MS2 on the Mac while PS0–PS1 are built, MS3 on the server, MS4 the CLI.
+- **Coding agents A5** (31 §7), built with MS0 on the same tool catalog (41 PM11). Claude Code, Codex and Antigravity
+  get Piopio's tools and their own sandbox, named in the toolbar, with checkpoints around each turn. A `task` to Claude
+  Code or Codex becomes a side conversation you can open, listed in Background, and `external-agents.ts` goes. Today
+  such a task is a blocking one-off run, drawn as a plain tool row (seen 2026-11-25). Answer 31 §8's four CA11–CA14
+  questions first.
 - **Cloudflare K2** (chats), then **K4** (web, connectors signed in from the cloud) and **K5** (the Mac Bridge), both
   for the Worker and the server at once.
 - **K6** the cloud browser (Browser Run) and **K7** Build in containers. Both have unverified parts in 30 §12 (cookies
