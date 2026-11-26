@@ -137,7 +137,6 @@ struct SubagentRowView: View {
 /// status vocabulary: accent ring = running, green = done, red = failed, grey = idle).
 public struct SubagentGlyph: View {
     let state: String
-    @State private var spin = false
 
     public init(state: String) { self.state = state }
 
@@ -149,9 +148,7 @@ public struct SubagentGlyph: View {
                     .stroke(Color(nsColor: DS.accent), style: StrokeStyle(lineWidth: 1.6, lineCap: .round))
                     .background(Circle().stroke(Color(nsColor: DS.accent).opacity(0.2), lineWidth: 1.6))
                     .frame(width: 11, height: 11)
-                    .rotationEffect(.degrees(spin ? 360 : 0))
-                    .animation(.linear(duration: 0.9).repeatForever(autoreverses: false), value: spin)
-                    .onAppear { spin = true }
+                    .turning(period: 0.9)
             case "done":
                 Image(systemName: "checkmark.circle.fill").font(.system(size: 13)).foregroundStyle(Color(nsColor: DS.green))
             case "failed":

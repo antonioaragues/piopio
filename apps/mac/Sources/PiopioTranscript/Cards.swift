@@ -960,7 +960,6 @@ struct LogStepView: View {
 /// The running mark (docs/design/grey): a 10pt grey ring with a turning gap.
 public struct RunningRing: View {
     var size: CGFloat
-    @State private var turning = false
 
     public init(size: CGFloat = 10) { self.size = size }
 
@@ -969,11 +968,30 @@ public struct RunningRing: View {
             .trim(from: 0.12, to: 1)
             .stroke(Color(nsColor: DS.fg3), style: StrokeStyle(lineWidth: 1.4, lineCap: .round))
             .frame(width: size - 1.4, height: size - 1.4)
-            .rotationEffect(.degrees(turning ? 360 : 0))
+            .turning(period: 1)
             .frame(width: size, height: size)
-            .onAppear { withAnimation(.linear(duration: 1).repeatForever(autoreverses: false)) { turning = true } }
             .accessibilityLabel("Running")
     }
+}
+
+/// Turns its content once per `period`, read from the clock. Not a `repeatForever` animation: that one never finishes,
+/// and one outlived its ring in the sidebar, redrawing the window every frame (about 45% CPU while idle, 2026-11-26).
+/// It holds still while another app is in front, as piopio does.
+struct Turning: ViewModifier {
+    let period: Double
+    @Environment(\.controlActiveState) private var activeState
+
+    func body(content: Content) -> some View {
+        TimelineView(.animation(minimumInterval: 1 / 30, paused: activeState == .inactive)) { timeline in
+            let turn = timeline.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: period) / period
+            content.rotationEffect(.degrees(turn * 360))
+        }
+    }
+}
+
+extension View {
+    /// A spinner's turn (`Turning`).
+    func turning(period: Double) -> some View { modifier(Turning(period: period)) }
 }
 
 /// Images a turn's steps returned (screenshots it read), at the end of its activity line: small rounded thumbnails,
