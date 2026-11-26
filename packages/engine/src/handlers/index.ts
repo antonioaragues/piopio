@@ -15,6 +15,7 @@ import { mcpHandlers } from "./mcp.js";
 import { packagesHandlers } from "./packages.js";
 import { hooksHandlers } from "./hooks.js";
 import { skillsHandlers } from "./skills.js";
+import { subagentsHandlers } from "./subagents.js";
 import { settingsHandlers } from "./settings.js";
 import { aboutMeHandlers } from "./aboutMe.js";
 import { agentsHandlers } from "./agents.js";
@@ -49,6 +50,7 @@ export function handlersFor(engine: Engine): AllHandlers {
 		...packagesHandlers(engine),
 		...hooksHandlers(engine),
 		...skillsHandlers(engine),
+		...subagentsHandlers(engine),
 		...settingsHandlers(engine),
 		...aboutMeHandlers(engine),
 		...agentsHandlers(engine),

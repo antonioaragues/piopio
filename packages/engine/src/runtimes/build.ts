@@ -132,6 +132,10 @@ export type BuildOpenOptions = {
 	sandbox?: () => boolean;
 	/** Claude Code / Codex CLIs a task can go to (external-agents.ts). */
 	externalAgents?: readonly string[];
+	/** Custom subagents a task can go to (roadmap PAR12), read when the session loads. */
+	namedAgents?: () => readonly { name: string; description: string }[];
+	/** This session is a custom subagent (PAR12): its instructions join the system prompt; `tools`, the only ones it gets. */
+	subagent?: { name: string; instructions: string; tools?: string[] };
 	/** Runs `task` subagents as child sessions; absent for the children themselves (one level deep). */
 	runTask?: SubagentBridge["run"];
 	/** Non-blocking `task`, `task_wait` and `task_stop` (docs/spec/17 §3). */
@@ -241,6 +245,8 @@ export class BuildRuntime implements Runtime {
 			agentDir,
 			settingsManager,
 			// Piopio's /automation, /grill-me and /browser (docs/spec/32 CM3).
+			// A custom subagent's own instructions (PAR12), after pi's and the project's, as pi's --append-system-prompt.
+			...(o.subagent?.instructions.trim() ? { appendSystemPromptOverride: (base: string[]) => [...base, subagentPrompt(o.subagent!)] } : {}),
 			promptsOverride: (base) => ({ ...base, prompts: withPiopioPrompts(base.prompts, { browser: Boolean(o.browser), automations: Boolean(o.automations), learn: Boolean(o.learn), project: Boolean(o.learn?.project()) }) }),
 			extensionFactories: o.chat ? chatFactories(o, broker, () => runtime) : [
 				// The pi CLI's built-ins (MCP servers, and codemode / tool search through which MCP tools are
@@ -374,7 +380,7 @@ export class BuildRuntime implements Runtime {
 							}),
 						]
 					: []),
-				subagentsExtension(o.runTask ? { run: o.runTask, ...(o.tasks ?? {}), ...(o.externalAgents?.length ? { agents: o.externalAgents } : {}) } : undefined),
+				subagentsExtension(o.runTask ? { run: o.runTask, ...(o.tasks ?? {}), ...(o.externalAgents?.length ? { agents: o.externalAgents } : {}), ...(o.namedAgents ? { named: o.namedAgents } : {}) } : undefined),
 				notifyExtension(notifyBridge(o, broker, () => runtime)),
 				// Last: pi's tools list and rules for Piopio's preamble, from the tools the others turned on.
 				promptToolsExtension(),
@@ -402,6 +408,8 @@ export class BuildRuntime implements Runtime {
 			settingsManager,
 			resourceLoader,
 			...(o.thinking ? { thinkingLevel: o.thinking as never } : {}),
+			// A custom subagent's tools (PAR12): pi's allowlist. applyMode keeps to it too.
+			...(o.subagent?.tools?.length ? { tools: o.subagent.tools } : {}),
 		});
 		// The extension holds plan mode (in the session's entries); until it has loaded, what the session starts as.
 		const plan: PlanHandle = { active: () => planHandle?.active() ?? o.plan.initial(), setActive: (on) => planHandle?.setActive(on) };
@@ -411,6 +419,7 @@ export class BuildRuntime implements Runtime {
 		if (o.keepImages) runtime.builder.keepImages = o.keepImages;
 		runtime.connectors = o.connectors;
 		runtime.toolsOff = o.toolsOff;
+		if (o.subagent?.tools?.length) runtime.allowedTools = toolMatcher(o.subagent.tools);
 		if (o.thinking) runtime.thinkingChosen = o.thinking;
 		if (o.history) runtime.history = o.history;
 		broker.onAdded = (prompt) => o.onAttention?.("waiting", prompt.detail ? `${prompt.title}: ${prompt.detail}` : prompt.title);
@@ -423,6 +432,8 @@ export class BuildRuntime implements Runtime {
 
 	private connectors?: ConnectorHub;
 	private toolsOff?: () => string[];
+	/** A custom subagent's tools (PAR12): the mode's own additions (web tools, Read only's) stay within them. */
+	allowedTools?: (name: string) => boolean;
 	/** The thinking level you picked (a chat shows "default" until then). */
 	private thinkingChosen?: string;
 
@@ -909,7 +920,7 @@ export class BuildRuntime implements Runtime {
 		const active = new Set(this.session.getActiveToolNames());
 		if (readOnly) for (const name of READ_ONLY_OFF) active.delete(name);
 		for (const name of [...(readOnly ? READ_ONLY_ON : READ_ONLY_OFF), ...WEB_TOOLS]) if (known.has(name)) active.add(name);
-		this.session.setActiveToolsByName([...active]);
+		this.session.setActiveToolsByName([...active].filter((name) => this.allowedTools?.(name) ?? true));
 	}
 
 	/** What the session state says about its settings: a chat's (model, thinking, web), or a folder conversation's. */
@@ -1392,4 +1403,15 @@ function mcpOffExtension(toolsOff: () => string[]): ExtensionFactory {
 			return hit ? { block: true, reason: `The MCP server “${hit}” is turned off in this conversation. The user can turn it back on in the composer's + menu.` } : undefined;
 		});
 	};
+}
+
+/** A custom subagent's part of the system prompt (PAR12): who it is, then its definition's instructions. */
+export function subagentPrompt(agent: { name: string; instructions: string }): string {
+	return `You are working as the subagent "${agent.name}": another conversation handed you this task. Follow these instructions from its definition:\n\n${agent.instructions.trim()}`;
+}
+
+/** Whether a tool's name is on a list of names or patterns (`*` matches any characters), as pi's `tools` reads it. */
+export function toolMatcher(patterns: readonly string[]): (name: string) => boolean {
+	const res = patterns.map((p) => new RegExp(`^${p.trim().split("*").map((part) => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join(".*")}$`));
+	return (name) => res.some((r) => r.test(name));
 }

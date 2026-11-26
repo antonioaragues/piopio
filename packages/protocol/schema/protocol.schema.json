@@ -14518,6 +14518,10 @@
 						"alert": {
 							"type": "string",
 							"description": "The Watchdog's note while it looks stuck or repeats itself"
+						},
+						"agent": {
+							"type": "string",
+							"description": "A custom subagent's name, when the task went to one (roadmap PAR12)"
 						}
 					}
 				},
@@ -24444,6 +24448,10 @@
 									"alert": {
 										"type": "string",
 										"description": "The Watchdog's note while it looks stuck or repeats itself"
+									},
+									"agent": {
+										"type": "string",
+										"description": "A custom subagent's name, when the task went to one (roadmap PAR12)"
 									}
 								}
 							},
@@ -25358,6 +25366,10 @@
 									"alert": {
 										"type": "string",
 										"description": "The Watchdog's note while it looks stuck or repeats itself"
+									},
+									"agent": {
+										"type": "string",
+										"description": "A custom subagent's name, when the task went to one (roadmap PAR12)"
 									}
 								}
 							},
@@ -26285,6 +26297,190 @@
 					"type": "string"
 				}
 			}
+		},
+		"subagents.list.params": {
+			"type": "object",
+			"properties": {
+				"project": {
+					"type": "string"
+				}
+			}
+		},
+		"subagents.list.result": {
+			"type": "object",
+			"required": [
+				"subagents"
+			],
+			"properties": {
+				"subagents": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": [
+							"name",
+							"description",
+							"path",
+							"where"
+						],
+						"properties": {
+							"name": {
+								"type": "string"
+							},
+							"description": {
+								"type": "string"
+							},
+							"tools": {
+								"type": "array",
+								"items": {
+									"type": "string"
+								}
+							},
+							"model": {
+								"type": "string"
+							},
+							"path": {
+								"type": "string"
+							},
+							"where": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "yours"
+									},
+									{
+										"type": "string",
+										"const": "project"
+									}
+								]
+							}
+						}
+					}
+				}
+			}
+		},
+		"subagents.get.params": {
+			"type": "object",
+			"required": [
+				"path"
+			],
+			"properties": {
+				"path": {
+					"type": "string"
+				}
+			}
+		},
+		"subagents.get.result": {
+			"type": "object",
+			"required": [
+				"info",
+				"instructions"
+			],
+			"properties": {
+				"info": {
+					"type": "object",
+					"required": [
+						"name",
+						"description",
+						"path",
+						"where"
+					],
+					"properties": {
+						"name": {
+							"type": "string"
+						},
+						"description": {
+							"type": "string"
+						},
+						"tools": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							}
+						},
+						"model": {
+							"type": "string"
+						},
+						"path": {
+							"type": "string"
+						},
+						"where": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "yours"
+								},
+								{
+									"type": "string",
+									"const": "project"
+								}
+							]
+						}
+					}
+				},
+				"instructions": {
+					"type": "string"
+				}
+			}
+		},
+		"subagents.save.params": {
+			"type": "object",
+			"required": [
+				"name",
+				"description",
+				"instructions"
+			],
+			"properties": {
+				"path": {
+					"type": "string"
+				},
+				"project": {
+					"type": "string"
+				},
+				"name": {
+					"type": "string"
+				},
+				"description": {
+					"type": "string"
+				},
+				"tools": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
+				},
+				"model": {
+					"type": "string"
+				},
+				"instructions": {
+					"type": "string"
+				}
+			}
+		},
+		"subagents.save.result": {
+			"type": "object",
+			"required": [
+				"path"
+			],
+			"properties": {
+				"path": {
+					"type": "string"
+				}
+			}
+		},
+		"subagents.delete.params": {
+			"type": "object",
+			"required": [
+				"path"
+			],
+			"properties": {
+				"path": {
+					"type": "string"
+				}
+			}
+		},
+		"subagents.delete.result": {
+			"type": "object",
+			"properties": {}
 		},
 		"hooks.list.params": {
 			"type": "object",
@@ -59954,6 +60150,10 @@
 									"alert": {
 										"type": "string",
 										"description": "The Watchdog's note while it looks stuck or repeats itself"
+									},
+									"agent": {
+										"type": "string",
+										"description": "A custom subagent's name, when the task went to one (roadmap PAR12)"
 									}
 								}
 							},

@@ -7,7 +7,8 @@
  * Everything this needs from the conversations comes through `ChildrenHost`, which Sessions implements.
  */
 import { randomUUID } from "node:crypto";
-import type { ApprovalMode, ContainerRef, WorkOn } from "@piopio/protocol";
+import type { ApprovalMode, ContainerRef, ModelRef, WorkOn } from "@piopio/protocol";
+import type { Subagent } from "../custom-subagents.js";
 import { EngineError } from "../models.js";
 import { git as runGit, status as gitStatus } from "../git.js";
 import { BuildRuntime } from "../runtimes/build.js";
@@ -45,6 +46,10 @@ export interface ChildrenHost {
 	/** A Watchdog note for a board helper, to the task that made it. */
 	noteHelper(project: string, taskId: string, text: string): Promise<void>;
 	findExternal(agent: ExternalAgent): string | undefined;
+	/** A custom subagent a conversation at `place` can hand work to (roadmap PAR12), by name. */
+	subagentNamed(place: string, name: string): Subagent | undefined;
+	/** A custom subagent's `model` as a model on this Mac, the conversation's provider first; undefined when none matches. */
+	modelNamed(text: string, near?: ModelRef): Promise<ModelRef | undefined>;
 	projectNamed(name: string): { id: string; path: string } | undefined;
 	projectNames(): string[];
 }
@@ -68,16 +73,21 @@ export class Children {
 	 * once. Past MAX_SUBAGENTS working for one parent it waits as queued. Its result goes back to the parent as a
 	 * `[Task]` note (the side conversations' bridge, 26 §7.1), unless `task_wait` collects it.
 	 */
-	async startTask(parentRef: ContainerRef, task: { callId: string; description: string; prompt: string }): Promise<{ sessionId: string; queued: boolean }> {
+	async startTask(parentRef: ContainerRef, task: { callId: string; description: string; prompt: string; agent?: string }): Promise<{ sessionId: string; queued: boolean }> {
 		const parent = this.host.entry(parentRef);
+		// A custom subagent (PAR12): its instructions and tools, and its model when one on this Mac matches.
+		const named = task.agent ? this.host.subagentNamed(parent.projectPath ?? parent.cwd!, task.agent) : undefined;
+		if (task.agent && !named) throw new EngineError("NOT_FOUND", `There's no subagent called ${task.agent} here.`);
+		const model = (named?.model && (await this.host.modelNamed(named.model, parent.model))) || parent.model;
 		// A child never gets more than its parent: the same profile (a Chat-lens parent has no bash) and the same tools
 		// turned off (see `toolsOff` in build(), which also follows later changes to the parent).
-		const ref = await this.host.create({ kind: "build", cwd: parent.cwd!, ...(parent.model ? { model: parent.model } : {}), approvalMode: this.host.modeAt(parent.projectPath ?? parent.cwd!, parent.approvalMode ?? this.host.defaultMode(parent.projectPath ?? parent.cwd!)), title: task.description });
+		const ref = await this.host.create({ kind: "build", cwd: parent.cwd!, ...(model ? { model } : {}), approvalMode: this.host.modeAt(parent.projectPath ?? parent.cwd!, parent.approvalMode ?? this.host.defaultMode(parent.projectPath ?? parent.cwd!)), title: task.description });
 		const child = this.host.entry(ref);
+		if (named) child.subagent = { name: named.name, instructions: named.instructions, ...(named.tools ? { tools: named.tools } : {}) };
 		// Counted here, after the await and right before the child takes its place: tasks the model starts in one
 		// message run in parallel, and counting before `create` let all of them past the limit.
 		const working = this.childrenOf(parent.ref.id).filter((c) => c !== child && c.parent && c.parent.state === "working").length;
-		child.parent = { id: parent.ref.id, callId: task.callId, state: working >= MAX_SUBAGENTS ? "queued" : "working", ...(working >= MAX_SUBAGENTS ? {} : { startedAt: new Date().toISOString() }) };
+		child.parent = { id: parent.ref.id, callId: task.callId, state: working >= MAX_SUBAGENTS ? "queued" : "working", ...(working >= MAX_SUBAGENTS ? {} : { startedAt: new Date().toISOString() }), ...(named ? { agent: named.name } : {}) };
 		if (parent.toolsOff?.length) child.toolsOff = [...parent.toolsOff];
 		if (parent.projectPath) child.projectPath = parent.projectPath;
 		if (child.parent.state === "queued") child.sideBrief = task.prompt;

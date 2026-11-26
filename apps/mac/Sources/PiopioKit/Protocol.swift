@@ -245,6 +245,31 @@ public struct SkillSaveParams: Encodable, Sendable {
 }
 public struct SkillSaveResult: Decodable, Sendable { public var path: String }
 
+/// A custom subagent (roadmap PAR12): one of pi's agent files, which a conversation's `task` can hand work to by name.
+public struct CustomSubagentInfo: Codable, Sendable, Hashable, Identifiable {
+    public enum Where: String, Codable, Sendable { case yours, project }
+    public var name: String
+    public var description: String
+    /// The only tools it gets; nil, all of the conversation's.
+    public var tools: [String]?
+    /// Its model as the file says it; nil, the conversation's.
+    public var model: String?
+    public var path: String
+    public var `where`: Where
+    public var id: String { path }
+}
+public struct SubagentsListParams: Encodable, Sendable { public var project: String?; public init(project: String? = nil) { self.project = project } }
+public struct SubagentsResult: Decodable, Sendable { public var subagents: [CustomSubagentInfo] }
+public struct SubagentPathParams: Encodable, Sendable { public var path: String; public init(path: String) { self.path = path } }
+public struct SubagentResult: Decodable, Sendable { public var info: CustomSubagentInfo; public var instructions: String }
+public struct SubagentSaveParams: Encodable, Sendable {
+    public var path: String?; public var project: String?; public var name: String; public var description: String; public var tools: [String]?; public var model: String?; public var instructions: String
+    public init(path: String? = nil, project: String? = nil, name: String, description: String, tools: [String]? = nil, model: String? = nil, instructions: String) {
+        self.path = path; self.project = project; self.name = name; self.description = description; self.tools = tools; self.model = model; self.instructions = instructions
+    }
+}
+public struct SubagentSaveResult: Decodable, Sendable { public var path: String }
+
 /// Where a /learn card stands (the session's `learned`).
 public struct LearnState: Codable, Sendable, Hashable {
     public enum Status: String, Codable, Sendable { case pending, later, saved, dismissed }
@@ -684,7 +709,7 @@ public struct SessionSummary: Codable, Sendable, Hashable {
     public var worktree: WorktreeInfo?
     /// A subagent's session: the parent session and its `task` call.
     /// A subagent's parent, and its state (queued, working, done, failed, stopped) with a line while it works (17 §3).
-    public struct Parent: Codable, Sendable, Hashable { public var id: String; public var callId: String; public var state: String?; public var line: String?; public var startedAt: String?; public var endedAt: String?; public var costUsd: Double?; public var brief: String?; public var alert: String? }
+    public struct Parent: Codable, Sendable, Hashable { public var id: String; public var callId: String; public var state: String?; public var line: String?; public var startedAt: String?; public var endedAt: String?; public var costUsd: Double?; public var brief: String?; public var alert: String?; public var agent: String? }
     public var parent: Parent?
     /// A helper's session (docs/spec/26 CL4): made by Piopio for a task on a project's board.
     public struct Helper: Codable, Sendable, Hashable { public var project: String; public var kind: String; public var taskId: String }

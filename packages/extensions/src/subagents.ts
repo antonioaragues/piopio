@@ -3,6 +3,9 @@
  * (docs/spec/05-build §4). Piopio runs each one as a child Build session you can open, with the parent's
  * approval mode, and counts its cost toward the parent. Without a bridge (pi CLI) it isn't registered.
  *
+ * Custom subagents (roadmap PAR12): `agent` can name one of the user's or the project's (`named`), which runs as
+ * Piopio's own does, with that definition's instructions, tools and model.
+ *
  * Non-blocking (docs/spec/17 §3, 26 §7.1): with a bridge that can `start` one, `task` returns at once and the result
  * comes back later as a `[Task]` message, the way a side conversation's report does; `task_wait` waits for some when
  * the parent can't go on without them, and `task_stop` stops one. `wait: true` keeps the old behaviour.
@@ -21,13 +24,15 @@ export interface SubagentBridge {
 		onProgress: (line: string) => void,
 	): Promise<TaskResult>;
 	/** Starts one and returns at once; its result comes back to the parent later. Absent: `task` always waits. */
-	start?(task: { callId: string; description: string; prompt: string }): Promise<{ sessionId: string; queued: boolean }>;
+	start?(task: { callId: string; description: string; prompt: string; agent?: string }): Promise<{ sessionId: string; queued: boolean }>;
 	/** Waits for these (by session id) to finish, and their results. */
 	wait?(ids: readonly string[], signal: AbortSignal | undefined): Promise<TaskResult[]>;
 	/** Stops one's running turn (or its start, when queued). */
 	stop?(id: string): Promise<string>;
 	/** Other agents a task can go to, by CLI name ("claude", "codex"), when installed. */
 	agents?: readonly string[];
+	/** Custom subagents (the user's and the project's agent files), read when the session loads. */
+	named?: () => readonly { name: string; description: string }[];
 }
 
 const AGENT_LABELS: Record<string, string> = { claude: "Claude Code", codex: "OpenAI Codex" };
@@ -38,6 +43,14 @@ export function subagentsExtension(bridge?: SubagentBridge): ExtensionFactory {
 	return (pi) => {
 		if (!bridge) return;
 		const later = !!bridge.start;
+		const external = bridge.agents ?? [];
+		const named = (bridge.named?.() ?? []).filter((a) => a.name !== "piopio" && !external.includes(a.name));
+		const choices = [...named.map((a) => a.name), ...external];
+		const agentHelp = [
+			`"piopio" (the default): a Piopio subagent you can follow.`,
+			...named.map((a) => `"${a.name}": ${a.description.replace(/\s+/g, " ").trim()} (a Piopio subagent with its own instructions, and maybe fewer tools or another model).`),
+			...external.map((a) => `"${a}": ${AGENT_LABELS[a] ?? a} on the user's own account, unattended in this folder (it always waits).`),
+		].join(" ");
 		pi.registerTool(
 			defineTool({
 				name: "task",
@@ -50,11 +63,11 @@ export function subagentsExtension(bridge?: SubagentBridge): ExtensionFactory {
 					description: Type.String({ description: "A short title (3–6 words)." }),
 					prompt: Type.String({ description: "The full task: goal, relevant files, constraints, and what to report back." }),
 					...(later ? { wait: Type.Optional(Type.Boolean({ description: "Wait here for its answer (default false: it comes back later as a [Task] message)" })) } : {}),
-					...(bridge.agents?.length
+					...(choices.length
 						? {
 								agent: Type.Optional(
-									Type.Union([Type.Literal("piopio"), ...bridge.agents.map((a) => Type.Literal(a))], {
-										description: `Who does it. "piopio" (the default): a Piopio subagent you can follow. ${bridge.agents.map((a) => `"${a}": ${AGENT_LABELS[a] ?? a} on the user's own account, unattended in this folder (it always waits)`).join("; ")}. Use another agent only when the user asks for it or a second opinion helps.`,
+									Type.Union([Type.Literal("piopio"), ...choices.map((a) => Type.Literal(a))], {
+										description: `Who does it. ${agentHelp}${named.length ? " Hand work to a named subagent when its description fits the task, or the user asks for it." : ""}${external.length ? " Use another coding agent only when the user asks for it or a second opinion helps." : ""}`,
 									}),
 								),
 							}
@@ -62,10 +75,11 @@ export function subagentsExtension(bridge?: SubagentBridge): ExtensionFactory {
 				}),
 				async execute(toolCallId, params, signal, onUpdate) {
 					const agent = (params as { agent?: string }).agent;
-					const external = !!agent && agent !== "piopio";
+					const isExternal = !!agent && external.includes(agent);
+					const isNamed = !!agent && named.some((a) => a.name === agent);
 					// Started now, answered later: the result comes back as a [Task] message (docs/spec/17 §3).
-					if (later && !external && (params as { wait?: boolean }).wait !== true) {
-						const { sessionId, queued } = await bridge.start!({ callId: toolCallId, description: params.description, prompt: params.prompt });
+					if (later && !isExternal && (params as { wait?: boolean }).wait !== true) {
+						const { sessionId, queued } = await bridge.start!({ callId: toolCallId, description: params.description, prompt: params.prompt, ...(isNamed ? { agent } : {}) });
 						return {
 							content: [{ type: "text", text: `Started ${sessionId}${queued ? " (queued: 3 are running)" : ""}. Its result comes back as a [Task] message; task_wait waits for it.` }],
 							details: { sessionId, status: queued ? "queued" : "started" },
@@ -74,7 +88,7 @@ export function subagentsExtension(bridge?: SubagentBridge): ExtensionFactory {
 					let sessionId = "";
 					const update = (line: string) => onUpdate?.({ content: [{ type: "text", text: line }], details: { sessionId } });
 					const result = await bridge.run(
-						{ callId: toolCallId, description: params.description, prompt: params.prompt, ...(external ? { agent } : {}) },
+						{ callId: toolCallId, description: params.description, prompt: params.prompt, ...(isExternal || isNamed ? { agent } : {}) },
 						signal,
 						(id) => {
 							sessionId = id;

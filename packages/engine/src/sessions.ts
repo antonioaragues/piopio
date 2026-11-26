@@ -8,6 +8,7 @@ import { randomUUID } from "node:crypto";
 import { cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, watch, writeFileSync, type FSWatcher, statSync, utimesSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
+import { listSubagents, matchModel, type Subagent } from "./custom-subagents.js";
 import { getAgentDir, SessionManager } from "@earendil-works/pi-coding-agent";
 import type { ApprovalMode, ApprovalRule, Budget, ContainerRef, LearnItem, ModelRef, PromptResponse, SessionSummary, TimelineItem, WorkOn } from "@piopio/protocol";
 import { EngineError, type ModelHub } from "./models.js";
@@ -145,9 +146,16 @@ export class Sessions {
 		chatSettings: () => this.chat?.settings.get().chat,
 		noteHelper: (project, taskId, text) => (this.work ? this.work.noteHelper(project, taskId, text) : Promise.resolve()),
 		findExternal: (agent) => this.findExternal(agent),
+		subagentNamed: (place, name) => this.subagentsAt(place).find((a) => a.name === name),
+		modelNamed: async (text, near) => matchModel(text, await this.hub.listModels().catch(() => []), near?.provider),
 		projectNamed: (name) => this.projectNamed?.(name),
 		projectNames: () => this.projectNames?.() ?? [],
 	});
+
+	/** Custom subagents a conversation at `place` can hand work to (roadmap PAR12): yours, and a trusted project's. */
+	subagentsAt(place: string): Subagent[] {
+		return listSubagents(this.piOverrides.piAgentDir ?? getAgentDir(), this.policy.projectFor(place)?.path ?? place);
+	}
 	/** Conversations' pull requests (sessions/pull-requests.ts). */
 	readonly prs = new PullRequests({
 		entry: (ref) => this.entry(ref),
@@ -2031,7 +2039,10 @@ export class Sessions {
 						runTask: (task, signal, onStart, onProgress) => this.children.runTask(entry, task, signal, onStart, onProgress),
 						tasks: { start: (task) => this.children.startTask(entry.ref, task), wait: (ids, signal) => this.children.waitTasks(entry.ref, ids, signal), stop: (id) => this.children.stopTask(entry.ref, id) },
 						externalAgents: this.externalAgents(),
+						namedAgents: () => this.subagentsAt(entry.projectPath ?? entry.cwd!).map((a) => ({ name: a.name, description: a.description })),
 					}),
+			// A custom subagent (PAR12): its instructions and the only tools it gets.
+			...(entry.subagent ? { subagent: entry.subagent } : {}),
 			// The board (docs/spec/26): Piopio's tools where parallel work is on, a reviewer's verdict.
 			...(entry.helper?.kind === "review" && this.work ? { board: this.boardBridge(entry, "review") } : {}),
 			...(entry.reviewFor ? { codeReview: this.reviewBridge(entry) } : {}),

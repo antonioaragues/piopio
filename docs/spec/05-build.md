@@ -55,6 +55,34 @@ Default state for new sessions: **approvals, checkpoints, todos, notify and suba
 
 | `piopio-diagnostics` | The project's check after the agent's edits ("Diagnostics" below). Built 2026-11-21. |
 
+### Custom subagents (roadmap PAR12, 2026-11-26)
+
+A subagent with a name: its own instructions, and when you want it, fewer tools or another model. A scout that only
+reads, a reviewer, a test runner. `task` hands it work by name; otherwise it runs like Piopio's own subagent (a child
+session you can open, the parent's approval mode, its cost on the parent, at most 3 at a time, one level deep).
+
+- **Files, as pi has them.** Each is a Markdown file with `name`, `description`, and optionally `tools` (a list, or
+  `read, grep`) and `model` in its frontmatter; the body is its instructions. The same files pi's subagent extension
+  reads: yours in `~/.pi/agent/agents/`, a project's in its `.pi/agents/`. A project's are read only while the project
+  is trusted (their text is the repository's, and it instructs a model that runs commands), and win over yours of the
+  same name, as in pi. The names `piopio`, `claude`, `codex`, `antigravity` and `gemini` are kept for the built-in ones.
+- **Where you make them:** Settings › Extensions › **Your subagents**: New subagent, or a row to edit; the sheet has
+  Name, Use it for (the description), Instructions, Tools (the conversation's, or only these: boxes for the common
+  ones and a field for others, `*` allowed) and Model. Delete moves the file to the Trash. A project's aren't listed
+  there yet; edit them in the project.
+- **How `task` offers them:** its `agent` parameter lists each by name with its description, next to `piopio` and the
+  coding agents, read when the conversation loads (a new one shows in conversations opened or reloaded after it).
+  A name that isn't there is refused by the tool's schema.
+- **How it runs:** the definition is copied onto the child when the task starts (`subagent` in its catalog entry), so
+  reopening it later gives the same subagent. Its instructions are added to the system prompt after pi's and the
+  project's (pi's `appendSystemPrompt`), headed "You are working as the subagent "scout"". `tools` is pi's allowlist
+  (`tools` at `createAgentSession`); the approval mode's own additions (web tools, Read only's) stay within it, and the
+  parent's turned-off tools stay off. `model` is matched against the models on this Mac: `provider/id` exactly, else the
+  same id or its last part, the conversation's provider first; none matches, it uses the conversation's model. The
+  child's summary carries `parent.agent`, its name.
+- **Not yet:** `/learn` proposing a subagent; the subagent's name on the task card and its row; a project's subagents in
+  its settings; Claude Code's `.claude/agents` (its tool names differ). Sending a named task to Claude Code or Codex.
+
 ### Diagnostics (roadmap PAR5, 2026-11-21)
 - **DG1 When.** A run that edited files (`edit`, `write`) is about to end: Piopio runs the project's check before the
   agent answers. A run that only read, or a failed edit, runs nothing.

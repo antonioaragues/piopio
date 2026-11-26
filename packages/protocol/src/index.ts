@@ -118,6 +118,22 @@ export const SkillInfo = Type.Object({
 });
 export type SkillInfo = Static<typeof SkillInfo>;
 
+/** A custom subagent (roadmap PAR12): one of pi's agent files, a task's `agent` by its name. */
+export const SubagentInfo = Type.Object({
+	name: Type.String(),
+	/** What it's for: what the conversation reads to decide to hand it work. */
+	description: Type.String(),
+	/** The only tools it gets (within its parent's); absent, all of them. */
+	tools: Type.Optional(Type.Array(Type.String())),
+	/** Its model as the file says it (`provider/id` or an id); absent, the conversation's. */
+	model: Type.Optional(Type.String()),
+	/** Its file. */
+	path: Type.String(),
+	/** yours: ~/.pi/agent/agents; project: a trusted project's .pi/agents. */
+	where: literals("yours", "project"),
+});
+export type SubagentInfo = Static<typeof SubagentInfo>;
+
 export const ToolDetails = Type.Union([
 	Type.Object({ type: Type.Literal("diff"), path: Type.String(), diff: Type.String() }),
 	Type.Object({ type: Type.Literal("file"), path: Type.String(), language: Type.Optional(Type.String()) }),
@@ -754,7 +770,7 @@ export const SessionSummary = Type.Object({
 	 * A subagent's session: the parent session and the `task` call that started it; its state (queued while 3 others
 	 * of its parent run, docs/spec/17 §3) and, while it works, a line on what it's doing.
 	 */
-	parent: Type.Optional(Type.Object({ id: Type.String(), callId: Type.String(), state: Type.Optional(literals("queued", "working", "done", "failed", "stopped")), line: Type.Optional(Type.String()), startedAt: Type.Optional(Type.String({ description: "When its latest turn started (docs/spec/37)" })), endedAt: Type.Optional(Type.String({ description: "When its latest turn ended" })), costUsd: Type.Optional(Type.Number({ description: "What the subagent has cost so far" })), brief: Type.Optional(Type.String({ description: "While queued: what it will be told when it starts" })), alert: Type.Optional(Type.String({ description: "The Watchdog's note while it looks stuck or repeats itself" })) })),
+	parent: Type.Optional(Type.Object({ id: Type.String(), callId: Type.String(), state: Type.Optional(literals("queued", "working", "done", "failed", "stopped")), line: Type.Optional(Type.String()), startedAt: Type.Optional(Type.String({ description: "When its latest turn started (docs/spec/37)" })), endedAt: Type.Optional(Type.String({ description: "When its latest turn ended" })), costUsd: Type.Optional(Type.Number({ description: "What the subagent has cost so far" })), brief: Type.Optional(Type.String({ description: "While queued: what it will be told when it starts" })), alert: Type.Optional(Type.String({ description: "The Watchdog's note while it looks stuck or repeats itself" })), agent: Type.Optional(Type.String({ description: "A custom subagent's name, when the task went to one (roadmap PAR12)" })) })),
 	/** A helper's session (docs/spec/26 CL4): made by Piopio for a task on a project's board; not listed with yours. */
 	helper: Type.Optional(Type.Object({ project: Type.String(), kind: literals("build", "review"), taskId: Type.String() })),
 	/**
@@ -1505,6 +1521,25 @@ export const methods = {
 	"skills.save": {
 		params: Type.Object({ path: Type.Optional(Type.String()), project: Type.Optional(Type.String()), name: Type.String(), description: Type.String(), body: Type.String(), manual: Type.Optional(Type.Boolean()) }),
 		result: Type.Object({ path: Type.String() }),
+	},
+	/** Custom subagents (roadmap PAR12): yours, and a project's with `project` (only while it's trusted). */
+	"subagents.list": {
+		params: Type.Object({ project: Type.Optional(Type.String()) }),
+		result: Type.Object({ subagents: Type.Array(SubagentInfo) }),
+	},
+	"subagents.get": {
+		params: Type.Object({ path: Type.String() }),
+		result: Type.Object({ info: SubagentInfo, instructions: Type.String() }),
+	},
+	/** A new subagent (no `path`) or a change to one (`path`: its file; a new name renames it). `project`: in its .pi/agents. */
+	"subagents.save": {
+		params: Type.Object({ path: Type.Optional(Type.String()), project: Type.Optional(Type.String()), name: Type.String(), description: Type.String(), tools: Type.Optional(Type.Array(Type.String())), model: Type.Optional(Type.String()), instructions: Type.String() }),
+		result: Type.Object({ path: Type.String() }),
+	},
+	/** Moves a subagent's file to the Trash. */
+	"subagents.delete": {
+		params: Type.Object({ path: Type.String() }),
+		result: Type.Object({}),
 	},
 	/** Your hooks (PAR6), and a project's with `project`; `claude`: that project's Claude Code hooks, to import. */
 	"hooks.list": {

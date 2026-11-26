@@ -50,6 +50,11 @@ export type CatalogEntry = SessionSummary & {
 	sideBriefs?: Record<string, string>;
 	/** /learn saves (docs/spec/14 M5), by tool call: what each wrote, so Undo takes exactly that back. */
 	learnUndo?: Record<string, { project?: string; file?: string; created?: boolean; lines: string[]; facts: string[]; skillsMade?: string[]; skillsBefore?: { path: string; text: string }[] }>;
+	/**
+	 * A custom subagent's definition (roadmap PAR12), as it was when the task started: its instructions go into the
+	 * system prompt, and `tools` (when set) are the only tools it gets, within its parent's.
+	 */
+	subagent?: { name: string; instructions: string; tools?: string[] };
 	/** Its pull request's comments already seen, and the head whose failing checks it was told about (docs/spec/17 §5). */
 	prSeen?: string[];
 	prFailedSha?: string;
