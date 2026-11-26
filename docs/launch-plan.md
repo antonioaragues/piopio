@@ -245,3 +245,7 @@ weeks).
 - **Support with no telemetry.** One person, public users: the report button and the issue templates are what stand
   between you and guessing.
 - **The server's agent host** is the one piece of engineering with an unknown size. Do its spike early in wave 3.
+- **The re-audit of 2026-11-25 would cut the scope** (its P2 item 7): one cloud path for 1.0, not the Worker and the
+  server both, and the iPhone app, Show me how (40) and computer use (23) after the launch, so the Mac core is
+  finished, signed, notarized and used for real first. The user kept §3's scope as closed on 2026-11-24
+  (2026-11-26). If wave 3 or 5 runs long, that cut is the one ready to make.
