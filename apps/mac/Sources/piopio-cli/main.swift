@@ -68,9 +68,9 @@ func chat(_ args: [String]) async throws {
     if let sessionId {
         ref = ContainerRef(kind: kind, id: sessionId)
     } else {
-        ref = try await client.call("sessions.create", CreateSessionParams(kind: kind, cwd: buildDir, model: model), as: CreateSessionResult.self).ref
+        ref = try await client.call("sessions.create", CreateSessionParams(kind: buildDir == nil ? .thread : .build, cwd: buildDir, model: model), as: CreateSessionResult.self).ref
     }
-    let sub = try await client.call("sessions.subscribe", RefParams(ref: ref), as: SubscribeResult.self)
+    let sub = try await client.call("sessions.subscribe", SubscribeParams(ref: ref), as: SubscribeResult.self)
     var transcript = Transcript(snapshot: sub.snapshot)
     stderr("[\(ref.kind.rawValue) \(ref.id)]\n")
 
@@ -87,11 +87,11 @@ func chat(_ args: [String]) async throws {
             switch event {
             case .itemDelta(_, _, .thinking, let delta):
                 stderr(delta)
-            case .itemAdded(.tool(let t)):
-                stderr("\n⚙︎ \(t.tool) \(t.args.flatMap { try? String(data: JSONEncoder().encode($0), encoding: .utf8) } ?? "")\n")
+            case .itemAdded(.tool(let t), _):
+                stderr("\n⚙︎ \(t.tool) \((try? JSONEncoder().encode(t.args)).flatMap { String(data: $0, encoding: .utf8) } ?? "")\n")
             case .itemUpdated(.tool(let t)) where t.status == .done || t.status == .error:
                 stderr("  ↳ \(t.status.rawValue)\(t.durationMs.map { " in \(Int($0)) ms" } ?? "")\n")
-            case .itemAdded(.system(let s)):
+            case .itemAdded(.system(let s), _):
                 stderr("\n[\(s.level.rawValue)] \(s.text)\n")
             default: break
             }

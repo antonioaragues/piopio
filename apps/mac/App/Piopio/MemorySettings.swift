@@ -237,7 +237,7 @@ struct MemoryPane: View {
 
     private func reindex() {
         Task {
-            let result = try? await engine.client?.call("memory.reindex", Empty(), as: MemoryCountResult.self)
+            let result = try? await engine.client?.call("memory.reindex", Empty(), as: MemoryReindexResult.self)
             let pending = result?.pending ?? 0
             note = pending == 0 ? "Everything is indexed." : "\(pending.formatted()) memories to embed. This runs in the background."
             tick += 1
@@ -589,7 +589,7 @@ struct MemoryBrowser: View {
 
     private func loadHistory() async {
         guard let bank else { return }
-        events = (try? await engine.client?.call("memory.history", MemoryHistoryParams(bank: bank), as: MemoryHistoryResult.self))?.events ?? []
+        events = (try? await engine.client?.call("memory.history", MemoryHistoryParams(provider: "builtin", bank: bank), as: MemoryHistoryResult.self))?.events ?? []
     }
 
     private func refreshBanks() async {
@@ -603,7 +603,7 @@ struct MemoryBrowser: View {
         Task {
             if current?.area == "about-me" {
                 // About me keeps its sections: corrected in place (its history shows the change).
-                _ = try? await engine.client?.call("memory.update", MemoryIdParams(provider: "builtin", bank: bank, id: r.id, text: text), as: Empty.self)
+                _ = try? await engine.client?.call("memory.update", MemoryUpdateParams(provider: "builtin", bank: bank, id: r.id, text: text), as: Empty.self)
             } else {
                 // A correction replaces the fact, so the history keeps what it said before.
                 _ = try? await engine.client?.call("memory.add", MemoryAddParams(provider: "builtin", bank: bank, text: text, replaces: r.id), as: Empty.self)
@@ -616,7 +616,7 @@ struct MemoryBrowser: View {
     private func pin(_ r: MemoryRecordInfo) {
         guard let bank else { return }
         Task {
-            _ = try? await engine.client?.call("memory.update", MemoryIdParams(provider: "builtin", bank: bank, id: r.id, pinned: !(r.pinned ?? false)), as: Empty.self)
+            _ = try? await engine.client?.call("memory.update", MemoryUpdateParams(provider: "builtin", bank: bank, id: r.id, pinned: !(r.pinned ?? false)), as: Empty.self)
             await load()
         }
     }

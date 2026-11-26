@@ -186,7 +186,7 @@ struct OverviewSetupTab: View {
         let id = "agent:\(agent.id)"
         let quiet = agent.state == .unused || agent.state == .off
         let needs = agent.state == .needsYou
-        return Button { open(.init(kind: "agent", id: agent.id, pane: nil)) } label: {
+        return Button { open(.init(kind: .agent, id: agent.id, pane: nil)) } label: {
             HStack(spacing: 5) {
                 if let avatar = agent.avatar, !avatar.isEmpty { Text(avatar).font(.system(size: 11)) }
                 if needs { Circle().fill(StatusTone.approval.dot).frame(width: 6, height: 6) }
@@ -230,11 +230,11 @@ struct OverviewSetupTab: View {
                 let quiet = row.paused == true
                 GridRow {
                     HStack(spacing: 6) {
-                        Image(systemName: row.kind == "agent" ? "bird" : "clock.arrow.circlepath").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                        Image(systemName: row.kind == .agent ? "bird" : "clock.arrow.circlepath").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
                         Text(row.name).lineLimit(1)
                         if quiet { Text("paused").font(.system(size: 12)).foregroundStyle(Color.dsFg3) }
                     }
-                    Text(row.runsOn == "cloud" ? "Cloud" : "This Mac")
+                    Text(row.runsOn == .cloud ? "Cloud" : "This Mac")
                     Text(row.model.map(Self.modelName) ?? "—").lineLimit(1)
                     Text(row.reachesYouIn).lineLimit(1)
                     Text(row.nextRun.flatMap(OverviewPage.date).map(Self.when) ?? "—").lineLimit(1)
@@ -244,7 +244,7 @@ struct OverviewSetupTab: View {
                 .foregroundStyle(quiet ? Color.dsFg3 : Color.dsFg)
                 .padding(.vertical, 7)
                 .contentShape(Rectangle())
-                .onTapGesture { open(.init(kind: row.kind, id: row.id, pane: nil)) }
+                .onTapGesture { open(.init(kind: row.kind == .agent ? .agent : .automation, id: row.id, pane: nil)) }
                 Divider().overlay(Color.dsLine).gridCellUnsizedAxes(.horizontal)
             }
         }
@@ -255,10 +255,10 @@ struct OverviewSetupTab: View {
     private func open(_ target: SetupNode.Open?) {
         guard let target else { return }
         switch target.kind {
-        case "agent": if let id = target.id { item = engine.item(for: id) ?? .agent(id) }
-        case "automation": if let id = target.id { item = .automation(id) }
-        case "project": if let id = target.id { item = .project(id) }
-        case "settings": ToolChoices.openSettings(Self.settingsSection(target.pane))
+        case .agent: if let id = target.id { item = engine.item(for: id) ?? .agent(id) }
+        case .automation: if let id = target.id { item = .automation(id) }
+        case .project: if let id = target.id { item = .project(id) }
+        case .settings: ToolChoices.openSettings(Self.settingsSection(target.pane))
         default: break
         }
     }

@@ -10,7 +10,7 @@ import SwiftUI
 struct LibraryPage: View {
     let engine: EngineController
     @Binding var item: SidebarItem
-    @State private var kind: String?
+    @State private var kind: LibraryKind?
     @State private var place: LibraryPlace?
     @State private var query = ""
     @State private var selected: String?
@@ -32,7 +32,7 @@ struct LibraryPage: View {
 
     private var shown: [LibraryEntry] {
         engine.library.filter { i in
-            (kind == nil || LibraryKind.filter(i.kind) == kind)
+            (kind == nil || i.kind.filter == kind)
                 && (place == nil || LibraryPlace.of(i) == place)
                 && (query.isEmpty || LibraryText.matches(i, query))
         }
@@ -138,10 +138,10 @@ struct LibraryPage: View {
 
     private var filters: some View {
         // The kinds there are, and the one you picked even when nothing of it is left.
-        let kinds = LibraryKind.filters.filter { f in f == kind || engine.library.contains { LibraryKind.filter($0.kind) == f } }
+        let kinds = LibraryKind.filters.filter { f in f == kind || engine.library.contains { $0.kind.filter == f } }
         return HStack(spacing: 6) {
             chip(nil, "All")
-            ForEach(kinds, id: \.self) { f in chip(f, LibraryKind.plural(f)) }
+            ForEach(kinds, id: \.self) { f in chip(f, f.plural) }
             Spacer(minLength: 12)
             Menu {
                 Button("All places") { place = nil }
@@ -156,7 +156,7 @@ struct LibraryPage: View {
         }
     }
 
-    private func chip(_ id: String?, _ title: String) -> some View {
+    private func chip(_ id: LibraryKind?, _ title: String) -> some View {
         let on = id == kind
         return Button { kind = id } label: {
             Text(title)
@@ -391,7 +391,7 @@ struct LibraryDragPreview: View {
     let item: LibraryEntry
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: LibraryKind.symbol(item.kind)).foregroundStyle(Color.dsFg3)
+            Image(systemName: item.kind.symbol).foregroundStyle(Color.dsFg3)
             Text(item.name).font(.system(size: 13)).foregroundStyle(Color.dsFg).lineLimit(1)
         }
         .padding(.horizontal, 10).padding(.vertical, 6)
@@ -519,7 +519,7 @@ private struct LibraryRow: View {
                     Text(item.name).font(.system(size: 13.5)).foregroundStyle(item.missing == true ? Color.dsFg3 : Color.dsFg).lineLimit(1).truncationMode(.tail)
                         .layoutPriority(1)
                     if item.missing == true { LibraryBadge(text: "File missing") }
-                    else if item.kind == "visual", item.path == nil, roomy { LibraryBadge(text: "in a conversation") }
+                    else if item.kind == .visual, item.path == nil, roomy { LibraryBadge(text: "in a conversation") }
                     if item.pinned == true {
                         Image(systemName: "pin.fill").font(.system(size: 9.5)).foregroundStyle(Color.dsFg3).accessibilityLabel("Pinned")
                     }
@@ -599,7 +599,7 @@ private struct LibraryTile: View {
                 .overlay(alignment: .bottom) { Rectangle().fill(Color.dsLine).frame(height: 0.5) }
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.name).font(.system(size: 13, weight: .medium)).foregroundStyle(Color.dsFg).lineLimit(1).truncationMode(.middle)
-                Text("\(LibraryKind.label(item.kind)) · \(LibraryText.changed(item))").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).lineLimit(1)
+                Text("\(item.kind.label) · \(LibraryText.changed(item))").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).lineLimit(1)
             }
             .padding(.horizontal, 10).padding(.vertical, 8)
         }
@@ -639,7 +639,7 @@ private struct LibraryPreview: View {
                     Text(item.note ?? LibraryText.what(item)).font(.system(size: 13)).foregroundStyle(Color.dsFg2).fixedSize(horizontal: false, vertical: true)
                 }
                 Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 10, verticalSpacing: 6) {
-                    row("Kind", "\(LibraryKind.label(item.kind))\(item.size.map { " · \(ByteCountFormatter.string(fromByteCount: Int64($0), countStyle: .file))" } ?? "")")
+                    row("Kind", "\(item.kind.label)\(item.size.map { " · \(ByteCountFormatter.string(fromByteCount: Int64($0), countStyle: .file))" } ?? "")")
                     if let path = item.path {
                         GridRow {
                             Text("File").foregroundStyle(Color.dsFg3)
@@ -657,7 +657,7 @@ private struct LibraryPreview: View {
                         }
                     }
                     row("By", item.by)
-                    row(item.how == "added" ? "Added" : "Made", LibraryText.long(item.at))
+                    row(item.how == .added ? "Added" : "Made", LibraryText.long(item.at))
                     if let changed = item.changedAt, changed > item.at, LibraryText.long(changed) != LibraryText.long(item.at) { row("Changed", LibraryText.long(changed)) }
                 }
                 .font(.system(size: 12.5))
@@ -702,7 +702,7 @@ struct LibraryThumb: View {
         // The field fills what it's offered and the picture fills the field, cropped: a wide page never spills out.
         Color.dsCardField
             .overlay(alignment: .top) {
-                if let image, item.kind == "visual" {
+                if let image, item.kind == .visual {
                     // A visual is drawn at a column's width: whole, with a margin, like its card.
                     Image(nsImage: image).resizable().aspectRatio(contentMode: .fit).padding(size.height > 40 ? 10 : 2)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -711,7 +711,7 @@ struct LibraryThumb: View {
                 } else if let sample, size.height > 60 {
                     LibrarySampleView(sample: sample)
                 } else {
-                    Image(systemName: LibraryKind.symbol(item.kind))
+                    Image(systemName: item.kind.symbol)
                         .font(.system(size: min(size.height * 0.42, 26))).foregroundStyle(Color.dsFg3)
                         // The overlay is top-aligned for pictures; the glyph sits in the middle of the field.
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -726,10 +726,10 @@ struct LibraryThumb: View {
         .task(id: "\(item.id)|\(item.changedAt ?? "")|\(item.visual?.version ?? "")|\(Int(size.width))") {
             image = nil
             sample = nil
-            if size.height > 60, let path = item.path, item.missing != true, item.kind != "visual" {
+            if size.height > 60, let path = item.path, item.missing != true, item.kind != .visual {
                 sample = await LibrarySample.read(path)
             }
-            if item.kind == "visual" {
+            if item.kind == .visual {
                 image = await LibraryThumbnails.visual(item.id, version: item.visual?.version, engine: engine)
                 return
             }
@@ -850,53 +850,53 @@ struct LibrarySampleView: View {
 
 // MARK: - Words and places
 
-enum LibraryKind {
+extension LibraryKind {
     /// The kind filters, in order (Apps come with docs/spec/35 L2).
-    static let filters = ["app", "document", "page", "visual", "image", "data"]
+    static let filters: [LibraryKind] = [.app, .document, .page, .visual, .image, .data]
 
     /// Which filter an item falls under; slides go with documents, other files only under All.
-    static func filter(_ kind: String) -> String? {
-        switch kind {
-        case "slides": "document"
-        case "file": nil
-        default: kind
+    var filter: LibraryKind? {
+        switch self {
+        case .slides: .document
+        case .file: nil
+        default: self
         }
     }
 
-    static func plural(_ kind: String) -> String {
-        switch kind {
-        case "app": "Apps"
-        case "document": "Documents"
-        case "page": "Pages"
-        case "visual": "Visuals"
-        case "image": "Images"
-        case "data": "Data"
+    var plural: String {
+        switch self {
+        case .app: "Apps"
+        case .document: "Documents"
+        case .page: "Pages"
+        case .visual: "Visuals"
+        case .image: "Images"
+        case .data: "Data"
         default: "Other"
         }
     }
 
-    static func label(_ kind: String) -> String {
-        switch kind {
-        case "app": "App"
-        case "document": "Document"
-        case "page": "Page"
-        case "visual": "Visual"
-        case "image": "Image"
-        case "data": "Data"
-        case "slides": "Slides"
+    var label: String {
+        switch self {
+        case .app: "App"
+        case .document: "Document"
+        case .page: "Page"
+        case .visual: "Visual"
+        case .image: "Image"
+        case .data: "Data"
+        case .slides: "Slides"
         default: "File"
         }
     }
 
-    static func symbol(_ kind: String) -> String {
-        switch kind {
-        case "app": "square.grid.2x2"
-        case "document": "doc.text"
-        case "page": "globe"
-        case "visual": "rectangle.3.group"
-        case "image": "photo"
-        case "data": "tablecells"
-        case "slides": "rectangle.on.rectangle"
+    var symbol: String {
+        switch self {
+        case .app: "square.grid.2x2"
+        case .document: "doc.text"
+        case .page: "globe"
+        case .visual: "rectangle.3.group"
+        case .image: "photo"
+        case .data: "tablecells"
+        case .slides: "rectangle.on.rectangle"
         default: "doc"
         }
     }
@@ -997,16 +997,16 @@ enum LibraryText {
 
     /// A row's second line: its note, or its kind; and who made it when that's an agent the place doesn't name.
     static func second(_ item: LibraryEntry) -> String {
-        let what = item.note ?? LibraryKind.label(item.kind)
+        let what = item.note ?? item.kind.label
         let agent = item.by != "Piopio" && item.by != "You" && item.by != item.origin?.title
         return agent ? "\(what) · by \(item.by)" : what
     }
 
     static func what(_ item: LibraryEntry) -> String {
         switch item.how {
-        case "visual": "A visual \(item.by) drew in a conversation."
-        case "written": "A file \(item.by) wrote in a chat."
-        case "added": "A file you added."
+        case .visual: "A visual \(item.by) drew in a conversation."
+        case .written: "A file \(item.by) wrote in a chat."
+        case .added: "A file you added."
         default: "A file \(item.by) handed over."
         }
     }

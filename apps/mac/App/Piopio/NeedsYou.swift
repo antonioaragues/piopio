@@ -35,9 +35,9 @@ extension EngineController {
         var out: [NeedsYouEntry] = []
         for i in inbox where i.needsYou {
             let kind: NeedsYouEntry.Kind = switch i.kind {
-            case "approval": .approval
-            case "run_failed": .runFailed
-            case "budget": .budget
+            case .approval: .approval
+            case .runFailed: .runFailed
+            case .budget: .budget
             default: .message
             }
             out.append(NeedsYouEntry(id: "inbox:\(i.id)", kind: kind, at: i.at, inbox: i, agent: agents.first { $0.ref.id == i.agent.id }))
@@ -92,7 +92,7 @@ enum NeedsYouText {
         case .runFailed: "didn't run"
         case .budget: entry.held != nil ? "waits for your OK" : entry.inbox?.title == "Budget used up" ? "paused itself" : "budget"
         case .buildPrompt: "is waiting on you"
-        case .watchdog: entry.watchdog?.rule == "looping" ? "is repeating itself" : "looks stuck"
+        case .watchdog: entry.watchdog?.rule == .looping ? "is repeating itself" : "looks stuck"
         }
     }
 
@@ -336,7 +336,7 @@ struct WaitingItem: View {
     private func runAgain() {
         guard let agent = entry.agent else { return }
         perform {
-            let upcoming = await engine.agentRuns(agent.ref)?.upcoming.first { $0.kind == "schedule" }
+            let upcoming = await engine.agentRuns(agent.ref)?.upcoming.first { $0.kind == .schedule }
             _ = try await engine.agentRunNow(agent.ref, scheduleId: upcoming?.id, prompt: upcoming == nil ? "Run your usual check now." : nil)
             if let inbox = entry.inbox { await engine.markInboxRead([inbox]) }
         }

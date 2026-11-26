@@ -13,13 +13,13 @@ private func rowModel(_ text: NSAttributedString) -> SubagentRowModel? {
     return found
 }
 
-private func task(_ status: ToolItem.Status, session: String?, state: String?, agent: String? = nil) -> ToolItem {
+private func task(_ status: ToolStatus, session: String?, state: String?, agent: String? = nil) -> ToolItem {
     var args: [String: JSONValue] = ["description": .string("Security of the engine"), "prompt": .string("…")]
     if let agent { args["agent"] = .string(agent) }
     var details: [String: JSONValue] = ["type": .string("task")]
     if let session { details["sessionId"] = .string(session) }
     if let state { details["status"] = .string(state) }
-    return ToolItem(id: "t1", at: "", callId: "c1", tool: "task", args: .object(args), status: status, details: .object(details))
+    return ToolItem(id: "t1", at: "", callId: "c1", tool: "task", args: .object(args), status: status, details: .decoded(.object(details)))
 }
 
 @Test @MainActor func aSubagentIsOneLiveRow() {

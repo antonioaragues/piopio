@@ -36,7 +36,7 @@ extension ItemRenderer {
 
     /// "Side conversation · Fix sidebar clipping · running tests", from side_start or an answered offer.
     func sideStarted(_ t: ToolItem) -> NSAttributedString {
-        let title = t.args?["title"]?.stringValue ?? "Side conversation"
+        let title = t.args["title"]?.stringValue ?? "Side conversation"
         if t.status == .running || t.status == .pendingApproval { return note("Starting a side conversation · \(title)") }
         // Started before sides kept where they came from: its title alone, as it was.
         guard let s = side(from: t.callId) ?? sides.first(where: { t.output?.contains($0.id) == true }) else { return note("Started a side conversation · \(title)") }
@@ -46,14 +46,14 @@ extension ItemRenderer {
     /// An offer (side_offer, docs/design/side-conversations 1a): the card while it waits; the side's row once New
     /// conversation started it; the question and your answer, boxed, once you chose Do it here.
     func sideOffer(_ t: ToolItem) -> NSAttributedString {
-        let title = t.args?["title"]?.stringValue ?? ""
+        let title = t.args["title"]?.stringValue ?? ""
         if let s = side(from: t.callId) { return attachmentParagraph(SideOfferAttachment(model: SideOfferModel(.side(s))), spacing: 14) }
-        let project = t.args?["project"]?.stringValue ?? ""
+        let project = t.args["project"]?.stringValue ?? ""
         if keptHere.contains(t.callId) {
             return answeredCard(context: ["This looks like its own task", project.isEmpty ? nil : "in \(project)"].compactMap { $0 }.joined(separator: " · "),
                                 question: title, answer: "Do it here")
         }
-        let model = SideOfferModel(.offer(callId: t.callId, title: title, brief: t.args?["brief"]?.stringValue ?? "", project: project.isEmpty ? nil : project))
+        let model = SideOfferModel(.offer(callId: t.callId, title: title, brief: t.args["brief"]?.stringValue ?? "", project: project.isEmpty ? nil : project))
         return attachmentParagraph(SideOfferAttachment(model: model), spacing: 14)
     }
 
@@ -62,13 +62,13 @@ extension ItemRenderer {
     /// the model's reason; Dismiss on the left and Start on the right. It's Piopio's idea, not something waiting on
     /// you, so it has no blue dot.
     func sideProposal(_ t: ToolItem) -> NSAttributedString {
-        let title = t.args?["title"]?.stringValue ?? ""
+        let title = t.args["title"]?.stringValue ?? ""
         if let s = side(from: t.callId) { return sideLine(s) }
         guard let expires = openProposals[t.callId] else { return note("Proposed a side conversation · \(title) · closed") }
-        let project = t.args?["project"]?.stringValue ?? ""
+        let project = t.args["project"]?.stringValue ?? ""
         let until = expires == .distantFuture ? nil : "until \(expires.formatted(.dateTime.day().month(.abbreviated)))"
         let what = ["Proposed", project.isEmpty ? nil : "in \(project)", until].compactMap { $0 }.joined(separator: " · ")
-        return actionCard(dot: false, title: title, meta: what, lines: [(t.args?["why"]?.stringValue ?? "", DS.fg2)],
+        return actionCard(dot: false, title: title, meta: what, lines: [(t.args["why"]?.stringValue ?? "", DS.fg2)],
                           secondary: [CardButton(title: "Dismiss", action: .offer(kind: SideActionKind.dismiss, callId: t.callId), help: "Drop this proposal")],
                           primary: CardButton(title: "Start", action: .offer(kind: SideActionKind.start, callId: t.callId), help: "Start it as its own conversation"))
     }

@@ -95,7 +95,7 @@ struct Corpus {
             }
             if items.count < count {
                 let text = answer(blocks: 1 + rng.next(9))
-                items.append(.assistant(AssistantItem(id: next(), at: "", parts: [AssistantPart(type: .text, text: text, redacted: nil)], model: "faux/lab", usage: nil, status: .done, error: nil)))
+                items.append(.assistant(AssistantItem(id: next(), at: "", parts: [.text(text)], model: "faux/lab", usage: nil, status: .done, error: nil)))
             }
         }
         return items

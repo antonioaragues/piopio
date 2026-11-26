@@ -41,27 +41,23 @@ import Testing
     #expect(inputs.read == ["README.md", "src/app.swift"])
 }
 
-@Test func pagesAreWhatItFetchedAndWhatItsSearchesFound() {
+/// The pages it fetched. A search's results aren't pages it read, and the engine sends no titles for web tools.
+@Test func pagesAreWhatItFetched() {
     let items: [TimelineItem] = [
-        .tool(ToolItem(id: "t1", at: "", callId: "c1", tool: "web_search", args: .object(["query": .string("lisbon")]), status: .done,
-                       details: .object(["type": .string("web"), "results": .array([
-                           .object(["url": .string("https://www.visitlisboa.com/march"), "title": .string("Lisbon in March")]),
-                           .object(["url": .string("https://carris.pt/"), "title": .string("")]),
-                       ])]))),
+        .tool(ToolItem(id: "t1", at: "", callId: "c1", tool: "web_search", args: .object(["query": .string("lisbon")]), status: .done)),
         .steps(StepsItem(id: "s1", at: "", tools: [
-            ToolItem(id: "t2", at: "", callId: "c2", tool: "web_fetch", args: .object(["url": .string("https://www.visitlisboa.com/march")]), status: .done,
-                     details: .object(["type": .string("page"), "url": .string("https://www.visitlisboa.com/march"), "title": .string("Lisbon in March")])),
+            ToolItem(id: "t2", at: "", callId: "c2", tool: "web_fetch", args: .object(["url": .string("https://www.visitlisboa.com/march")]), status: .done),
             ToolItem(id: "t3", at: "", callId: "c3", tool: "web_fetch", args: .object(["url": .string("https://oceanario.pt/tickets?day=12")]), status: .done),
             ToolItem(id: "t4", at: "", callId: "c4", tool: "web_fetch", args: .object(["url": .string("https://evil.example")]), status: .denied),
             ToolItem(id: "t6", at: "", callId: "c6", tool: "web_fetch", args: .object(["url": .string("https://down.example")]), status: .error),
+            ToolItem(id: "t7", at: "", callId: "c7", tool: "web_fetch", args: .object(["url": .string("https://www.visitlisboa.com/march")]), status: .done),
             ToolItem(id: "t5", at: "", callId: "c5", tool: "bash", args: .object(["command": .string("curl https://x.y")]), status: .done),
         ])),
     ]
     let pages = SessionDigest.inputs(items: items, cwd: nil, exists: { _ in false }).pages
-    #expect(pages.map(\.url) == ["https://www.visitlisboa.com/march", "https://carris.pt/", "https://oceanario.pt/tickets?day=12"])
+    #expect(pages.map(\.url) == ["https://www.visitlisboa.com/march", "https://oceanario.pt/tickets?day=12"])
     #expect(pages[0].host == "visitlisboa.com")
-    #expect(pages[1].untitled && pages[1].path == "")
-    #expect(pages[2].untitled && pages[2].path == "/tickets?day=12")
+    #expect(pages[1].untitled && pages[1].path == "/tickets?day=12")
 }
 
 @Test func editedFilesAreOnlyWhatItsOwnToolsChanged() {

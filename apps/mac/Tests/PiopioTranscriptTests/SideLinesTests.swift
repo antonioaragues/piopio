@@ -66,7 +66,7 @@ import Testing
 
 @Test func anAnsweredQuestionKeepsTheQuestionAndTheAnswerInABox() {
     var item = ToolItem(id: "t", at: "", callId: "q", tool: "ask_user", args: .object(["question": .string("Should I build phase 1?")]), status: .done,
-                        output: "The user answered: Yes, build it", details: .object(["answer": .string("Yes, build it")]))
+                        output: "The user answered: Yes, build it")
     let r = ItemRenderer()
     let box = r.render(.tool(item))
     #expect(box.string.contains("Should I build phase 1?") && box.string.contains("Yes, build it"))

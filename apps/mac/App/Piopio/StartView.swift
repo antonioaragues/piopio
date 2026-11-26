@@ -962,14 +962,14 @@ private struct AgentStart: View {
         guard canCreate, !creating else { return }
         creating = true
         error = nil
-        let schedule: CreateAgentParams.Schedule = draft.schedule.isEmpty ? .none : .cron(draft.schedule)
+        let schedule: Nullable<String> = draft.schedule.isEmpty ? .null : .value(draft.schedule)
         Task {
             defer { creating = false }
             do {
                 let ref = try await engine.createAgent(name: name.isEmpty ? "New agent" : name, template: draft.template, avatar: draft.avatar.trimmingCharacters(in: .whitespaces), instructions: instructions, schedule: schedule)
                 // Made here, then sent up (it starts on this Mac either way, docs/spec/30 §3.3).
                 if inCloud && engine.cloudConnected {
-                    do { _ = try await engine.moveAgent(ref, to: "cloud") } catch {
+                    do { _ = try await engine.moveAgent(ref, to: .cloud) } catch {
                         self.error = "It was made on this Mac, but couldn't move to your cloud: " + ((error as? EngineError)?.message ?? String(describing: error))
                     }
                 }

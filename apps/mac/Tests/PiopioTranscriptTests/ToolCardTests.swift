@@ -14,7 +14,7 @@ import Testing
 
 @Test func toolCardsFollowTheirDetails() {
     let edit = ToolItem(id: "t1", at: "", callId: "c1", tool: "edit", args: .object(["path": .string("a.ts")]), status: .done,
-                        details: .object(["type": .string("diff"), "path": .string("a.ts"), "diff": .string("@@ -1 +1 @@\n-old\n+new")]))
+                        details: .decoded(.object(["type": .string("diff"), "path": .string("a.ts"), "diff": .string("@@ -1 +1 @@\n-old\n+new")])))
     let editCard = ItemRenderer.toolCard(edit)
     #expect(editCard.title == "Edited")
     #expect(editCard.detail == "a.ts")
@@ -22,7 +22,7 @@ import Testing
     #expect(editCard.added == 1 && editCard.removed == 1)
 
     let bash = ToolItem(id: "t2", at: "", callId: "c2", tool: "bash", args: .object(["command": .string("npm test\necho done")]), status: .error, output: "boom",
-                        details: .object(["type": .string("terminal"), "command": .string("npm test"), "exitCode": .number(2)]), durationMs: 1500)
+                        details: .decoded(.object(["type": .string("terminal"), "command": .string("npm test"), "exitCode": .number(2)])), durationMs: 1500)
     let bashCard = ItemRenderer.toolCard(bash)
     #expect(bashCard.title == "Command failed")
     #expect(bashCard.detail.isEmpty)
@@ -42,7 +42,7 @@ import Testing
     #expect(ItemRenderer.displayCommand("npm test", root: "/Users/me/app") == ("npm test", nil))
 
     let bash = ToolItem(id: "t", at: "", callId: "c", tool: "bash", args: .object(["command": .string("cd /Users/me/app && python3 -c 'print(1)'")]), status: .done, output: "1",
-                        details: .object(["type": .string("terminal"), "command": .string("x"), "exitCode": .number(0)]), durationMs: 400)
+                        details: .decoded(.object(["type": .string("terminal"), "command": .string("x"), "exitCode": .number(0)])), durationMs: 400)
     let card = ItemRenderer.toolCard(bash, root: "/Users/me/app")
     #expect(card.title == "Ran a command")
     #expect(card.detail.isEmpty)
@@ -54,7 +54,7 @@ import Testing
     let command = "cd /p && python3 -c 'print(1)'\necho done"
     var item = ToolItem(id: "t", at: "", callId: "c", tool: "bash", args: .object([
         "command": .string(command), "description": .string("  Revisando\n el proyecto  ")
-    ]), status: .running, details: .object(["type": .string("terminal"), "command": .string(command)]))
+    ]), status: .running, details: .decoded(.object(["type": .string("terminal"), "command": .string(command)])))
     let card = ItemRenderer.toolCard(item)
     #expect(card.title == "Revisando el proyecto")
     #expect(card.detail.isEmpty)
@@ -110,7 +110,7 @@ import Testing
 }
 
 @Test func theActivityLineCountsOnlyWhatLoaded() {
-    let page = { (id: String, status: ToolItem.Status) in
+    let page = { (id: String, status: ToolStatus) in
         ToolItem(id: id, at: "", callId: id, tool: "web_fetch", args: .object(["url": .string("https://\(id).example")]), status: status)
     }
     let missing = ToolItem(id: "r", at: "", callId: "r", tool: "read", args: .object(["path": .string("/p/gone.md")]), status: .error)
@@ -131,11 +131,11 @@ import Testing
 
 @Test func handedOverFilesOpenAndMissingOnesSaySo() {
     let item = ToolItem(id: "t9", at: "", callId: "c9", tool: "present_files", args: .object(["files": .array([.object(["path": .string("out/report.pdf")])])]), status: .done,
-                        details: .object(["type": .string("files"), "files": .array([
+                        details: .decoded(.object(["type": .string("files"), "files": .array([
                             .object(["path": .string("/p/out/report.pdf"), "name": .string("report.pdf"), "description": .string("The weekly report"), "size": .number(2048)]),
                             .object(["path": .string("/p/gone.csv"), "name": .string("gone.csv"), "missing": .bool(true)]),
-                        ])]))
-    guard case .files(let files)? = item.typedDetails else { Issue.record("no files"); return }
+                        ])])))
+    guard case .files(let files)? = item.details else { Issue.record("no files"); return }
     #expect(files.map(\.name) == ["report.pdf", "gone.csv"])
     let card = ItemRenderer.fileCard(files[0], root: "/p")
     #expect(card.title == "report.pdf")
@@ -150,7 +150,7 @@ import Testing
 
 @Test func aCommandAutoReviewRanSaysSoAndWhy() {
     let item = ToolItem(id: "t11", at: "", callId: "c11", tool: "bash", args: .object(["command": .string("pnpm test")]), status: .done, output: "ok",
-                        details: .object(["type": .string("terminal"), "command": .string("pnpm test"), "exitCode": .number(0)]), review: "Runs the project's tests.")
+                        details: .decoded(.object(["type": .string("terminal"), "command": .string("pnpm test"), "exitCode": .number(0)])), review: "Runs the project's tests.")
     let card = ItemRenderer.toolCard(item)
     #expect(card.trailing.contains("auto-reviewed"))
     #expect(card.body.hasPrefix("# Auto review ran this without asking: Runs the project's tests.\n$ pnpm test"))
@@ -245,7 +245,7 @@ func sideOfferModel(_ text: NSAttributedString) -> SideOfferModel? {
 
 @Test func anActivityWhoseOnlyStepIsACommandOpensToItsOutput() {
     let bash = ToolItem(id: "t", at: "", callId: "c", tool: "bash", args: .object(["command": .string("swift test"), "description": .string("Running the tests")]),
-                        status: .running, details: .object(["type": .string("terminal"), "command": .string("swift test")]))
+                        status: .running, details: .decoded(.object(["type": .string("terminal"), "command": .string("swift test")])))
     let line = ItemRenderer.stepsCard(StepsItem(id: "s", at: "", tools: [bash]))
     #expect(line.title == "Running the tests…")
     #expect(line.soleCommand?.body == "$ swift test")
@@ -268,17 +268,17 @@ func sideOfferModel(_ text: NSAttributedString) -> SideOfferModel? {
 @Test func pastConversationsShowWhatWasFoundAndWhatStayedOnThisMac() {
     // docs/spec/14 M4: a search lists what it found and how many it held back; a read opens its conversation.
     let search = ToolItem(id: "t11", at: "", callId: "c11", tool: "search_conversations", args: .object(["query": .string("sink")]), status: .done,
-                          details: .object(["type": .string("conversations"), "conversations": .array([
+                          details: .decoded(.object(["type": .string("conversations"), "conversations": .array([
                               .object(["id": .string("ses_a"), "title": .string("Kitchen plan"), "kind": .string("thread")]),
                               .object(["id": .string("ses_b"), "title": .string("Fix the tap"), "kind": .string("build")]),
-                          ]), "withheld": .number(1)]))
-    guard case .conversations(let found, let withheld)? = search.typedDetails else { Issue.record("no conversations"); return }
+                          ]), "withheld": .number(1)])))
+    guard case .conversations(let found, let withheld)? = search.details else { Issue.record("no conversations"); return }
     #expect(found.map(\.id) == ["ses_a", "ses_b"] && withheld == 1)
     let card = ItemRenderer.toolCard(search)
     #expect(card.trailing == "2 found · 1 kept on this Mac")
     #expect(card.action == nil)
     let read = ToolItem(id: "t12", at: "", callId: "c12", tool: "read_conversation", args: .object(["id": .string("ses_a")]), status: .done,
-                        details: .object(["type": .string("conversations"), "conversations": .array([.object(["id": .string("ses_a"), "title": .string("Kitchen plan"), "kind": .string("thread")])])]))
+                        details: .decoded(.object(["type": .string("conversations"), "conversations": .array([.object(["id": .string("ses_a"), "title": .string("Kitchen plan"), "kind": .string("thread")])])])))
     let opened = ItemRenderer.toolCard(read)
     #expect(opened.detail == "Kitchen plan")
     #expect(opened.action?.1 == .openConversation("ses_a"))
@@ -288,12 +288,12 @@ func sideOfferModel(_ text: NSAttributedString) -> SideOfferModel? {
 @Test func aLearnCardGroupsRulesBySectionAndFoldsOnceAnswered() {
     // docs/spec/14 M5: the card while it waits; one line once saved.
     let t = ToolItem(id: "t13", at: "", callId: "c13", tool: "propose_learnings", args: .object([:]), status: .done,
-                     details: .object(["type": .string("learn"), "file": .string("AGENTS.md"), "items": .array([
+                     details: .decoded(.object(["type": .string("learn"), "file": .string("AGENTS.md"), "items": .array([
                          .object(["to": .string("project"), "text": .string("Use pnpm test:unit."), "section": .string("Testing"), "why": .string("you corrected it")]),
                          .object(["to": .string("project"), "text": .string("Never edit build/."), "section": .string("testing")]),
                          .object(["to": .string("about_me"), "text": .string("Writes commits in English.")]),
-                     ])]))
-    guard case .learn(let file, let items)? = t.typedDetails else { Issue.record("no learn"); return }
+                     ])])))
+    guard case .learn(let file, let items)? = t.details else { Issue.record("no learn"); return }
     #expect(file == "AGENTS.md" && items.count == 3)
     let sections = LearnCardModel.sections(items)
     #expect(sections.map(\.0) == ["Testing"] && sections[0].1.count == 2)

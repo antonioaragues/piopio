@@ -104,9 +104,9 @@ struct AutomationsPage: View {
                     empty
                 } else {
                     VStack(alignment: .leading, spacing: 26) {
-                        group("Waiting on you", tone: .dsWarn, shown.filter { $0.lastStatus == "waiting" })
-                        group("On", tone: .dsFg, shown.filter { $0.enabled && $0.lastStatus != "waiting" })
-                        group("Paused", tone: .dsFg3, shown.filter { !$0.enabled && $0.lastStatus != "waiting" })
+                        group("Waiting on you", tone: .dsWarn, shown.filter { $0.lastStatus == .waiting })
+                        group("On", tone: .dsFg, shown.filter { $0.enabled && $0.lastStatus != .waiting })
+                        group("Paused", tone: .dsFg3, shown.filter { !$0.enabled && $0.lastStatus != .waiting })
                     }
                 }
             }
@@ -495,7 +495,7 @@ struct RunsOnNote: View {
 
     var body: some View {
         let cloud = runner.map(engine.runsInCloud) ?? false
-        let anyCloud = engine.agents.contains { $0.agent?.location == "cloud" }
+        let anyCloud = engine.agents.contains { $0.agent?.location == .cloud }
         HStack(spacing: 6) {
             if cloud {
                 Image(systemName: "cloud.fill").font(.system(size: 10)).foregroundStyle(Color.dsFg2)
@@ -544,7 +544,7 @@ struct AutomationRow: View {
             .opacity(dim)
             Text(a.resultLabel).font(.system(size: 13)).foregroundStyle(Color.dsFg2).lineLimit(1).opacity(dim)
             Text(AutomationText.status(a)).font(.system(size: 13))
-                .foregroundStyle(a.lastStatus == "waiting" ? Color.dsWarn : a.lastStatus == "failed" && a.enabled ? Color.dsRed : Color.dsFg2)
+                .foregroundStyle(a.lastStatus == .waiting ? Color.dsWarn : a.lastStatus == .failed && a.enabled ? Color.dsRed : Color.dsFg2)
                 .lineLimit(1).opacity(dim)
             EnabledSwitch(engine: engine, automation: a)
         }
@@ -583,25 +583,24 @@ struct EnabledSwitch: View {
     static func status(_ a: Automation) -> String {
         if !a.enabled { return "Paused" }
         switch a.lastStatus {
-        case "running": return "Running now"
-        case "waiting": return a.lastRun.map { "\(MainSidebar.when($0).capitalizedFirst) · waiting for your OK" } ?? "Waiting for your OK"
+        case .running: return "Running now"
+        case .waiting: return a.lastRun.map { "\(MainSidebar.when($0).capitalizedFirst) · waiting for your OK" } ?? "Waiting for your OK"
         default: break
         }
         if let next = a.next { return "Next: \(MainSidebar.when(date(next)))" }
         if let last = a.lastRun { return "Last \(MainSidebar.when(last))\(a.lastStatus.map { " · \(word($0))" } ?? "")" }
-        return a.on == "time" ? "Not scheduled" : "Waits for its event"
+        return a.on == .time ? "Not scheduled" : "Waits for its event"
     }
 
     /// A run's outcome in a word or two.
-    static func word(_ status: String) -> String {
+    static func word(_ status: AutomationRunStatus) -> String {
         switch status {
-        case "done": "done"
-        case "quiet": "nothing new"
-        case "failed": "failed"
-        case "skipped": "skipped"
-        case "waiting": "waiting for your OK"
-        case "running": "running"
-        default: status
+        case .done: "done"
+        case .quiet: "nothing new"
+        case .failed: "failed"
+        case .skipped: "skipped"
+        case .waiting: "waiting for your OK"
+        case .running: "running"
         }
     }
 }
@@ -902,9 +901,9 @@ struct AutomationPage: View {
         VStack(alignment: .leading, spacing: 0) {
             if a.isPiopio {
                 caption("Where it works")
-                row("Without a project", line: "A conversation of its own", picked: a.project == nil) { save(AutomationChange(project: .clear)) }
+                row("Without a project", line: "A conversation of its own", picked: a.project == nil) { save(AutomationChange(project: .null)) }
                 ForEach(engine.projects) { p in
-                    row("In \(p.name)…", line: "With the project's files and permissions", picked: a.project == p.id) { save(AutomationChange(project: .set(p.id))) }
+                    row("In \(p.name)…", line: "With the project's files and permissions", picked: a.project == p.id) { save(AutomationChange(project: .value(p.id))) }
                 }
             } else {
                 // AU6: only Piopio works in a project.
@@ -920,16 +919,16 @@ struct AutomationPage: View {
             caption("Where the result goes")
             if a.isPiopio {
                 let project = a.project.flatMap { p in engine.projects.first { $0.id == p }?.name }
-                row(project.map { "Start a conversation in \($0)" } ?? "Start a conversation", line: "With what it did, in the sidebar", picked: a.result == "conversation") { save(AutomationChange(result: "conversation")) }
-                row("Stay quiet unless it needs me", line: "Every run is still recorded", picked: a.result == "quiet") { save(AutomationChange(result: "quiet")) }
+                row(project.map { "Start a conversation in \($0)" } ?? "Start a conversation", line: "With what it did, in the sidebar", picked: a.result == .conversation) { save(AutomationChange(result: .conversation)) }
+                row("Stay quiet unless it needs me", line: "Every run is still recorded", picked: a.result == .quiet) { save(AutomationChange(result: .quiet)) }
                 Text("Piopio has no channels. To get results on Telegram, have one of your agents run this.")
                     .font(.system(size: 11.5)).foregroundStyle(Color.dsFg3).fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 10).padding(.top, 6).padding(.bottom, 6)
             } else {
                 let telegram = runnerDef?.channels?["telegram"] != nil
-                row("Post in \(runner)’s chat", line: "The usual place", picked: a.result == "chat") { save(AutomationChange(result: "chat")) }
-                row("Tell me on Telegram", line: telegram ? "One of \(runner)’s channels" : "Connect Telegram in \(runner)’s Setup first", picked: a.result == "telegram", disabled: !telegram) { save(AutomationChange(result: "telegram")) }
-                row("Stay quiet unless it needs me", line: "Every run is still recorded", picked: a.result == "quiet") { save(AutomationChange(result: "quiet")) }
+                row("Post in \(runner)’s chat", line: "The usual place", picked: a.result == .chat) { save(AutomationChange(result: .chat)) }
+                row("Tell me on Telegram", line: telegram ? "One of \(runner)’s channels" : "Connect Telegram in \(runner)’s Setup first", picked: a.result == .telegram, disabled: !telegram) { save(AutomationChange(result: .telegram)) }
+                row("Stay quiet unless it needs me", line: "Every run is still recorded", picked: a.result == .quiet) { save(AutomationChange(result: .quiet)) }
             }
         }
     }
@@ -951,9 +950,9 @@ struct AutomationPage: View {
 
     private func resultWords(_ a: Automation, runner: String) -> String {
         switch a.result {
-        case "quiet": "stay quiet unless it needs me"
-        case "telegram": "tell me on Telegram"
-        case "conversation": "start a conversation"
+        case .quiet: "stay quiet unless it needs me"
+        case .telegram: "tell me on Telegram"
+        case .conversation: "start a conversation"
         default: "post in \(runner)’s chat"
         }
     }
@@ -979,8 +978,8 @@ struct AutomationPage: View {
             Text("While you're away").font(.system(size: 13, weight: .semibold))
             awayRow("If it needs your OK") {
                 HStack(alignment: .top, spacing: 10) {
-                    approvalCard("Wait for me", "Shows in Home, under Waiting on you", picked: a.approval != "skip") { save(AutomationChange(approval: "wait")) }
-                    approvalCard("Skip this run", "Tries again next time", picked: a.approval == "skip") { save(AutomationChange(approval: "skip")) }
+                    approvalCard("Wait for me", "Shows in Home, under Waiting on you", picked: a.approval != .skip) { save(AutomationChange(approval: .wait)) }
+                    approvalCard("Skip this run", "Tries again next time", picked: a.approval == .skip) { save(AutomationChange(approval: .skip)) }
                 }
                 .fixedSize(horizontal: false, vertical: true)
             }
@@ -988,13 +987,13 @@ struct AutomationPage: View {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 6) {
                         ForEach(Self.budgets, id: \.self) { v in
-                            budgetChip(String(format: "$%.2f", v), picked: a.budgetPerRunUsd.map { abs($0 - v) < 0.001 } ?? false) { save(AutomationChange(budgetPerRunUsd: .set(v))) }
+                            budgetChip(String(format: "$%.2f", v), picked: a.budgetPerRunUsd.map { abs($0 - v) < 0.001 } ?? false) { save(AutomationChange(budgetPerRunUsd: .value(v))) }
                         }
                         let custom = a.budgetPerRunUsd.flatMap { v in Self.budgets.contains { abs($0 - v) < 0.001 } ? nil : v }
                         if otherBudget {
                             TextField("0.75", text: $budgetText).textFieldStyle(.roundedBorder).frame(width: 64).font(.system(size: 12.5))
                                 .onSubmit {
-                                    if let v = Double(budgetText.replacingOccurrences(of: "$", with: "")), v > 0 { save(AutomationChange(budgetPerRunUsd: .set(v))) }
+                                    if let v = Double(budgetText.replacingOccurrences(of: "$", with: "")), v > 0 { save(AutomationChange(budgetPerRunUsd: .value(v))) }
                                     otherBudget = false
                                 }
                         } else {
@@ -1102,7 +1101,7 @@ struct AutomationPage: View {
                 if isDraft {
                     VStack(alignment: .leading, spacing: 3) {
                         Text("Not on yet.").font(.system(size: 12.5)).foregroundStyle(Color.dsFg2)
-                        Text(a.next.map { "First run would be \(Self.firstRun($0))" } ?? (a.on == "time" ? "Not scheduled" : "It starts \(Self.lowerFirst(a.label))"))
+                        Text(a.next.map { "First run would be \(Self.firstRun($0))" } ?? (a.on == .time ? "Not scheduled" : "It starts \(Self.lowerFirst(a.label))"))
                             .font(.system(size: 12.5, weight: .semibold)).foregroundStyle(Color.dsFg).fixedSize(horizontal: false, vertical: true)
                     }
                     .padding(.horizontal, 14).padding(.vertical, 12)
@@ -1114,7 +1113,7 @@ struct AutomationPage: View {
                         if let next = a.next {
                             Text("First run: \(Self.firstRun(next))").font(.system(size: 12.5, weight: .semibold)).foregroundStyle(Color.dsFg)
                         } else {
-                            Text(a.on == "time" ? "Not scheduled" : "When its event happens").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3)
+                            Text(a.on == .time ? "Not scheduled" : "When its event happens").font(.system(size: 12.5)).foregroundStyle(Color.dsFg3)
                         }
                     }
                     .padding(.horizontal, 14).padding(.vertical, 12)
@@ -1128,17 +1127,17 @@ struct AutomationPage: View {
     }
 
     private func runCard(_ run: AutomationRun) -> some View {
-        let tone: Color = run.status == "waiting" ? .dsWarn : run.status == "running" ? .accentColor : run.status == "failed" ? .dsRed : .dsFg
+        let tone: Color = run.status == .waiting ? .dsWarn : run.status == .running ? .accentColor : run.status == .failed ? .dsRed : .dsFg
         return VStack(alignment: .leading, spacing: 5) {
             HStack(alignment: .firstTextBaseline) {
-                Text(run.status == "running" ? "\(Self.runWhen(run.firedAt)) · Running…" : Self.runWhen(run.firedAt))
+                Text(run.status == .running ? "\(Self.runWhen(run.firedAt)) · Running…" : Self.runWhen(run.firedAt))
                     .font(.system(size: 12.5, weight: .medium)).foregroundStyle(tone)
                 Spacer()
                 if let cost = run.costUsd, cost > 0 {
                     Text(cost < 0.01 ? String(format: "$%.3f", cost) : String(format: "$%.2f", cost)).font(.system(size: 12)).monospacedDigit().foregroundStyle(Color.dsFg3)
                 }
             }
-            let what = [run.status == "running" ? nil : AutomationText.word(run.status).capitalizedFirst, run.summary.map { String($0.prefix(140)) }].compactMap { $0 }.joined(separator: " · ")
+            let what = [run.status == .running ? nil : AutomationText.word(run.status).capitalizedFirst, run.summary.map { String($0.prefix(140)) }].compactMap { $0 }.joined(separator: " · ")
             if !what.isEmpty { Text(what).font(.system(size: 12)).foregroundStyle(Color.dsFg2).lineLimit(3).fixedSize(horizontal: false, vertical: true) }
             if run.conversation != nil {
                 Button("Open conversation ›") { open(run) }.buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Color.accentColor)
@@ -1180,8 +1179,8 @@ struct AutomationPage: View {
     private func changeRunner(_ a: Automation, to runner: String) {
         guard runner != a.runsAs else { return }
         // An agent never works in a project (AU6); Piopio has no channels (AU7).
-        save(runner == "piopio" ? AutomationChange(runsAs: runner, result: a.result == "quiet" ? "quiet" : "conversation")
-                                : AutomationChange(runsAs: runner, project: .clear, result: a.result == "quiet" ? "quiet" : "chat"))
+        save(runner == "piopio" ? AutomationChange(runsAs: runner, result: a.result == .quiet ? .quiet : .conversation)
+                                : AutomationChange(runsAs: runner, project: .null, result: a.result == .quiet ? .quiet : .chat))
     }
 
     /// A saved automation's new name, when it is one; an emptied name goes back to the saved one.
@@ -1218,8 +1217,8 @@ struct AutomationPage: View {
             let project = start.preset.flatMap { p in engine.projects.first { $0.id == p }?.id }
             let runsAs = project == nil && engine.agents.contains(where: { $0.ref.id == start.preset }) ? start.preset! : project == nil ? start.runsAs : "piopio"
             let agent = runsAs != "piopio"
-            pending = AutomationChange(on: "time", when: "0 9 * * *", runsAs: runsAs, project: project.map { .set($0) }, result: agent ? "chat" : "conversation",
-                                       approval: "wait", budgetPerRunUsd: .set(agent ? 0.25 : 0.50))
+            pending = AutomationChange(on: .time, when: "0 9 * * *", runsAs: runsAs, project: project.map { .value($0) }, result: agent ? .chat : .conversation,
+                                       approval: .wait, budgetPerRunUsd: .value(agent ? 0.25 : 0.50))
             prompt = start.prompt
             drafted = draftAutomation()
             if let drafted { trigger = TriggerChoice(drafted) }
@@ -1234,20 +1233,20 @@ struct AutomationPage: View {
     private func draftAutomation() -> Automation {
         let c = pending
         let runsAs = c.runsAs ?? "piopio"
-        let on = c.on ?? "time"
-        let project: String? = if case .set(let p)? = c.project { p } else { nil }
-        let budget: Double? = if case .set(let b)? = c.budgetPerRunUsd { b } else { nil }
+        let on = c.on ?? .time
+        let project = c.project?.value
+        let budget = c.budgetPerRunUsd?.value
         let when = c.when ?? ""
-        let cron = on == "time" && when.split(separator: " ").count == 5 ? when : nil
-        let at = on == "time" && cron == nil ? AutomationWords.localDate(when).map { $0.timeIntervalSince1970 * 1000 } : nil
-        let next = on == "time" ? AutomationWords.next(cron: cron, at: at).map { $0.timeIntervalSince1970 * 1000 } : nil
+        let cron = on == .time && when.split(separator: " ").count == 5 ? when : nil
+        let at = on == .time && cron == nil ? AutomationWords.localDate(when).map { $0.timeIntervalSince1970 * 1000 } : nil
+        let next = on == .time ? AutomationWords.next(cron: cron, at: at).map { $0.timeIntervalSince1970 * 1000 } : nil
         let runnerName = engine.runnerName(runsAs)
         let projectName = project.flatMap { p in engine.projects.first { $0.id == p }?.name }
-        return Automation(id: "draft", name: name, on: on, runsAs: runsAs, prompt: prompt, result: c.result ?? "conversation", approval: c.approval ?? "wait",
+        return Automation(id: "draft", name: name, on: on, runsAs: runsAs, prompt: prompt, result: c.result ?? .conversation, approval: c.approval ?? .wait,
                           cron: cron, at: at, folder: c.folder, from: c.from, subject: c.subject, project: project, budgetPerRunUsd: budget, next: next,
                           label: AutomationWords.when(on: on, cron: cron, at: at, folder: c.folder, from: c.from, subject: c.subject),
                           runnerName: runnerName,
-                          resultLabel: AutomationWords.result(c.result ?? "conversation", piopio: runsAs == "piopio", runner: runnerName, project: projectName))
+                          resultLabel: AutomationWords.result(c.result ?? .conversation, piopio: runsAs == "piopio", runner: runnerName, project: projectName))
     }
 
     /// Turn on: the engine gets it (named after its first words unless you named it) and its page opens.
@@ -1263,8 +1262,8 @@ struct AutomationPage: View {
         change.enabled = true
         let named = name.trimmingCharacters(in: .whitespacesAndNewlines)
         change.name = named.isEmpty ? nil : named
-        if case .clear? = change.project { change.project = nil }
-        if case .clear? = change.budgetPerRunUsd { change.budgetPerRunUsd = nil }
+        if case .null? = change.project { change.project = nil }
+        if case .null? = change.budgetPerRunUsd { change.budgetPerRunUsd = nil }
         turningOn = true
         Task {
             defer { turningOn = false }
@@ -1373,7 +1372,7 @@ struct TriggerChoice: Equatable {
     }
 
     init(_ a: Automation) {
-        kind = Kind(rawValue: a.on) ?? .time
+        kind = Kind(rawValue: a.on.rawValue) ?? .time
         from = a.from ?? ""
         subject = a.subject ?? ""
         folder = a.folder ?? ""
@@ -1421,10 +1420,10 @@ struct TriggerChoice: Equatable {
                 return String(format: "%04d-%02d-%02dT%02d:%02d", d.year ?? 2026, d.month ?? 1, d.day ?? 1, h, m)
             }()
             }
-            return AutomationChange(on: "time", when: when)
-        case .email: return AutomationChange(on: "email", from: from, subject: subject)
-        case .folder: return AutomationChange(on: "folder", folder: folder)
-        case .webhook: return AutomationChange(on: "webhook")
+            return AutomationChange(on: .time, when: when)
+        case .email: return AutomationChange(on: .email, from: from, subject: subject)
+        case .folder: return AutomationChange(on: .folder, folder: folder)
+        case .webhook: return AutomationChange(on: .webhook)
         }
     }
 }
@@ -1509,15 +1508,15 @@ extension AutomationChange {
 enum AutomationWords {
     private static let days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
 
-    static func when(on: String, cron: String?, at: Double?, folder: String?, from: String?, subject: String?) -> String {
+    static func when(on: AutomationTrigger, cron: String?, at: Double?, folder: String?, from: String?, subject: String?) -> String {
         switch on {
-        case "folder": return "When a file appears or changes in \(folder ?? "a folder")"
-        case "email":
+        case .folder: return "When a file appears or changes in \(folder ?? "a folder")"
+        case .email:
             let who = from.flatMap { $0.isEmpty ? nil : " from \($0)" } ?? ""
             let about = subject.flatMap { $0.isEmpty ? nil : " about “\($0)”" } ?? ""
             return "When an email\(who)\(about) arrives"
-        case "webhook": return "When its URL is called"
-        default: break
+        case .webhook: return "When its URL is called"
+        case .time: break
         }
         if let at {
             let d = Date(timeIntervalSince1970: at / 1000)
@@ -1537,10 +1536,10 @@ enum AutomationWords {
         }
     }
 
-    static func result(_ result: String, piopio: Bool, runner: String, project: String?) -> String {
+    static func result(_ result: AutomationDelivery, piopio: Bool, runner: String, project: String?) -> String {
         switch result {
-        case "quiet": "Only if it needs you"
-        case "telegram": "Telegram"
+        case .quiet: "Only if it needs you"
+        case .telegram: "Telegram"
         default: piopio ? project.map { "A conversation in \($0)" } ?? "A new conversation" : "\(runner)’s chat"
         }
     }

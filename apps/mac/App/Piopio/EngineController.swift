@@ -15,7 +15,7 @@ final class EngineController {
     /// Agents (docs/spec/06-agents).
     private(set) var agents: [SessionSummary] = []
     /// Projects' work (docs/spec/26): each one's way of working and board.
-    private(set) var work: [ProjectWork] = []
+    private(set) var work: [WorkInfo] = []
     /// Automations (docs/spec/27): what starts on its own, run as Piopio or one of your agents. Bumps
     /// `automationsGeneration` on every change, so open pages read their runs again.
     private(set) var automations: [Automation] = []
@@ -180,7 +180,7 @@ final class EngineController {
                 guard let callId = note.userInfo?["callId"] as? String, let path = note.userInfo?["path"] as? String else { return }
                 MainActor.assumeIsolated {
                     Task {
-                        _ = try? await self?.client?.call("library.saved", LibrarySavedParams(callId: callId, path: path), as: Empty.self)
+                        _ = try? await self?.client?.call("library.saved", LibrarySavedParams(callId: callId, path: path), as: LibrarySavedResult.self)
                         await self?.loadLibrary()
                     }
                 }
@@ -428,7 +428,7 @@ final class EngineController {
                     NotificationCenter.default.post(name: AppCardSource.changed, object: AppCardContent(path: app.path, html: app.html, title: app.title, payload: AppPage.payload(app), subtitle: AppPage.updated(app)))
                 case .connectorAuth(let auth):
                     if self.connectorLogin?.loginId == auth.loginId { self.connectorLogin?.apply(auth.event) }
-                    if auth.event.type == "done" { await self.loadConnectors() }
+                    if auth.event == .done { await self.loadConnectors() }
                 }
             }
         }
@@ -555,7 +555,7 @@ final class EngineController {
     // MARK: Projects
 
     /// Adds a folder as a project; its pi sessions are imported by the engine.
-    func addProject(_ url: URL, lens: ProjectInfo.Lens? = nil) async -> ProjectInfo? {
+    func addProject(_ url: URL, lens: ProjectLens? = nil) async -> ProjectInfo? {
         guard let client else { return nil }
         do {
             let project = try await client.call("projects.add", ProjectsAddParams(path: url.path, lens: lens), as: ProjectsAddResult.self).project
@@ -567,7 +567,7 @@ final class EngineController {
     }
 
     /// Projects shown in a mode (04-chat P1).
-    func projects(in lens: ProjectInfo.Lens) -> [ProjectInfo] {
+    func projects(in lens: ProjectLens) -> [ProjectInfo] {
         projects.filter { $0.lenses.contains(lens) }
     }
 
@@ -583,15 +583,15 @@ final class EngineController {
         buildSessions.filter { ($0.projectPath ?? $0.cwd) == project.path }
     }
 
-    func createBuildSession(in project: ProjectInfo, profile: SessionSummary.Profile = .build) async -> ContainerRef? {
+    func createBuildSession(in project: ProjectInfo, profile: SessionProfile = .build) async -> ContainerRef? {
         try? await createBuildSession(in: project, workOn: .current, mode: nil, model: nil, profile: profile)
     }
 
     /// A Build session on the project as it is, a new branch, or its own worktree (docs/design 7a).
     /// Without Build (the area is off), folders are Read only (docs/spec/18 §7). `planMode`: start in Plan.
-    func createBuildSession(in project: ProjectInfo, workOn: WorkOn, mode: ApprovalMode?, model: ModelRef?, planMode: Bool = false, profile: SessionSummary.Profile = .build) async throws -> ContainerRef {
+    func createBuildSession(in project: ProjectInfo, workOn: WorkOn, mode: ApprovalMode?, model: ModelRef?, planMode: Bool = false, profile: SessionProfile = .build) async throws -> ContainerRef {
         guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "The engine isn't running.") }
-        let ref = try await client.call("sessions.create", CreateSessionParams(kind: .build, cwd: project.path, model: model ?? self.model(for: .build), workOn: workOn, planMode: planMode ? true : nil, approvalMode: Areas.shared.contains(.build) ? mode : .readOnly, profile: profile), as: CreateSessionResult.self).ref
+        let ref = try await client.call("sessions.create", CreateSessionParams(kind: .build, cwd: project.path, workOn: workOn, profile: profile, approvalMode: Areas.shared.contains(.build) ? mode : .readOnly, planMode: planMode ? true : nil, model: model ?? self.model(for: .build)), as: CreateSessionResult.self).ref
         try? await refreshCatalog()
         return ref
     }
@@ -797,7 +797,7 @@ final class EngineController {
     }
 
     /// Moves an agent to the cloud or back ("cloud" / "local"); what moved, in lines.
-    func moveAgent(_ ref: ContainerRef, to place: String) async throws -> [String] {
+    func moveAgent(_ ref: ContainerRef, to place: AgentMoveParams.To) async throws -> [String] {
         guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
         let lines = try await client.call("agents.move", AgentMoveParams(ref: ContainerRef(kind: .agent, id: ref.id), to: place), as: AgentMoveResult.self).lines
         // Its open conversations followed the copy that stopped: new models subscribe to where it runs now.
@@ -826,25 +826,25 @@ final class EngineController {
     }
 
     /// Address comments ("comments") or Fix CI ("ci"): handed to the conversation.
-    func addressPR(_ ref: ContainerRef, _ what: String) async throws {
+    func addressPR(_ ref: ContainerRef, _ what: AddressPrParams.What) async throws {
         guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
         _ = try await client.call("sessions.pr.address", AddressPrParams(ref: ref, what: what), as: Empty.self)
     }
 
     /// The project's work branch as a pull request (the Board's merge card).
-    func createWorkPR(_ work: ProjectWork, title: String, body: String, draft: Bool) async throws -> PrStatus {
+    func createWorkPR(_ work: WorkInfo, title: String, body: String, draft: Bool) async throws -> PrStatus {
         guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
         return try await client.call("work.createPR", WorkPrParams(project: work.project, title: title, body: body, draft: draft), as: PrResult.self).pr
     }
 
-    func setPrEvents(_ value: String, for project: ProjectInfo) async {
+    func setPrEvents(_ value: PrEvents, for project: ProjectInfo) async {
         _ = try? await client?.call("projects.configure", ProjectsConfigureParams(id: project.id, prEvents: value), as: ProjectsAddResult.self)
         await loadProjects()
     }
 
     /// The project's check after the agent's edits: a command, "" for off, nil for the detected one (05-build "Diagnostics").
     func setCheck(_ command: String?, for project: ProjectInfo) async {
-        _ = try? await client?.call("projects.configure", ProjectsCheckParams(id: project.id, check: command), as: ProjectsAddResult.self)
+        _ = try? await client?.call("projects.configure", ProjectsConfigureParams(id: project.id, check: Nullable(command)), as: ProjectsAddResult.self)
         await loadProjects()
     }
 
@@ -890,7 +890,7 @@ final class EngineController {
 
     /// Your answer to a side card (docs/spec/24 §1): returns the new conversation, and whether to offer Always start.
     @discardableResult
-    func answerSide(_ ref: ContainerRef, id: String, choice: String) async throws -> AnswerSideResult {
+    func answerSide(_ ref: ContainerRef, id: String, choice: AnswerSideParams.Choice) async throws -> AnswerSideResult {
         guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
         let result = try await client.call("sessions.side.answer", AnswerSideParams(ref: ref, id: id, choice: choice), as: AnswerSideResult.self)
         try? await refreshCatalog()
@@ -909,13 +909,13 @@ final class EngineController {
     }
 
     /// A project's work: its way of working and board; nil until parallel work was first switched on there.
-    func work(in project: ProjectInfo) -> ProjectWork? {
+    func work(in project: ProjectInfo) -> WorkInfo? {
         work.first { $0.project == project.id }
     }
 
     /// How work is done here (docs/spec/26 §4). "" clears a model or the checks; a budget of 0 clears it.
     @discardableResult
-    func configureWork(_ params: ConfigureWorkParams) async throws -> ProjectWork {
+    func configureWork(_ params: ConfigureWorkParams) async throws -> WorkInfo {
         guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
         let result = try await client.call("work.configure", params, as: WorkResult.self).work
         await loadWork()
@@ -936,11 +936,11 @@ final class EngineController {
 
     func addTask(_ project: ProjectInfo, title: String, brief: String) async throws {
         guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
-        _ = try await client.call("work.addTask", AddWorkTaskParams(project: project.id, title: title, brief: brief), as: Empty.self)
+        _ = try await client.call("work.addTask", AddWorkTaskParams(project: project.id, title: title, brief: brief), as: WorkAddTaskResult.self)
         await loadWork()
     }
 
-    func updateTask(_ project: ProjectInfo, _ task: WorkTask, state: String? = nil) async throws {
+    func updateTask(_ project: ProjectInfo, _ task: WorkTask, state: UpdateWorkTaskParams.State? = nil) async throws {
         guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
         _ = try await client.call("work.updateTask", UpdateWorkTaskParams(project: project.id, taskId: task.id, state: state), as: Empty.self)
         await loadWork()
@@ -976,7 +976,7 @@ final class EngineController {
     @discardableResult
     func addAutomation(_ change: AutomationChange) async throws -> Automation {
         guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
-        let made = try await client.call("automations.add", change, as: AutomationResult.self).automation
+        let made = try await client.call("automations.add", AutomationsAddParams(automationChange: change, prompt: change.prompt ?? ""), as: AutomationResult.self).automation
         await loadAutomations()
         return made
     }
@@ -984,9 +984,7 @@ final class EngineController {
     @discardableResult
     func updateAutomation(_ id: String, _ change: AutomationChange) async throws -> Automation {
         guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
-        var change = change
-        change.id = id
-        let changed = try await client.call("automations.update", change, as: AutomationResult.self).automation
+        let changed = try await client.call("automations.update", AutomationsUpdateParams(automationChange: change, id: id), as: AutomationResult.self).automation
         await loadAutomations()
         return changed
     }
@@ -1151,17 +1149,17 @@ final class EngineController {
     /// Whether an automation's runner is an agent in your cloud (docs/spec/30 K1): its time automations run up there as
     /// its own schedules; what the Mac still lists for it is parked, off, until it comes back.
     func runsInCloud(_ runsAs: String) -> Bool {
-        agents.first { $0.ref.id == runsAs }?.agent?.location == "cloud"
+        agents.first { $0.ref.id == runsAs }?.agent?.location == .cloud
     }
 
     /// What the work branch would bring to the project's; nil for a project whose work isn't on a branch.
-    func landing(_ work: ProjectWork) async -> WorkLanding? {
+    func landing(_ work: WorkInfo) async -> WorkLanding? {
         guard work.git != nil else { return nil }
         return try? await client?.call("work.landing", ProjectParams(project: work.project), as: WorkLanding.self)
     }
 
     /// What a conversation's tasks cost so far, and the budget per job.
-    func job(_ work: ProjectWork, conversationId: String) async -> WorkJob? {
+    func job(_ work: WorkInfo, conversationId: String) async -> WorkJob? {
         try? await client?.call("work.job", WorkJobParams(project: work.project, conversationId: conversationId), as: WorkJob.self)
     }
 
@@ -1171,7 +1169,7 @@ final class EngineController {
     }
 
     /// Merges the work branch into the project's ("merge"), or pushes it for a pull request ("push").
-    func land(_ work: ProjectWork, action: String) async throws -> WorkLandResult {
+    func land(_ work: WorkInfo, action: WorkLandParams.Action) async throws -> WorkLandResult {
         guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
         let result = try await client.call("work.land", WorkLandParams(project: work.project, action: action), as: WorkLandResult.self)
         await loadWork()
@@ -1191,7 +1189,7 @@ final class EngineController {
         (try? await client?.call("agents.templates", Empty(), as: AgentTemplatesResult.self).templates) ?? []
     }
 
-    func createAgent(name: String, template: String?, avatar: String, instructions: String? = nil, schedule: CreateAgentParams.Schedule = .template) async throws -> ContainerRef {
+    func createAgent(name: String, template: String?, avatar: String, instructions: String? = nil, schedule: Nullable<String>? = nil) async throws -> ContainerRef {
         guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
         let ref = try await client.call("agents.create", CreateAgentParams(name: name, template: template, avatar: avatar.isEmpty ? nil : avatar, model: model(for: .agent), owner: NSFullUserName().split(separator: " ").first.map(String.init), instructions: instructions, schedule: schedule), as: CreateSessionResult.self).ref
         try? await refreshCatalog()
@@ -1257,11 +1255,11 @@ final class EngineController {
         guard let client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Not connected") }
         // A connected app's change in a chat (docs/spec/12-connectors): the chat answers it.
         if agent.kind != .agent {
-            _ = try await client.call("sessions.decide", SessionDecideParams(ref: agent, approvalId: approvalId, approve: approve, always: always ? true : nil), as: JSONValue.self)
+            _ = try await client.call("sessions.decide", SessionDecideParams(ref: agent, approvalId: approvalId, approve: approve, always: always ? true : nil), as: SessionsDecideResult.self)
             return
         }
         let ref = ContainerRef(kind: .agent, id: agent.id)
-        _ = try await client.call("agents.decide", AgentDecideParams(ref: ref, approvalId: approvalId, approve: approve, args: args, always: always ? true : nil, reason: reason), as: JSONValue.self)
+        _ = try await client.call("agents.decide", AgentDecideParams(ref: ref, approvalId: approvalId, approve: approve, args: args, always: always ? true : nil, reason: reason), as: AgentsDecideResult.self)
         await loadInbox()
     }
 
@@ -1415,11 +1413,11 @@ final class EngineController {
 
     /// pi project trust (saved in ~/.pi/agent/trust.json, shared with the pi CLI).
     func setTrust(_ trusted: Bool, for project: ProjectInfo) async {
-        _ = try? await client?.call("projects.configure", ProjectsConfigureParams(id: project.id, trust: trusted), as: ProjectsAddResult.self)
+        _ = try? await client?.call("projects.configure", ProjectsConfigureParams(id: project.id, trust: .value(trusted)), as: ProjectsAddResult.self)
     }
 
     /// The project's commands' network (docs/spec/39): open, only the sites allowed, or only this Mac.
-    func setNetwork(_ network: ProjectInfo.Network, for project: ProjectInfo) async {
+    func setNetwork(_ network: ProjectNetwork, for project: ProjectInfo) async {
         _ = try? await client?.call("projects.configure", ProjectsConfigureParams(id: project.id, network: network), as: ProjectsAddResult.self)
     }
 
@@ -1450,19 +1448,19 @@ final class EngineController {
     }
 
     /// Starts connecting a provider; the sign-in sheet follows `login`.
-    func connect(_ provider: ProviderInfo, method: ProviderInfo.Method.Kind) async {
+    func connect(_ provider: ProviderInfo, method: AuthMethod) async {
         guard let client else { return }
         let state = ProviderLogin(provider: provider, method: method)
         login = state
         do {
             state.loginId = try await client.call("providers.login", ProviderLoginParams(provider: provider.id, method: method), as: ProviderLoginResult.self).loginId
         } catch {
-            state.apply(ProviderAuthEvent(type: "failed", message: (error as? EngineError)?.message ?? error.localizedDescription))
+            state.apply(.failed((error as? EngineError)?.message ?? error.localizedDescription))
         }
     }
 
     func answerLogin(_ value: String?) async {
-        guard let login, let loginId = login.loginId, let promptId = login.prompt?.promptId else { return }
+        guard let login, let loginId = login.loginId, case .prompt(let promptId, _, _, _, _)? = login.prompt else { return }
         login.prompt = nil
         _ = try? await client?.call("providers.answer", ProviderAnswerParams(loginId: loginId, promptId: promptId, value: value), as: Empty.self)
     }
@@ -1487,7 +1485,7 @@ final class EngineController {
         do {
             state.loginId = try await client.call("connectors.connect", ConnectorParams(connector: connector.id), as: ProviderLoginResult.self).loginId
         } catch {
-            state.apply(ProviderAuthEvent(type: "failed", message: (error as? EngineError)?.message ?? error.localizedDescription))
+            state.apply(.failed((error as? EngineError)?.message ?? error.localizedDescription))
         }
     }
 
@@ -1523,7 +1521,7 @@ final class EngineController {
 
     // Custom endpoints (LiteLLM, Ollama, LM Studio…)
 
-    func checkEndpoint(_ baseUrl: String, key: String?, id: String?, format: String? = nil, headers: [String: String]? = nil) async -> EndpointCheckResult? {
+    func checkEndpoint(_ baseUrl: String, key: String?, id: String?, format: EndpointFormat? = nil, headers: [String: String]? = nil) async -> EndpointCheckResult? {
         try? await client?.call("endpoints.check", EndpointCheckParams(baseUrl: baseUrl, key: key, id: id, format: format, headers: headers), as: EndpointCheckResult.self)
     }
 

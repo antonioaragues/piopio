@@ -21,10 +21,10 @@ enum PackageText {
 
     /// "npm · 1.4.0", "git · github.com/antonio/writing", "folder · ~/prompts".
     static func origin(_ p: PiPackage) -> String {
-        switch p.kind ?? "npm" {
-        case "local": "folder · \((p.installedPath ?? p.source).replacingOccurrences(of: NSHomeDirectory(), with: "~"))"
-        case "git": "git · \(p.source.replacingOccurrences(of: "git:", with: "").replacingOccurrences(of: "https://", with: ""))"
-        default: ["npm", p.version].compactMap { $0 }.joined(separator: " · ")
+        switch p.kind {
+        case .local: "folder · \((p.installedPath ?? p.source).replacingOccurrences(of: NSHomeDirectory(), with: "~"))"
+        case .git: "git · \(p.source.replacingOccurrences(of: "git:", with: "").replacingOccurrences(of: "https://", with: ""))"
+        case .npm: ["npm", p.version].compactMap { $0 }.joined(separator: " · ")
         }
     }
 
@@ -179,7 +179,7 @@ struct ExtensionsPane: View {
         working = "update"
         error = nil
         Task {
-            do { try await engine.spaceCall("packages.update", PackageParams(source: nil)) } catch { self.error = (error as? EngineError)?.message ?? String(describing: error) }
+            do { try await engine.spaceCall("packages.update", PackagesUpdateParams()) } catch { self.error = (error as? EngineError)?.message ?? String(describing: error) }
             working = nil
             await load()
         }
@@ -392,10 +392,10 @@ private struct PackageDetail: View {
             } else if let latest = package.latest {
                 StatusText(color: .dsAmber, text: "\(package.version ?? "") installed · \(latest) available")
             } else {
-                StatusText(color: package.enabled ? .dsFg3 : .dsFg3, text: [package.enabled ? "On" : "Off", package.kind == "local" ? "folder" : package.kind ?? "npm", package.version].compactMap { $0 }.joined(separator: " · "))
+                StatusText(color: package.enabled ? .dsFg3 : .dsFg3, text: [package.enabled ? "On" : "Off", package.kind == .local ? "folder" : package.kind.rawValue, package.version].compactMap { $0 }.joined(separator: " · "))
             }
         } actions: {
-            if package.latest != nil || package.kind == "git" || !package.installed {
+            if package.latest != nil || package.kind == .git || !package.installed {
                 Button(working ? "Updating…" : package.latest.map { "Update to \($0)" } ?? "Update") { update() }
                     .buttonStyle(PillStyle(kind: package.latest != nil ? .primary : .secondary, compact: true)).disabled(working)
             }
@@ -420,10 +420,10 @@ private struct PackageDetail: View {
                     }
                 }
             }
-            section("Extensions", "extensions", r.extensions, where_: "Build only · runs code")
-            section("Skills", "skills", r.skills, where_: "Everywhere")
-            section("Templates", "prompts", r.prompts, where_: "Everywhere", slash: true)
-            section("Themes", "themes", r.themes, where_: "Not shown in Piopio")
+            section("Extensions", .extensions, r.extensions, where_: "Build only · runs code")
+            section("Skills", .skills, r.skills, where_: "Everywhere")
+            section("Templates", .prompts, r.prompts, where_: "Everywhere", slash: true)
+            section("Themes", .themes, r.themes, where_: "Not shown in Piopio")
             if let error { Text(error).font(.system(size: 12)).foregroundStyle(Color.dsFg2) }
         }
         .alert("Uninstall \(PackageText.name(package))?", isPresented: $removing) {
@@ -445,7 +445,7 @@ private struct PackageDetail: View {
         return parts.isEmpty ? "Uninstalling removes it from Piopio and the pi CLI." : "Uninstalling: \(parts.joined(separator: "; "))."
     }
 
-    @ViewBuilder private func section(_ title: String, _ kind: String, _ items: [PiPackage.Resource], where_: String, slash: Bool = false) -> some View {
+    @ViewBuilder private func section(_ title: String, _ kind: PackageResourceKind, _ items: [PiPackage.Resources.Resource], where_: String, slash: Bool = false) -> some View {
         if !items.isEmpty || package.off.contains(kind) {
             let kindOn = !package.off.contains(kind)
             VStack(alignment: .leading, spacing: 0) {
@@ -580,7 +580,7 @@ struct McpMemoryEditor: View {
     }
 
     private func load(_ t: McpMemoryProvider.Tools) {
-        for (op, mapping) in [("recall", t.recall as McpMemoryProvider.Mapping?), ("retain", t.retain), ("list", t.list), ("forget", t.forget), ("reflect", t.reflect)] {
+        for (op, mapping) in [("recall", t.recall as McpMemoryMapping?), ("retain", t.retain), ("list", t.list), ("forget", t.forget), ("reflect", t.reflect)] {
             guard let mapping, !mapping.tool.isEmpty else { continue }
             toolNames[op] = mapping.tool
             args[op] = (try? String(data: JSONEncoder.sorted.encode(mapping.args), encoding: .utf8)) ?? "{}"
@@ -611,7 +611,7 @@ struct McpMemoryEditor: View {
         }
     }
 
-    private func mapping(_ op: String) throws -> McpMemoryProvider.Mapping? {
+    private func mapping(_ op: String) throws -> McpMemoryMapping? {
         guard let tool = toolNames[op], !tool.isEmpty else { return nil }
         let text = (args[op] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return .init(tool: tool, args: [:]) }

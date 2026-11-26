@@ -103,10 +103,11 @@ struct AppPage: View {
                         // A calendar source: each account and when it was read (docs/spec/35 §16).
                         Section(s.file) {
                             ForEach(accounts, id: \.id) { a in
-                                Text("\(a.label) · \(a.state == "gone" ? "not connected" : a.readAt.map { "read \(Self.time($0))" } ?? "not read yet")")
+                                let read: String = a.state == .gone ? "not connected" : a.readAt.map { "read \(Self.time($0))" } ?? "not read yet"
+                                Text("\(a.label) · \(read)")
                             }
                         }
-                    } else if s.kind == "piopio" {
+                    } else if s.kind == .piopio {
                         // Piopio's own numbers (docs/spec/35 L4): nothing to show in Finder.
                         Text("\(s.file)\(s.readAt.map { " · read \(Self.time($0))" } ?? "")")
                     } else {
@@ -142,8 +143,8 @@ struct AppPage: View {
                 Task { if let fresh = try? await engine.allowApp(path) { show(fresh) } }
             }
         }
-        ForEach(app.sources.filter { $0.state == "failed" }, id: \.name) { s in
-            if s.kind == "piopio" {
+        ForEach(app.sources.filter { $0.state == .failed }, id: \.name) { s in
+            if s.kind == .piopio {
                 notice("\(s.error ?? "\(s.file) couldn't be read.") \(s.readAt.map { "Showing what it read \(Self.time($0))." } ?? "Nothing to show from it yet.")", action: "Try Again") {
                     Task { if let fresh = try? await engine.refreshApp(path) { show(fresh) } }
                 }

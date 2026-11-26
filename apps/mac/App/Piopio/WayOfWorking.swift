@@ -15,7 +15,7 @@ struct WayOfWorkingSection: View {
     @State private var picking: String?
     @State private var error: String?
 
-    private var work: ProjectWork? { engine.work(in: project) }
+    private var work: WorkInfo? { engine.work(in: project) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -30,7 +30,7 @@ struct WayOfWorkingSection: View {
         .sheet(isPresented: $fitting) { ParallelFitSheet(engine: engine, project: project) { fitting = false } }
     }
 
-    @ViewBuilder private func settings(_ work: ProjectWork) -> some View {
+    @ViewBuilder private func settings(_ work: WorkInfo) -> some View {
         let way = work.way
         row("Review", way.review ? "Every task is checked by a helper with fresh eyes" : "Tasks are done when their helper finishes") {
             HStack(spacing: 10) {
@@ -73,12 +73,12 @@ struct WayOfWorkingSection: View {
             .labelsHidden().fixedSize()
         }
         row("Budget", "Per job: what one conversation's tasks may spend") {
-            TextField("No limit", value: Binding(get: { way.budgetPerJob }, set: { v in configure(ConfigureWorkParams(project: project.id, budgetPerJob: v ?? 0)) }), format: .currency(code: "USD"))
+            TextField("No limit", value: Binding(get: { way.budgetPerJob }, set: { v in configure(ConfigureWorkParams(project: project.id, budgetPerJob: .value(v ?? 0))) }), format: .currency(code: "USD"))
                 .textFieldStyle(.roundedBorder).frame(width: 100)
         }
         row("Playbook", playbooks.first { $0.id == way.playbook }?.description ?? "How Piopio plans and splits the work") {
             Picker("", selection: Binding(get: { way.playbook }, set: { v in configure(ConfigureWorkParams(project: project.id, playbook: v)) })) {
-                ForEach(playbooks) { p in Text(p.source == "project" ? "\(p.name) · this project's" : p.name).tag(p.id) }
+                ForEach(playbooks) { p in Text(p.source == .project ? "\(p.name) · this project's" : p.name).tag(p.id) }
                 if !playbooks.contains(where: { $0.id == way.playbook }) { Text(way.playbook).tag(way.playbook) }
             }
             .labelsHidden().fixedSize()
@@ -93,13 +93,13 @@ struct WayOfWorkingSection: View {
                 VStack(alignment: .leading, spacing: 0) {
                     ModelPicker(engine: engine, selected: modelRef(raw), role: .build) { m in
                         picking = nil
-                        configure(kind == "build" ? ConfigureWorkParams(project: project.id, buildModel: "\(m.provider):\(m.id)") : ConfigureWorkParams(project: project.id, reviewModel: "\(m.provider):\(m.id)"))
+                        configure(kind == "build" ? ConfigureWorkParams(project: project.id, buildModel: .value("\(m.provider):\(m.id)")) : ConfigureWorkParams(project: project.id, reviewModel: .value("\(m.provider):\(m.id)")))
                     }
                     if raw != nil {
                         Divider()
                         Button("Use \(fallback.lowercased()) model") {
                             picking = nil
-                            configure(kind == "build" ? ConfigureWorkParams(project: project.id, buildModel: "") : ConfigureWorkParams(project: project.id, reviewModel: ""))
+                            configure(kind == "build" ? ConfigureWorkParams(project: project.id, buildModel: .value("")) : ConfigureWorkParams(project: project.id, reviewModel: .value("")))
                         }
                         .buttonStyle(.plain).font(.system(size: 12.5)).padding(10)
                     }

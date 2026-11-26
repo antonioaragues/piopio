@@ -333,8 +333,8 @@ struct BuildSessionView: View {
             Task { try? await engine.turnIntoAgent(summary.ref) }
         case "routine":
             // An older card's "Just a routine here": the same thing is an automation now; ask Piopio to make it.
-            guard let what = t.args?["what"]?.stringValue else { return }
-            Task { await session.send("Make it an automation here: \(t.args?["when"]?.stringValue ?? "on its schedule"), \(what)") }
+            guard let what = t.args["what"]?.stringValue else { return }
+            Task { await session.send("Make it an automation here: \(t.args["when"]?.stringValue ?? "on its schedule"), \(what)") }
         default: break
         }
     }
@@ -390,7 +390,7 @@ struct BuildSessionView: View {
     /// This conversation's subagents, oldest first, as their rows show them (docs/spec/37).
     private var subagents: [SubagentInfo] {
         engine.buildSessions.filter { $0.parent?.id == summary.ref.id }.sorted { $0.createdAt < $1.createdAt }.map { s in
-            SubagentInfo(id: s.ref.id, title: s.title, state: s.parent?.state ?? "working", line: s.parent?.line,
+            SubagentInfo(id: s.ref.id, title: s.title, state: s.parent?.state?.rawValue ?? "working", line: s.parent?.line,
                          startedAt: s.parent?.startedAt.flatMap(ISODate.parse), endedAt: s.parent?.endedAt.flatMap(ISODate.parse), costUsd: s.parent?.costUsd,
                          alert: s.parent?.alert)
         }

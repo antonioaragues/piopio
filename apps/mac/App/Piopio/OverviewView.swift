@@ -91,7 +91,7 @@ struct OverviewPage: View {
                         byDay(spend).padding(.top, 26)
                         groupsSection(spend)
                         // Piopio's one remark on the page (docs/design/overview Redesign, A): in yolk, with the chick.
-                        if agent == nil, let suggestions = spend.suggestions, !suggestions.isEmpty { cheaper(Array(suggestions.prefix(3))).padding(.top, 26) }
+                        if agent == nil, case let suggestions = spend.suggestions, !suggestions.isEmpty { cheaper(Array(suggestions.prefix(3))).padding(.top, 26) }
                         if agent == nil { plainSection("Budgets") { budgetGrid } }
                     }
                     if spend.backfilling == true {
@@ -384,7 +384,7 @@ struct OverviewPage: View {
         if g.plan { parts.append("on your plan") }
         if g.unknownCalls > 0 { parts.append("\(g.unknownCalls) without a price") }
         if groupBy == .what, g.id.hasPrefix("agent:"), let a = engine.agents.first(where: { "agent:\($0.ref.id)" == g.id }) {
-            parts.insert("agent · \(a.agent?.location == "cloud" ? "cloud" : "This Mac")", at: 0)
+            parts.insert("agent · \(a.agent?.location == .cloud ? "cloud" : "This Mac")", at: 0)
         } else if groupBy == .what, g.id.hasPrefix("automation:") { parts.insert("automation", at: 0) }
         else if groupBy == .what, g.id == "piopio" { parts.insert("titles, memory, search", at: 0) }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")

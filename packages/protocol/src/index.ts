@@ -11,44 +11,53 @@ function literals<const T extends readonly string[]>(...values: T): TUnion<{ -re
 	return Type.Union(values.map((v) => Type.Literal(v))) as never;
 }
 
+/**
+ * Names an exported schema: its JSON Schema `title`, which TypeBox keeps wherever the schema is used, so the Swift
+ * generator (src/swift.ts) makes it one Swift type instead of a copy per place. `export const X = named("X", …)`;
+ * test/swift.test.ts checks every exported schema is named after itself.
+ */
+function named<T extends TSchema>(title: string, schema: T): T {
+	return Object.assign(schema, { title });
+}
+
 export const PROTOCOL_VERSION = "1.0";
 
 // ── Common ──────────────────────────────────────────────────────────────────
 
-export const ContainerKind = literals("build", "thread", "agent");
+export const ContainerKind = named("ContainerKind", literals("build", "thread", "agent"));
 export type ContainerKind = Static<typeof ContainerKind>;
 
-export const ContainerRef = Type.Object({ kind: ContainerKind, id: Type.String(), conversationId: Type.Optional(Type.String()) });
+export const ContainerRef = named("ContainerRef", Type.Object({ kind: ContainerKind, id: Type.String(), conversationId: Type.Optional(Type.String()) }));
 export type ContainerRef = Static<typeof ContainerRef>;
 
-export const ErrorCode = literals("NOT_FOUND", "BUSY", "AUTH", "ENGINE_UNAVAILABLE", "MODEL_ERROR", "INVALID", "CONFLICT", "QUOTA", "INTERNAL");
+export const ErrorCode = named("ErrorCode", literals("NOT_FOUND", "BUSY", "AUTH", "ENGINE_UNAVAILABLE", "MODEL_ERROR", "INVALID", "CONFLICT", "QUOTA", "INTERNAL"));
 export type ErrorCode = Static<typeof ErrorCode>;
 
-export const Usage = Type.Object({
+export const Usage = named("Usage", Type.Object({
 	inputTokens: Type.Number(),
 	outputTokens: Type.Number(),
 	cacheReadTokens: Type.Number(),
 	cacheWriteTokens: Type.Number(),
 	costUsd: Type.Number(),
-});
+}));
 export type Usage = Static<typeof Usage>;
 
-export const ModelRef = Type.Object({ provider: Type.String(), id: Type.String() });
+export const ModelRef = named("ModelRef", Type.Object({ provider: Type.String(), id: Type.String() }));
 export type ModelRef = Static<typeof ModelRef>;
 
 // ── Timeline ────────────────────────────────────────────────────────────────
 
-export const AssistantPart = Type.Union([
+export const AssistantPart = named("AssistantPart", Type.Union([
 	Type.Object({ type: Type.Literal("text"), text: Type.String() }),
 	Type.Object({ type: Type.Literal("thinking"), text: Type.String(), redacted: Type.Optional(Type.Boolean()) }),
-]);
+]));
 export type AssistantPart = Static<typeof AssistantPart>;
 
-export const ToolStatus = literals("pending_approval", "running", "done", "error", "interrupted", "denied");
+export const ToolStatus = named("ToolStatus", literals("pending_approval", "running", "done", "error", "interrupted", "denied"));
 export type ToolStatus = Static<typeof ToolStatus>;
 
 /** An automation as its card shows it (docs/spec/27 §4): when, who runs it, what it does, where the result goes. */
-export const AutomationSummary = Type.Object({
+export const AutomationSummary = named("AutomationSummary", Type.Object({
 	id: Type.String(),
 	name: Type.String(),
 	when: Type.String({ description: "“Every Monday at 09:00”, “When an email from the bank arrives”" }),
@@ -58,11 +67,11 @@ export const AutomationSummary = Type.Object({
 	runsOn: Type.String({ description: "“This Mac, only while it's awake”" }),
 	url: Type.Optional(Type.String({ description: "webhook: where to POST" })),
 	next: Type.Optional(Type.Number({ description: "time: the next run, epoch ms" })),
-});
+}));
 export type AutomationSummary = Static<typeof AutomationSummary>;
 
 /** One thing /learn proposes to keep (docs/spec/14 M5): a project rule (under a section of AGENTS.md) or a fact about you. */
-export const LearnItem = Type.Object({
+export const LearnItem = named("LearnItem", Type.Object({
 	/** project: a rule for the instructions file; about_me: a fact; skill: how to do a kind of job (40 SH0). */
 	to: literals("project", "about_me", "skill"),
 	/** A rule or fact as it's written; for a skill, its "used when" (the description the model routes on). */
@@ -77,20 +86,20 @@ export const LearnItem = Type.Object({
 	addTo: Type.Optional(Type.String()),
 	/** skill: kept for this project only (its .pi/skills), not every project. */
 	projectOnly: Type.Optional(Type.Boolean()),
-});
+}));
 export type LearnItem = Static<typeof LearnItem>;
 
 /** One of your hooks (PAR6): what Piopio writes as a pi extension file from a sentence. */
-export const HookSpec = Type.Object({
+export const HookSpec = named("HookSpec", Type.Object({
 	when: literals("before", "after", "end"),
 	tools: Type.Optional(Type.Array(literals("edit", "write", "bash", "any"))),
 	files: Type.Optional(Type.String()),
 	command: Type.Optional(Type.String()),
 	run: Type.Optional(Type.String()),
 	stop: Type.Optional(Type.String()),
-});
+}));
 export type HookSpec = Static<typeof HookSpec>;
-export const HookInfo = Type.Object({
+export const HookInfo = named("HookInfo", Type.Object({
 	path: Type.String(),
 	name: Type.String(),
 	on: Type.Boolean(),
@@ -99,11 +108,11 @@ export const HookInfo = Type.Object({
 	/** Piopio's own, unchanged: editable as a sentence. Absent: changed by hand, so it's code. */
 	spec: Type.Optional(HookSpec),
 	sentence: Type.String(),
-});
+}));
 export type HookInfo = Static<typeof HookInfo>;
 
 /** A skill pi loads (backlog D9): where it lives, and whether Piopio may change it. */
-export const SkillInfo = Type.Object({
+export const SkillInfo = named("SkillInfo", Type.Object({
 	name: Type.String(),
 	description: Type.String(),
 	/** Its SKILL.md. */
@@ -115,11 +124,11 @@ export const SkillInfo = Type.Object({
 	editable: Type.Boolean(),
 	/** package: its folder, as Settings › Extensions names it. */
 	source: Type.Optional(Type.String()),
-});
+}));
 export type SkillInfo = Static<typeof SkillInfo>;
 
 /** A custom subagent (roadmap PAR12): one of pi's agent files, a task's `agent` by its name. */
-export const SubagentInfo = Type.Object({
+export const SubagentInfo = named("SubagentInfo", Type.Object({
 	name: Type.String(),
 	/** What it's for: what the conversation reads to decide to hand it work. */
 	description: Type.String(),
@@ -131,22 +140,26 @@ export const SubagentInfo = Type.Object({
 	path: Type.String(),
 	/** yours: ~/.pi/agent/agents; project: a trusted project's .pi/agents. */
 	where: literals("yours", "project"),
-});
+}));
 export type SubagentInfo = Static<typeof SubagentInfo>;
 
-export const ToolDetails = Type.Union([
+/** An item of the agent's checklist (piopio-todos): its title in a few words, a sentence on what it covers, how far it is. */
+export const Todo = named("Todo", Type.Object({ text: Type.String(), detail: Type.Optional(Type.String()), status: literals("pending", "in_progress", "done") }));
+export type Todo = Static<typeof Todo>;
+
+export const ToolDetails = named("ToolDetails", Type.Union([
 	Type.Object({ type: Type.Literal("diff"), path: Type.String(), diff: Type.String() }),
 	Type.Object({ type: Type.Literal("file"), path: Type.String(), language: Type.Optional(Type.String()) }),
-	Type.Object({ type: Type.Literal("terminal"), command: Type.String(), exitCode: Type.Optional(Type.Number()) }),
+	Type.Object({ type: Type.Literal("terminal"), command: Type.String(), exitCode: Type.Optional(Type.Integer()) }),
 	Type.Object({ type: Type.Literal("json"), value: Type.Unknown() }),
 	/** The agent's checklist (piopio-todos). */
-	Type.Object({ type: Type.Literal("todos"), items: Type.Array(Type.Object({ text: Type.String(), detail: Type.Optional(Type.String()), status: literals("pending", "in_progress", "done") })) }),
+	Type.Object({ type: Type.Literal("todos"), items: Type.Array(Todo) }),
 	/** A subagent (piopio-subagents): its child session, once started, and the outcome. */
 	Type.Object({ type: Type.Literal("task"), sessionId: Type.Optional(Type.String()), status: Type.Optional(literals("started", "queued", "done", "error", "stopped")), costUsd: Type.Optional(Type.Number()) }),
 	/** Files the agent handed over (piopio-present): where they are, what they are, and which ones don't exist. */
 	Type.Object({
 		type: Type.Literal("files"),
-		files: Type.Array(Type.Object({ path: Type.String(), name: Type.String(), description: Type.Optional(Type.String()), size: Type.Optional(Type.Number()), missing: Type.Optional(Type.Boolean()) })),
+		files: Type.Array(Type.Object({ path: Type.String(), name: Type.String(), description: Type.Optional(Type.String()), size: Type.Optional(Type.Integer()), missing: Type.Optional(Type.Boolean()) })),
 	}),
 	/**
 	 * Earlier conversations a turn searched or read (docs/spec/14 M4): which ones it found, to open from the card, and
@@ -155,7 +168,7 @@ export const ToolDetails = Type.Union([
 	Type.Object({
 		type: Type.Literal("conversations"),
 		conversations: Type.Array(Type.Object({ id: Type.String(), title: Type.String(), kind: literals("thread", "build") })),
-		withheld: Type.Optional(Type.Number()),
+		withheld: Type.Optional(Type.Integer()),
 	}),
 	/**
 	 * What a conversation learned (docs/spec/14 M5, /learn): rules for the project's instructions file and facts for
@@ -188,42 +201,42 @@ export const ToolDetails = Type.Union([
 	}),
 	/** Piopio made or changed an automation (docs/spec/27 §4): its card, with Open in Automations and Undo. */
 	Type.Object({ type: Type.Literal("automation"), automation: AutomationSummary, changed: Type.Optional(Type.Boolean()) }),
-]);
+]));
 export type ToolDetails = Static<typeof ToolDetails>;
 
 /** Where a user message sits among alternative versions (edits/regenerations) at the same point. */
-export const BranchInfo = Type.Object({
-	index: Type.Number(), // 0-based position of the shown version
-	count: Type.Number(),
+export const BranchInfo = named("BranchInfo", Type.Object({
+	index: Type.Integer(), // 0-based position of the shown version
+	count: Type.Integer(),
 	/** Branch ids to pass to `sessions.switchBranch` for the neighbouring versions. */
 	previous: Type.Optional(Type.String()),
 	next: Type.Optional(Type.String()),
-});
+}));
 export type BranchInfo = Static<typeof BranchInfo>;
 
 /** A file sent with a message, as the transcript shows it. */
-export const AttachmentInfo = Type.Object({
+export const AttachmentInfo = named("AttachmentInfo", Type.Object({
 	name: Type.String(),
 	kind: literals("image", "text"),
 	mimeType: Type.Optional(Type.String()),
 	size: Type.Optional(Type.Number()),
 	/** Where Piopio keeps a copy, relative to `<home>/attachments/<container id>/` (to show it again). */
 	stored: Type.Optional(Type.String()),
-});
+}));
 export type AttachmentInfo = Static<typeof AttachmentInfo>;
 
 /**
  * A file to send. Clients prepare it: images as base64 (already downscaled), documents as extracted text. `path` is the
  * original on this Mac, which the engine copies so the file can be shown again; it never reaches the model.
  */
-export const Attachment = Type.Union([
+export const Attachment = named("Attachment", Type.Union([
 	Type.Object({ kind: Type.Literal("image"), name: Type.String(), mimeType: Type.String(), data: Type.String(), path: Type.Optional(Type.String()) }),
 	Type.Object({ kind: Type.Literal("text"), name: Type.String(), mimeType: Type.Optional(Type.String()), text: Type.String(), path: Type.Optional(Type.String()) }),
-]);
+]));
 export type Attachment = Static<typeof Attachment>;
 
 /** A file an agent keeps (06 §14). */
-export const AgentFile = Type.Object({
+export const AgentFile = named("AgentFile", Type.Object({
 	name: Type.String(),
 	note: Type.Optional(Type.String()),
 	kind: literals("image", "pdf", "text", "other"),
@@ -231,21 +244,21 @@ export const AgentFile = Type.Object({
 	addedAt: Type.String(),
 	path: Type.String(),
 	readable: Type.Boolean(),
-});
+}));
 
-export const UserItem = Type.Object({
+export const UserItem = named("UserItem", Type.Object({
 	kind: Type.Literal("user"),
 	id: Type.String(),
 	at: Type.String(),
 	text: Type.String(),
 	attachments: Type.Optional(Type.Array(AttachmentInfo)),
 	branch: Type.Optional(BranchInfo),
-});
+}));
 
 /** Why a model request failed, so clients can offer the right fix. */
-export const ErrorKind = literals("auth", "credits", "model", "rate_limit", "provider", "network", "context", "other");
+export const ErrorKind = named("ErrorKind", literals("auth", "credits", "model", "rate_limit", "provider", "network", "context", "other"));
 export type ErrorKind = Static<typeof ErrorKind>;
-export const AssistantItem = Type.Object({
+export const AssistantItem = named("AssistantItem", Type.Object({
 	kind: Type.Literal("assistant"),
 	id: Type.String(),
 	at: Type.String(),
@@ -261,8 +274,8 @@ export const AssistantItem = Type.Object({
 	outbound: Type.Optional(Type.Object({ from: Type.String(), suggestions: Type.Optional(Type.Array(Type.String(), { description: "Quick replies offered with it (a new agent's greeting)" })) })),
 	/** How long it thought before answering or acting (measured live; absent for reloaded history). */
 	thinkingMs: Type.Optional(Type.Number()),
-});
-export const ToolItem = Type.Object({
+}));
+export const ToolItem = named("ToolItem", Type.Object({
 	kind: Type.Literal("tool"),
 	id: Type.String(),
 	at: Type.String(),
@@ -278,25 +291,25 @@ export const ToolItem = Type.Object({
 	review: Type.Optional(Type.String()),
 	/** Images the tool returned (a screenshot it read), kept like sent files so the transcript can show them. */
 	images: Type.Optional(Type.Array(AttachmentInfo)),
-});
-export const SystemItem = Type.Object({
+}));
+export const SystemItem = named("SystemItem", Type.Object({
 	kind: Type.Literal("system"),
 	id: Type.String(),
 	at: Type.String(),
 	level: literals("info", "warn", "error"),
 	text: Type.String(),
 	/** A run of the agent, shown in its owner's conversation as a divider (docs/spec/21 D3); opens as `run:<id>`. */
-	run: Type.Optional(Type.Object({ id: Type.String(), status: literals("running", "done", "failed", "skipped"), sent: Type.Number(), summary: Type.Optional(Type.String()), costUsd: Type.Optional(Type.Number()), automation: Type.Optional(Type.Object({ id: Type.String(), name: Type.String() }, { description: "The automation that started it (docs/spec/27 §4): “From <name>”" })) })),
-});
-export const CompactionItem = Type.Object({
+	run: Type.Optional(Type.Object({ id: Type.String(), status: literals("running", "done", "failed", "skipped"), sent: Type.Integer(), summary: Type.Optional(Type.String()), costUsd: Type.Optional(Type.Number()), automation: Type.Optional(Type.Object({ id: Type.String(), name: Type.String() }, { description: "The automation that started it (docs/spec/27 §4): “From <name>”" })) })),
+}));
+export const CompactionItem = named("CompactionItem", Type.Object({
 	kind: Type.Literal("compaction"),
 	id: Type.String(),
 	at: Type.String(),
 	summary: Type.String(),
-});
+}));
 
 /** A snapshot of the working tree before a turn changed files (Build, docs/spec/05-build §7). */
-export const CheckpointItem = Type.Object({
+export const CheckpointItem = named("CheckpointItem", Type.Object({
 	kind: Type.Literal("checkpoint"),
 	id: Type.String(),
 	at: Type.String(),
@@ -304,11 +317,11 @@ export const CheckpointItem = Type.Object({
 	/** "Session start", "Before turn 3", "Before restore". */
 	label: Type.String(),
 	/** Files that changed since the previous checkpoint. */
-	files: Type.Optional(Type.Number()),
-});
+	files: Type.Optional(Type.Integer()),
+}));
 
 /** A turn's tool calls as one line, "Worked 18s · 2 steps" (06-agents §12 UI2): agents' conversations. */
-export const StepsItem = Type.Object({
+export const StepsItem = named("StepsItem", Type.Object({
 	kind: Type.Literal("steps"),
 	id: Type.String(),
 	at: Type.String(),
@@ -316,10 +329,13 @@ export const StepsItem = Type.Object({
 	/** What the model thought in the answers that only called these tools, folded into the same line. */
 	thinking: Type.Optional(Type.String()),
 	thinkingMs: Type.Optional(Type.Number()),
-});
+}));
 
+/** Where an agent's approval stands. */
+export const ApprovalStatus = named("ApprovalStatus", literals("pending", "approved", "denied", "expired", "cancelled"));
+export type ApprovalStatus = Static<typeof ApprovalStatus>;
 /** An agent's tool call waiting for the owner (06-agents §9 AS1), or how it was answered. */
-export const ApprovalItem = Type.Object({
+export const ApprovalItem = named("ApprovalItem", Type.Object({
 	kind: Type.Literal("approval"),
 	id: Type.String(),
 	at: Type.String(),
@@ -328,7 +344,7 @@ export const ApprovalItem = Type.Object({
 	/** "Send to María: “…”". */
 	title: Type.String(),
 	args: Type.Unknown(),
-	status: literals("pending", "approved", "denied", "expired", "cancelled"),
+	status: ApprovalStatus,
 	editedArgs: Type.Optional(Type.Unknown()),
 	reason: Type.Optional(Type.String()),
 	expiresAt: Type.String(),
@@ -336,9 +352,9 @@ export const ApprovalItem = Type.Object({
 	always: Type.String(),
 	/** "connector": a connected app's change in a chat (Allow / Deny, no editing; `sessions.decide`). Else an agent's. */
 	source: Type.Optional(Type.Literal("connector")),
-});
+}));
 /** What an agent's tool changed, with Undo while it can be undone (06-agents §4.2 RC1–RC2). */
-export const ResultItem = Type.Object({
+export const ResultItem = named("ResultItem", Type.Object({
 	kind: Type.Literal("result"),
 	id: Type.String(),
 	at: Type.String(),
@@ -351,9 +367,15 @@ export const ResultItem = Type.Object({
 		automation: Type.Optional(AutomationSummary),
 	}),
 	undo: Type.Optional(Type.Object({ id: Type.String(), status: literals("available", "undone", "failed", "expired"), until: Type.String() })),
-});
+}));
+/** Where a message between agents stands. */
+export const AgentMsgStatus = named("AgentMsgStatus", literals("waiting", "replied", "no_reply", "sent", "failed"));
+export type AgentMsgStatus = Static<typeof AgentMsgStatus>;
+/** A message between agents: a question, news, or an answer. */
+export const AgentMsgMode = named("AgentMsgMode", literals("ask", "tell", "reply"));
+export type AgentMsgMode = Static<typeof AgentMsgMode>;
 /** A message between two of the owner's agents (06-agents §7 AA5): sent (`out`, with the answer once it comes) or received (`in`). */
-export const AgentMsgItem = Type.Object({
+export const AgentMsgItem = named("AgentMsgItem", Type.Object({
 	kind: Type.Literal("agent_msg"),
 	id: Type.String(),
 	at: Type.String(),
@@ -361,13 +383,13 @@ export const AgentMsgItem = Type.Object({
 	toAgent: Type.Object({ id: Type.String(), name: Type.String() }),
 	text: Type.String(),
 	direction: literals("in", "out"),
-	mode: literals("ask", "tell", "reply"),
-	status: Type.Optional(literals("waiting", "replied", "no_reply", "sent", "failed")),
+	mode: AgentMsgMode,
+	status: Type.Optional(AgentMsgStatus),
 	reply: Type.Optional(Type.String()),
 	/** Opens the trace view (`agents.trace`). */
 	traceId: Type.Optional(Type.String()),
-});
-export const TimelineItem = Type.Union([UserItem, AssistantItem, ToolItem, SystemItem, CompactionItem, CheckpointItem, StepsItem, ApprovalItem, ResultItem, AgentMsgItem]);
+}));
+export const TimelineItem = named("TimelineItem", Type.Union([UserItem, AssistantItem, ToolItem, SystemItem, CompactionItem, CheckpointItem, StepsItem, ApprovalItem, ResultItem, AgentMsgItem]));
 export type TimelineItem = Static<typeof TimelineItem>;
 export type UserItem = Static<typeof UserItem>;
 export type AssistantItem = Static<typeof AssistantItem>;
@@ -379,52 +401,55 @@ export type SystemItem = Static<typeof SystemItem>;
 export type CheckpointItem = Static<typeof CheckpointItem>;
 
 /** A file that differs from a checkpoint. */
-export const FileChange = Type.Object({
+export const FileChange = named("FileChange", Type.Object({
 	path: Type.String(),
 	status: literals("added", "modified", "deleted"),
-	added: Type.Number(),
-	removed: Type.Number(),
+	added: Type.Integer(),
+	removed: Type.Integer(),
 	binary: Type.Optional(Type.Boolean()),
-});
+}));
 export type FileChange = Static<typeof FileChange>;
 
 /** Compared with the session's first checkpoint, or its latest one (the last turn). */
-export const ChangesSince = literals("session", "turn");
+export const ChangesSince = named("ChangesSince", literals("session", "turn"));
 
 // ── Session state & events ─────────────────────────────────────────────────
 
-export const SessionStatus = literals("idle", "running", "waiting_approval", "error");
+export const SessionStatus = named("SessionStatus", literals("idle", "running", "waiting_approval", "error"));
 
 /** A command the agent started with bash `background: true` (docs/spec/05-build §9 TM4). */
-export const BackgroundProcess = Type.Object({
+export const BackgroundProcess = named("BackgroundProcess", Type.Object({
 	id: Type.String(),
 	command: Type.String(),
 	description: Type.Optional(Type.String()),
 	cwd: Type.String(),
 	status: literals("running", "exited", "stopped"),
-	exitCode: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
+	exitCode: Type.Optional(Type.Union([Type.Integer(), Type.Null()])),
 	startedAt: Type.String(),
 	endedAt: Type.Optional(Type.String()),
 	/** Local addresses it printed (a dev server's). */
 	urls: Type.Array(Type.String()),
-});
+}));
 export type BackgroundProcess = Static<typeof BackgroundProcess>;
 
 /** Build approval modes (docs/spec/05-build §6). */
 /** How much a Build session may do on its own (05-build §6). `read_only`: reads and the web; no edits or commands (18 §4). */
-export const ApprovalMode = literals("read_only", "ask", "auto_edit", "full_auto");
+export const ApprovalMode = named("ApprovalMode", literals("read_only", "ask", "auto_edit", "full_auto"));
 export type ApprovalMode = Static<typeof ApprovalMode>;
 
+/** What an "Always allow" rule matches: a bash command prefix, a tool, a path glob, or a site (docs/spec/39). */
+export const ApprovalRuleKind = named("ApprovalRuleKind", literals("command", "tool", "path", "host"));
+export type ApprovalRuleKind = Static<typeof ApprovalRuleKind>;
 /** "Always allow" rules, per project (AP2): a bash command prefix, a tool name, or a path glob. */
 /** "host": a site a filtered project's commands may reach (docs/spec/39), "example.com" or "*.example.com". */
-export const ApprovalRule = Type.Object({ id: Type.String(), kind: literals("command", "tool", "path", "host"), pattern: Type.String(), createdAt: Type.String() });
+export const ApprovalRule = named("ApprovalRule", Type.Object({ id: Type.String(), kind: ApprovalRuleKind, pattern: Type.String(), createdAt: Type.String() }));
 export type ApprovalRule = Static<typeof ApprovalRule>;
 
 /**
  * Something the session waits on you for: a tool approval, an agent's question (`ask_user`), or an
  * extension's confirm/select/input. Lives in the session state until answered, so it survives reconnects.
  */
-export const PendingPrompt = Type.Object({
+export const PendingPrompt = named("PendingPrompt", Type.Object({
 	id: Type.String(),
 	kind: literals("approval", "question", "confirm", "select", "input", "plan"),
 	title: Type.String(),
@@ -437,17 +462,17 @@ export const PendingPrompt = Type.Object({
 	/** Why it asks even though the mode would allow it (deny-list, outside the project). */
 	reason: Type.Optional(Type.String()),
 	/** Approvals: the rule "Always allow" would add; absent when it can't be made a rule (deny-list). */
-	rule: Type.Optional(Type.Object({ kind: literals("command", "tool", "path", "host"), pattern: Type.String() })),
+	rule: Type.Optional(Type.Object({ kind: ApprovalRuleKind, pattern: Type.String() })),
 	/** Questions and selects: the choices offered. */
 	options: Type.Optional(Type.Array(Type.String())),
 	placeholder: Type.Optional(Type.String()),
 	/** Plans (propose_plan): the steps. Approve = decision "allow"; keep planning = "deny" with a note. */
 	steps: Type.Optional(Type.Array(Type.String())),
 	at: Type.String(),
-});
+}));
 export type PendingPrompt = Static<typeof PendingPrompt>;
 
-export const PromptResponse = Type.Object({
+export const PromptResponse = named("PromptResponse", Type.Object({
 	/** Approvals. "always" also adds the prompt's rule. */
 	decision: Type.Optional(literals("allow", "always", "deny")),
 	/** Deny: a note for the agent. Questions/inputs: the answer. */
@@ -459,11 +484,11 @@ export const PromptResponse = Type.Object({
 	/** Plans: the user's edited version, approved with decision "allow". */
 	summary: Type.Optional(Type.String()),
 	steps: Type.Optional(Type.Array(Type.String())),
-});
+}));
 export type PromptResponse = Static<typeof PromptResponse>;
 export type SessionStatus = Static<typeof SessionStatus>;
 
-export const QueuedInput = Type.Object({ id: Type.String(), mode: Type.Union([Type.Literal("steer"), Type.Literal("followUp")]), text: Type.Optional(Type.String()) });
+export const QueuedInput = named("QueuedInput", Type.Object({ id: Type.String(), mode: Type.Union([Type.Literal("steer"), Type.Literal("followUp")]), text: Type.Optional(Type.String()) }));
 export type QueuedInput = Static<typeof QueuedInput>;
 
 /** What fills the context: pi's total spread over categories by their estimated shares, so they add up to `tokens`. */
@@ -476,7 +501,7 @@ const ContextBreakdown = Type.Object({
 	})),
 });
 
-export const SessionState = Type.Object({
+export const SessionState = named("SessionState", Type.Object({
 	status: SessionStatus,
 	queue: Type.Array(QueuedInput),
 	model: Type.Optional(ModelRef),
@@ -488,7 +513,7 @@ export const SessionState = Type.Object({
 	approvalMode: Type.Optional(ApprovalMode),
 	prompts: Type.Optional(Type.Array(PendingPrompt)),
 	/** Build: the agent's current checklist, and whether plan mode is on. */
-	todos: Type.Optional(Type.Array(Type.Object({ text: Type.String(), detail: Type.Optional(Type.String()), status: literals("pending", "in_progress", "done") }))),
+	todos: Type.Optional(Type.Array(Todo)),
 	planMode: Type.Optional(Type.Boolean()),
 	/**
 	 * The conversation just changed who runs it (docs/spec/31 CA7) and hasn't sent anything since: who ran it before, for
@@ -503,41 +528,41 @@ export const SessionState = Type.Object({
 		window: Type.Number(),
 		breakdown: Type.Optional(ContextBreakdown),
 	})),
-});
+}));
 export type SessionState = Static<typeof SessionState>;
 
-export const Snapshot = Type.Object({ ref: ContainerRef, items: Type.Array(TimelineItem), state: SessionState });
+export const Snapshot = named("Snapshot", Type.Object({ ref: ContainerRef, items: Type.Array(TimelineItem), state: SessionState }));
 export type Snapshot = Static<typeof Snapshot>;
 
-export const SessionEvent = Type.Union([
+export const SessionEvent = named("SessionEvent", Type.Union([
 	/** Appended, or inserted before the item `before` when set (checkpoints go before the change they precede). */
 	Type.Object({ type: Type.Literal("item.added"), item: TimelineItem, before: Type.Optional(Type.String()) }),
-	Type.Object({ type: Type.Literal("item.delta"), itemId: Type.String(), partIndex: Type.Number(), partType: Type.Union([Type.Literal("text"), Type.Literal("thinking")]), textDelta: Type.String() }),
+	Type.Object({ type: Type.Literal("item.delta"), itemId: Type.String(), partIndex: Type.Integer(), partType: Type.Union([Type.Literal("text"), Type.Literal("thinking")]), textDelta: Type.String() }),
 	Type.Object({ type: Type.Literal("item.updated"), item: TimelineItem }),
 	Type.Object({ type: Type.Literal("item.removed"), itemId: Type.String() }),
 	/** A provisional item (e.g. a streaming answer) got its durable id. Same position. */
 	Type.Object({ type: Type.Literal("item.replaced"), oldId: Type.String(), item: TimelineItem }),
 	Type.Object({ type: Type.Literal("state"), state: SessionState }),
 	Type.Object({ type: Type.Literal("resnapshot"), snapshot: Snapshot }),
-]);
+]));
 export type SessionEvent = Static<typeof SessionEvent>;
 
-export const SessionEventsNotification = Type.Object({ subscriptionId: Type.String(), seq: Type.Number(), events: Type.Array(SessionEvent) });
+export const SessionEventsNotification = named("SessionEventsNotification", Type.Object({ subscriptionId: Type.String(), seq: Type.Integer(), events: Type.Array(SessionEvent) }));
 export type SessionEventsNotification = Static<typeof SessionEventsNotification>;
 
 /** A Build session in its own worktree (docs/spec/05-build BP5). */
-export const WorktreeInfo = Type.Object({
+export const WorktreeInfo = named("WorktreeInfo", Type.Object({
 	branch: Type.String(),
 	base: Type.String(),
 	/** Set once finished: merged into base, or discarded. The session then continues in the project folder. */
 	finished: Type.Optional(literals("merged", "discarded")),
-});
+}));
 export type WorktreeInfo = Static<typeof WorktreeInfo>;
 
 /** One operation of an MCP memory provider: the tool, and its arguments with {placeholders} (07-shared §6.2 MM1). */
-export const McpMemoryMapping = Type.Object({ tool: Type.String(), args: Type.Record(Type.String(), Type.Unknown()) });
+export const McpMemoryMapping = named("McpMemoryMapping", Type.Object({ tool: Type.String(), args: Type.Record(Type.String(), Type.Unknown()) }));
 /** A memory system reached through its MCP server: a server from mcp.json, or a URL. */
-export const McpMemoryProvider = Type.Object({
+export const McpMemoryProvider = named("McpMemoryProvider", Type.Object({
 	id: Type.String(),
 	name: Type.String(),
 	server: Type.Optional(Type.String()),
@@ -549,18 +574,22 @@ export const McpMemoryProvider = Type.Object({
 		forget: Type.Optional(McpMemoryMapping),
 		reflect: Type.Optional(McpMemoryMapping),
 	}),
-});
+}));
 export type McpMemoryProvider = Static<typeof McpMemoryProvider>;
 
 /**
  * Where background model work runs (07-shared §1.3): "auto" (the default) uses the provider each conversation already
  * uses; or Apple's on-device model, a model you picked, or nowhere.
  */
-export const UtilityChoice = Type.Union([Type.Literal("auto"), Type.Literal("on_device"), Type.Literal("off"), ModelRef]);
+export const UtilityChoice = named("UtilityChoice", Type.Union([Type.Literal("auto"), Type.Literal("on_device"), Type.Literal("off"), ModelRef]));
 export type UtilityChoice = Static<typeof UtilityChoice>;
 
+/** Side conversations (docs/spec/24 §6): when you bring up something unrelated, ask (default), start one, or do nothing. */
+export const SideOnUnrelated = named("SideOnUnrelated", literals("ask", "start", "off"));
+export type SideOnUnrelated = Static<typeof SideOnUnrelated>;
+
 /** Engine-wide settings (07-shared §5, §7). */
-export const EngineSettings = Type.Object({
+export const EngineSettings = named("EngineSettings", Type.Object({
 	/** Background model work (07-shared §1.3). Unset: automatic. */
 	models: Type.Optional(
 		Type.Object({
@@ -576,7 +605,7 @@ export const EngineSettings = Type.Object({
 		/** After an answer, suggest a few next messages (docs/design v2 "You could also"). */
 		followUps: Type.Optional(Type.Boolean()),
 		/** Side conversations (docs/spec/24 §6): when you bring up something unrelated, ask (default), start one, or do nothing. */
-		sideOnUnrelated: Type.Optional(literals("ask", "start", "off")),
+		sideOnUnrelated: Type.Optional(SideOnUnrelated),
 		/** Piopio proposes follow-ups it notices as cards you start (default on). */
 		sidePropose: Type.Optional(Type.Boolean()),
 		/** A side conversation's report wakes the conversation it came from (default on). */
@@ -620,13 +649,19 @@ export const EngineSettings = Type.Object({
 		/** Another embedding endpoint than the default (OpenRouter, then the OpenAI API key): an OpenAI-compatible server. */
 		embeddings: Type.Optional(Type.Object({ baseUrl: Type.String(), model: Type.String(), dims: Type.Number(), provider: Type.Optional(Type.String()) })),
 	}),
-});
+}));
 export type EngineSettings = Static<typeof EngineSettings>;
 
+/** What a pi package brings, by kind. */
+export const PackageResourceKind = named("PackageResourceKind", literals("extensions", "skills", "prompts", "themes"));
+export type PackageResourceKind = Static<typeof PackageResourceKind>;
+/** Where a pi package comes from. */
+export const PackageKind = named("PackageKind", literals("npm", "git", "local"));
+export type PackageKind = Static<typeof PackageKind>;
 /** A pi package (07-shared §6.1): what it brings, and what of it is on. */
-export const PiPackage = Type.Object({
+export const PiPackage = named("PiPackage", Type.Object({
 	source: Type.String(),
-	kind: literals("npm", "git", "local"),
+	kind: PackageKind,
 	/** From its package.json, once installed. */
 	name: Type.Optional(Type.String()),
 	version: Type.Optional(Type.String()),
@@ -638,20 +673,20 @@ export const PiPackage = Type.Object({
 	/** Some of it is on. */
 	enabled: Type.Boolean(),
 	/** Kinds of resources turned off. */
-	off: Type.Array(literals("extensions", "skills", "prompts", "themes")),
+	off: Type.Array(PackageResourceKind),
 	resources: Type.Object({
 		extensions: Type.Array(Type.Object({ path: Type.String(), enabled: Type.Boolean() })),
 		skills: Type.Array(Type.Object({ path: Type.String(), enabled: Type.Boolean() })),
 		prompts: Type.Array(Type.Object({ path: Type.String(), enabled: Type.Boolean() })),
 		themes: Type.Array(Type.Object({ path: Type.String(), enabled: Type.Boolean() })),
 	}),
-});
+}));
 export type PiPackage = Static<typeof PiPackage>;
 
 /** What a package would add, before installing it (Settings › Extensions, Install sheet). */
-export const PackagePreview = Type.Object({
+export const PackagePreview = named("PackagePreview", Type.Object({
 	ok: Type.Boolean(),
-	kind: literals("npm", "git", "local"),
+	kind: PackageKind,
 	name: Type.Optional(Type.String()),
 	version: Type.Optional(Type.String()),
 	description: Type.Optional(Type.String()),
@@ -663,11 +698,11 @@ export const PackagePreview = Type.Object({
 	/** Whether the lists above are known (a git repository off GitHub isn't read before installing). */
 	contentsKnown: Type.Boolean(),
 	error: Type.Optional(Type.String()),
-});
+}));
 export type PackagePreview = Static<typeof PackagePreview>;
 
 /** An agent in the catalog (06-agents §12): enough for the sidebar and the header. */
-export const AgentInfo = Type.Object({
+export const AgentInfo = named("AgentInfo", Type.Object({
 	slug: Type.String(),
 	avatar: Type.Optional(Type.String()),
 	description: Type.Optional(Type.String()),
@@ -682,14 +717,14 @@ export const AgentInfo = Type.Object({
 	/** Just made, still learning its job by talking (docs/spec/21 D4): shown as a draft. */
 	draft: Type.Optional(Type.Boolean()),
 	/** While the engine runs it: paused (AS4), this month's spend against the budget (AS3), Inbox items waiting. */
-	status: Type.Optional(Type.Object({ paused: Type.Boolean(), spendUsd: Type.Number(), budgetUsd: Type.Optional(Type.Number()), inbox: Type.Number(), nextRun: Type.Optional(Type.String()) })),
-});
+	status: Type.Optional(Type.Object({ paused: Type.Boolean(), spendUsd: Type.Number(), budgetUsd: Type.Optional(Type.Number()), inbox: Type.Integer(), nextRun: Type.Optional(Type.String()) })),
+}));
 export type AgentInfo = Static<typeof AgentInfo>;
 
-export const DefinitionError = Type.Object({ path: Type.String(), message: Type.String() });
+export const DefinitionError = named("DefinitionError", Type.Object({ path: Type.String(), message: Type.String() }));
 
 /** A memory record on its way between the Mac and the cloud: its partition (the bank is `<agent>/<partition>`). */
-export const CloudMemory = Type.Object({
+export const CloudMemory = named("CloudMemory", Type.Object({
 	partition: Type.String(),
 	text: Type.String(),
 	kind: Type.String(),
@@ -697,11 +732,11 @@ export const CloudMemory = Type.Object({
 	at: Type.String(),
 	tags: Type.Optional(Type.Array(Type.String())),
 	pinned: Type.Optional(Type.Boolean()),
-});
+}));
 export type CloudMemory = Static<typeof CloudMemory>;
 
 /** Your cloud as the Mac sees it (docs/spec/30 K1). */
-export const CloudStatus = Type.Object({
+export const CloudStatus = named("CloudStatus", Type.Object({
 	connected: Type.Boolean(),
 	url: Type.Optional(Type.String()),
 	/** It answered `/v1/health` just now (false: offline, or the token stopped working; see `error`). */
@@ -713,25 +748,25 @@ export const CloudStatus = Type.Object({
 	managed: Type.Optional(Type.Boolean()),
 	/** The agents the Worker's registry lists. */
 	agents: Type.Array(Type.Object({ id: Type.String(), name: Type.String(), avatar: Type.Optional(Type.String()), deployedAt: Type.String() })),
-});
+}));
 export type CloudStatus = Static<typeof CloudStatus>;
 
 /** A finding of a review by an agent (docs/spec/05-build "Review by an agent"). */
-export const ReviewFinding = Type.Object({
+export const ReviewFinding = named("ReviewFinding", Type.Object({
 	id: Type.String(),
 	severity: literals("bug", "risk", "nit"),
 	file: Type.String(),
-	line: Type.Optional(Type.Number()),
+	line: Type.Optional(Type.Integer()),
 	title: Type.String(),
 	detail: Type.String(),
 	suggestion: Type.Optional(Type.String()),
 	/** Sent to the session to fix, or set aside. */
 	/** "fixed": the turn Fix started finished (a stopped or failed one puts it back to "open"). */
 	state: literals("open", "fixing", "fixed", "dismissed"),
-});
+}));
 export type ReviewFinding = Static<typeof ReviewFinding>;
 /** A review of a session's changes or a pull request, and what it found. */
-export const ReviewInfo = Type.Object({
+export const ReviewInfo = named("ReviewInfo", Type.Object({
 	/** The review's own session. */
 	reviewer: ContainerRef,
 	/** "This session's changes", "Branch fix-export against main", "PR #42 · Fix export". */
@@ -740,17 +775,26 @@ export const ReviewInfo = Type.Object({
 	summary: Type.Optional(Type.String()),
 	findings: Type.Array(ReviewFinding),
 	at: Type.String(),
-});
+}));
 export type ReviewInfo = Static<typeof ReviewInfo>;
 
-export const SessionSummary = Type.Object({
+/** A pull request's state. */
+export const PrState = named("PrState", literals("open", "closed", "merged"));
+export type PrState = Static<typeof PrState>;
+/** A pull request's checks, summed up. */
+export const PrChecks = named("PrChecks", literals("pending", "passing", "failing", "none"));
+export type PrChecks = Static<typeof PrChecks>;
+/** A project session's profile (04-chat P2): "build" (coding tools) or "chat" (a knowledge assistant: no bash, web tools). */
+export const SessionProfile = named("SessionProfile", literals("build", "chat"));
+export type SessionProfile = Static<typeof SessionProfile>;
+export const SessionSummary = named("SessionSummary", Type.Object({
 	/** A temporary chat (docs/spec/14 M4): when it's deleted, 24 hours after its last message, unless kept. */
 	temporary: Type.Optional(Type.Object({ expiresAt: Type.String() })),
 	/**
 	 * Its /learn cards (docs/spec/14 M5), by tool call: "pending" until answered, "later" once you wrote again without
 	 * answering (or chose Not now), "saved" (and where), "dismissed".
 	 */
-	learned: Type.Optional(Type.Record(Type.String(), Type.Object({ status: literals("pending", "later", "saved", "dismissed"), file: Type.Optional(Type.String()), aboutMe: Type.Optional(Type.Number()), skills: Type.Optional(Type.Array(Type.String())) }))),
+	learned: Type.Optional(Type.Record(Type.String(), Type.Object({ status: literals("pending", "later", "saved", "dismissed"), file: Type.Optional(Type.String()), aboutMe: Type.Optional(Type.Integer()), skills: Type.Optional(Type.Array(Type.String())) }))),
 	/** A conversation about an app (docs/spec/35 §15): the app's file. */
 	app: Type.Optional(Type.String()),
 	ref: ContainerRef,
@@ -765,7 +809,7 @@ export const SessionSummary = Type.Object({
 	review: Type.Optional(ReviewInfo),
 	worktree: Type.Optional(WorktreeInfo),
 	/** Project sessions: the profile they were created with (04-chat P2). */
-	profile: Type.Optional(literals("build", "chat")),
+	profile: Type.Optional(SessionProfile),
 	/**
 	 * A subagent's session: the parent session and the `task` call that started it; its state (queued while 3 others
 	 * of its parent run, docs/spec/17 §3) and, while it works, a line on what it's doing.
@@ -781,7 +825,7 @@ export const SessionSummary = Type.Object({
 	/** Side conversations Piopio proposed from here (docs/spec/24 §3): each a card you may start, until it expires. */
 	sideProposals: Type.Optional(Type.Array(Type.Object({ id: Type.String(), title: Type.String(), why: Type.String(), project: Type.Optional(Type.String()), expiresAt: Type.String() }))),
 	/** Its pull request (docs/spec/05-build G6–G7): the conversation that created it owns it. */
-	pr: Type.Optional(Type.Object({ repo: Type.String(), number: Type.Number(), url: Type.String(), title: Type.String(), head: Type.String(), base: Type.String(), state: literals("open", "closed", "merged"), checks: Type.Optional(literals("pending", "passing", "failing", "none")) })),
+	pr: Type.Optional(Type.Object({ repo: Type.String(), number: Type.Integer(), url: Type.String(), title: Type.String(), head: Type.String(), base: Type.String(), state: PrState, checks: Type.Optional(PrChecks) })),
 	/** A chat continued in a project folder (18 §5): the new conversation, and in it, where it came from. */
 	continuedIn: Type.Optional(Type.Object({ id: Type.String(), title: Type.String() })),
 	continuedFrom: Type.Optional(Type.Object({ id: Type.String(), title: Type.String() })),
@@ -794,10 +838,10 @@ export const SessionSummary = Type.Object({
 	 * app, "mcp:<server>" for an MCP server. Settings decides what's on; this can only take things away.
 	 */
 	toolsOff: Type.Optional(Type.Array(Type.String())),
-});
+}));
 export type SessionSummary = Static<typeof SessionSummary>;
 
-export const ModelInfo = Type.Object({
+export const ModelInfo = named("ModelInfo", Type.Object({
 	provider: Type.String(),
 	id: Type.String(),
 	name: Type.String(),
@@ -812,30 +856,36 @@ export const ModelInfo = Type.Object({
 	billing: Type.Optional(Type.String()),
 	/** A model inside a coding agent (Claude Code), which runs the whole conversation (docs/spec/31). */
 	agent: Type.Optional(Type.Boolean()),
-});
+}));
 export type ModelInfo = Static<typeof ModelInfo>;
 
+/** How a provider is connected: an API key, or signing in. */
+export const AuthMethod = named("AuthMethod", literals("api_key", "oauth"));
+export type AuthMethod = Static<typeof AuthMethod>;
+/** The API a custom endpoint speaks. */
+export const EndpointFormat = named("EndpointFormat", literals("openai", "anthropic"));
+export type EndpointFormat = Static<typeof EndpointFormat>;
 /** A model provider and how it's connected (docs/spec/10-model-providers FR1). */
-export const ProviderInfo = Type.Object({
+export const ProviderInfo = named("ProviderInfo", Type.Object({
 	id: Type.String(),
 	name: Type.String(),
 	/** Ways to connect it: an API key, or signing in (OAuth); `subscription` when sign-in uses a paid plan. */
-	methods: Type.Array(Type.Object({ type: literals("api_key", "oauth"), label: Type.String(), subscription: Type.Optional(Type.Boolean()) })),
+	methods: Type.Array(Type.Object({ type: AuthMethod, label: Type.String(), subscription: Type.Optional(Type.Boolean()) })),
 	status: literals("not_connected", "connecting", "connected", "needs_attention"),
-	connectedWith: Type.Optional(literals("api_key", "oauth")),
+	connectedWith: Type.Optional(AuthMethod),
 	billing: Type.Optional(Type.String()),
 	/** Why it needs attention ("Sign-in expired"). */
 	message: Type.Optional(Type.String()),
 	/** Shown first in Settings (OpenRouter, ChatGPT, OpenAI API). */
 	featured: Type.Boolean(),
-	models: Type.Number(),
+	models: Type.Integer(),
 	/** A custom endpoint added by address (LiteLLM, Ollama, LM Studio…). */
 	endpoint: Type.Optional(
 		Type.Object({
 			baseUrl: Type.String(),
 			local: Type.Boolean(),
 			keyless: Type.Boolean(),
-			format: Type.Optional(literals("openai", "anthropic")),
+			format: Type.Optional(EndpointFormat),
 			headers: Type.Optional(Type.Record(Type.String(), Type.String())),
 			contextWindow: Type.Optional(Type.Number()),
 		}),
@@ -853,14 +903,14 @@ export const ProviderInfo = Type.Object({
 	/** The stored key, masked ("sk-or-v1-755…a30"). */
 	keyHint: Type.Optional(Type.String()),
 	/** Models you hid from the picker. */
-	hiddenModels: Type.Optional(Type.Number()),
+	hiddenModels: Type.Optional(Type.Integer()),
 	/** A few model names, for the connect sheet's preview. */
 	sampleModels: Type.Optional(Type.Array(Type.String())),
-});
+}));
 export type ProviderInfo = Static<typeof ProviderInfo>;
 
 /** One step of a provider sign-in (pi's AuthInteraction, docs/spec/10 §10). `prompt` waits for `providers.answer`. */
-export const ProviderAuthEvent = Type.Union([
+export const ProviderAuthEvent = named("ProviderAuthEvent", Type.Union([
 	Type.Object({ type: Type.Literal("auth_url"), url: Type.String(), instructions: Type.Optional(Type.String()) }),
 	Type.Object({ type: Type.Literal("device_code"), userCode: Type.String(), verificationUri: Type.String(), expiresInSeconds: Type.Optional(Type.Number()) }),
 	Type.Object({ type: Type.Literal("progress"), message: Type.String() }),
@@ -876,13 +926,13 @@ export const ProviderAuthEvent = Type.Union([
 	Type.Object({ type: Type.Literal("prompt_closed"), promptId: Type.String() }),
 	Type.Object({ type: Type.Literal("done") }),
 	Type.Object({ type: Type.Literal("failed"), message: Type.String() }),
-]);
+]));
 export type ProviderAuthEvent = Static<typeof ProviderAuthEvent>;
 
-export const ConnectorPermission = literals("runs", "ask", "off");
+export const ConnectorPermission = named("ConnectorPermission", literals("runs", "ask", "off"));
 
 /** A connected app (docs/spec/12-connectors): what it is, its accounts and settings. */
-export const ConnectorInfo = Type.Object({
+export const ConnectorInfo = named("ConnectorInfo", Type.Object({
 	id: Type.String(),
 	name: Type.String(),
 	category: Type.String(),
@@ -910,14 +960,23 @@ export const ConnectorInfo = Type.Object({
 			note: Type.Optional(Type.String()),
 		}),
 	),
-});
+}));
 export type ConnectorInfo = Static<typeof ConnectorInfo>;
 
+/** A project's commands' network (docs/spec/39): open, filtered, or off (only this Mac). */
+export const ProjectNetwork = named("ProjectNetwork", literals("open", "filtered", "off"));
+export type ProjectNetwork = Static<typeof ProjectNetwork>;
+/** What a conversation hears about its pull request (docs/spec/17 §5): nothing, a notification, or a follow-up it works on. */
+export const PrEvents = named("PrEvents", literals("off", "tell", "act"));
+export type PrEvents = Static<typeof PrEvents>;
+/** Where a project shows (04-chat P1): Build, Chat, or both. */
+export const ProjectLens = named("ProjectLens", literals("build", "chat"));
+export type ProjectLens = Static<typeof ProjectLens>;
 /**
  * A project (docs/spec/18 §3, CF4): a folder on the Mac. One the user opened (05-build BP1), or one New project made in
  * ~/Piopio with an AGENTS.md and a NOTES.md.
  */
-export const ProjectInfo = Type.Object({
+export const ProjectInfo = named("ProjectInfo", Type.Object({
 	id: Type.String(),
 	path: Type.String(),
 	name: Type.String(),
@@ -931,7 +990,7 @@ export const ProjectInfo = Type.Object({
 	/** Approval mode new sessions start with (default: auto_edit). */
 	approvalMode: ApprovalMode,
 	/** What a conversation hears about its pull request (docs/spec/17 §5): off, tell (a notification, default) or act (a follow-up it works on). */
-	prEvents: Type.Optional(literals("off", "tell", "act")),
+	prEvents: Type.Optional(PrEvents),
 	rules: Type.Array(ApprovalRule),
 	/**
 	 * pi project trust (shared with the pi CLI, ~/.pi/agent/trust.json): whether the project's own .pi
@@ -946,9 +1005,9 @@ export const ProjectInfo = Type.Object({
 	 * others ask), or off (only this Mac). Projects added or cloned start filtered until they're trusted; off is set
 	 * by hand and stays until it's changed.
 	 */
-	network: Type.Optional(literals("open", "filtered", "off")),
+	network: Type.Optional(ProjectNetwork),
 	/** Where the project shows (04-chat P1): Build, Chat, or both. Detected when added; "Show in…" changes it. */
-	lenses: Type.Array(literals("build", "chat")),
+	lenses: Type.Array(ProjectLens),
 	/** The folder no longer exists. */
 	missing: Type.Optional(Type.Boolean()),
 	/**
@@ -956,16 +1015,19 @@ export const ProjectInfo = Type.Object({
 	 * @ finds their files. `edit`: they follow the project's permissions like its own folder; otherwise read only.
 	 */
 	folders: Type.Optional(Type.Array(Type.Object({ path: Type.String(), edit: Type.Boolean(), missing: Type.Optional(Type.Boolean()) }))),
-});
+}));
 export type ProjectInfo = Static<typeof ProjectInfo>;
 
-export const ProjectsChanged = Type.Object({ projects: Type.Array(ProjectInfo) });
+export const ProjectsChanged = named("ProjectsChanged", Type.Object({ projects: Type.Array(ProjectInfo) }));
 export type ProjectsChanged = Static<typeof ProjectsChanged>;
 
+/** Where an MCP server is configured: your global mcp.json, or a project's. */
+export const McpScope = named("McpScope", literals("global", "project"));
+export type McpScope = Static<typeof McpScope>;
 /** An MCP server as configured in a pi mcp.json (docs: pi-coding-agent docs/mcp.md). */
-export const McpServerInfo = Type.Object({
+export const McpServerInfo = named("McpServerInfo", Type.Object({
 	name: Type.String(),
-	scope: literals("global", "project"),
+	scope: McpScope,
 	transport: literals("stdio", "http"),
 	command: Type.Optional(Type.String()),
 	args: Type.Optional(Type.Array(Type.String())),
@@ -980,48 +1042,48 @@ export const McpServerInfo = Type.Object({
 	hiddenTools: Type.Optional(Type.Array(Type.String())),
 	/** Global servers: chats use it too. */
 	chat: Type.Optional(Type.Boolean()),
-});
+}));
 export type McpServerInfo = Static<typeof McpServerInfo>;
 
 /** A server started to see it works: its tools and how long it took, or what went wrong (with its stderr). */
-export const McpProbe = Type.Object({
+export const McpProbe = named("McpProbe", Type.Object({
 	ok: Type.Boolean(),
 	ms: Type.Optional(Type.Number()),
 	tools: Type.Array(Type.Object({ name: Type.String(), description: Type.Optional(Type.String()) })),
 	error: Type.Optional(Type.String()),
 	log: Type.Optional(Type.String()),
-});
+}));
 export type McpProbe = Static<typeof McpProbe>;
 
 // ── Git (Build, docs/spec/05-build §8 G1–G3) ──────────────────────────────
 
-export const GitFile = Type.Object({
+export const GitFile = named("GitFile", Type.Object({
 	path: Type.String(),
 	status: literals("added", "modified", "deleted", "renamed", "conflicted", "untracked"),
 	staged: Type.Boolean(),
 	from: Type.Optional(Type.String()),
 	/** Lines added and removed against HEAD (untracked: the file's lines); absent for binary files. */
-	added: Type.Optional(Type.Number()),
-	removed: Type.Optional(Type.Number()),
-});
+	added: Type.Optional(Type.Integer()),
+	removed: Type.Optional(Type.Integer()),
+}));
 export type GitFile = Static<typeof GitFile>;
 
-export const GitStatus = Type.Object({
+export const GitStatus = named("GitStatus", Type.Object({
 	repo: Type.Boolean(),
 	branch: Type.Optional(Type.String()),
 	detached: Type.Optional(Type.Boolean()),
 	upstream: Type.Optional(Type.String()),
-	ahead: Type.Number(),
-	behind: Type.Number(),
+	ahead: Type.Integer(),
+	behind: Type.Integer(),
 	files: Type.Array(GitFile),
-});
+}));
 export type GitStatus = Static<typeof GitStatus>;
 
 /**
  * A project's work (docs/spec/26): its way of working, its board and its branch. Every conversation in a project is
  * with Piopio, which puts parallel work on the board for helpers it makes (a kind, a brief, a model).
  */
-export const WorkTask = Type.Object({
+export const WorkTask = named("WorkTask", Type.Object({
 	id: Type.String(),
 	title: Type.String(),
 	brief: Type.String(),
@@ -1036,52 +1098,64 @@ export const WorkTask = Type.Object({
 	cwd: Type.Optional(Type.String()),
 	report: Type.Optional(Type.String()),
 	review: Type.Optional(Type.String()),
-	attempts: Type.Number(),
+	attempts: Type.Integer(),
 	blocked: Type.Optional(Type.String()),
 	landed: Type.Optional(Type.String({ description: "When its work was merged into the project's branch" })),
 	createdAt: Type.String(),
 	updatedAt: Type.String(),
-});
+}));
 export type WorkTask = Static<typeof WorkTask>;
 /** A pull request as Piopio sees it (docs/spec/05-build G7): state, checks and the comments on it. */
-export const PrStatus = Type.Object({
+export const PrStatus = named("PrStatus", Type.Object({
 	repo: Type.String(),
-	number: Type.Number(),
+	number: Type.Integer(),
 	url: Type.String(),
 	title: Type.String(),
-	state: literals("open", "closed", "merged"),
+	state: PrState,
 	draft: Type.Boolean(),
 	head: Type.String(),
 	base: Type.String(),
 	headSha: Type.String(),
-	summary: literals("pending", "passing", "failing", "none"),
+	summary: PrChecks,
 	checks: Type.Array(Type.Object({ name: Type.String(), status: literals("queued", "in_progress", "completed"), conclusion: Type.Optional(Type.String()), url: Type.Optional(Type.String()), jobId: Type.Optional(Type.Number()) })),
-	comments: Type.Array(Type.Object({ id: Type.String(), author: Type.String(), bot: Type.Boolean(), body: Type.String(), at: Type.String(), url: Type.Optional(Type.String()), path: Type.Optional(Type.String()), line: Type.Optional(Type.Number()), kind: literals("review", "comment", "verdict") })),
-});
+	comments: Type.Array(Type.Object({ id: Type.String(), author: Type.String(), bot: Type.Boolean(), body: Type.String(), at: Type.String(), url: Type.Optional(Type.String()), path: Type.Optional(Type.String()), line: Type.Optional(Type.Integer()), kind: literals("review", "comment", "verdict") })),
+}));
 export type PrStatus = Static<typeof PrStatus>;
 /** What the project's work branch would bring to its branch (the merge card). */
-export const WorkLanding = Type.Object({
+export const WorkLanding = named("WorkLanding", Type.Object({
 	base: Type.String(),
 	branch: Type.String(),
-	ahead: Type.Number(),
-	behind: Type.Number(),
-	files: Type.Array(Type.Object({ path: Type.String(), added: Type.Number(), removed: Type.Number() })),
+	ahead: Type.Integer(),
+	behind: Type.Integer(),
+	files: Type.Array(Type.Object({ path: Type.String(), added: Type.Integer(), removed: Type.Integer() })),
 	tasks: Type.Array(Type.Object({ id: Type.String(), title: Type.String() })),
-	open: Type.Number(),
+	open: Type.Integer(),
 	checkedOut: Type.Optional(Type.String()),
 	remote: Type.Optional(Type.String()),
 	compareUrl: Type.Optional(Type.String()),
-});
+}));
 export type WorkLanding = Static<typeof WorkLanding>;
+/** What starts an automation (docs/spec/27). */
+export const AutomationTrigger = named("AutomationTrigger", literals("time", "folder", "email", "webhook"));
+export type AutomationTrigger = Static<typeof AutomationTrigger>;
+/** Where an automation's result goes (docs/spec/27). */
+export const AutomationDelivery = named("AutomationDelivery", literals("chat", "telegram", "conversation", "quiet"));
+export type AutomationDelivery = Static<typeof AutomationDelivery>;
+/** What an automation's run does with a tool call that needs you while you're away: wait for you, or skip it. */
+export const AutomationApproval = named("AutomationApproval", literals("wait", "skip"));
+export type AutomationApproval = Static<typeof AutomationApproval>;
+/** How an automation's run went. */
+export const AutomationRunStatus = named("AutomationRunStatus", literals("running", "done", "quiet", "waiting", "skipped", "failed"));
+export type AutomationRunStatus = Static<typeof AutomationRunStatus>;
 /**
  * An automation (docs/spec/27): work that starts when nobody started it. A trigger (a time, an email, a file in a
  * folder, a URL), who runs it (Piopio or an agent), the prompt, a project (Piopio only), where the result goes, and
  * what it may do while you're away.
  */
-export const Automation = Type.Object({
+export const Automation = named("Automation", Type.Object({
 	id: Type.String(),
 	name: Type.String(),
-	on: literals("time", "folder", "email", "webhook"),
+	on: AutomationTrigger,
 	cron: Type.Optional(Type.String()),
 	at: Type.Optional(Type.Number({ description: "time, once: epoch ms" })),
 	tz: Type.Optional(Type.String()),
@@ -1091,16 +1165,16 @@ export const Automation = Type.Object({
 	runsAs: Type.String({ description: "“piopio”, or an agent's id" }),
 	project: Type.Optional(Type.String({ description: "A project's id; only when Piopio runs it" })),
 	prompt: Type.String(),
-	result: literals("chat", "telegram", "conversation", "quiet"),
+	result: AutomationDelivery,
 	deliverTo: Type.Optional(Type.String({ description: "An agent's contact the result is for (default its owner)" })),
-	approval: literals("wait", "skip"),
+	approval: AutomationApproval,
 	budgetPerRunUsd: Type.Optional(Type.Number()),
 	enabled: Type.Boolean(),
 	by: Type.String({ description: "“you”, “piopio”, or the agent that made it" }),
 	createdAt: Type.String(),
 	next: Type.Optional(Type.Number({ description: "time: the next run, epoch ms" })),
 	lastRun: Type.Optional(Type.String()),
-	runCount: Type.Number(),
+	runCount: Type.Integer(),
 	fresh: Type.Optional(Type.Boolean({ description: "Not opened since it was made (the list's “New” badge)" })),
 	aliases: Type.Optional(Type.Array(Type.String())),
 	/** Words for the app. */
@@ -1108,32 +1182,32 @@ export const Automation = Type.Object({
 	runnerName: Type.String({ description: "“Piopio”, “Piopio in shop”, “Rita”" }),
 	resultLabel: Type.String({ description: "“Rita’s chat”, “Telegram”, “A conversation in shop”, “Only if it needs you”" }),
 	url: Type.Optional(Type.String({ description: "webhook: where to POST" })),
-	lastStatus: Type.Optional(literals("running", "done", "quiet", "waiting", "skipped", "failed")),
+	lastStatus: Type.Optional(AutomationRunStatus),
 	lastSummary: Type.Optional(Type.String()),
-});
+}));
 export type Automation = Static<typeof Automation>;
-export const AutomationRun = Type.Object({
+export const AutomationRun = named("AutomationRun", Type.Object({
 	id: Type.String(),
 	automation: Type.String(),
 	firedAt: Type.String(),
 	cause: literals("time", "event", "now"),
-	status: literals("running", "done", "quiet", "waiting", "skipped", "failed"),
+	status: AutomationRunStatus,
 	summary: Type.Optional(Type.String()),
 	costUsd: Type.Optional(Type.Number()),
 	/** A Piopio run's conversation (a session id), or an agent's run (`run:<id>`, opened in that agent). */
 	conversation: Type.Optional(Type.String()),
 	agent: Type.Optional(Type.String()),
 	agentRun: Type.Optional(Type.String()),
-});
+}));
 export type AutomationRun = Static<typeof AutomationRun>;
 /** What a Library item is (docs/spec/35 §4.2): by its file's extension, or a visual in a conversation. */
-export const LibraryKind = literals("app", "document", "page", "visual", "image", "data", "slides", "file");
+export const LibraryKind = named("LibraryKind", literals("app", "document", "page", "visual", "image", "data", "slides", "file"));
 export type LibraryKind = Static<typeof LibraryKind>;
 /**
  * One thing Piopio or an agent made (docs/spec/35 §4): a file where it lives, or a visual still in its conversation.
  * The Library lists them; it never moves or copies a file.
  */
-export const LibraryItem = Type.Object({
+export const LibraryItem = named("LibraryItem", Type.Object({
 	id: Type.String(),
 	kind: LibraryKind,
 	name: Type.String(),
@@ -1152,13 +1226,13 @@ export const LibraryItem = Type.Object({
 	visual: Type.Optional(Type.Object({ callId: Type.String(), version: Type.Optional(Type.String()) })),
 	/** The file isn't where it was: Locate… or Remove. */
 	missing: Type.Optional(Type.Boolean()),
-	size: Type.Optional(Type.Number()),
+	size: Type.Optional(Type.Integer()),
 	changedAt: Type.Optional(Type.String()),
 	pinned: Type.Optional(Type.Boolean()),
-});
+}));
 export type LibraryItem = Static<typeof LibraryItem>;
 /** One source of an app (docs/spec/35 §14): a file, its last read, and why it failed. */
-export const AppSourceStatus = Type.Object({
+export const AppSourceStatus = named("AppSourceStatus", Type.Object({
 	name: Type.String(),
 	/** piopio: Piopio's own numbers (34's `stats.*`, automation runs, agents), read with no model. */
 	kind: literals("file", "calendar", "piopio"),
@@ -1185,10 +1259,10 @@ export const AppSourceStatus = Type.Object({
 	error: Type.Optional(Type.String()),
 	readAt: Type.Optional(Type.String()),
 	failedAt: Type.Optional(Type.String()),
-});
+}));
 export type AppSourceStatus = Static<typeof AppSourceStatus>;
 /** An app as it is now: its page, each source's state, and the data `piopio.onData` gets. */
-export const AppView = Type.Object({
+export const AppView = named("AppView", Type.Object({
 	path: Type.String(),
 	title: Type.String(),
 	html: Type.String(),
@@ -1202,12 +1276,12 @@ export const AppView = Type.Object({
 	undo: Type.Optional(Type.Object({ label: Type.String(), at: Type.String() })),
 	/** The conversation about it (a chat's id), once there is one. */
 	conversation: Type.Optional(Type.String()),
-});
+}));
 export type AppView = Static<typeof AppView>;
 /** What `automations.add` and `automations.update` take: the trigger in words (`when`), the rest as the record. */
-export const AutomationChange = Type.Object({
+export const AutomationChange = named("AutomationChange", Type.Object({
 	name: Type.Optional(Type.String()),
-	on: Type.Optional(literals("time", "folder", "email", "webhook")),
+	on: Type.Optional(AutomationTrigger),
 	when: Type.Optional(Type.String({ description: "time: a 5-field cron, or a local date-time once" })),
 	folder: Type.Optional(Type.String()),
 	from: Type.Optional(Type.String()),
@@ -1215,74 +1289,74 @@ export const AutomationChange = Type.Object({
 	runsAs: Type.Optional(Type.String()),
 	project: Type.Optional(Type.Union([Type.String(), Type.Null()])),
 	prompt: Type.Optional(Type.String()),
-	result: Type.Optional(literals("chat", "telegram", "conversation", "quiet")),
-	approval: Type.Optional(literals("wait", "skip")),
+	result: Type.Optional(AutomationDelivery),
+	approval: Type.Optional(AutomationApproval),
 	budgetPerRunUsd: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
 	enabled: Type.Optional(Type.Boolean()),
-});
+}));
 export type AutomationChange = Static<typeof AutomationChange>;
 /** How work is done in a project (docs/spec/26 §4). */
-export const WayOfWorking = Type.Object({
+export const WayOfWorking = named("WayOfWorking", Type.Object({
 	parallel: Type.Boolean({ description: "Piopio may split work onto the board" }),
 	review: Type.Boolean({ description: "Every task is reviewed by a helper with fresh eyes" }),
-	reviewLimit: Type.Number({ description: "Times a task may be sent back before you're asked" }),
+	reviewLimit: Type.Integer({ description: "Times a task may be sent back before you're asked" }),
 	testCommand: Type.Optional(Type.String({ description: "The checks, run after each merge" })),
-	maxParallel: Type.Number({ description: "Tasks at once" }),
+	maxParallel: Type.Integer({ description: "Tasks at once" }),
 	buildModel: Type.Optional(Type.String({ description: "The helpers' model for doing tasks; unset: the project's" })),
 	reviewModel: Type.Optional(Type.String({ description: "The reviewers' model; unset: the build model" })),
 	helperMode: ApprovalMode,
 	budgetPerJob: Type.Optional(Type.Number({ description: "USD one conversation's tasks may spend" })),
 	playbook: Type.String({ description: "The playbook Piopio plans with: development, research, writing, or a project's own" }),
-});
+}));
 export type WayOfWorking = Static<typeof WayOfWorking>;
-export const WorkInfo = Type.Object({
+export const WorkInfo = named("WorkInfo", Type.Object({
 	project: Type.String(),
 	cwd: Type.String(),
 	way: WayOfWorking,
 	git: Type.Optional(Type.Object({ base: Type.String(), branch: Type.String(), integration: Type.String() })),
 	tasks: Type.Array(WorkTask),
 	createdAt: Type.String(),
-});
+}));
 export type WorkInfo = Static<typeof WorkInfo>;
 
-export const GitBranch = Type.Object({ name: Type.String(), upstream: Type.Optional(Type.String()), lastCommitAt: Type.Optional(Type.String()), current: Type.Boolean() });
+export const GitBranch = named("GitBranch", Type.Object({ name: Type.String(), upstream: Type.Optional(Type.String()), lastCommitAt: Type.Optional(Type.String()), current: Type.Boolean() }));
 export type GitBranch = Static<typeof GitBranch>;
-export const GitCommitFile = Type.Object({ path: Type.String(), added: Type.Number(), removed: Type.Number() });
+export const GitCommitFile = named("GitCommitFile", Type.Object({ path: Type.String(), added: Type.Integer(), removed: Type.Integer() }));
 export type GitCommitFile = Static<typeof GitCommitFile>;
 /** A commit on the current branch (a session's results: what was committed since it started), with the files it touched. */
-export const GitCommit = Type.Object({ hash: Type.String(), subject: Type.String(), at: Type.String(), files: Type.Optional(Type.Array(GitCommitFile)) });
+export const GitCommit = named("GitCommit", Type.Object({ hash: Type.String(), subject: Type.String(), at: Type.String(), files: Type.Optional(Type.Array(GitCommitFile)) }));
 export type GitCommit = Static<typeof GitCommit>;
 
 /** Where a new Build session works: the project as it is, a new branch in it, or a new worktree. */
-export const WorkOn = Type.Union([
+export const WorkOn = named("WorkOn", Type.Union([
 	Type.Object({ kind: Type.Literal("current") }),
 	Type.Object({ kind: Type.Literal("branch"), branch: Type.String(), base: Type.Optional(Type.String()) }),
 	Type.Object({ kind: Type.Literal("worktree"), branch: Type.String(), base: Type.Optional(Type.String()) }),
-]);
+]));
 export type WorkOn = Static<typeof WorkOn>;
 
-export const CatalogChanged = Type.Object({ upserted: Type.Array(SessionSummary), removed: Type.Array(ContainerRef) });
+export const CatalogChanged = named("CatalogChanged", Type.Object({ upserted: Type.Array(SessionSummary), removed: Type.Array(ContainerRef) }));
 export type CatalogChanged = Static<typeof CatalogChanged>;
 
 // ── Methods (client → engine) ───────────────────────────────────────────────
 
-export const EngineCapabilities = Type.Object({ runtimes: Type.Array(ContainerKind), models: Type.Array(Type.String()) });
+export const EngineCapabilities = named("EngineCapabilities", Type.Object({ runtimes: Type.Array(ContainerKind), models: Type.Array(Type.String()) }));
 
 // ── Overview (docs/spec/34) ─────────────────────────────────────────────────
 
 /** Days are local to the engine's Mac. "month" is this calendar month, "12m" the last twelve, by month. */
-export const SpendRange = literals("today", "7d", "month", "last_month", "12m");
+export const SpendRange = named("SpendRange", literals("today", "7d", "month", "last_month", "12m"));
 export type SpendRange = Static<typeof SpendRange>;
-export const SpendGroupBy = literals("what", "model", "provider", "project", "where");
+export const SpendGroupBy = named("SpendGroupBy", literals("what", "model", "provider", "project", "where"));
 export type SpendGroupBy = Static<typeof SpendGroupBy>;
-export const SpendGroup = Type.Object({
+export const SpendGroup = named("SpendGroup", Type.Object({
 	/** Stable within a grouping: "conversations", "build", "piopio", "agent:<id>", "automation:<id>", a model, a provider, a project path, a place. */
 	id: Type.String(),
 	label: Type.String(),
 	/** Known USD (unknown prices excluded and counted in `unknownCalls`). */
 	usd: Type.Number(),
-	calls: Type.Number(),
-	unknownCalls: Type.Number(),
+	calls: Type.Integer(),
+	unknownCalls: Type.Integer(),
 	/** Billed to a subscription plan: shown as tokens, never as dollars (OV4). */
 	plan: Type.Boolean(),
 	tokens: Type.Number(),
@@ -1290,21 +1364,21 @@ export const SpendGroup = Type.Object({
 	share: Type.Number(),
 	/** What it opens: an agent, a conversation. */
 	ref: Type.Optional(ContainerRef),
-});
+}));
 export type SpendGroup = Static<typeof SpendGroup>;
-export const SpendDay = Type.Object({
+export const SpendDay = named("SpendDay", Type.Object({
 	/** "2026-11-23", or "2026-11" on 12 months. */
 	day: Type.String(),
 	macUsd: Type.Number(),
 	cloudUsd: Type.Number(),
-	calls: Type.Number(),
+	calls: Type.Integer(),
 	/** Requests that day with no price. */
-	unknownCalls: Type.Number(),
+	unknownCalls: Type.Integer(),
 	/** That day's top three spenders (the What grouping). */
 	top: Type.Array(Type.Object({ label: Type.String(), usd: Type.Number() })),
-});
+}));
 /** Cheaper next time (34 §5.5, OV7): a saving with the number it's based on, and one thing to do about it. */
-export const SpendSuggestion = Type.Object({
+export const SpendSuggestion = named("SpendSuggestion", Type.Object({
 	id: Type.String(),
 	/** "Morning briefing spent $4.10 on Opus 5.5; Haiku 5.5 would have been about $0.80". */
 	text: Type.String(),
@@ -1316,19 +1390,19 @@ export const SpendSuggestion = Type.Object({
 		id: Type.Optional(Type.String()),
 		label: Type.String(),
 	})),
-});
+}));
 export type SpendSuggestion = Static<typeof SpendSuggestion>;
-export const SpendResult = Type.Object({
+export const SpendResult = named("SpendResult", Type.Object({
 	range: SpendRange,
 	/** The range's start and end (end is exclusive; for an open range, its natural end). */
 	from: Type.String(),
 	to: Type.String(),
 	knownUsd: Type.Number(),
-	calls: Type.Number(),
+	calls: Type.Integer(),
 	/** Requests with no price: counted, never shown as $0. */
-	unknownCalls: Type.Number(),
+	unknownCalls: Type.Integer(),
 	/** Requests billed to a subscription plan, and their tokens (shown instead of dollars). */
-	planCalls: Type.Number(),
+	planCalls: Type.Integer(),
 	planTokens: Type.Number(),
 	tokens: Type.Object({ input: Type.Number(), output: Type.Number(), cacheRead: Type.Number(), cacheWrite: Type.Number() }),
 	/** "About" this much by the month's end, straight-line from the days so far; only for "month" from day 5. */
@@ -1344,11 +1418,11 @@ export const SpendResult = Type.Object({
 	suggestions: Type.Array(SpendSuggestion),
 	/** Your cloud's usage is counted up to this time (it was unreachable since). Absent when current or no cloud. */
 	cloudAsOf: Type.Optional(Type.String()),
-});
+}));
 export type SpendResult = Static<typeof SpendResult>;
-export const SpendItem = Type.Object({ ref: ContainerRef, title: Type.String(), usd: Type.Number(), calls: Type.Number(), unknownCalls: Type.Number(), plan: Type.Boolean(), tokens: Type.Number(), lastAt: Type.String() });
+export const SpendItem = named("SpendItem", Type.Object({ ref: ContainerRef, title: Type.String(), usd: Type.Number(), calls: Type.Integer(), unknownCalls: Type.Integer(), plan: Type.Boolean(), tokens: Type.Number(), lastAt: Type.String() }));
 export type SpendItem = Static<typeof SpendItem>;
-export const Budget = Type.Object({
+export const Budget = named("Budget", Type.Object({
 	/** "agent:<id>", "automation:<id>". */
 	id: Type.String(),
 	kind: literals("agent", "automation"),
@@ -1362,10 +1436,10 @@ export const Budget = Type.Object({
 	ref: Type.Optional(ContainerRef),
 	/** An automation's id, to open its page. */
 	automation: Type.Optional(Type.String()),
-});
+}));
 export type Budget = Static<typeof Budget>;
 /** Overview › Activity (34 §7): one number, the same for the range before, and what it counts. */
-export const ActivityRow = Type.Object({
+export const ActivityRow = named("ActivityRow", Type.Object({
 	id: Type.String(),
 	label: Type.String(),
 	value: Type.Number(),
@@ -1375,9 +1449,9 @@ export const ActivityRow = Type.Object({
 	unit: Type.Optional(literals("count", "ms", "files")),
 	/** A word on what it is ("Morning briefing failed most", "read_file, bash, edit"). */
 	detail: Type.Optional(Type.String()),
-});
-export const ActivityGroup = Type.Object({ id: Type.String(), title: Type.String(), rows: Type.Array(ActivityRow) });
-export const ActivityResult = Type.Object({
+}));
+export const ActivityGroup = named("ActivityGroup", Type.Object({ id: Type.String(), title: Type.String(), rows: Type.Array(ActivityRow) }));
+export const ActivityResult = named("ActivityResult", Type.Object({
 	range: SpendRange,
 	from: Type.String(),
 	to: Type.String(),
@@ -1385,10 +1459,10 @@ export const ActivityResult = Type.Object({
 	/** A year of days (34 §7, OV5): from the day Piopio started or a year ago, how much happened each local day. */
 	year: Type.Array(Type.Object({ day: Type.String(), count: Type.Number() })),
 	backfilling: Type.Optional(Type.Boolean()),
-});
+}));
 export type ActivityResult = Static<typeof ActivityResult>;
 /** Overview › Activity › Disk (34 §7.1): sizes inside the data folder, and what can be cleaned. */
-export const StorageResult = Type.Object({
+export const StorageResult = named("StorageResult", Type.Object({
 	totalBytes: Type.Number(),
 	items: Type.Array(Type.Object({
 		id: Type.String(),
@@ -1396,14 +1470,14 @@ export const StorageResult = Type.Object({
 		bytes: Type.Number(),
 		detail: Type.Optional(Type.String()),
 		/** A cleanup, with what it would free. */
-		action: Type.Optional(Type.Object({ id: literals("worktrees"), label: Type.String(), freesBytes: Type.Number(), count: Type.Number() })),
+		action: Type.Optional(Type.Object({ id: literals("worktrees"), label: Type.String(), freesBytes: Type.Number(), count: Type.Integer() })),
 	})),
 	/** The data folder (shown, not opened). */
 	path: Type.String(),
-});
+}));
 export type StorageResult = Static<typeof StorageResult>;
 /** Overview › Setup (34 §6): a node of the map. */
-export const SetupNode = Type.Object({
+export const SetupNode = named("SetupNode", Type.Object({
 	id: Type.String(),
 	column: literals("you", "piopio", "uses"),
 	kind: literals("device", "channel", "place", "provider", "coding_agent", "connector", "mcp", "memory"),
@@ -1417,9 +1491,9 @@ export const SetupNode = Type.Object({
 	open: Type.Optional(Type.Object({ kind: literals("agent", "settings", "automation", "project", "overview"), id: Type.Optional(Type.String()), pane: Type.Optional(Type.String()) })),
 	/** Agents that live on this place (a place's own list, drawn inside it). */
 	agents: Type.Optional(Type.Array(Type.Object({ id: Type.String(), name: Type.String(), avatar: Type.Optional(Type.String()), state: literals("ok", "needs_you", "unused", "off"), reason: Type.Optional(Type.String()) }))),
-});
+}));
 export type SetupNode = Static<typeof SetupNode>;
-export const SetupResult = Type.Object({
+export const SetupResult = named("SetupResult", Type.Object({
 	nodes: Type.Array(SetupNode),
 	/** From → to by node id, or "agent:<id>" for an agent inside a place. */
 	edges: Type.Array(Type.Object({ from: Type.String(), to: Type.String() })),
@@ -1436,13 +1510,13 @@ export const SetupResult = Type.Object({
 		monthUsd: Type.Number(),
 		paused: Type.Optional(Type.Boolean()),
 	})),
-});
+}));
 export type SetupResult = Static<typeof SetupResult>;
 /**
  * Piopio this month (docs/spec/34 §5.4, OV3): one budget over everything the ledger counts on this Mac, off until set.
  * At 80% it notifies once; at 100% background work (automations) waits for your yes; your conversations keep going.
  */
-export const PiopioBudget = Type.Object({
+export const PiopioBudget = named("PiopioBudget", Type.Object({
 	/** "2026-11": the month it's measured in (local). */
 	month: Type.String(),
 	limitUsd: Type.Optional(Type.Number()),
@@ -1452,9 +1526,12 @@ export const PiopioBudget = Type.Object({
 	state: literals("off", "ok", "near", "over", "allowed"),
 	/** Automation runs waiting because of it, oldest first. */
 	held: Type.Array(Type.Object({ run: Type.String(), automation: Type.String(), name: Type.String(), at: Type.String() })),
-});
+}));
 export type PiopioBudget = Static<typeof PiopioBudget>;
 
+/** A path that's a file or a folder. */
+export const PathKind = named("PathKind", literals("file", "folder"));
+export type PathKind = Static<typeof PathKind>;
 export const methods = {
 	"engine.hello": {
 		params: Type.Object({
@@ -1468,7 +1545,7 @@ export const methods = {
 	},
 	"engine.status": {
 		params: Type.Object({}),
-		result: Type.Object({ uptimeMs: Type.Number(), openSessions: Type.Number(), subscriptions: Type.Number(), runtime: Type.String(), memoryMB: Type.Number(), dataPath: Type.String() }),
+		result: Type.Object({ uptimeMs: Type.Number(), openSessions: Type.Integer(), subscriptions: Type.Integer(), runtime: Type.String(), memoryMB: Type.Number(), dataPath: Type.String() }),
 	},
 	"sessions.list": {
 		params: Type.Object({ kind: Type.Optional(ContainerKind) }),
@@ -1489,7 +1566,7 @@ export const methods = {
 			/** Build: branch or worktree to work on (default: the project as it is). */
 			workOn: Type.Optional(WorkOn),
 			/** Project sessions: "build" (coding tools) or "chat" (knowledge assistant: no bash, web tools). */
-			profile: Type.Optional(literals("build", "chat")),
+			profile: Type.Optional(SessionProfile),
 			approvalMode: Type.Optional(ApprovalMode),
 			planMode: Type.Optional(Type.Boolean()),
 			model: Type.Optional(ModelRef),
@@ -1506,7 +1583,7 @@ export const methods = {
 	/** Saves a /learn card (docs/spec/14 M5): its items, or the ones you edited; writes the instructions file and About me. */
 	"learn.save": {
 		params: Type.Object({ ref: ContainerRef, callId: Type.String(), items: Type.Optional(Type.Array(LearnItem)) }),
-		result: Type.Object({ file: Type.Optional(Type.String()), project: Type.Number(), aboutMe: Type.Number(), skills: Type.Array(Type.String()) }),
+		result: Type.Object({ file: Type.Optional(Type.String()), project: Type.Integer(), aboutMe: Type.Integer(), skills: Type.Array(Type.String()) }),
 	},
 	/** Skills (backlog D9, PAR12): yours (every project), a project's, and packages' (read-only). */
 	"skills.list": {
@@ -1562,7 +1639,7 @@ export const methods = {
 	/** Runs a hook's command once, on a file it would match when there is one. */
 	"hooks.try": {
 		params: Type.Object({ spec: HookSpec, project: Type.Optional(Type.String()) }),
-		result: Type.Object({ code: Type.Number(), output: Type.String(), ms: Type.Number(), file: Type.Optional(Type.String()) }),
+		result: Type.Object({ code: Type.Integer(), output: Type.String(), ms: Type.Number(), file: Type.Optional(Type.String()) }),
 	},
 	/** Writes a project's Claude Code hooks as pi extensions in its .pi/extensions. */
 	"hooks.importClaude": {
@@ -1655,7 +1732,7 @@ export const methods = {
 	},
 	/** Full-text search over session titles and messages (active branches). Snippets mark matches with \u0002…\u0003. */
 	"catalog.search": {
-		params: Type.Object({ query: Type.String(), limit: Type.Optional(Type.Number()), kind: Type.Optional(ContainerKind) }),
+		params: Type.Object({ query: Type.String(), limit: Type.Optional(Type.Integer()), kind: Type.Optional(ContainerKind) }),
 		result: Type.Object({
 			results: Type.Array(Type.Object({ ref: ContainerRef, title: Type.String(), itemId: Type.Optional(Type.String()), kind: literals("title", "user", "assistant"), snippet: Type.String(), at: Type.String() })),
 		}),
@@ -1664,7 +1741,7 @@ export const methods = {
 	"engine.shutdown": { params: Type.Object({}), result: Type.Object({}) },
 	"usage.extras": {
 		params: Type.Object({ ref: Type.Optional(ContainerRef) }),
-		result: Type.Object({ scope: Type.String(), knownUsd: Type.Number(), unknownCalls: Type.Number(), calls: Type.Number(), breakdown: Type.Array(Type.Object({ kind: Type.String(), calls: Type.Number(), knownUsd: Type.Number(), unknownCalls: Type.Number() })) }),
+		result: Type.Object({ scope: Type.String(), knownUsd: Type.Number(), unknownCalls: Type.Integer(), calls: Type.Integer(), breakdown: Type.Array(Type.Object({ kind: Type.String(), calls: Type.Integer(), knownUsd: Type.Number(), unknownCalls: Type.Integer() })) }),
 	},
 	/**
 	 * Overview › Spend (docs/spec/34 §5, §8): Piopio's own estimate from the usage ledger, one row per request. Never
@@ -1695,11 +1772,11 @@ export const methods = {
 	/** Overview › Disk (34 §7.1). */
 	"stats.storage": { params: Type.Object({}), result: StorageResult },
 	/** Runs a Disk cleanup; says what it freed. */
-	"stats.storage.clean": { params: Type.Object({ action: literals("worktrees") }), result: Type.Object({ freedBytes: Type.Number(), removed: Type.Number() }) },
+	"stats.storage.clean": { params: Type.Object({ action: literals("worktrees") }), result: Type.Object({ freedBytes: Type.Number(), removed: Type.Integer() }) },
 	/** Overview › Setup (34 §6): the map and What runs where. */
 	"stats.setup": { params: Type.Object({}), result: SetupResult },
 	/** The ledger for a range as CSV, one row per request (34 §8.3). Refs and numbers only. */
-	"stats.export": { params: Type.Object({ range: SpendRange }), result: Type.Object({ csv: Type.String(), rows: Type.Number() }) },
+	"stats.export": { params: Type.Object({ range: SpendRange }), result: Type.Object({ csv: Type.String(), rows: Type.Integer() }) },
 	/** OpenRouter-key billing; includes other apps sharing that key. Cached a minute. */
 	"usage.summary": {
 		params: Type.Object({ refresh: Type.Optional(Type.Boolean()) }),
@@ -1726,7 +1803,7 @@ export const methods = {
 	},
 	/** Starts connecting a provider; its steps arrive as `providers.auth` notifications with this `loginId`. */
 	"providers.login": {
-		params: Type.Object({ provider: Type.String(), method: literals("api_key", "oauth") }),
+		params: Type.Object({ provider: Type.String(), method: AuthMethod }),
 		result: Type.Object({ loginId: Type.String() }),
 	},
 	/** Answers a sign-in prompt (`value`), or cancels it (no value). */
@@ -1740,7 +1817,7 @@ export const methods = {
 	},
 	/** Asks an OpenAI-compatible server for its models, without saving anything. */
 	"endpoints.check": {
-		params: Type.Object({ baseUrl: Type.String(), key: Type.Optional(Type.String()), id: Type.Optional(Type.String()), format: Type.Optional(literals("openai", "anthropic")), headers: Type.Optional(Type.Record(Type.String(), Type.String())) }),
+		params: Type.Object({ baseUrl: Type.String(), key: Type.Optional(Type.String()), id: Type.Optional(Type.String()), format: Type.Optional(EndpointFormat), headers: Type.Optional(Type.Record(Type.String(), Type.String())) }),
 		result: Type.Object({
 			ok: Type.Boolean(),
 			/** The address that answered (with /v1 added when needed). */
@@ -1759,7 +1836,7 @@ export const methods = {
 			name: Type.String(),
 			baseUrl: Type.String(),
 			key: Type.Optional(Type.String()),
-			format: Type.Optional(literals("openai", "anthropic")),
+			format: Type.Optional(EndpointFormat),
 			headers: Type.Optional(Type.Record(Type.String(), Type.String())),
 			contextWindow: Type.Optional(Type.Number()),
 			/** Model ids to keep out of the picker (embeddings are hidden by default). */
@@ -1775,7 +1852,7 @@ export const methods = {
 	/** Ollama and LM Studio answering on this Mac, and not added yet. */
 	"endpoints.detect": {
 		params: Type.Object({}),
-		result: Type.Object({ found: Type.Array(Type.Object({ name: Type.String(), baseUrl: Type.String(), models: Type.Number(), preset: Type.String() })) }),
+		result: Type.Object({ found: Type.Array(Type.Object({ name: Type.String(), baseUrl: Type.String(), models: Type.Integer(), preset: Type.String() })) }),
 	},
 	/** Connected apps (docs/spec/12-connectors). */
 	"connectors.list": {
@@ -1819,12 +1896,12 @@ export const methods = {
 	/** Answers a connector approval in a chat or Build session. `always`: don't ask again for that write. */
 	"sessions.decide": {
 		params: Type.Object({ ref: ContainerRef, approvalId: Type.String(), approve: Type.Boolean(), always: Type.Optional(Type.Boolean()), reason: Type.Optional(Type.String()) }),
-		result: Type.Object({ status: literals("pending", "approved", "denied", "expired", "cancelled") }),
+		result: Type.Object({ status: ApprovalStatus }),
 	},
 	/** Checks a key against the provider's model list without saving it. `ok: null`: can't be checked up front. */
 	"providers.verifyKey": {
 		params: Type.Object({ provider: Type.String(), key: Type.String() }),
-		result: Type.Object({ ok: Type.Union([Type.Boolean(), Type.Null()]), message: Type.Optional(Type.String()), models: Type.Optional(Type.Number()) }),
+		result: Type.Object({ ok: Type.Union([Type.Boolean(), Type.Null()]), message: Type.Optional(Type.String()), models: Type.Optional(Type.Integer()) }),
 	},
 	/** Connects a provider with an API key directly (the Add provider sheet), replacing any key it had. */
 	"providers.saveKey": {
@@ -1868,7 +1945,7 @@ export const methods = {
 		result: Type.Object({ name: Type.String(), instructions: Type.String(), schedule: Type.Union([Type.String(), Type.Null()]) }),
 	},
 	"projects.add": {
-		params: Type.Object({ path: Type.String(), lens: Type.Optional(literals("build", "chat")) }),
+		params: Type.Object({ path: Type.String(), lens: Type.Optional(ProjectLens) }),
 		result: Type.Object({ project: ProjectInfo }),
 	},
 	/** Default approval mode for the project's new sessions, and rule removal. */
@@ -1882,11 +1959,11 @@ export const methods = {
 			linkFolder: Type.Optional(Type.Object({ path: Type.String(), edit: Type.Boolean() })),
 			/** Unlinks a folder (its path as `folders` lists it). Nothing on disk changes. */
 			unlinkFolder: Type.Optional(Type.String()),
-			prEvents: Type.Optional(literals("off", "tell", "act")),
+			prEvents: Type.Optional(PrEvents),
 			/** The check after the agent's edits (05-build "Diagnostics"): a command, "" for off, null for automatic. */
 			check: Type.Optional(Type.Union([Type.String(), Type.Null()])),
 			/** Its commands' network (docs/spec/39). Trusting the project also opens a filtered one, not one that's off. */
-			network: Type.Optional(literals("open", "filtered", "off")),
+			network: Type.Optional(ProjectNetwork),
 		}),
 		result: Type.Object({ project: ProjectInfo }),
 	},
@@ -1917,7 +1994,7 @@ export const methods = {
 	"git.status": { params: Type.Object({ cwd: Type.String() }), result: GitStatus },
 	"git.branches": { params: Type.Object({ cwd: Type.String() }), result: Type.Object({ branches: Type.Array(GitBranch) }) },
 	/** The current branch's commits, newest first: since `since` (ISO), at most `limit` (default 20, up to 100). */
-	"git.log": { params: Type.Object({ cwd: Type.String(), since: Type.Optional(Type.String()), limit: Type.Optional(Type.Number()) }), result: Type.Object({ commits: Type.Array(GitCommit) }) },
+	"git.log": { params: Type.Object({ cwd: Type.String(), since: Type.Optional(Type.String()), limit: Type.Optional(Type.Integer()) }), result: Type.Object({ commits: Type.Array(GitCommit) }) },
 	"git.checkout": { params: Type.Object({ cwd: Type.String(), branch: Type.String(), create: Type.Optional(Type.Boolean()), base: Type.Optional(Type.String()) }), result: Type.Object({}) },
 	/** Commits `paths` (default: every change), new and deleted files included. */
 	"git.commit": {
@@ -1938,7 +2015,7 @@ export const methods = {
 	/** Build: pi's session tree, as your messages (BR6). `depth` grows at each branch point; `current` = on the active path. */
 	"sessions.tree": {
 		params: Type.Object({ ref: ContainerRef }),
-		result: Type.Object({ nodes: Type.Array(Type.Object({ entryId: Type.String(), text: Type.String(), at: Type.String(), depth: Type.Number(), current: Type.Boolean(), branches: Type.Number() })) }),
+		result: Type.Object({ nodes: Type.Array(Type.Object({ entryId: Type.String(), text: Type.String(), at: Type.String(), depth: Type.Integer(), current: Type.Boolean(), branches: Type.Integer() })) }),
 	},
 	/** Build: moves to another point of the tree. Going to one of your messages returns its text for the composer. */
 	"sessions.navigate": {
@@ -1949,18 +2026,18 @@ export const methods = {
 	"sessions.compact": { params: Type.Object({ ref: ContainerRef }), result: Type.Object({}) },
 	/** Files and folders for @-mentions: fuzzy match on the path, .gitignore respected. */
 	"projects.files": {
-		params: Type.Object({ cwd: Type.String(), query: Type.String(), limit: Type.Optional(Type.Number()) }),
-		result: Type.Object({ files: Type.Array(Type.Object({ path: Type.String(), kind: literals("file", "folder") })) }),
+		params: Type.Object({ cwd: Type.String(), query: Type.String(), limit: Type.Optional(Type.Integer()) }),
+		result: Type.Object({ files: Type.Array(Type.Object({ path: Type.String(), kind: PathKind })) }),
 	},
 	/** File browser (04-chat P3): the entries of a folder of the project (.gitignore respected in git repositories). */
 	"projects.listDir": {
 		params: Type.Object({ cwd: Type.String(), dir: Type.String() }),
-		result: Type.Object({ entries: Type.Array(Type.Object({ name: Type.String(), path: Type.String(), kind: literals("file", "folder") })) }),
+		result: Type.Object({ entries: Type.Array(Type.Object({ name: Type.String(), path: Type.String(), kind: PathKind })) }),
 	},
 	/** File viewer (BR4): a file of a project or worktree. Text only; large files are cut. */
 	"projects.readFile": {
 		params: Type.Object({ cwd: Type.String(), path: Type.String() }),
-		result: Type.Object({ content: Type.String(), size: Type.Number(), truncated: Type.Boolean(), binary: Type.Boolean() }),
+		result: Type.Object({ content: Type.String(), size: Type.Integer(), truncated: Type.Boolean(), binary: Type.Boolean() }),
 	},
 	/** File viewer quick edit (BR4). */
 	"projects.writeFile": { params: Type.Object({ cwd: Type.String(), path: Type.String(), content: Type.String() }), result: Type.Object({}) },
@@ -1981,7 +2058,7 @@ export const methods = {
 	},
 	"mcp.add": {
 		params: Type.Object({
-			scope: literals("global", "project"),
+			scope: McpScope,
 			cwd: Type.Optional(Type.String()),
 			name: Type.String(),
 			command: Type.Optional(Type.String()),
@@ -2003,14 +2080,14 @@ export const methods = {
 	},
 	/** A configured server's status: its last probe, or a new one (`refresh`: Restart). */
 	"mcp.status": {
-		params: Type.Object({ scope: literals("global", "project"), cwd: Type.Optional(Type.String()), name: Type.String(), refresh: Type.Optional(Type.Boolean()) }),
+		params: Type.Object({ scope: McpScope, cwd: Type.Optional(Type.String()), name: Type.String(), refresh: Type.Optional(Type.Boolean()) }),
 		result: McpProbe,
 	},
 	/** A global server in chats, or not. */
 	"mcp.setChat": { params: Type.Object({ name: Type.String(), chat: Type.Boolean() }), result: Type.Object({}) },
 	/** One of a server's tools on or off. */
 	"mcp.setTool": {
-		params: Type.Object({ scope: literals("global", "project"), cwd: Type.Optional(Type.String()), name: Type.String(), tool: Type.String(), enabled: Type.Boolean() }),
+		params: Type.Object({ scope: McpScope, cwd: Type.Optional(Type.String()), name: Type.String(), tool: Type.String(), enabled: Type.Boolean() }),
 		result: Type.Object({}),
 	},
 	/** Servers configured in other apps (Claude Desktop, Cursor, VS Code, Windsurf) that aren't here yet. */
@@ -2026,9 +2103,9 @@ export const methods = {
 			),
 		}),
 	},
-	"mcp.remove": { params: Type.Object({ scope: literals("global", "project"), cwd: Type.Optional(Type.String()), name: Type.String() }), result: Type.Object({}) },
+	"mcp.remove": { params: Type.Object({ scope: McpScope, cwd: Type.Optional(Type.String()), name: Type.String() }), result: Type.Object({}) },
 	"mcp.setEnabled": {
-		params: Type.Object({ scope: literals("global", "project"), cwd: Type.Optional(Type.String()), name: Type.String(), enabled: Type.Boolean() }),
+		params: Type.Object({ scope: McpScope, cwd: Type.Optional(Type.String()), name: Type.String(), enabled: Type.Boolean() }),
 		result: Type.Object({}),
 	},
 	/**
@@ -2037,12 +2114,12 @@ export const methods = {
 	 */
 	"sessions.rewind": {
 		params: Type.Object({ ref: ContainerRef, itemId: Type.String(), files: Type.Boolean(), dryRun: Type.Optional(Type.Boolean()) }),
-		result: Type.Object({ files: Type.Array(FileChange), turns: Type.Number(), editorText: Type.Optional(Type.String()) }),
+		result: Type.Object({ files: Type.Array(FileChange), turns: Type.Integer(), editorText: Type.Optional(Type.String()) }),
 	},
 	/** Answers a pending prompt (approval, question, confirm, select, input). */
 	/** Asks an agent to review this session's changes, or the pull request `pr` (05-build "Review by an agent"). */
 	"sessions.review": {
-		params: Type.Object({ ref: ContainerRef, pr: Type.Optional(Type.Number()) }),
+		params: Type.Object({ ref: ContainerRef, pr: Type.Optional(Type.Integer()) }),
 		result: Type.Object({ ref: ContainerRef }),
 	},
 	"sessions.reviewFinding": {
@@ -2064,7 +2141,7 @@ export const methods = {
 	},
 	"settings.get": { params: Type.Object({}), result: EngineSettings },
 	"settings.set": {
-		params: Type.Object({ models: Type.Optional(Type.Object({ utility: Type.Optional(UtilityChoice) })), chat: Type.Optional(Type.Partial(EngineSettings.properties.chat)), aboutMe: Type.Optional(Type.Partial(EngineSettings.properties.aboutMe)), memory: Type.Optional(Type.Partial(EngineSettings.properties.memory)) }),
+		params: Type.Object({ models: Type.Optional(Type.Object({ utility: Type.Optional(UtilityChoice) })), build: EngineSettings.properties.build, chat: Type.Optional(Type.Partial(EngineSettings.properties.chat)), aboutMe: Type.Optional(Type.Partial(EngineSettings.properties.aboutMe)), memory: Type.Optional(Type.Partial(EngineSettings.properties.memory)) }),
 		result: EngineSettings,
 	},
 	/** The "About me" memory and its history, newest first. */
@@ -2098,16 +2175,16 @@ export const methods = {
 					/** "about-me", "agent", "project" (a project without a folder), or "other" (its owner was deleted). */
 					area: Type.String(),
 					agent: Type.Optional(Type.Object({ id: Type.String(), name: Type.String(), avatar: Type.Optional(Type.String()), learns: Type.Boolean() })),
-					records: Type.Number(),
-					facts: Type.Number(),
-					messages: Type.Number(),
-					ended: Type.Number(),
+					records: Type.Integer(),
+					facts: Type.Integer(),
+					messages: Type.Integer(),
+					ended: Type.Integer(),
 					updatedAt: Type.Optional(Type.String()),
 				}),
 			),
 			/** Agents that use memory, with or without records yet (for the learning switches). */
 			agents: Type.Array(Type.Object({ id: Type.String(), name: Type.String(), avatar: Type.Optional(Type.String()), learns: Type.Boolean(), provider: Type.String() })),
-			bytes: Type.Number(),
+			bytes: Type.Integer(),
 		}),
 	},
 	/** A bank's changes, newest first. */
@@ -2116,11 +2193,11 @@ export const methods = {
 		result: Type.Object({ events: Type.Array(Type.Object({ id: Type.String(), at: Type.String(), action: Type.String(), recordId: Type.String(), text: Type.String(), by: Type.String() })) }),
 	},
 	/** Writes everything the built-in provider holds to `folder` as memory.json and memory.md. */
-	"memory.export": { params: Type.Object({ folder: Type.String() }), result: Type.Object({ files: Type.Array(Type.String()), records: Type.Number() }) },
+	"memory.export": { params: Type.Object({ folder: Type.String() }), result: Type.Object({ files: Type.Array(Type.String()), records: Type.Integer() }) },
 	/** Deletes one bank, or every bank with "*". */
-	"memory.wipe": { params: Type.Object({ bank: Type.String() }), result: Type.Object({ records: Type.Number() }) },
+	"memory.wipe": { params: Type.Object({ bank: Type.String() }), result: Type.Object({ records: Type.Integer() }) },
 	/** Embeds again what has no vector from the current model (in the background); how many records wait. */
-	"memory.reindex": { params: Type.Object({}), result: Type.Object({ pending: Type.Number() }) },
+	"memory.reindex": { params: Type.Object({}), result: Type.Object({ pending: Type.Integer() }) },
 	/** An agent learns facts by itself, or only stores what was said (its definition's memory.learn). */
 	"memory.setLearning": { params: Type.Object({ ref: ContainerRef, learn: Type.Boolean() }), result: Type.Object({}) },
 	/** The built-in provider's semantic search: on or why not, the embedding model and how much is indexed. */
@@ -2134,8 +2211,8 @@ export const methods = {
 			model: Type.Optional(Type.String()),
 			/** Who computes the embeddings: "OpenRouter", "OpenAI API", or a server's address. */
 			via: Type.Optional(Type.String()),
-			records: Type.Number(),
-			indexed: Type.Number(),
+			records: Type.Integer(),
+			indexed: Type.Integer(),
 		}),
 	},
 	/** Try a provider: what it recalls for a query in a bank. */
@@ -2151,11 +2228,11 @@ export const methods = {
 	"packages.preview": { params: Type.Object({ source: Type.String() }), result: PackagePreview },
 	/** One resource (by its path, as `packages.list` gives it) on or off. */
 	"packages.setResource": {
-		params: Type.Object({ source: Type.String(), kind: literals("extensions", "skills", "prompts", "themes"), path: Type.String(), enabled: Type.Boolean() }),
+		params: Type.Object({ source: Type.String(), kind: PackageResourceKind, path: Type.String(), enabled: Type.Boolean() }),
 		result: Type.Object({}),
 	},
 	"packages.setEnabled": {
-		params: Type.Object({ source: Type.String(), enabled: Type.Boolean(), kinds: Type.Optional(Type.Array(literals("extensions", "skills", "prompts", "themes"))) }),
+		params: Type.Object({ source: Type.String(), enabled: Type.Boolean(), kinds: Type.Optional(Type.Array(PackageResourceKind)) }),
 		result: Type.Object({}),
 	},
 	/** Agents (06-agents §2, §11). */
@@ -2203,14 +2280,14 @@ export const methods = {
 				Type.Object({
 					id: Type.String(),
 					parent: Type.Optional(Type.String()),
-					hop: Type.Number(),
-					mode: literals("ask", "tell", "reply"),
+					hop: Type.Integer(),
+					mode: AgentMsgMode,
 					from: Type.Object({ id: Type.String(), name: Type.String() }),
 					to: Type.Object({ id: Type.String(), name: Type.String() }),
 					text: Type.String(),
 					reply: Type.Optional(Type.String()),
 					at: Type.String(),
-					status: literals("waiting", "replied", "no_reply", "sent", "failed"),
+					status: AgentMsgStatus,
 					costUsd: Type.Optional(Type.Number()),
 					error: Type.Optional(Type.String()),
 				}),
@@ -2226,7 +2303,7 @@ export const methods = {
 		result: Type.Object({
 			today: Type.Array(Type.Object({ at: Type.Optional(Type.String()), label: Type.String(), source: Type.Object({ kind: literals("agent", "project", "piopio"), id: Type.String(), name: Type.String() }), automation: Type.Optional(Type.String({ description: "The automation it belongs to (docs/spec/27)" })), state: literals("done", "failed", "skipped", "running", "upcoming", "event"), tomorrow: Type.Optional(Type.Boolean({ description: "Upcoming after midnight, within the next 24 hours" })) })),
 			away: Type.Array(Type.Object({ at: Type.String(), source: Type.Object({ kind: literals("agent", "project", "piopio"), id: Type.String(), name: Type.String() }), automation: Type.Optional(Type.String({ description: "The automation it belongs to (docs/spec/27)" })), text: Type.String(), costUsd: Type.Optional(Type.Number()), quiet: Type.Boolean(), failed: Type.Optional(Type.Boolean()) })),
-			held: Type.Number({ description: "Messages held by quiet hours or limits, across agents" }),
+			held: Type.Integer({ description: "Messages held by quiet hours or limits, across agents" }),
 		}),
 	},
 	/** Every project's work (docs/spec/26): its way of working, board and branch. */
@@ -2266,9 +2343,9 @@ export const methods = {
 			project: Type.String(),
 			parallel: Type.Optional(Type.Boolean()),
 			review: Type.Optional(Type.Boolean()),
-			reviewLimit: Type.Optional(Type.Number({ minimum: 1, maximum: 10 })),
+			reviewLimit: Type.Optional(Type.Integer({ minimum: 1, maximum: 10 })),
 			testCommand: Type.Optional(Type.String({ description: "Empty removes it" })),
-			maxParallel: Type.Optional(Type.Number({ minimum: 1, maximum: 8 })),
+			maxParallel: Type.Optional(Type.Integer({ minimum: 1, maximum: 8 })),
 			buildModel: Type.Optional(Type.Union([Type.String(), Type.Null()])),
 			reviewModel: Type.Optional(Type.Union([Type.String(), Type.Null()])),
 			helperMode: Type.Optional(ApprovalMode),
@@ -2288,7 +2365,7 @@ export const methods = {
 		result: Type.Object({ git: Type.Boolean(), checks: Type.Optional(Type.String({ description: "The test command found in the folder" })), agentsMd: Type.Boolean(), language: Type.Optional(Type.String()) }),
 	},
 	/** What a conversation's tasks have cost (a job), against the budget per job. */
-	"work.job": { params: Type.Object({ project: Type.String(), conversationId: Type.String() }), result: Type.Object({ cost: Type.Number(), tasks: Type.Number(), budget: Type.Optional(Type.Number()) }) },
+	"work.job": { params: Type.Object({ project: Type.String(), conversationId: Type.String() }), result: Type.Object({ cost: Type.Number(), tasks: Type.Integer(), budget: Type.Optional(Type.Number()) }) },
 	/** You add a card to the board. */
 	"work.addTask": { params: Type.Object({ project: Type.String(), title: Type.String(), brief: Type.String(), done: Type.Optional(Type.String()) }), result: Type.Object({ task: WorkTask }) },
 	/** You move or edit a card. */
@@ -2364,7 +2441,7 @@ export const methods = {
 					firedAt: Type.String(),
 					status: literals("running", "done", "failed", "skipped"),
 					summary: Type.Optional(Type.String()),
-					sent: Type.Number(),
+					sent: Type.Integer(),
 					costUsd: Type.Optional(Type.Number()),
 				}),
 			),
@@ -2387,7 +2464,7 @@ export const methods = {
 	/** Answers an approval: approve (as asked, or with `args`), or deny; `always` stops asking for this kind of call. */
 	"agents.decide": {
 		params: Type.Object({ ref: ContainerRef, approvalId: Type.String(), approve: Type.Boolean(), args: Type.Optional(Type.Unknown()), always: Type.Optional(Type.Boolean()), reason: Type.Optional(Type.String()) }),
-		result: Type.Object({ status: literals("pending", "approved", "denied", "expired", "cancelled") }),
+		result: Type.Object({ status: ApprovalStatus }),
 	},
 	/** Reverses a change a result card shows (within 24 hours). */
 	"agents.undo": {
@@ -2403,7 +2480,7 @@ export const methods = {
 	"inbox.list": {
 		params: Type.Object({}),
 		result: Type.Object({
-			count: Type.Number(),
+			count: Type.Integer(),
 			items: Type.Array(
 				Type.Object({
 					id: Type.String(),
@@ -2662,7 +2739,7 @@ export const notifications = {
 	"library.changed": Type.Object({}),
 	/** An open app's new data, after one of its files changed. */
 	"apps.data": Type.Object({ app: AppView }),
-	"inbox.changed": Type.Object({ count: Type.Number(), approval: Type.Optional(Type.Object({ agent: ContainerRef, agentName: Type.String(), approvalId: Type.String(), title: Type.String() })) }),
+	"inbox.changed": Type.Object({ count: Type.Integer(), approval: Type.Optional(Type.Object({ agent: ContainerRef, agentName: Type.String(), approvalId: Type.String(), title: Type.String() })) }),
 } satisfies Record<string, TSchema>;
 
 // ── JSON-RPC envelope ───────────────────────────────────────────────────────

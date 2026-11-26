@@ -11,7 +11,7 @@ struct OverviewActivityTab: View {
     @State private var activity: ActivityResult?
     @State private var storage: StorageResult?
     @State private var error: String?
-    @State private var confirming: StorageResult.Action?
+    @State private var confirming: StorageResult.Item.Action?
     @State private var cleaned: String?
     @State private var confirmBrowser = false
     @State private var browserCleared = false
@@ -265,10 +265,10 @@ struct OverviewActivityTab: View {
         storage = try? await engine.client?.call("stats.storage", Empty(), as: StorageResult.self)
     }
 
-    private func clean(_ action: StorageResult.Action) async {
+    private func clean(_ action: StorageResult.Item.Action) async {
         guard let client = engine.client else { return }
         do {
-            let r = try await client.call("stats.storage.clean", StorageCleanParams(action: action.id), as: StorageCleanResult.self)
+            let r = try await client.call("stats.storage.clean", StorageCleanParams(action: StorageCleanParams.Action(rawValue: action.id.rawValue) ?? .worktrees), as: StorageCleanResult.self)
             cleaned = r.removed == 0 ? "Nothing to clean up." : "Removed \(r.removed) worktree\(r.removed == 1 ? "" : "s"), freed \(Self.bytes(r.freedBytes))."
         } catch {
             cleaned = error.localizedDescription

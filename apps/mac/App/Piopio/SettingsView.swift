@@ -286,7 +286,7 @@ private struct ProjectApprovalsPage: View {
     }
 
     /// What each choice of the commands' network means (docs/spec/39).
-    static func networkSubtitle(_ network: ProjectInfo.Network) -> String {
+    static func networkSubtitle(_ network: ProjectNetwork) -> String {
         switch network {
         case .open: return "Commands reach any site"
         case .filtered: return "Only package registries, GitHub and the sites you allow; others ask"
@@ -322,9 +322,9 @@ private struct ProjectApprovalsPage: View {
                     // docs/spec/39: Filtered for a project you added or cloned until you trust it; Off only by hand.
                     SettingRow(title: "Commands' network", subtitle: Self.networkSubtitle(project.network ?? .open)) {
                         Picker("", selection: Binding(get: { project.network ?? .open }, set: { value in Task { await engine.setNetwork(value, for: project) } })) {
-                            Text("Open").tag(ProjectInfo.Network.open)
-                            Text("Filtered").tag(ProjectInfo.Network.filtered)
-                            Text("Off").tag(ProjectInfo.Network.off)
+                            Text("Open").tag(ProjectNetwork.open)
+                            Text("Filtered").tag(ProjectNetwork.filtered)
+                            Text("Off").tag(ProjectNetwork.off)
                         }
                         .labelsHidden()
                         .accessibilityLabel("Commands' network")

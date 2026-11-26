@@ -10,12 +10,12 @@ import SwiftUI
 struct WorkBoard: View {
     let engine: EngineController
     let project: ProjectInfo
-    let work: ProjectWork
+    let work: WorkInfo
     @Binding var item: SidebarItem
     @State private var adding = false
 
-    private static let columns: [(id: String, title: String, states: Set<String>)] = [
-        ("todo", "To do", ["todo"]), ("doing", "Doing", ["doing"]), ("review", "Review", ["review", "integrating"]), ("done", "Done", ["done"]), ("blocked", "Blocked", ["blocked"]),
+    private static let columns: [(id: String, title: String, states: Set<WorkTask.State>)] = [
+        ("todo", "To do", [.todo]), ("doing", "Doing", [.doing]), ("review", "Review", [.review, .integrating]), ("done", "Done", [.done]), ("blocked", "Blocked", [.blocked]),
     ]
 
     var body: some View {
@@ -65,18 +65,18 @@ struct WorkBoard: View {
     }
 
     private func card(_ task: WorkTask) -> some View {
-        Button { if let id = task.reviewSessionId ?? task.sessionId, task.state == "review" { item = .session(id) } else if let id = task.sessionId { item = .session(id) } } label: {
+        Button { if let id = task.reviewSessionId ?? task.sessionId, task.state == .review { item = .session(id) } else if let id = task.sessionId { item = .session(id) } } label: {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
                     Text(task.id).font(.system(size: 11, design: .monospaced)).foregroundStyle(Color.dsFg3)
-                    if task.state == "doing" || task.state == "review" || task.state == "integrating" { ProgressView().controlSize(.mini) }
+                    if task.state == .doing || task.state == .review || task.state == .integrating { ProgressView().controlSize(.mini) }
                     Spacer()
                     Text(task.helper).font(.system(size: 11)).foregroundStyle(Color.dsFg2)
                         .padding(.horizontal, 6).padding(.vertical, 1)
                         .background(Color.dsChip, in: Capsule())
                 }
                 Text(task.title).font(.system(size: 13, weight: .medium)).foregroundStyle(Color.dsFg).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
-                if let line = status(task) { Text(line).font(.system(size: 11.5)).foregroundStyle(task.state == "blocked" ? Color.dsWarn : Color.dsFg3).lineLimit(3) }
+                if let line = status(task) { Text(line).font(.system(size: 11.5)).foregroundStyle(task.state == .blocked ? Color.dsWarn : Color.dsFg3).lineLimit(3) }
             }
             .padding(10)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -87,24 +87,24 @@ struct WorkBoard: View {
         .buttonStyle(.plain)
         .help(task.sessionId == nil ? task.brief : "Open its session")
         .contextMenu {
-            if task.state != "todo" { Button("Move to To do") { update(task, state: "todo") } }
-            if task.state != "blocked" { Button("Stop (Blocked)") { update(task, state: "blocked") } }
-            if task.state != "done" { Button("Mark Done") { update(task, state: "done") } }
+            if task.state != .todo { Button("Move to To do") { update(task, state: .todo) } }
+            if task.state != .blocked { Button("Stop (Blocked)") { update(task, state: .blocked) } }
+            if task.state != .done { Button("Mark Done") { update(task, state: .done) } }
         }
     }
 
     private func status(_ task: WorkTask) -> String? {
         switch task.state {
-        case "review": "In review"
-        case "integrating": "Merging and checking"
-        case "blocked": task.blocked
-        case "doing": task.attempts > 0 ? "Round \(task.attempts + 1), after a review" : (task.by == "you" ? "Added by you" : nil)
-        case "done": task.report.map { $0.replacingOccurrences(of: "\n", with: " ") }
-        default: task.by == "you" ? "Added by you" : nil
+        case .review: "In review"
+        case .integrating: "Merging and checking"
+        case .blocked: task.blocked
+        case .doing: task.attempts > 0 ? "Round \(task.attempts + 1), after a review" : (task.by == .you ? "Added by you" : nil)
+        case .done: task.report.map { $0.replacingOccurrences(of: "\n", with: " ") }
+        case .todo: task.by == .you ? "Added by you" : nil
         }
     }
 
-    private func update(_ task: WorkTask, state: String) {
+    private func update(_ task: WorkTask, state: UpdateWorkTaskParams.State) {
         Task { try? await engine.updateTask(project, task, state: state) }
     }
 }
@@ -149,7 +149,7 @@ private struct AddTask: View {
 /// it: merge it here, or push it for a pull request. Shown once the branch has work the project doesn't.
 struct LandingCard: View {
     let engine: EngineController
-    let work: ProjectWork
+    let work: WorkInfo
     /// In the conversation that made the tasks (docs/spec/21 D6, design 5b-4): a green card with what they cost.
     var conversation: String? = nil
     var onMerged: (() -> Void)? = nil
@@ -210,7 +210,7 @@ struct LandingCard: View {
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Self.green, lineWidth: 1))
         .disabled(busy)
         .alert("Merge \(l.branch) into \(l.base)?", isPresented: $confirming) {
-            Button("Merge") { Task { await land("merge") } }
+            Button("Merge") { Task { await land(.merge) } }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("\(count(l.tasks.count, "task")), \(count(l.files.count, "file")). New tasks start from there.")
@@ -269,7 +269,7 @@ struct LandingCard: View {
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 1))
         .disabled(busy)
         .alert("Merge \(l.branch) into \(l.base)?", isPresented: $confirming) {
-            Button("Merge") { Task { await land("merge") } }
+            Button("Merge") { Task { await land(.merge) } }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text(l.checkedOut == l.base
@@ -284,12 +284,12 @@ struct LandingCard: View {
 
     private func count(_ n: Int, _ word: String) -> String { "\(n) \(word)\(n == 1 ? "" : "s")" }
 
-    private func land(_ action: String) async {
+    private func land(_ action: WorkLandParams.Action) async {
         busy = true
         defer { busy = false }
         do {
             let result = try await engine.land(work, action: action)
-            if action == "push" {
+            if action == .push {
                 if let url = result.compareUrl.flatMap(URL.init(string:)) { NSWorkspace.shared.open(url) }
                 note = ("Pushed \(work.git?.branch ?? "the work branch")\(result.compareUrl != nil ? ": create the pull request in your browser." : ".")", false)
             } else {

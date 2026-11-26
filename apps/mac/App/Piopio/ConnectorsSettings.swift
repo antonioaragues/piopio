@@ -21,15 +21,15 @@ import SwiftUI
     init(connector: ConnectorInfo, inline: Bool = false) { self.connector = connector; self.inline = inline }
 
     func apply(_ event: ProviderAuthEvent) {
-        switch event.type {
-        case "auth_url":
-            url = event.url.flatMap(URL.init(string:))
+        switch event {
+        case .authUrl(let address, _):
+            url = URL(string: address)
             // Captures sign in to a fake server without a browser (PIOPIO_DEMO_CONNECT_APPS).
             if let url, ProcessInfo.processInfo.environment["PIOPIO_DEMO_CONNECT_APPS"] != nil { URLSession.shared.dataTask(with: url).resume() }
             else if let url { NSWorkspace.shared.open(url) }
-        case "progress": progress = event.message
-        case "done": finished = true; error = nil
-        case "failed": finished = true; error = event.message ?? "Couldn't connect."
+        case .progress(let message): progress = message
+        case .done: finished = true; error = nil
+        case .failed(let message): finished = true; error = message.isEmpty ? "Couldn't connect." : message
         default: break
         }
     }

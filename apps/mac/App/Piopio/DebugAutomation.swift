@@ -38,8 +38,8 @@ enum DebugAutomation {
             demo(screen == "ask" ? "ask:call: automate | {\"when\":\"0 8 * * 1-5\",\"name\":\"Morning brief\",\"prompt\":\"Send me today's calendar and anything urgent in my inbox.\"}" : "draft")
             return
         }
-        guard let rita = try? await engine.createAgent(name: "Rita", template: nil, avatar: "", instructions: "Watch what Acme, Brightly and Northwind ship and what they charge. Tell me what changed, briefly.", schedule: .none),
-              let coach = try? await engine.createAgent(name: "Coach", template: nil, avatar: "", instructions: "Keep me to my training plan.", schedule: .none) else { return }
+        guard let rita = try? await engine.createAgent(name: "Rita", template: nil, avatar: "", instructions: "Watch what Acme, Brightly and Northwind ship and what they charge. Tell me what changed, briefly.", schedule: .null),
+              let coach = try? await engine.createAgent(name: "Coach", template: nil, avatar: "", instructions: "Keep me to my training plan.", schedule: .null) else { return }
         for (ref, line) in [(rita, "Watches Acme, Brightly and Northwind"), (coach, "Keeps you to your training plan")] {
             if let got = await engine.agentDefinition(ref), var def = AgentDef(got.definition) {
                 def.description = line
@@ -49,9 +49,9 @@ enum DebugAutomation {
         try? await engine.refreshCatalog()
         let folder = FileManager.default.temporaryDirectory.appending(path: "Invoices").path
         try? FileManager.default.createDirectory(atPath: folder, withIntermediateDirectories: true)
-        _ = try? await engine.addAutomation(AutomationChange(name: "Daily price check", when: "0 8 * * *", runsAs: rita.id, prompt: "call: send_message | {\"to\":\"owner\",\"text\":\"Brightly dropped its Pro plan from $24 to $18 a month overnight. Acme and Northwind didn't change.\"}", result: "chat"))
-        _ = try? await engine.addAutomation(AutomationChange(name: "File new invoices", on: "folder", folder: folder, runsAs: "piopio", prompt: "Read the new invoice, file it under its supplier and tell me the total.", result: "quiet"))
-        if let morning = try? await engine.addAutomation(AutomationChange(name: "Morning summary", when: "30 7 * * 1-5", runsAs: coach.id, prompt: "Summarise today's training and what I ate yesterday.", result: "chat")) {
+        _ = try? await engine.addAutomation(AutomationChange(name: "Daily price check", when: "0 8 * * *", runsAs: rita.id, prompt: "call: send_message | {\"to\":\"owner\",\"text\":\"Brightly dropped its Pro plan from $24 to $18 a month overnight. Acme and Northwind didn't change.\"}", result: .chat))
+        _ = try? await engine.addAutomation(AutomationChange(name: "File new invoices", on: .folder, folder: folder, runsAs: "piopio", prompt: "Read the new invoice, file it under its supplier and tell me the total.", result: .quiet))
+        if let morning = try? await engine.addAutomation(AutomationChange(name: "Morning summary", when: "30 7 * * 1-5", runsAs: coach.id, prompt: "Summarise today's training and what I ate yesterday.", result: .chat)) {
             _ = try? await engine.updateAutomation(morning.id, AutomationChange(enabled: false))
         }
         // The price check runs once: its message in Rita's chat carries "From Daily price check".

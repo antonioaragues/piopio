@@ -87,19 +87,18 @@ public enum SessionDigest {
             switch t.tool {
             case "read":
                 // A file it failed to read wasn't read.
-                guard let raw = t.args?["path"]?.stringValue, t.status != .denied, t.status != .error else { return }
+                guard let raw = t.args["path"]?.stringValue, t.status != .denied, t.status != .error else { return }
                 let path = relative(raw, cwd: cwd)
                 if seenRead.insert(path).inserted { out.read.append(path) }
             case "edit", "write":
-                guard t.status == .done, let raw = t.args?["path"]?.stringValue else { return }
+                guard t.status == .done, let raw = t.args["path"]?.stringValue else { return }
                 let path = relative(raw, cwd: cwd)
                 if seenEdited.insert(path).inserted { out.edited.append(path) }
             case "web_fetch":
-                // A page that didn't load wasn't read.
+                // A page that didn't load wasn't read. (The engine sends no details for web tools, so no titles or
+                // search results: docs/spec/03 §4 plans "web" and "page" details.)
                 guard t.status == .done else { return }
-                page(t.details?["url"]?.stringValue ?? t.args?["url"]?.stringValue, t.details?["title"]?.stringValue)
-            case "web_search":
-                for result in t.details?["results"]?.arrayValue ?? [] { page(result["url"]?.stringValue, result["title"]?.stringValue) }
+                page(t.args["url"]?.stringValue, nil)
             default: break
             }
         }

@@ -7,7 +7,7 @@ import SwiftUI
 /// its steps — a browser page, a device code, a key or a pasted code — until it's done or fails.
 @MainActor @Observable final class ProviderLogin {
     let provider: ProviderInfo
-    let method: ProviderInfo.Method.Kind
+    let method: AuthMethod
     var loginId: String?
     var url: URL?
     var instructions: String?
@@ -19,31 +19,30 @@ import SwiftUI
     var finished = false
     var error: String?
 
-    init(provider: ProviderInfo, method: ProviderInfo.Method.Kind) {
+    init(provider: ProviderInfo, method: AuthMethod) {
         self.provider = provider
         self.method = method
     }
 
     func apply(_ event: ProviderAuthEvent) {
-        switch event.type {
-        case "auth_url":
-            url = event.url.flatMap(URL.init(string:))
-            instructions = event.instructions
+        switch event {
+        case .authUrl(let address, let steps):
+            url = URL(string: address)
+            instructions = steps
             if let url { NSWorkspace.shared.open(url) }
-        case "device_code":
-            deviceCode = event.userCode
-            verificationURL = event.verificationUri.flatMap(URL.init(string:))
-        case "progress": progress = event.message
-        case "info": info = event.message
-        case "prompt": prompt = event
-        case "prompt_closed": if prompt?.promptId == event.promptId { prompt = nil }
-        case "done":
+        case .deviceCode(let code, let uri, _):
+            deviceCode = code
+            verificationURL = URL(string: uri)
+        case .progress(let message): progress = message
+        case .info(let message, _): info = message
+        case .prompt: prompt = event
+        case .promptClosed(let id): if case .prompt(id, _, _, _, _)? = prompt { prompt = nil }
+        case .done:
             finished = true
             error = nil
-        case "failed":
+        case .failed(let message):
             finished = true
-            error = event.message ?? "Couldn't connect."
-        default: break
+            error = message.isEmpty ? "Couldn't connect." : message
         }
     }
 }
@@ -104,7 +103,7 @@ struct ProviderSignInSheet: View {
                     }
                 } else {
                     Button("Cancel") { Task { await engine.cancelLogin() } }.buttonStyle(PillStyle()).keyboardShortcut(.cancelAction)
-                    if let prompt = login.prompt, prompt.kind != "select" {
+                    if let prompt = login.prompt, case .prompt(_, let kind, _, _, _) = prompt, kind != .select {
                         Button("Continue") { submit() }.buttonStyle(PillStyle(kind: .primary)).keyboardShortcut(.defaultAction)
                             .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     }
@@ -113,7 +112,7 @@ struct ProviderSignInSheet: View {
         }
         .padding(22)
         .frame(width: 480)
-        .onChange(of: login.prompt?.promptId) { _, _ in text = ""; focused = true }
+        .onChange(of: login.prompt) { _, _ in text = ""; focused = true }
     }
 
     @ViewBuilder private var content: some View {
@@ -159,13 +158,14 @@ struct ProviderSignInSheet: View {
         }
     }
 
-    @ViewBuilder private func promptView(_ prompt: ProviderAuthEvent) -> some View {
+    @ViewBuilder private func promptView(_ event: ProviderAuthEvent) -> some View {
+        if case .prompt(_, let kind, let message, let placeholder, let options) = event {
         VStack(alignment: .leading, spacing: 6) {
-            Text(prompt.message ?? "").font(.system(size: 12.5, weight: .medium))
-            switch prompt.kind {
-            case "select":
+            Text(message).font(.system(size: 12.5, weight: .medium))
+            switch kind {
+            case .select:
                 VStack(spacing: 6) {
-                    ForEach(prompt.options ?? [], id: \.id) { option in
+                    ForEach(options ?? [], id: \.id) { option in
                         Button { Task { await engine.answerLogin(option.id) } } label: {
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(option.label).font(.system(size: 13, weight: .medium)).foregroundStyle(Color.dsFg)
@@ -178,12 +178,13 @@ struct ProviderSignInSheet: View {
                         .buttonStyle(.plain)
                     }
                 }
-            case "secret":
-                SecureField(prompt.placeholder ?? "", text: $text).textFieldStyle(.roundedBorder).font(.system(size: 13, design: .monospaced)).focused($focused).onSubmit(submit)
-            default:
-                TextField(prompt.placeholder ?? (prompt.kind == "manual_code" ? "Paste the address the browser ended on" : ""), text: $text)
+            case .secret:
+                SecureField(placeholder ?? "", text: $text).textFieldStyle(.roundedBorder).font(.system(size: 13, design: .monospaced)).focused($focused).onSubmit(submit)
+            case .text, .manualCode:
+                TextField(placeholder ?? (kind == .manualCode ? "Paste the address the browser ended on" : ""), text: $text)
                     .textFieldStyle(.roundedBorder).font(.system(size: 13)).focused($focused).onSubmit(submit)
             }
+        }
         }
     }
 

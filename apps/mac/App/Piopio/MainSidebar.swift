@@ -339,9 +339,9 @@ struct MainSidebar: View {
     }
 
     /// "Board  2 doing ◌": the project's board, with what's moving (or the blue dot when a task is blocked).
-    private func boardRow(_ project: ProjectInfo, _ work: ProjectWork) -> some View {
-        let doing = work.tasks.filter { ["doing", "review", "integrating"].contains($0.state) }.count
-        let blocked = work.tasks.contains { $0.state == "blocked" }
+    private func boardRow(_ project: ProjectInfo, _ work: WorkInfo) -> some View {
+        let doing = work.tasks.filter { [.doing, .review, .integrating].contains($0.state) }.count
+        let blocked = work.tasks.contains { $0.state == .blocked }
         return Button { item = .board(project.id) } label: {
             HStack(spacing: 8) {
                 Image(systemName: "rectangle.split.3x1").font(.system(size: 11.5)).foregroundStyle(Color.dsFg2).frame(width: 16)
@@ -378,7 +378,7 @@ struct MainSidebar: View {
         let folded = collapsedProjects.contains(project.id)
         let work = engine.work(in: project)
         let hasContent = !engine.sessions(in: project).filter { $0.listed }.isEmpty || work.map { $0.way.parallel || !$0.tasks.isEmpty } == true
-        let working = work?.tasks.filter { ["doing", "review", "integrating"].contains($0.state) }.count ?? 0
+        let working = work?.tasks.filter { [.doing, .review, .integrating].contains($0.state) }.count ?? 0
         // The row folds or unfolds its conversations (docs/spec/18 §19); with nothing to show, it starts one there.
         return ProjectRow(project: project, selected: false, isOpen: openProjectId == project.id, plus: plus, folded: hasContent ? folded : nil, working: working,
                           toggle: {
@@ -459,7 +459,7 @@ struct MainSidebar: View {
 
     private func dotStatus(_ s: SessionSummary) -> SidebarDot.Status {
         // A parent shows that one of its side conversations needs you (docs/spec/24 §6).
-        if engine.liveStatus[s.ref.id] != .running, engine.sides(of: s.ref.id).contains(where: { $0.side?.state == "needs_you" }) { return .waiting }
+        if engine.liveStatus[s.ref.id] != .running, engine.sides(of: s.ref.id).contains(where: { $0.side?.state == .needsYou }) { return .waiting }
         return switch engine.liveStatus[s.ref.id] {
         case .running?: .running
         case .waitingApproval?: .waiting
@@ -482,7 +482,7 @@ struct MainSidebar: View {
         case .automations, .automation: true
         default: false
         }
-        let running = engine.automations.contains { $0.lastStatus == "running" }
+        let running = engine.automations.contains { $0.lastStatus == .running }
         return Button { item = .automations(nil) } label: {
             HStack(spacing: 10) {
                 RowGlyph(symbol: "clock.arrow.circlepath")
@@ -524,7 +524,7 @@ struct MainSidebar: View {
                 LibraryOpen.open(pin, engine: engine) { item = $0 } missing: { engine.focusLibrary(pin.id) }
             } label: {
                 HStack(spacing: 8) {
-                    Image(systemName: LibraryKind.symbol(pin.kind)).font(.system(size: 11)).foregroundStyle(Color.dsFg3).frame(width: 14)
+                    Image(systemName: pin.kind.symbol).font(.system(size: 11)).foregroundStyle(Color.dsFg3).frame(width: 14)
                     Text(pin.name).font(.system(size: 13)).foregroundStyle(pin.missing == true ? Color.dsFg3 : Color.dsFg).lineLimit(1).truncationMode(.middle)
                     Spacer(minLength: 4)
                 }
@@ -577,7 +577,7 @@ struct MainSidebar: View {
             HStack(spacing: 10) {
                 SidebarAvatar(id: agent.ref.id, name: agent.title, glyph: agent.agent?.avatar).frame(width: 18)
                 Text(agent.title).font(.system(size: 13)).foregroundStyle(Color.dsFg).lineLimit(1)
-                if agent.agent?.location == "cloud" { Image(systemName: "cloud").font(.system(size: 10)).foregroundStyle(Color.dsFg2).help("In your cloud") }
+                if agent.agent?.location == .cloud { Image(systemName: "cloud").font(.system(size: 10)).foregroundStyle(Color.dsFg2).help("In your cloud") }
                 Spacer(minLength: 4)
                 if engine.liveStatus[agent.ref.key] == .running { SidebarDot(status: .running) }
                 // Unread (design 1a): a blue dot when it wrote to you.

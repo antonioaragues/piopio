@@ -61,11 +61,11 @@ struct ChatPane: View {
             CardTitle("Side conversations")
             ListCard {
                 SettingRow(title: "When I bring up something unrelated", subtitle: "A new subject can get its own conversation, linked to this one") {
-                    Picker("", selection: Binding(get: { settings?.chat.sideOnUnrelated ?? "ask" }, set: { v in
+                    Picker("", selection: Binding(get: { settings?.chat.sideOnUnrelated ?? .ask }, set: { v in
                         Task { await engine.updateSettings(SettingsPatch(chat: .init(sideOnUnrelated: v))) }
                     })) {
-                        Text("Ask").tag("ask")
-                        Text("Always start one").tag("start")
+                        Text("Ask").tag(SideOnUnrelated.ask)
+                        Text("Always start one").tag(SideOnUnrelated.start)
                         Text("Do nothing").tag("off")
                     }
                     .labelsHidden().fixedSize()
@@ -216,8 +216,8 @@ struct AboutMeEditor: View {
 
     /// "You", or "Learned · 2 d ago" when a conversation added it.
     private func source(_ fact: MemoryText.Fact) -> String {
-        guard let r = revisions.first(where: { r in r.undone != true && r.added.contains { $0 == fact.raw || $0.contains(fact.text) } }) else { return "You" }
-        return r.by.kind == "user" ? "You" : "Learned · \(BuildSessionView.relative(r.at))"
+        guard let r = revisions.first(where: { r in r.added.contains { $0 == fact.raw || $0.contains(fact.text) } }) else { return "You" }
+        return r.by.kind == .user ? "You" : "Learned · \(BuildSessionView.relative(r.at))"
     }
 
     private var lines: [String] { text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init) }
@@ -329,10 +329,10 @@ private struct AboutMeHistorySheet: View {
                         HStack(alignment: .top, spacing: 12) {
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(r.summary).font(.system(size: 13)).fixedSize(horizontal: false, vertical: true)
-                                Text("\(r.by.kind == "user" ? "You" : "Learned in a conversation") · \(BuildSessionView.relative(r.at))").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
+                                Text("\(r.by.kind == .user ? "You" : "Learned in a conversation") · \(BuildSessionView.relative(r.at))").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
                             }
                             Spacer()
-                            if r.undone == true || undone.contains(r.id) {
+                            if undone.contains(r.id) {
                                 Text("Undone").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
                             } else {
                                 Button("Undo") {

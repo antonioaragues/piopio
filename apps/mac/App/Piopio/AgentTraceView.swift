@@ -59,7 +59,7 @@ struct TraceSheet: View {
     private func hop(_ h: AgentTrace.Hop, depth: Int) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 6) {
-                Circle().fill(h.status == "failed" ? Color.dsFg2 : h.status == "waiting" ? Color.accentColor : h.status == "no_reply" ? Color.dsAmber : Color.dsFg3).frame(width: 6, height: 6)
+                Circle().fill(h.status == .failed ? Color.dsFg2 : h.status == .waiting ? Color.accentColor : h.status == .noReply ? Color.dsAmber : Color.dsFg3).frame(width: 6, height: 6)
                 Text("\(h.from.name) → \(h.to.name)").font(.system(size: 12.5, weight: .semibold))
                 Text("\(h.mode) · hop \(h.hop)").font(.system(size: 11)).foregroundStyle(Color.dsFg3)
                 Spacer()

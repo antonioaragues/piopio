@@ -170,7 +170,7 @@ struct CommandPalette: View {
             // What Piopio made (docs/spec/35 §4.3): an item by its name, when you've typed some of it.
             if q.count >= 2, searchScope.kind == nil {
                 for i in engine.library where matches(i.name) {
-                    destinations.append(Row(id: "l:\(i.id)", icon: LibraryKind.symbol(i.kind), title: i.name, trailing: "Library · \(LibraryKind.label(i.kind))") {
+                    destinations.append(Row(id: "l:\(i.id)", icon: i.kind.symbol, title: i.name, trailing: "Library · \(i.kind.label)") {
                         close()
                         engine.focusLibrary(i.id)
                     })

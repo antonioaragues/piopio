@@ -21,7 +21,7 @@ struct SubagentPanel: View {
         VStack(spacing: 0) {
             tabs(children)
             if let child = children.first(where: { $0.ref.id == selected }) {
-                SubagentConversation(engine: engine, thread: engine.thread(child.ref), queuedBrief: child.parent?.state == "queued" ? child.parent?.brief ?? "" : nil)
+                SubagentConversation(engine: engine, thread: engine.thread(child.ref), queuedBrief: child.parent?.state == .queued ? child.parent?.brief ?? "" : nil)
                     .id(child.ref.id)
             } else {
                 Text("This subagent is gone.").font(.system(size: 13)).foregroundStyle(Color.dsFg3)
@@ -55,7 +55,7 @@ struct SubagentPanel: View {
         let on = child.ref.id == selected
         return Button { select(child.ref.id) } label: {
             HStack(spacing: 6) {
-                SubagentGlyph(state: child.parent?.state ?? "working").scaleEffect(0.85)
+                SubagentGlyph(state: child.parent?.state?.rawValue ?? "working").scaleEffect(0.85)
                 if titled { Text(child.title).font(.system(size: 12.5)).lineLimit(1).frame(maxWidth: 140, alignment: .leading).fixedSize() }
             }
             .foregroundStyle(on ? Color.dsFg : Color.dsFg2)
@@ -76,13 +76,13 @@ struct SubagentPanel: View {
                 Button {
                     select(child.ref.id)
                 } label: {
-                    let state = child.parent?.state ?? "working"
+                    let state = child.parent?.state?.rawValue ?? "working"
                     Text("\(child.ref.id == selected ? "✓ " : "")\(child.title) · \(state == "working" ? (child.parent?.line ?? "working") : state)")
                 }
             }
         } label: {
             HStack(spacing: 6) {
-                SubagentGlyph(state: current?.parent?.state ?? "working").scaleEffect(0.85)
+                SubagentGlyph(state: current?.parent?.state?.rawValue ?? "working").scaleEffect(0.85)
                 Text(current?.title ?? "Subagents").font(.system(size: 12.5)).lineLimit(1)
                 Text("\(children.count)").font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
                 Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold)).foregroundStyle(Color.dsFg3)

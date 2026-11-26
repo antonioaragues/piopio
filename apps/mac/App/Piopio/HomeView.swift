@@ -179,11 +179,11 @@ struct HomeView: View {
     // MARK: Waiting on you
 
     /// Projects whose finished board work waits to be merged (open the project's Board).
-    private var readyToMerge: [(work: ProjectWork, project: ProjectInfo, tasks: Int)] {
+    private var readyToMerge: [(work: WorkInfo, project: ProjectInfo, tasks: Int)] {
         engine.work.compactMap { w in
-            guard w.git != nil, !w.tasks.contains(where: { ["todo", "doing", "review", "integrating"].contains($0.state) }),
+            guard w.git != nil, !w.tasks.contains(where: { [.todo, .doing, .review, .integrating].contains($0.state) }),
                   let p = engine.projects.first(where: { $0.id == w.project }) else { return nil }
-            let n = w.tasks.filter { $0.state == "done" && $0.branch != nil && $0.landed == nil }.count
+            let n = w.tasks.filter { $0.state == .done && $0.branch != nil && $0.landed == nil }.count
             return n > 0 ? (w, p, n) : nil
         }
     }
@@ -262,12 +262,12 @@ struct HomeView: View {
     /// A timeline row: the time ("now" while it runs, "any" for an event), what, and whose on the right. Past rows are
     /// grey with ✓ or ⚠; the running one is highlighted.
     private func timelineRow(_ row: HomeAgenda.Today) -> some View {
-        let past = ["done", "failed", "skipped"].contains(row.state)
-        let now = row.state == "running"
+        let past = [.done, .failed, .skipped].contains(row.state)
+        let now = row.state == .running
         // An agent's own schedule has no label: the row is the agent.
         let label = row.label.isEmpty ? row.source.name : row.label.capitalizedFirst
-        let origin = row.label.isEmpty ? row.source.kind : row.source.name + (now && row.source.kind == "project" ? " · board" : "")
-        let mark = row.state == "done" ? " ✓" : row.state == "failed" ? " ⚠" : ""
+        let origin = row.label.isEmpty ? row.source.kind.rawValue : row.source.name + (now && row.source.kind == .project ? " · board" : "")
+        let mark = row.state == .done ? " ✓" : row.state == .failed ? " ⚠" : ""
         return Button { open(row.source, automation: row.automation) } label: {
             HStack(spacing: 12) {
                 Text(now ? "now" : row.at.map(Self.clock) ?? "any")
@@ -291,8 +291,8 @@ struct HomeView: View {
     private func open(_ source: HomeAgenda.Source, automation: String? = nil) {
         if let automation { item = .automation(automation); return }
         switch source.kind {
-        case "agent": item = .agent(source.id)
-        case "piopio": item = .automations("piopio")
+        case .agent: item = .agent(source.id)
+        case .piopio: item = .automations("piopio")
         default: item = .project(source.id)
         }
     }
@@ -806,7 +806,7 @@ struct AskBox: View {
                 case .branch, .worktree:
                     let suggested = try? await engine.client?.call("git.suggestBranch", SuggestBranchParams(prompt: message), as: SuggestBranchResult.self).branch
                     let name = suggested?.isEmpty == false ? suggested! : "piopio/session-\(Int(Date().timeIntervalSince1970))"
-                    place = choice == .branch ? .branch(name, base: nil) : .worktree(name, base: nil)
+                    place = choice == .branch ? .branch(branch: name, base: nil) : .worktree(branch: name, base: nil)
                 }
                 do {
                     let ref = try await engine.createBuildSession(in: project, workOn: place, mode: chosenMode, model: model, planMode: startInPlan)

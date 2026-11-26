@@ -441,9 +441,9 @@ struct ProviderGlyph: View {
 
     static func kindLabel(_ p: ProviderInfo) -> String {
         switch p.kind {
-        case "subscription": "Subscription"
-        case "platform": "Cloud platform"
-        case "custom": "Custom"
+        case .subscription: "Subscription"
+        case .platform: "Cloud platform"
+        case .custom: "Custom"
         default: "Cloud"
         }
     }
@@ -490,7 +490,7 @@ struct ProviderDetailView: View {
                 if isCustom { infoRow("Name", provider.name, action: "Rename") { editing = .name } }
                 if let e = provider.endpoint {
                     infoRow("Base URL", e.baseUrl, mono: true, action: "Edit") { editing = .url }
-                    infoRow("API format", e.format == "anthropic" ? "Anthropic" : "OpenAI-compatible", action: nil) {}
+                    infoRow("API format", e.format == .anthropic ? "Anthropic" : "OpenAI-compatible", action: nil) {}
                 }
                 infoRow("API key", keyValue, mono: provider.keyHint != nil, note: provider.keyHint != nil ? "Keychain" : nil, action: provider.connectedWith == .oauth ? "Sign in again" : keyValue == "None" ? "Add" : "Replace") { replaceKey() }
                 if let e = provider.endpoint {
@@ -585,7 +585,7 @@ struct ProviderDetailView: View {
     }
 
     private var kindDetail: String {
-        if let e = provider.endpoint { return "Custom, \(e.format == "anthropic" ? "Anthropic" : "OpenAI-compatible")" }
+        if let e = provider.endpoint { return "Custom, \(e.format == .anthropic ? "Anthropic" : "OpenAI-compatible")" }
         return [ProviderGlyph.kindLabel(provider), provider.billing].compactMap { $0 }.joined(separator: ", ")
     }
 
@@ -907,7 +907,7 @@ struct AddProviderSheet: View {
     }
 
     private func count(_ c: Category) -> Int {
-        c == .local ? EndpointPreset.all.count : catalog.filter { ($0.kind ?? "cloud") == kind(c) }.count
+        c == .local ? EndpointPreset.all.count : catalog.filter { ($0.kind?.rawValue ?? "cloud") == kind(c) }.count
     }
 
     private func kind(_ c: Category) -> String {
@@ -943,7 +943,7 @@ struct AddProviderSheet: View {
                 presetGrid(EndpointPreset.all)
                 dontSeeYours
             default:
-                grid(catalog.filter { ($0.kind ?? "cloud") == kind(category) }.sorted { $0.name < $1.name })
+                grid(catalog.filter { ($0.kind?.rawValue ?? "cloud") == kind(category) }.sorted { $0.name < $1.name })
             }
         }
     }
@@ -1046,7 +1046,7 @@ struct AddProviderSheet: View {
     }
 
     private func authLabel(_ p: ProviderInfo) -> String {
-        if p.kind == "platform" { return "Cloud credentials" }
+        if p.kind == .platform { return "Cloud credentials" }
         if p.methods.contains(where: { $0.type == .apiKey }) { return "API key" }
         return "Sign in"
     }
@@ -1066,7 +1066,7 @@ private struct ConnectProviderPage: View {
     @State private var error: String?
     @FocusState private var focused: Bool
 
-    private var usesKey: Bool { provider.kind != "platform" && provider.methods.contains { $0.type == .apiKey } }
+    private var usesKey: Bool { provider.kind != .platform && provider.methods.contains { $0.type == .apiKey } }
     private var oauth: ProviderInfo.Method? { provider.methods.first { $0.type == .oauth } }
 
     var body: some View {
@@ -1131,7 +1131,7 @@ private struct ConnectProviderPage: View {
 
     private var billsLine: String {
         if provider.id == "openrouter" { return "Hundreds of models, billed to your OpenRouter credits" }
-        if provider.kind == "subscription" { return "Uses your \(provider.name) plan" }
+        if provider.kind == .subscription { return "Uses your \(provider.name) plan" }
         let families = (provider.families ?? []).prefix(2).map(\.capitalized)
         return families.isEmpty ? "Billed by \(provider.name)" : "\(families.joined(separator: " and ")) models, billed by \(provider.name)"
     }
@@ -1179,7 +1179,7 @@ private struct CustomEndpointPage: View {
     @State private var chosen: EndpointPreset?
     @State private var name = ""
     @State private var url = ""
-    @State private var format = "openai"
+    @State private var format: EndpointFormat = .openai
     @State private var key = ""
     @State private var headers: [HeaderRow] = []
     @State private var context = ""
@@ -1260,7 +1260,7 @@ private struct CustomEndpointPage: View {
     }
 
     private var keyPlaceholder: String {
-        if check?.error == "auth" { return "Required — the server wants a key" }
+        if check?.error == .auth { return "Required — the server wants a key" }
         if check?.ok == true, key.isEmpty { return "Optional — not needed for this server" }
         return "Optional"
     }
@@ -1288,24 +1288,24 @@ private struct CustomEndpointPage: View {
     /// Plain words for what went wrong, and what to do (m5).
     private func help(_ check: EndpointCheckResult) -> some View {
         let text: String = switch check.error {
-        case "refused": chosen.map { "Nothing is listening at \(ProvidersCard.host(url)). \($0.startHint)" } ?? (check.message ?? "Nothing is answering.")
-        case "auth": "The server wants an API key. Paste it in the API key field."
-        case "not_found": check.message ?? "Reachable, but no model list."
-        case "empty": "Connected, but no models are loaded on the server."
-        case "tls": "The server's certificate isn't trusted. Use http:// for a local server, or a trusted certificate."
+        case .refused: chosen.map { "Nothing is listening at \(ProvidersCard.host(url)). \($0.startHint)" } ?? (check.message ?? "Nothing is answering.")
+        case .auth: "The server wants an API key. Paste it in the API key field."
+        case .notFound: check.message ?? "Reachable, but no model list."
+        case .empty: "Connected, but no models are loaded on the server."
+        case .tls: "The server's certificate isn't trusted. Use http:// for a local server, or a trusted certificate."
         default: check.message ?? "The server didn't answer as expected."
         }
         return VStack(alignment: .leading, spacing: 8) {
             Text(text).font(.system(size: 12.5)).foregroundStyle(Color.dsFg).fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 8) {
                 Button("Try again") { Task { await probe(delay: false) } }.buttonStyle(PillStyle(compact: true))
-                if check.error != "auth" && check.error != "invalid" { Button("Add anyway") { save(force: true) }.buttonStyle(PillStyle(compact: true)) }
+                if check.error != .auth && check.error != .invalid { Button("Add anyway") { save(force: true) }.buttonStyle(PillStyle(compact: true)) }
             }
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .settingsRows()
-        .onAppear { if check.error == "auth" { keyFocused = true } }
+        .onAppear { if check.error == .auth { keyFocused = true } }
     }
 
     private func found(_ check: EndpointCheckResult) -> some View {
@@ -1343,7 +1343,7 @@ private struct CustomEndpointPage: View {
         chosen = p
         name = p?.name ?? ""
         url = p?.url ?? ""
-        format = "openai"
+        format = .openai
         check = nil
     }
 

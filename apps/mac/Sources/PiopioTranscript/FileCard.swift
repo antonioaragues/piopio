@@ -99,11 +99,11 @@ struct FileCardView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(file.name).font(.system(size: 13, weight: .medium)).foregroundStyle(Color(nsColor: DS.fg))
                         .lineLimit(1).truncationMode(.middle)
-                    Text(file.missing ? "Not found at \(model.shownPath)" : file.description ?? model.kindLine)
+                    Text(file.isMissing ? "Not found at \(model.shownPath)" : file.description ?? model.kindLine)
                         .font(.system(size: 12)).foregroundStyle(Color(nsColor: DS.fg2)).lineLimit(1)
                 }
                 Spacer(minLength: 8)
-                if !file.missing {
+                if !file.isMissing {
                     Text(file.description == nil ? "Open" : model.kindLine)
                         .font(.system(size: 11.5)).foregroundStyle(Color(nsColor: DS.fg3)).lineLimit(1).fixedSize()
                     // Room for the Save button drawn over the card.
@@ -112,18 +112,18 @@ struct FileCardView: View {
             }
             .padding(.horizontal, 11)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color(nsColor: hovering && !file.missing ? DS.bubble : DS.card), in: RoundedRectangle(cornerRadius: DS.Radius.card, style: .continuous))
+            .background(Color(nsColor: hovering && !file.isMissing ? DS.bubble : DS.card), in: RoundedRectangle(cornerRadius: DS.Radius.card, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: DS.Radius.card, style: .continuous).strokeBorder(Color(nsColor: DS.line), lineWidth: 1))
             .contentShape(RoundedRectangle(cornerRadius: DS.Radius.card, style: .continuous))
         }
         .buttonStyle(.plain)
-        .disabled(file.missing)
-        .opacity(file.missing ? 0.6 : 1)
+        .disabled(file.isMissing)
+        .opacity(file.isMissing ? 0.6 : 1)
         .onHover { hovering = $0 }
-        .help(file.missing ? "Not found: \(model.shownPath)" : "Open \(model.shownPath)")
-        .accessibilityLabel(file.missing ? "\(file.name), not found" : "Open \(file.name), \(model.kindLine)")
+        .help(file.isMissing ? "Not found: \(model.shownPath)" : "Open \(model.shownPath)")
+        .accessibilityLabel(file.isMissing ? "\(file.name), not found" : "Open \(file.name), \(model.kindLine)")
         .overlay(alignment: .trailing) {
-            if !file.missing {
+            if !file.isMissing {
                 Button { FileSaving.saveCopy(of: url) } label: {
                     Image(systemName: "arrow.down.circle")
                         .font(.system(size: 15, weight: .regular))
@@ -138,9 +138,9 @@ struct FileCardView: View {
             }
         }
         // Drag it to Finder, Mail or another app, as a downloaded file.
-        .onDrag { file.missing ? NSItemProvider() : (NSItemProvider(contentsOf: url) ?? NSItemProvider()) }
+        .onDrag { file.isMissing ? NSItemProvider() : (NSItemProvider(contentsOf: url) ?? NSItemProvider()) }
         .contextMenu {
-            if !file.missing {
+            if !file.isMissing {
                 Button("Open") { open() }
                 Button("Open in Default App") { NSWorkspace.shared.open(url) }
                 Button("Save a Copy…") { FileSaving.saveCopy(of: url) }
@@ -153,7 +153,7 @@ struct FileCardView: View {
     private var url: URL { URL(fileURLWithPath: file.path) }
 
     private func open() {
-        guard !file.missing else { return }
+        guard !file.isMissing else { return }
         MainActor.assumeIsolated { model.onAction?(.openFile(path: file.path, line: nil)) }
     }
 }

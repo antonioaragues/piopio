@@ -90,7 +90,7 @@ struct PullRequestBlock: View {
                     Button { withAnimation(.easeOut(duration: 0.15)) { open.toggle() } } label: {
                         HStack(spacing: 8) {
                             Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).foregroundStyle(Color.dsFg3).rotationEffect(.degrees(open ? 90 : 0))
-                            Image(systemName: "arrow.triangle.pull").font(.system(size: 12)).foregroundStyle(Self.color(pr.state, pr.checks))
+                            Image(systemName: "arrow.triangle.pull").font(.system(size: 12)).foregroundStyle(Self.color(pr.state.rawValue, pr.checks?.rawValue))
                             Text("#\(pr.number)").font(.system(size: 12.5, weight: .semibold))
                             Text(pr.title).font(.system(size: 12.5)).lineLimit(1)
                             Text(line(pr)).font(.system(size: 12)).foregroundStyle(Color.dsFg3).lineLimit(1)
@@ -99,8 +99,8 @@ struct PullRequestBlock: View {
                     }
                     .buttonStyle(.plain)
                     Spacer(minLength: 8)
-                    if pr.state == "open", pr.checks == "failing" { Button("Fix CI") { address("ci") }.buttonStyle(PillStyle(kind: .primary, compact: true)) }
-                    if pr.state == "open", humanComments > 0 { Button("Address comments") { address("comments") }.buttonStyle(PillStyle(compact: true)) }
+                    if pr.state == .open, pr.checks == .failing { Button("Fix CI") { address(.ci) }.buttonStyle(PillStyle(kind: .primary, compact: true)) }
+                    if pr.state == .open, humanComments > 0 { Button("Address comments") { address(.comments) }.buttonStyle(PillStyle(compact: true)) }
                     Button { if let url = URL(string: pr.url) { NSWorkspace.shared.open(url) } } label: { Image(systemName: "arrow.up.right.square") }
                         .buttonStyle(.plain).foregroundStyle(Color.dsFg2).help("Open on GitHub")
                 }
@@ -112,7 +112,7 @@ struct PullRequestBlock: View {
             .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.dsLine, lineWidth: 1))
             .frame(maxWidth: DS.column)
             // While it's in view: now, then every minute (the engine polls every two for the conversation's sake).
-            .task(id: "\(pr.number)\(pr.state)\(pr.checks ?? "")") {
+            .task(id: "\(pr.number)\(pr.state.rawValue)\(pr.checks?.rawValue ?? "")") {
                 while !Task.isCancelled {
                     status = try? await engine.pullRequest(summary.ref)
                     try? await Task.sleep(for: .seconds(60))
@@ -124,11 +124,11 @@ struct PullRequestBlock: View {
     private var humanComments: Int { status?.comments.filter { !$0.bot }.count ?? 0 }
 
     private func line(_ pr: SessionSummary.PR) -> String {
-        var parts = [pr.state == "open" ? "open into \(pr.base)" : pr.state]
+        var parts = [pr.state == .open ? "open into \(pr.base)" : pr.state.rawValue]
         switch pr.checks {
-        case "failing": parts.append("checks failing")
-        case "pending": parts.append("checks running")
-        case "passing": parts.append("checks passed")
+        case .failing: parts.append("checks failing")
+        case .pending: parts.append("checks running")
+        case .passing: parts.append("checks passed")
         default: break
         }
         if humanComments > 0 { parts.append("\(humanComments) comment\(humanComments == 1 ? "" : "s")") }
@@ -139,9 +139,9 @@ struct PullRequestBlock: View {
         VStack(alignment: .leading, spacing: 6) {
             ForEach(s.checks, id: \.name) { c in
                 HStack(spacing: 8) {
-                    Circle().fill(c.status != "completed" ? Color.accentColor : ["success", "neutral", "skipped"].contains(c.conclusion ?? "") ? Color.dsGreen : Color.dsRed).frame(width: 7, height: 7)
+                    Circle().fill(c.status != .completed ? Color.accentColor : ["success", "neutral", "skipped"].contains(c.conclusion ?? "") ? Color.dsGreen : Color.dsRed).frame(width: 7, height: 7)
                     Text(c.name).font(.system(size: 12.5))
-                    Text(c.status == "completed" ? (c.conclusion ?? "done") : "running").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
+                    Text(c.status == .completed ? (c.conclusion ?? "done") : "running").font(.system(size: 12)).foregroundStyle(Color.dsFg3)
                     Spacer()
                     if let url = c.url.flatMap(URL.init(string:)) { Button("Details") { NSWorkspace.shared.open(url) }.buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Color.dsFg2) }
                 }
@@ -157,7 +157,7 @@ struct PullRequestBlock: View {
         .padding(.horizontal, 12).padding(.bottom, 10)
     }
 
-    private func address(_ what: String) {
+    private func address(_ what: AddressPrParams.What) {
         Task {
             do { try await engine.addressPR(summary.ref, what); error = nil } catch { self.error = (error as? EngineError)?.message ?? error.localizedDescription }
         }
@@ -173,7 +173,7 @@ struct PullRequestBlock: View {
 /// The Board's work branch as a pull request (G6): a title and body, then it opens on GitHub.
 struct WorkPRSheet: View {
     let engine: EngineController
-    let work: ProjectWork
+    let work: WorkInfo
     let done: () -> Void
     @State private var title = ""
     @State private var prBody = ""
@@ -210,7 +210,7 @@ struct WorkPRSheet: View {
         .padding(20)
         .frame(width: 520)
         .onAppear {
-            let done = work.tasks.filter { $0.state == "done" && $0.landed == nil }
+            let done = work.tasks.filter { $0.state == .done && $0.landed == nil }
             title = done.count == 1 ? done[0].title : "\(done.count) tasks from the board"
             prBody = done.map { "- \($0.id) \($0.title)" }.joined(separator: "\n")
         }
@@ -234,13 +234,13 @@ struct GitHubPane: View {
                     Image(systemName: status?.connected == true ? "checkmark.circle.fill" : "circle").foregroundStyle(status?.connected == true ? Color.dsGreen : Color.dsFg3)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(status?.connected == true ? "Signed in as \(status?.login ?? "")" : "Not signed in").font(.system(size: 13))
-                        Text(status?.via == "gh" ? "Through the GitHub CLI (gh)." : status?.via == "token" ? "With your token, kept in the Keychain." : (status?.error ?? "Sign in with `gh auth login` in Terminal, or add a token below.")).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
+                        Text(status?.via == .gh ? "Through the GitHub CLI (gh)." : status?.via == .token ? "With your token, kept in the Keychain." : (status?.error ?? "Sign in with `gh auth login` in Terminal, or add a token below.")).font(.system(size: 11.5)).foregroundStyle(Color.dsFg3)
                     }
                     Spacer()
-                    if status?.via == "token" { Button("Sign out") { Task { await engine.signOutOfGitHub(); await reload() } }.buttonStyle(PillStyle(compact: true)) }
+                    if status?.via == .token { Button("Sign out") { Task { await engine.signOutOfGitHub(); await reload() } }.buttonStyle(PillStyle(compact: true)) }
                 }
                 .padding(.horizontal, 14).frame(minHeight: 50)
-                if status?.via != "gh" {
+                if status?.via != .gh {
                     RowDivider(inset: 14)
                     HStack(spacing: 8) {
                         SecureField("Personal access token (repo, workflow)", text: $token).textFieldStyle(.roundedBorder)

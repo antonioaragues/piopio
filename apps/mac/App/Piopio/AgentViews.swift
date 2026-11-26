@@ -211,7 +211,7 @@ struct AgentPage: View {
         }
     }
 
-    private var inCloud: Bool { summary.agent?.location == "cloud" }
+    private var inCloud: Bool { summary.agent?.location == .cloud }
 
     private var watching: Bool { BrowserCenter.shared.openPanels.contains(summary.ref.id) }
 
@@ -235,7 +235,7 @@ struct AgentPage: View {
         Task {
             defer { moving = false }
             do {
-                moved = try await engine.moveAgent(summary.ref, to: inCloud ? "local" : "cloud")
+                moved = try await engine.moveAgent(summary.ref, to: inCloud ? .local : .cloud)
                 conversation = nil
                 await load()
             } catch {
@@ -261,9 +261,9 @@ struct AgentPage: View {
 
     @ViewBuilder private var chat: some View {
         let person = people.first { $0.conversationId == conversation }
-        if let conversation, conversation.hasPrefix("run:") || person?.role == "agent" {
+        if let conversation, conversation.hasPrefix("run:") || person?.role == .agent {
             AgentRunTranscript(engine: engine, ref: ContainerRef(kind: .agent, id: summary.ref.id, conversationId: conversation))
-        } else if let conversation, let person, person.role != "owner" {
+        } else if let conversation, let person, person.role != .owner {
             AgentChat(engine: engine, ref: ContainerRef(kind: .agent, id: summary.ref.id, conversationId: conversation), simulated: person.name)
         } else {
             AgentChat(engine: engine, ref: summary.ref, simulated: nil, accessory: identityCard)
@@ -275,7 +275,7 @@ struct AgentPage: View {
         guard summary.agent?.draft != true, let def, !introSeen.split(separator: ",").contains(Substring(summary.ref.id)) else { return nil }
         let thread = engine.thread(summary.ref)
         _ = thread.revision
-        let setUpHere = thread.document.items.contains { if case .result(let r) = $0 { r.card.kind == "setup" } else { false } }
+        let setUpHere = thread.document.items.contains { if case .result(let r) = $0 { r.card.kind == .setup } else { false } }
         guard setUpHere, (runs?.runs ?? []).isEmpty else { return nil }
         return AnyView(AgentIdentityCard(engine: engine, summary: summary, def: def, runs: runs, rename: {
             setupSection = "What it does"
@@ -301,7 +301,7 @@ struct AgentPage: View {
     private func backBar(_ conversation: String) -> some View {
         let person = people.first { $0.conversationId == conversation }
         let what = conversation.hasPrefix("run:") ? (runs?.runs.first { "run:\($0.id)" == conversation }.map { "Run · \(HomeView.at($0.firedAt))" } ?? "A run")
-            : person.map { $0.role == "agent" ? "With \($0.name) (agent)" : "With \($0.name)" } ?? ""
+            : person.map { $0.role == .agent ? "With \($0.name) (agent)" : "With \($0.name)" } ?? ""
         return HStack(spacing: 8) {
             Button { self.conversation = nil } label: { Label("Your chat", systemImage: "chevron.left").font(.system(size: 12.5)) }
                 .buttonStyle(.plain).foregroundStyle(Color.dsFg2)
@@ -430,11 +430,11 @@ struct AgentPage: View {
                 Button(status.paused ? "Resume" : "Pause") { Task { try? await engine.pause(summary.ref, paused: !status.paused) } }
             }
             Divider()
-            let others = people.filter { $0.role != "owner" }
+            let others = people.filter { $0.role != .owner }
             if !others.isEmpty {
                 Menu("Conversations") {
                     Button("Yours") { conversation = nil; tab = .chat }
-                    ForEach(others) { p in Button(p.role == "agent" ? "\(p.name) (agent)" : p.name) { conversation = p.conversationId; tab = .chat } }
+                    ForEach(others) { p in Button(p.role == .agent ? "\(p.name) (agent)" : p.name) { conversation = p.conversationId; tab = .chat } }
                 }
                 Divider()
             }
@@ -606,7 +606,7 @@ struct AgentMemoryView: View {
     private func pin(_ r: MemoryRecordInfo) {
         guard let info, let bank else { return }
         run {
-            try await engine.spaceCall("memory.update", MemoryIdParams(provider: info.provider, bank: bank, id: r.id, pinned: !(r.pinned ?? false)))
+            try await engine.spaceCall("memory.update", MemoryUpdateParams(provider: info.provider, bank: bank, id: r.id, pinned: !(r.pinned ?? false)))
             await load()
         }
     }

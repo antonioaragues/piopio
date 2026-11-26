@@ -38,7 +38,7 @@ struct AgentQuickReplies: View {
             switch item {
             case .user: return []
             case .tool(let t) where t.tool == "ask_owner" && t.status != .error:
-                guard case .array(let list)? = t.args?["options"] else { return [] }
+                guard case .array(let list)? = t.args["options"] else { return [] }
                 return list.compactMap(\.stringValue)
             case .assistant(let a):
                 if let s = a.outbound?.suggestions, !s.isEmpty { return s }
@@ -54,7 +54,7 @@ struct AgentQuickReplies: View {
             switch item {
             case .user: return nil
             case .tool(let t) where t.tool == "ask_owner" && t.status != .error:
-                if case .number(let n)? = t.args?["number"] { return "Question \(Int(n)) of 3" }
+                if case .number(let n)? = t.args["number"] { return "Question \(Int(n)) of 3" }
                 return nil
             default: continue
             }
@@ -119,7 +119,7 @@ struct AgentIdentityCard: View {
     private var when: String {
         var parts = (def.schedules ?? []).map { CronText.describe($0.cron) }
         // A routine it set itself: its time in words when it repeats, else what it waits for.
-        parts += (runs?.upcoming ?? []).filter { $0.kind == "watch" || $0.kind == "reminder" }.map { u in u.cron.map(CronText.describe) ?? (u.label.components(separatedBy: " · ").first ?? u.label) }
+        parts += (runs?.upcoming ?? []).filter { $0.kind == .watch || $0.kind == .reminder }.map { u in u.cron.map(CronText.describe) ?? (u.label.components(separatedBy: " · ").first ?? u.label) }
         return parts.isEmpty ? "Only when you ask" : parts.prefix(3).joined(separator: "; ")
     }
 

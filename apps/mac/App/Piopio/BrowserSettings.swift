@@ -5,16 +5,6 @@ import WebKit
 // Settings › Browser (docs/spec/22 §4.4, §7): the sites the model may always act on, the sites it never acts on, and
 // your browsing data (the sign-ins the browser keeps).
 
-private struct BrowserSitesResult: Decodable {
-    struct Site: Decodable, Hashable { let site: String; let level: String }
-    let sites: [Site]
-}
-
-private struct SetSiteParams: Encodable, Sendable {
-    let site: String
-    let level: String
-}
-
 struct BrowserSettingsPane: View {
     let engine: EngineController
     @State private var sites: [BrowserSitesResult.Site] = []
@@ -31,8 +21,8 @@ struct BrowserSettingsPane: View {
                     SettingRow(title: "No sites yet", subtitle: "“Allow, don't ask again” on a card adds a site here.") { EmptyView() }
                 }
                 ForEach(sites, id: \.self) { s in
-                    SettingRow(title: s.site, subtitle: s.level == "allowed" ? "Always allowed" : "Blocked: never clicks or types here") {
-                        Button { Task { await set(s.site, "ask") } } label: { Image(systemName: "minus.circle.fill").foregroundStyle(Color.dsFg3) }
+                    SettingRow(title: s.site, subtitle: s.level == .allowed ? "Always allowed" : "Blocked: never clicks or types here") {
+                        Button { Task { await set(s.site, .ask) } } label: { Image(systemName: "minus.circle.fill").foregroundStyle(Color.dsFg3) }
                             .buttonStyle(.plain)
                             .help("Remove: acting here asks again")
                     }
@@ -67,7 +57,7 @@ struct BrowserSettingsPane: View {
         sites = (try? await engine.client?.call("browser.sites", Empty(), as: BrowserSitesResult.self))?.sites ?? []
     }
 
-    private func set(_ site: String, _ level: String) async {
+    private func set(_ site: String, _ level: SetSiteParams.Level) async {
         _ = try? await engine.client?.call("browser.setSite", SetSiteParams(site: site, level: level), as: Empty.self)
         await load()
     }
@@ -76,7 +66,7 @@ struct BrowserSettingsPane: View {
         let site = blocking.trimmingCharacters(in: .whitespaces).lowercased()
         guard !site.isEmpty else { return }
         blocking = ""
-        Task { await set(browserSite(of: URL(string: site.contains("://") ? site : "https://\(site)")) ?? site, "blocked") }
+        Task { await set(browserSite(of: URL(string: site.contains("://") ? site : "https://\(site)")) ?? site, .blocked) }
     }
 
     private func clear() async {

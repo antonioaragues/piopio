@@ -14,12 +14,12 @@ extension Notification.Name {
 
 struct ConversationPlan: View {
     let engine: EngineController
-    let work: ProjectWork
+    let work: WorkInfo
     let conversationId: String
     @State private var open = true
 
     private var tasks: [WorkTask] { work.tasks.filter { $0.conversationId == conversationId } }
-    private var running: Bool { tasks.contains { ["todo", "doing", "review", "integrating"].contains($0.state) } }
+    private var running: Bool { tasks.contains { [.todo, .doing, .review, .integrating].contains($0.state) } }
 
     var body: some View {
         let tasks = tasks
@@ -67,7 +67,7 @@ struct ConversationPlan: View {
     private func row(_ t: WorkTask) -> some View {
         let (word, color) = Self.state(t)
         return Button {
-            if let id = (t.state == "review" ? t.reviewSessionId : nil) ?? t.sessionId {
+            if let id = (t.state == .review ? t.reviewSessionId : nil) ?? t.sessionId {
                 NotificationCenter.default.post(name: .selectItem, object: SidebarItem.session(id).raw)
             }
         } label: {
@@ -99,11 +99,11 @@ struct ConversationPlan: View {
     /// A task's state as the plan says it, and its dot.
     static func state(_ t: WorkTask) -> (String, Color) {
         switch t.state {
-        case "todo": ("waiting", Color.dsFg3)
-        case "doing": ("building", Color.accentColor)
-        case "review": ("in review", Color.dsWarn)
-        case "integrating": ("merging", Color.accentColor)
-        case "done": (t.landed != nil ? "merged" : "approved", Color.dsGreen)
+        case .todo: ("waiting", Color.dsFg3)
+        case .doing: ("building", Color.accentColor)
+        case .review: ("in review", Color.dsWarn)
+        case .integrating: ("merging", Color.accentColor)
+        case .done: (t.landed != nil ? "merged" : "approved", Color.dsGreen)
         default: ("blocked", Color.dsRed)
         }
     }

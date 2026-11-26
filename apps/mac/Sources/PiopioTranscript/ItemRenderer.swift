@@ -121,7 +121,7 @@ nonisolated struct ItemRenderer: Sendable {
             return out
         case .assistant(let a):
             let out = NSMutableAttributedString()
-            let thinking = a.parts.filter { $0.type == .thinking }.map(\.text).joined()
+            let thinking = a.parts.filter { $0.isThinking }.map(\.text).joined()
             if !thinking.isEmpty { out.append(thinkingCard(DisclosureCard(kind: .thinking, title: Self.thought(a.thinkingMs), detail: "", body: thinking))) }
             // A new agent's greeting (docs/spec/19 S2) reads as its first message, with no label.
             // A run's message follows its run line (docs/spec/21 D3), which says so; others are marked here.
@@ -137,8 +137,8 @@ nonisolated struct ItemRenderer: Sendable {
             // One the tool refused (an answer too long) was never asked: the model asks again, so it showed up to three times.
             let out = NSMutableAttributedString()
             if t.status == .error { return out }
-            if case .number(let n)? = t.args?["number"] { out.append(note("Question \(Int(n)) of 3")) }
-            for block in MarkdownStream(text: t.args?["question"]?.stringValue ?? "").blocks { out.append(render(block)) }
+            if case .number(let n)? = t.args["number"] { out.append(note("Question \(Int(n)) of 3")) }
+            for block in MarkdownStream(text: t.args["question"]?.stringValue ?? "").blocks { out.append(render(block)) }
             return out
         case .tool(let t) where t.tool == "ask_agent":
             return agentAnswer(t)
@@ -154,12 +154,8 @@ nonisolated struct ItemRenderer: Sendable {
             return offerCard(t)
         case .tool(let t) where (t.tool == "automate" || t.tool == "change_automation") && t.status == .done:
             // Piopio made or changed an automation (docs/spec/27 §4): its card, Open in Automations, and Undo for a new one.
-            guard case .object(let details)? = t.details, case .object(let s)? = details["automation"], let id = s["id"]?.stringValue else { return attachmentParagraph(DisclosureAttachment(card: Self.toolCard(t, root: root))) }
-            let summary = AutomationSummary(id: id, name: s["name"]?.stringValue ?? "Automation", when: s["when"]?.stringValue ?? "", runsAs: s["runsAs"]?.stringValue ?? "",
-                                            does: s["does"]?.stringValue ?? "", tellsYou: s["tellsYou"]?.stringValue ?? "", runsOn: s["runsOn"]?.stringValue ?? "", url: s["url"]?.stringValue)
-            var withNext = summary
-            if case .number(let next)? = s["next"] { withNext.next = next }
-            return automationCard(withNext, undoId: nil, changed: t.tool == "change_automation")
+            guard case .automation(let summary, _)? = t.details else { return attachmentParagraph(DisclosureAttachment(card: Self.toolCard(t, root: root))) }
+            return automationCard(summary, undoId: nil, changed: t.tool == "change_automation")
         case .tool(let t) where t.tool == "side_propose" && t.status == .done:
             return sideProposal(t)
         case .tool(let t) where t.tool == "propose_plan":
@@ -169,20 +165,20 @@ nonisolated struct ItemRenderer: Sendable {
             return NSAttributedString()
         case .tool(let t) where t.tool == "make_app" && t.status == .done && !compact:
             // The app it made, live, as a visual is (docs/spec/35 §17): its page with its data, Open and Pin.
-            guard case .files(let files)? = t.typedDetails, let file = files.first else { return attachmentParagraph(DisclosureAttachment(card: Self.toolCard(t, root: root))) }
-            let title = t.args?["title"]?.stringValue ?? file.name
+            guard case .files(let files)? = t.details, let file = files.first else { return attachmentParagraph(DisclosureAttachment(card: Self.toolCard(t, root: root))) }
+            let title = t.args["title"]?.stringValue ?? file.name
             let model = VisualCardModel(itemId: t.id, key: "app:\(file.path)", title: title, html: "", root: root, appPath: file.path)
             return attachmentParagraph(VisualAttachment(model: model), spacing: 14)
         case .tool(let t) where (t.tool == "present_files" || t.tool == "make_app") && t.status == .done:
             // Files the agent handed over: a card per file that opens it (piopio-present).
-            guard case .files(let files)? = t.typedDetails, !files.isEmpty else { return attachmentParagraph(DisclosureAttachment(card: Self.toolCard(t, root: root))) }
+            guard case .files(let files)? = t.details, !files.isEmpty else { return attachmentParagraph(DisclosureAttachment(card: Self.toolCard(t, root: root))) }
             let out = NSMutableAttributedString()
             for file in files { out.append(attachmentParagraph(FileCardAttachment(model: FileCardModel(file: file, shownPath: Self.relative(file.path, root: root))), spacing: 8)) }
             return out
         case .tool(let t) where t.tool == "show_visual" && t.status != .error:
             // A visual (docs/spec/25): live HTML in a card; until its HTML has arrived, the usual running card.
-            guard let html = t.args?["html"]?.stringValue, !html.isEmpty else { return attachmentParagraph(DisclosureAttachment(card: Self.toolCard(t, root: root))) }
-            let model = VisualCardModel(itemId: t.id, key: t.callId, title: t.args?["title"]?.stringValue ?? "", html: html, root: root, makesApps: !compact && (versions || build))
+            guard let html = t.args["html"]?.stringValue, !html.isEmpty else { return attachmentParagraph(DisclosureAttachment(card: Self.toolCard(t, root: root))) }
+            let model = VisualCardModel(itemId: t.id, key: t.callId, title: t.args["title"]?.stringValue ?? "", html: html, root: root, makesApps: !compact && (versions || build))
             return attachmentParagraph(VisualAttachment(model: model), spacing: 14)
         case .tool(let t):
             return attachmentParagraph(DisclosureAttachment(card: Self.toolCard(t, root: root)))
@@ -195,23 +191,23 @@ nonisolated struct ItemRenderer: Sendable {
                 // An automation's run (the handoff's screen 2): "From Daily price check · 08:00" over what it wrote; it
                 // opens the automation. A run that didn't write says how it went under it.
                 let out = NSMutableAttributedString(attributedString: originTag(origin, when: when))
-                guard !(run.status == "done" && run.sent > 0) else { return out }
+                guard !(run.status == .done && run.sent > 0) else { return out }
                 let outcome = s.text.components(separatedBy: " · ").dropFirst().joined(separator: " · ")
-                guard let summary = run.summary, !summary.isEmpty, run.status != "running" else {
-                    out.append(note(outcome.capitalizedFirstLetter, dot: run.status == "failed" ? DS.amber : nil))
+                guard let summary = run.summary, !summary.isEmpty, run.status != .running else {
+                    out.append(note(outcome.capitalizedFirstLetter, dot: run.status == .failed ? DS.amber : nil))
                     return out
                 }
                 let card = DisclosureCard(kind: .thinking, title: outcome.capitalizedFirstLetter, body: summary)
                 card.action = ("Open", .openSession("run:\(run.id)"))
-                card.failed = run.status == "failed"
+                card.failed = run.status == .failed
                 out.append(thinkingCard(card))
                 return out
             }
             let title = when.isEmpty ? s.text : "\(when) · \(s.text)"
-            guard let summary = run.summary, !summary.isEmpty, run.status != "running" else { return note(title, dot: run.status == "failed" ? DS.amber : nil) }
+            guard let summary = run.summary, !summary.isEmpty, run.status != .running else { return note(title, dot: run.status == .failed ? DS.amber : nil) }
             let card = DisclosureCard(kind: .thinking, title: title, body: summary)
             card.action = ("Open", .openSession("run:\(run.id)"))
-            card.failed = run.status == "failed"
+            card.failed = run.status == .failed
             return thinkingCard(card)
         case .system(let s):
             if s.level == .error { return errorCard(title: s.text, safe: "Nothing was lost.", actions: []) }
@@ -248,7 +244,7 @@ nonisolated struct ItemRenderer: Sendable {
         let allow = CardButton(title: "Allow", action: .decideApproval(approvalId: a.approvalId, approve: true))
         let deny = CardButton(title: "Deny", action: .decideApproval(approvalId: a.approvalId, approve: false))
         if compact { return actionCard(title: title) }
-        if a.source == "connector" {
+        if a.source == .connector {
             // A connected app's change in a chat (docs/spec/12-connectors): Deny / Allow, and "don't ask again" for plain writes.
             let always = a.always.isEmpty ? [] : [CardButton(title: "Allow, don't ask again", action: .allowAlways(approvalId: a.approvalId))]
             return actionCard(title: title, secondary: [deny] + always, primary: allow)
@@ -306,10 +302,10 @@ nonisolated struct ItemRenderer: Sendable {
     /// What a tool changed (06-agents §4.2 RC1): the change, and Undo while it can be undone.
     private func resultCard(_ r: ResultItem) -> NSAttributedString {
         // An agent's automation (docs/spec/27 §4): the same card as Piopio's, with the agent's own Undo.
-        if r.card.kind == "automation", let s = r.card.automation {
+        if r.card.kind == .automation, let s = r.card.automation {
             return automationCard(s, undoId: r.undo?.status == .available ? r.undo!.id : nil, changed: r.card.title.hasPrefix("Changed"), undone: r.undo?.status == .undone)
         }
-        let icon = switch r.card.kind { case "reminder": "◷"; case "message": "✉︎"; default: "✎" }
+        let icon = switch r.card.kind { case .reminder: "◷"; case .message: "✉︎"; default: "✎" }
         let undone = r.undo?.status == .undone
         let m = NSMutableAttributedString(string: "\(icon)  ", attributes: [.font: NSFont.systemFont(ofSize: 12), .foregroundColor: DS.fg3])
         m.append(NSAttributedString(string: r.card.title, attributes: [.font: NSFont.systemFont(ofSize: 12.5, weight: .semibold), .foregroundColor: undone ? DS.fg3 : DS.fg, .strikethroughStyle: undone ? NSUnderlineStyle.single.rawValue : 0]))
@@ -335,15 +331,15 @@ nonisolated struct ItemRenderer: Sendable {
         func offer(_ kind: String) -> TranscriptAction { .offer(kind: kind, callId: t.callId) }
         if t.tool == "offer_parallel" {
             var parts = ""
-            if case .array(let list)? = t.args?["parts"] { parts = list.compactMap(\.stringValue).joined(separator: " · ") }
-            return actionCard(title: "This could go faster in parallel", lines: [(t.args?["why"]?.stringValue ?? "", DS.fg2), (parts, DS.fg3)],
+            if case .array(let list)? = t.args["parts"] { parts = list.compactMap(\.stringValue).joined(separator: " · ") }
+            return actionCard(title: "This could go faster in parallel", lines: [(t.args["why"]?.stringValue ?? "", DS.fg2), (parts, DS.fg3)],
                               secondary: [CardButton(title: "Do it here, one by one", action: reply("Do it here, one by one."))],
                               primary: CardButton(title: "Work in parallel", action: offer("parallel")))
         }
-        let what = t.args?["what"]?.stringValue ?? ""
-        let when = t.args?["when"]?.stringValue ?? ""
+        let what = t.args["what"]?.stringValue ?? ""
+        let when = t.args["when"]?.stringValue ?? ""
         var others: [CardButton] = [CardButton(title: "No", action: reply("No, just this once."))]
-        if t.args?["cron"]?.stringValue != nil { others.append(CardButton(title: "Just a routine here", action: offer("routine"))) }
+        if t.args["cron"]?.stringValue != nil { others.append(CardButton(title: "Just a routine here", action: offer("routine"))) }
         return actionCard(title: "Make this happen on its own?", lines: [([when, what].filter { !$0.isEmpty }.joined(separator: ": "), DS.fg2)],
                           secondary: others, primary: CardButton(title: "Make it an agent", action: offer("agent")))
     }
@@ -387,11 +383,11 @@ nonisolated struct ItemRenderer: Sendable {
     /// One of your agents, asked from a conversation (docs/spec/21 D6, design 5c-2): "Rita · joined for this message"
     /// when `@Rita` brought her in, else "Asked Rita"; her answer indented under a rule in her colour.
     private func agentAnswer(_ t: ToolItem) -> NSAttributedString {
-        let agent = t.details?["agent"]
-        let name = agent?["name"]?.stringValue ?? t.args?["agent"]?.stringValue ?? "Agent"
-        let id = agent?["id"]?.stringValue ?? ""
+        var agent: ToolDetails.Agent?
         var joined = false
-        if case .bool(let j)? = t.details?["joined"] { joined = j }
+        if case .agent(let a, let j, _)? = t.details { agent = a; joined = j == true }
+        let name = agent?.name ?? t.args["agent"]?.stringValue ?? "Agent"
+        let id = agent?.id ?? ""
         let tint = id.isEmpty ? DS.fg3 : AgentPalette.color(id)
         let head = NSMutableAttributedString()
         head.append(NSAttributedString(string: "●  ", attributes: [.font: NSFont.systemFont(ofSize: 9), .foregroundColor: tint, .baselineOffset: 1]))
@@ -491,7 +487,7 @@ nonisolated struct ItemRenderer: Sendable {
             var seen: [String] = []
             // A file it failed to read or change wasn't read or changed: "1 step failed" says so (as Read does).
             for t in tools where kinds.contains(t.tool) && t.status != .denied && t.status != .error {
-                let path = relative(t.args?["path"]?.stringValue ?? "", root: root)
+                let path = relative(t.args["path"]?.stringValue ?? "", root: root)
                 if !path.isEmpty, !seen.contains(path) { seen.append(path) }
             }
             return seen
@@ -509,7 +505,7 @@ nonisolated struct ItemRenderer: Sendable {
             case "edit":
                 let edited = paths(["edit", "write"])
                 let added = tools.filter { ["edit", "write"].contains($0.tool) && $0.status != .error }.reduce(0) { n, t in
-                    if case .diff(_, let patch)? = t.typedDetails { n + DiffLine.parse(patch).added } else { n }
+                    if case .diff(_, let patch)? = t.details { n + DiffLine.parse(patch).added } else { n }
                 }
                 let verb = tools.contains { $0.tool == "edit" } ? "edited" : "wrote"
                 if edited.count == 1 { parts.append(ActivityPart(text: verb, chip: edited[0], added: added > 0 ? added : nil, help: edited[0])) }
@@ -562,7 +558,7 @@ nonisolated struct ItemRenderer: Sendable {
         func names(_ kind: Set<String>) -> [String] {
             var seen: [String] = []
             for t in tools where kind.contains(t.tool) {
-                let path = t.args?["path"]?.stringValue ?? ""
+                let path = t.args["path"]?.stringValue ?? ""
                 let name = (path as NSString).lastPathComponent
                 if !name.isEmpty, !seen.contains(name) { seen.append(name) }
             }
@@ -689,20 +685,20 @@ nonisolated struct ItemRenderer: Sendable {
     /// A plan in the transcript (docs/spec/09 P1–P3): its details once the engine has them, else its arguments.
     static func planContent(_ t: ToolItem) -> PlanContent {
         let strings = { (key: String) -> [String] in
-            guard case .array(let items)? = t.args?[key] else { return [] }
+            guard case .array(let items)? = t.args[key] else { return [] }
             return items.compactMap(\.stringValue)
         }
-        var plan = PlanContent(callId: t.callId, summary: t.args?["summary"]?.stringValue ?? "", steps: strings("steps"), files: strings("files"), risks: strings("risks"), state: .pending)
-        var outcome: String?
-        if case .plan(let d)? = t.typedDetails {
-            plan.summary = d.summary.isEmpty ? plan.summary : d.summary
-            plan.steps = d.steps.isEmpty ? plan.steps : d.steps
-            plan.files = d.files
-            plan.risks = d.risks
-            outcome = d.outcome
-            if d.outcome == "approved" { plan.state = d.edited ? .approvedEdited : .approved }
-            else if d.outcome == "changes" { plan.state = .changes(d.note) }
-            else if d.outcome == "unanswered" { plan.state = .unanswered }
+        var plan = PlanContent(callId: t.callId, summary: t.args["summary"]?.stringValue ?? "", steps: strings("steps"), files: strings("files"), risks: strings("risks"), state: .pending)
+        var outcome: ToolDetails.Outcome?
+        if case .plan(let summary, let steps, let files, let risks, let answer, let edited, let note)? = t.details {
+            plan.summary = summary.isEmpty ? plan.summary : summary
+            plan.steps = steps.isEmpty ? plan.steps : steps
+            plan.files = files ?? []
+            plan.risks = risks ?? []
+            outcome = answer
+            if answer == .approved { plan.state = edited == true ? .approvedEdited : .approved }
+            else if answer == .changes { plan.state = .changes(note) }
+            else if answer == .unanswered { plan.state = .unanswered }
         }
         if outcome == nil {
             switch t.status {
@@ -717,11 +713,11 @@ nonisolated struct ItemRenderer: Sendable {
     /// A question the agent asked (ask_user) and what you answered, kept in the transcript as Cursor and Claude
     /// do; while it waits, the question card above the composer takes the answer.
     private func questionCard(_ t: ToolItem) -> NSAttributedString {
-        let question = t.args?["question"]?.stringValue ?? ""
+        let question = t.args["question"]?.stringValue ?? ""
         // While it waits, the card above the composer holds the question.
         if t.status == .running || t.status == .pendingApproval { return NSAttributedString() }
         let prefix = "The user answered: "
-        let answer = t.details?["answer"]?.stringValue ?? t.output.flatMap { $0.hasPrefix(prefix) ? String($0.dropFirst(prefix.count)) : nil }
+        let answer = t.output.flatMap { $0.hasPrefix(prefix) ? String($0.dropFirst(prefix.count)) : nil }
         // Once answered, the question and your answer in a box, as Claude keeps them.
         return answeredCard(question: question, answer: answer ?? (t.status == .interrupted ? "Stopped before you answered" : "Not answered"))
     }
@@ -755,7 +751,7 @@ nonisolated struct ItemRenderer: Sendable {
     /// /learn's card (docs/spec/14 M5): waiting, it's the whole card with its choices; written past, not now, saved or
     /// dismissed, one line (Review opens it again in place).
     func learnCard(_ t: ToolItem) -> NSAttributedString {
-        guard case .learn(let file, let items)? = t.typedDetails, !items.isEmpty else { return attachmentParagraph(DisclosureAttachment(card: Self.toolCard(t, root: root))) }
+        guard case .learn(let file, let items)? = t.details, !items.isEmpty else { return attachmentParagraph(DisclosureAttachment(card: Self.toolCard(t, root: root))) }
         let id = t.callId
         let things = "\(items.count) thing\(items.count == 1 ? "" : "s")"
         let plain = { (text: String) in (text, TranscriptAction.learn(kind: "none", callId: id)) }
@@ -788,7 +784,7 @@ nonisolated struct ItemRenderer: Sendable {
         let duration = t.durationMs.map { $0 < 100 ? "" : $0 < 1000 ? String(format: "%.1fs", $0 / 1000) : String(format: "%.0fs", $0 / 1000) } ?? (t.status == .running ? "…" : "")
         let failed = t.status == .error
         let card: DisclosureCard
-        switch t.typedDetails {
+        switch t.details {
         case .diff(_, let patch) where !patch.isEmpty && !failed:
             let parsed = DiffLine.parse(patch)
             card = DisclosureCard(tool: title, detail: detail, trailing: "", content: .diff(parsed.lines))
@@ -801,26 +797,27 @@ nonisolated struct ItemRenderer: Sendable {
             card = DisclosureCard(tool: title, detail: "\(done) of \(todos.count) done" + (current.map { " · \($0)" } ?? ""), trailing: "", content: .text(todos.map { "\($0.status == .done ? "✓" : $0.status == .inProgress ? "▸" : "○")  \($0.text)" }.joined(separator: "\n")))
         case .task(let sessionId, let status, let cost):
             var trailing = [String]()
-            if status == "error" { trailing.append("failed") } else if status == "stopped" { trailing.append("stopped") }
+            if status == .error { trailing.append("failed") } else if status == .stopped { trailing.append("stopped") }
             // Non-blocking (docs/spec/17 §3): its result comes back later as a [Task] row.
-            else if status == "started" { trailing.append("started · its result comes back here") } else if status == "queued" { trailing.append("queued") }
+            else if status == .started { trailing.append("started · its result comes back here") } else if status == .queued { trailing.append("queued") }
             if let cost, cost > 0 { trailing.append(cost < 0.01 ? String(format: "$%.4f", cost) : String(format: "$%.2f", cost)) }
             if trailing.isEmpty, !duration.isEmpty { trailing.append(duration) }
             card = DisclosureCard(tool: title, detail: detail, trailing: trailing.joined(separator: " · "), content: .text(t.output ?? ""))
             if let sessionId { card.action = ("Open", .openSession(sessionId)) }
-        case .conversations(let found, let withheld) where !failed:
+        case .conversations(let found, let held) where !failed:
+            let withheld = held ?? 0
             // Earlier conversations (docs/spec/14 M4): what it looked in, shown, not hidden. Opened, the card lists what
             // it found; the one it read (or a search's only match) opens from the header.
             var trailing = [String]()
             if t.tool == "search_conversations" { trailing.append(found.isEmpty ? "nothing found" : "\(found.count) found") }
             if withheld > 0 { trailing.append("\(withheld) kept on this Mac") }
             if !duration.isEmpty { trailing.append(duration) }
-            let lines = found.map { "\($0.kind == "build" ? "◇" : "○")  \($0.title)" }
+            let lines = found.map { "\($0.kind == .build ? "◇" : "○")  \($0.title)" }
             let note = withheld > 0 ? "\(withheld == 1 ? "One more ran" : "\(withheld) more ran") only on models on this Mac, so this model doesn't see \(withheld == 1 ? "it" : "them"). Bring one in with @, or switch to a local model." : ""
             card = DisclosureCard(tool: title, detail: t.tool == "read_conversation" ? (found.first?.title ?? detail) : detail, trailing: trailing.joined(separator: " · "), content: .text((lines + (note.isEmpty ? [] : ["", note])).joined(separator: "\n")))
             if found.count == 1, let only = found.first { card.action = ("Open", .openConversation(only.id)) }
         case .terminal(_, let exitCode):
-            let full = t.args?["command"]?.stringValue ?? raw
+            let full = t.args["command"]?.stringValue ?? raw
             let shown = displayCommand(full, root: root)
             var trailing = [String]()
             if let folder = shown.folder { trailing.append("in \(folder)") }
@@ -835,16 +832,16 @@ nonisolated struct ItemRenderer: Sendable {
             card.action = ("Copy", .copyText(full))
         default:
             var body = t.output ?? ""
-            if t.tool == "propose_plan", case .array(let steps)? = t.args?["steps"] {
+            if t.tool == "propose_plan", case .array(let steps)? = t.args["steps"] {
                 body = steps.enumerated().map { "\($0.offset + 1). \($0.element.stringValue ?? "")" }.joined(separator: "\n") + (body.isEmpty ? "" : "\n\n\(body)")
             } else if t.tool == "bash" || t.tool == "codemode" {
                 // Older or interrupted calls may not have typed details. Keep their input available too.
-                let source = t.args?["command"]?.stringValue ?? t.args?["code"]?.stringValue ?? t.args?["script"]?.stringValue ?? ""
+                let source = t.args["command"]?.stringValue ?? t.args["code"]?.stringValue ?? t.args["script"]?.stringValue ?? ""
                 body = (t.tool == "bash" ? "$ " : "") + source + (body.isEmpty ? "" : "\n\n\(body)")
             } else if t.tool.hasPrefix("mcp__") || title == readableToolName(t.tool) {
                 let encoder = JSONEncoder()
                 encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-                let arguments = t.args.flatMap { try? encoder.encode($0) }.flatMap { String(data: $0, encoding: .utf8) }
+                let arguments = (try? encoder.encode(t.args)).flatMap { String(data: $0, encoding: .utf8) }
                 body = "Tool: \(t.tool)" + (arguments.map { "\n\nArguments\n\($0)" } ?? "") + (body.isEmpty ? "" : "\n\nResult\n\(body)")
             }
             card = DisclosureCard(tool: title, detail: detail, trailing: duration, content: .text(body))
@@ -853,9 +850,9 @@ nonisolated struct ItemRenderer: Sendable {
         card.failed = failed
         card.glyph = glyph(t.tool)
         // Files the agent read or changed open in the viewer (BR4).
-        if ["read", "edit", "write"].contains(t.tool), let path = t.args?["path"]?.stringValue, t.status != .denied {
+        if ["read", "edit", "write"].contains(t.tool), let path = t.args["path"]?.stringValue, t.status != .denied {
             var line: Int?
-            if case .number(let offset)? = t.args?["offset"] { line = Int(offset) }
+            if case .number(let offset)? = t.args["offset"] { line = Int(offset) }
             card.action = ("Open", .openFile(path: path, line: line))
         }
         switch t.status {
@@ -872,10 +869,10 @@ nonisolated struct ItemRenderer: Sendable {
     /// A file the agent handed over: its name and what it is, opening in the viewer; a missing one says so.
     static func fileCard(_ file: PresentedFile, root: String?) -> DisclosureCard {
         let size = file.size.map { ByteCountFormatter.string(fromByteCount: Int64($0), countStyle: .file) } ?? ""
-        let card = DisclosureCard(tool: file.name, detail: file.description ?? relative(file.path, root: root), trailing: file.missing ? "not found" : size, content: .text(relative(file.path, root: root)))
+        let card = DisclosureCard(tool: file.name, detail: file.description ?? relative(file.path, root: root), trailing: file.isMissing ? "not found" : size, content: .text(relative(file.path, root: root)))
         card.glyph = "doc.richtext"
-        card.failed = file.missing
-        if !file.missing { card.action = ("Open", .openFile(path: file.path, line: nil)) }
+        card.failed = file.isMissing
+        if !file.isMissing { card.action = ("Open", .openFile(path: file.path, line: nil)) }
         return card
     }
 
@@ -905,20 +902,20 @@ nonisolated struct ItemRenderer: Sendable {
     static func toolTitle(_ t: ToolItem) -> (String, String) {
         if t.status == .pendingApproval || t.status == .denied {
             // Approval rows still identify the actual command, not just a model-written description.
-            if t.tool == "bash" { return ("Run", t.args?["command"]?.stringValue ?? "") }
+            if t.tool == "bash" { return ("Run", t.args["command"]?.stringValue ?? "") }
             let (_, detail) = toolTitle(ToolItem(id: t.id, at: t.at, callId: t.callId, tool: t.tool, args: t.args, status: .done))
             let verb = ["bash": "Run", "edit": "Edit", "write": "Write", "read": "Read", "web_fetch": "Open", "web_search": "Search the web"][t.tool] ?? t.tool
             return (verb, detail)
         }
         let running = t.status == .running
         let failed = t.status == .error
-        let path = t.args?["path"]?.stringValue ?? ""
+        let path = t.args["path"]?.stringValue ?? ""
         switch t.tool {
         case "read":
             var range = ""
-            if case .number(let offset)? = t.args?["offset"] {
+            if case .number(let offset)? = t.args["offset"] {
                 range = ":\(Int(offset))"
-                if case .number(let limit)? = t.args?["limit"] { range += "–\(Int(offset + limit - 1))" }
+                if case .number(let limit)? = t.args["limit"] { range += "–\(Int(offset + limit - 1))" }
             }
             return (running ? "Reading" : failed ? "Couldn't read" : "Read", path + range)
         case "edit":
@@ -928,80 +925,80 @@ nonisolated struct ItemRenderer: Sendable {
         case "bash":
             return (activityLabel(t) ?? (running ? "Running a command" : failed ? "Command failed" : t.status == .interrupted ? "Command stopped" : "Ran a command"), "")
         case "grep":
-            return (running ? "Searching" : "Searched", t.args?["pattern"]?.stringValue ?? "")
+            return (running ? "Searching" : "Searched", t.args["pattern"]?.stringValue ?? "")
         case "find":
-            return (running ? "Finding files" : "Found files", t.args?["pattern"]?.stringValue ?? path)
+            return (running ? "Finding files" : "Found files", t.args["pattern"]?.stringValue ?? path)
         case "ls":
             return (running ? "Listing" : "Listed", path.isEmpty ? "." : path)
         case "todo":
             return (running ? "Updating the checklist" : "Checklist", "")
-        case "task" where t.args?["agent"]?.stringValue == "claude" || t.args?["agent"]?.stringValue == "codex":
-            let who = t.args?["agent"]?.stringValue == "claude" ? "Claude Code" : "Codex"
-            return (running ? "\(who) working" : who, t.args?["description"]?.stringValue ?? "")
+        case "task" where t.args["agent"]?.stringValue == "claude" || t.args["agent"]?.stringValue == "codex":
+            let who = t.args["agent"]?.stringValue == "claude" ? "Claude Code" : "Codex"
+            return (running ? "\(who) working" : who, t.args["description"]?.stringValue ?? "")
         case "task":
-            return (running ? "Subagent working" : "Subagent", t.args?["description"]?.stringValue ?? "")
+            return (running ? "Subagent working" : "Subagent", t.args["description"]?.stringValue ?? "")
         case "propose_plan":
-            return (running ? "Proposed a plan" : "Plan", t.args?["summary"]?.stringValue ?? "")
+            return (running ? "Proposed a plan" : "Plan", t.args["summary"]?.stringValue ?? "")
         case "show_visual":
-            return (running ? "Drawing a visual" : failed ? "Visual not shown" : "Visual", t.args?["title"]?.stringValue ?? "")
+            return (running ? "Drawing a visual" : failed ? "Visual not shown" : "Visual", t.args["title"]?.stringValue ?? "")
         case "present_files":
-            let names = t.args?["files"]?.arrayValue?.compactMap { $0["path"]?.stringValue.map { ($0 as NSString).lastPathComponent } }.joined(separator: ", ") ?? ""
+            let names = t.args["files"]?.arrayValue?.compactMap { $0["path"]?.stringValue.map { ($0 as NSString).lastPathComponent } }.joined(separator: ", ") ?? ""
             return (running ? "Handing over files" : failed ? "Files not found" : "Files for you", names)
         case "search_conversations":
-            return (running ? "Searching your conversations" : "Searched your conversations", t.args?["query"]?.stringValue ?? "")
+            return (running ? "Searching your conversations" : "Searched your conversations", t.args["query"]?.stringValue ?? "")
         case "read_conversation":
-            return (running ? "Reading a conversation" : failed ? "Couldn't read a conversation" : "Read a conversation", t.args?["query"]?.stringValue ?? "")
+            return (running ? "Reading a conversation" : failed ? "Couldn't read a conversation" : "Read a conversation", t.args["query"]?.stringValue ?? "")
         case "update_goal":
-            let status = t.args?["status"]?.stringValue
-            return (status == "done" ? "Goal done" : status == "blocked" ? "Goal blocked" : "Goal", t.args?["note"]?.stringValue ?? "")
+            let status = t.args["status"]?.stringValue
+            return (status == "done" ? "Goal done" : status == "blocked" ? "Goal blocked" : "Goal", t.args["note"]?.stringValue ?? "")
         case "codemode":
             return (activityLabel(t) ?? (running ? "Running a script" : failed ? "Script failed" : t.status == .interrupted ? "Script stopped" : "Ran a script"), "")
         case "tool_search":
-            return (running ? "Finding tools" : "Found tools", t.args?["query"]?.stringValue ?? "")
+            return (running ? "Finding tools" : "Found tools", t.args["query"]?.stringValue ?? "")
         case let name where name.hasPrefix("mcp__"):
             let parts = name.components(separatedBy: "__")
             let server = parts.count > 1 ? readableToolName(parts[1]) : "Connected app"
             let tool = parts.dropFirst(2).joined(separator: "_")
             return (tool.isEmpty ? "Using a connected app" : readableToolName(tool), server)
         case "remember_about_me":
-            let facts = t.args?["add"]?.arrayValue?.compactMap(\.stringValue).joined(separator: ", ") ?? ""
+            let facts = t.args["add"]?.arrayValue?.compactMap(\.stringValue).joined(separator: ", ") ?? ""
             return (running ? "Saving to About me" : failed ? "Not saved to About me" : "Saved to About me", facts)
         case "ask_topic":
-            return (running ? "Asking \(t.args?["topic"]?.stringValue ?? "a topic")" : "Asked \(t.args?["topic"]?.stringValue ?? "a topic")", t.args?["question"]?.stringValue ?? "")
+            return (running ? "Asking \(t.args["topic"]?.stringValue ?? "a topic")" : "Asked \(t.args["topic"]?.stringValue ?? "a topic")", t.args["question"]?.stringValue ?? "")
         // Projects without a folder, before docs/spec/18 CF4: their tools still show in old conversations.
         case "read_project_file":
-            return (running ? "Reading a project file" : "Read a project file", t.args?["name"]?.stringValue ?? "")
+            return (running ? "Reading a project file" : "Read a project file", t.args["name"]?.stringValue ?? "")
         case "remember_in_project":
-            return (running ? "Saving to the project" : "Saved to the project", t.args?["fact"]?.stringValue ?? "")
+            return (running ? "Saving to the project" : "Saved to the project", t.args["fact"]?.stringValue ?? "")
         case "rename_topic", "archive_topic", "merge_topics":
-            return (failed ? "Suggested tidying" : "Tidied topics", t.args?["topic"]?.stringValue ?? t.args?["from"]?.stringValue ?? "")
+            return (failed ? "Suggested tidying" : "Tidied topics", t.args["topic"]?.stringValue ?? t.args["from"]?.stringValue ?? "")
         case "ask_user":
-            return (running ? "Waiting for your answer" : "Asked you", t.args?["question"]?.stringValue ?? "")
+            return (running ? "Waiting for your answer" : "Asked you", t.args["question"]?.stringValue ?? "")
         case "calendar_events":
-            return (running ? "Reading your calendar" : failed ? "Couldn't read your calendar" : "Read your calendar", t.args?["query"]?.stringValue ?? "")
+            return (running ? "Reading your calendar" : failed ? "Couldn't read your calendar" : "Read your calendar", t.args["query"]?.stringValue ?? "")
         case "calendar_free_time":
             return (running ? "Finding free time" : "Found free time", "")
         case "calendar_create_event":
-            return (running ? "Creating an event" : failed ? "Didn't create the event" : "Created an event", t.args?["title"]?.stringValue ?? "")
+            return (running ? "Creating an event" : failed ? "Didn't create the event" : "Created an event", t.args["title"]?.stringValue ?? "")
         case "calendar_update_event":
-            return (running ? "Changing an event" : failed ? "Didn't change the event" : "Changed an event", t.args?["title"]?.stringValue ?? "")
+            return (running ? "Changing an event" : failed ? "Didn't change the event" : "Changed an event", t.args["title"]?.stringValue ?? "")
         case "calendar_delete_event":
             return (running ? "Deleting an event" : failed ? "Didn't delete the event" : "Deleted an event", "")
         case "mail_search":
-            return (running ? "Searching your mail" : "Searched your mail", t.args?["query"]?.stringValue ?? "")
+            return (running ? "Searching your mail" : "Searched your mail", t.args["query"]?.stringValue ?? "")
         case "mail_read":
             return (running ? "Reading an email" : "Read an email", "")
         case "mail_draft":
-            return (running ? "Writing a draft" : failed ? "Didn't save the draft" : "Wrote a draft", t.args?["subject"]?.stringValue ?? "")
+            return (running ? "Writing a draft" : failed ? "Didn't save the draft" : "Wrote a draft", t.args["subject"]?.stringValue ?? "")
         case "mail_send":
             return (running ? "Sending an email" : failed ? "Didn't send the email" : "Sent an email", "")
         case "notify_user":
-            return ("Notified you", t.args?["message"]?.stringValue ?? "")
+            return ("Notified you", t.args["message"]?.stringValue ?? "")
         case "web_search":
-            let query = t.args?["query"]?.stringValue ?? ""
+            let query = t.args["query"]?.stringValue ?? ""
             return (running ? "Searching the web" : t.status == .error ? "Web search failed" : "Searched the web", query)
         case "web_fetch":
-            let url = t.args?["url"]?.stringValue ?? ""
+            let url = t.args["url"]?.stringValue ?? ""
             let host = URL(string: url)?.host() ?? url
             return (running ? "Reading" : t.status == .error ? "Couldn't read" : "Read", host)
         default:
@@ -1012,9 +1009,9 @@ nonisolated struct ItemRenderer: Sendable {
     /// Explicit activity metadata only: never guess a task from the first line of executable code.
     static func activityLabel(_ t: ToolItem) -> String? {
         var label: String?
-        if t.tool == "bash" { label = t.args?["description"]?.stringValue }
+        if t.tool == "bash" { label = t.args["description"]?.stringValue }
         if t.tool == "codemode" {
-            let source = t.args?["code"]?.stringValue ?? t.args?["script"]?.stringValue ?? ""
+            let source = t.args["code"]?.stringValue ?? t.args["script"]?.stringValue ?? ""
             for line in source.split(separator: "\n", omittingEmptySubsequences: false) {
                 let line = line.trimmingCharacters(in: .whitespacesAndNewlines)
                 if line.isEmpty { continue }

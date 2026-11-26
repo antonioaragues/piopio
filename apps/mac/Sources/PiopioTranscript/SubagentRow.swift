@@ -167,26 +167,26 @@ extension ItemRenderer {
     /// A Piopio `task` call as its subagent's row (docs/spec/37). Claude Code and Codex tasks keep their card (SB7).
     static func isPiopioTask(_ t: ToolItem) -> Bool {
         guard t.tool == "task" else { return false }
-        let agent = t.args?["agent"]?.stringValue ?? "piopio"
+        let agent = t.args["agent"]?.stringValue ?? "piopio"
         return agent == "piopio" || agent.isEmpty
     }
 
     func subagentRow(_ t: ToolItem) -> NSAttributedString {
-        let title = t.args?["description"]?.stringValue ?? "Subagent"
+        let title = t.args["description"]?.stringValue ?? "Subagent"
         var sessionId: String?
-        var status: String?
-        if case .task(let id, let s, _)? = t.typedDetails { sessionId = id; status = s }
+        var status: ToolDetails.TaskStatus?
+        if case .task(let id, let s, _)? = t.details { sessionId = id; status = s }
         if let id = sessionId, let s = subagents.first(where: { $0.id == id }) {
             let model = SubagentRowModel(id: id, title: s.title.isEmpty ? title : s.title, state: s.state, status: s.status, open: openSubagent == id, alert: s.alerting)
             return attachmentParagraph(SubagentRowAttachment(model: model), spacing: 4)
         }
         // Not in the sessions list (yet, or anymore): what the call itself knows.
         let state: String = switch (t.status, status) {
-        case (.error, _), (_, "error"): "failed"
-        case (_, "stopped"), (.interrupted, _): "stopped"
-        case (_, "queued"): "queued"
-        case (_, "done"): "done"
-        case (.done, "started"): "working"
+        case (.error, _), (_, .error?): "failed"
+        case (_, .stopped?), (.interrupted, _): "stopped"
+        case (_, .queued?): "queued"
+        case (_, .done?): "done"
+        case (.done, .started?): "working"
         default: "starting"
         }
         let line = state == "starting" ? "starting" : SubagentInfo(id: sessionId ?? "", title: title, state: state).status

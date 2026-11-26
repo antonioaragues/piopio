@@ -19,10 +19,8 @@ public struct Transcript: Sendable {
 
     public mutating func apply(_ event: SessionEvent) {
         switch event {
-        case .itemAdded(let item):
-            if let i = index(of: item.id) { items[i] = item } else { items.append(item) }
-        case .itemInserted(let item, let before):
-            if let i = index(of: item.id) { items[i] = item } else if let b = index(of: before) { items.insert(item, at: b) } else { items.append(item) }
+        case .itemAdded(let item, let before):
+            if let i = index(of: item.id) { items[i] = item } else if let before, let b = index(of: before) { items.insert(item, at: b) } else { items.append(item) }
         case .itemUpdated(let item):
             if let i = index(of: item.id) { items[i] = item }
         case .itemReplaced(let oldId, let item):
@@ -31,8 +29,8 @@ public struct Transcript: Sendable {
             items.removeAll { $0.id == id }
         case .itemDelta(let id, let partIndex, let partType, let delta):
             guard let i = index(of: id), case .assistant(var a) = items[i] else { return }
-            while a.parts.count <= partIndex { a.parts.append(AssistantPart(type: partType, text: "", redacted: nil)) }
-            a.parts[partIndex].text += delta
+            while a.parts.count <= partIndex { a.parts.append(partType == .thinking ? .thinking(text: "") : .text("")) }
+            a.parts[partIndex] = a.parts[partIndex].appending(delta)
             items[i] = .assistant(a)
         case .state(let s):
             state = s

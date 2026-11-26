@@ -65,7 +65,7 @@ struct SideOffers: ViewModifier {
 
     private var sides: [SideInfo] {
         engine.sides(of: ref.id).map { s in
-            SideInfo(id: s.ref.id, title: s.title, state: s.side?.state ?? "working", line: s.side?.line, branch: s.worktree?.branch,
+            SideInfo(id: s.ref.id, title: s.title, state: s.side?.state.rawValue ?? "working", line: s.side?.line, branch: s.worktree?.branch,
                      finished: s.worktree?.finished?.rawValue, from: s.side?.from)
         }
     }
@@ -94,7 +94,8 @@ struct SideOffers: ViewModifier {
             .sheet(item: Binding(get: { model.editingLearn }, set: { model.editingLearn = $0 })) { edit in
                 LearnEditSheet(edit: edit) { items in
                     model.editingLearn = nil
-                    Task { await model.learn(items.isEmpty ? "dismiss" : "save", edit.callId, items: items.isEmpty ? nil : items) }
+                    let kind = items.isEmpty ? "dismiss" : "save"
+                    Task { await model.learn(kind, edit.callId, items: items.isEmpty ? nil : items) }
                 } cancel: { model.editingLearn = nil }
             }
             .onChange(of: sides, initial: true) { _, now in document.setSides(now, openProposals: proposals) }
@@ -107,7 +108,7 @@ struct SideOffers: ViewModifier {
                 take(kind, id)
             }
             .alert("Start these on their own?", isPresented: $askAlways) {
-                Button("Always start") { Task { await engine.updateSettings(SettingsPatch(chat: .init(sideOnUnrelated: "start"))) } }
+                Button("Always start") { Task { await engine.updateSettings(SettingsPatch(chat: .init(sideOnUnrelated: .start))) } }
                 Button("Keep asking", role: .cancel) {}
             } message: {
                 Text("You chose New conversation three times in a row. Piopio can start a side conversation for something unrelated without asking. Settings › Chat changes it back.")
@@ -125,11 +126,11 @@ struct SideOffers: ViewModifier {
             guard let side = engine.sides(of: ref.id).first(where: { $0.ref.id == id }) else { return }
             run { try await engine.finish(side.ref, kind == SideActionKind.merge ? .merge : .discard) }
         default:
-            let choice = switch kind {
-            case "side-new": "new"
-            case SideActionKind.start: "start"
-            case SideActionKind.dismiss: "dismiss"
-            default: "here"
+            let choice: AnswerSideParams.Choice = switch kind {
+            case "side-new": .new
+            case SideActionKind.start: .start
+            case SideActionKind.dismiss: .dismiss
+            default: .here
             }
             run {
                 let result = try await engine.answerSide(ref, id: id, choice: choice)

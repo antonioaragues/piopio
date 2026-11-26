@@ -470,7 +470,7 @@ public final class TranscriptDocument {
             guard let item = items.last(where: { $0.id == id }) else { continue }
             switch item {
             case .tool(let t) where t.tool == "automate" || t.tool == "change_automation": replace(item)
-            case .result(let r) where r.card.kind == "automation": replace(item)
+            case .result(let r) where r.card.kind == .automation: replace(item)
             default: break
             }
         }
@@ -522,19 +522,11 @@ public final class TranscriptDocument {
 
     private func apply(_ event: SessionEvent) {
         switch event {
-        case .itemAdded(let item):
+        case .itemAdded(let item, let before):
             if let i = items.firstIndex(where: { $0.id == item.id }) {
                 items[i] = item
                 replace(item)
-            } else {
-                items.append(item)
-                append(item)
-            }
-        case .itemInserted(let item, let before):
-            if let i = items.firstIndex(where: { $0.id == item.id }) {
-                items[i] = item
-                replace(item)
-            } else if let i = items.firstIndex(where: { $0.id == before }) {
+            } else if let before, let i = items.firstIndex(where: { $0.id == before }) {
                 items.insert(item, at: i)
                 if let d = documentIDs.firstIndex(of: before) { insert(item, at: d) }
             } else {
@@ -568,7 +560,7 @@ public final class TranscriptDocument {
             }
         case .itemDelta(let id, _, let partType, let delta):
             guard let i = items.lastIndex(where: { $0.id == id }), case .assistant(var a) = items[i] else { return }
-            if let p = a.parts.lastIndex(where: { $0.type == partType }) { a.parts[p].text += delta } else { a.parts.append(AssistantPart(type: partType, text: delta)) }
+            if let p = a.parts.lastIndex(where: { $0.isThinking == (partType == .thinking) }) { a.parts[p] = a.parts[p].appending(delta) } else { a.parts.append(partType == .thinking ? .thinking(text: delta) : .text(delta)) }
             items[i] = .assistant(a)
             streamDelta(id: id, partType: partType, delta: delta)
         case .resnapshot(let snapshot):
@@ -770,7 +762,7 @@ public final class TranscriptDocument {
         streams[a.id] = s
         guard let d = documentIDs.firstIndex(of: a.id) else { return }
         let range = NSRange(location: offset(ofIndex: d), length: lengths[a.id] ?? 0)
-        let thinkingText = a.parts.filter { $0.type == .thinking }.map(\.text).joined()
+        let thinkingText = a.parts.filter { $0.isThinking }.map(\.text).joined()
         let out = NSMutableAttributedString()
         if !thinkingText.isEmpty {
             let card = DisclosureCard(kind: .thinking, title: "Thinking…", body: thinkingText)
@@ -790,7 +782,7 @@ public final class TranscriptDocument {
         lengths[a.id] = out.length
     }
 
-    private func streamDelta(id: String, partType: AssistantPart.PartType, delta: String) {
+    private func streamDelta(id: String, partType: SessionEvent.PartType, delta: String) {
         guard let s = streams[id], let d = documentIDs.firstIndex(of: id) else { return }
         let start = offset(ofIndex: d)
         let length = lengths[id] ?? 0

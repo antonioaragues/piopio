@@ -14,7 +14,7 @@ struct HooksCard: View {
     @State private var editing: HookEditTarget?
     @State private var error: String?
 
-    private var mine: [HookInfo] { hooks.filter { $0.where == (project == nil ? "yours" : "project") } }
+    private var mine: [HookInfo] { hooks.filter { $0.where == (project == nil ? .yours : .project) } }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -282,7 +282,7 @@ struct HookSheet: View {
         let name = scope.flatMap { s in engine.projects.first { $0.path == s }?.name } ?? "Every project"
         return Group {
             if info != nil {
-                Text(info?.where == "project" ? name : "Every project").foregroundStyle(Color.dsFg2)
+                Text(info?.where == .project ? name : "Every project").foregroundStyle(Color.dsFg2)
             } else {
                 Menu {
                     Button("Every project") { scope = nil }

@@ -331,10 +331,10 @@ struct ProjectSettingsSheet: View {
             // What a conversation hears about its pull request (docs/spec/17 §5).
             HStack(spacing: 10) {
                 Text("Pull request news").font(.system(size: 13)).foregroundStyle(Color.dsFg2).frame(width: 180, alignment: .leading)
-                Picker("", selection: Binding(get: { project.prEvents ?? "tell" }, set: { v in Task { await engine.setPrEvents(v, for: project) } })) {
-                    Text("Tell me").tag("tell")
-                    Text("The conversation works on it").tag("act")
-                    Text("Only in the conversation's panel").tag("off")
+                Picker("", selection: Binding(get: { project.prEvents ?? .tell }, set: { v in Task { await engine.setPrEvents(v, for: project) } })) {
+                    Text("Tell me").tag(PrEvents.tell)
+                    Text("The conversation works on it").tag(PrEvents.act)
+                    Text("Only in the conversation's panel").tag(PrEvents.off)
                 }
                 .labelsHidden().fixedSize()
             }
@@ -655,7 +655,7 @@ struct ProjectBoardPage: View {
     }
 
     /// The empty Board (design 4b, 26 §5): what goes here, and the switch for parallel work.
-    private func empty(_ project: ProjectInfo, work: ProjectWork?) -> some View {
+    private func empty(_ project: ProjectInfo, work: WorkInfo?) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Piopio puts parallel work here").font(.system(size: 15, weight: .semibold))
             Text("When something you ask splits into parts that can be done at once, Piopio makes a helper for each part and puts it here. Each part is reviewed, then merged; you merge the whole into \(project.name) when it's ready. Small things Piopio still does in the conversation.")

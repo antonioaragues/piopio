@@ -277,7 +277,7 @@ final class ThreadModel {
             try await flushDraft()
             guard let client = engine?.client else { throw EngineError(code: "ENGINE_UNAVAILABLE", message: "Piopio is reconnecting. Your message is saved; retry when connected.") }
             if let itemId = input.editItemId {
-                _ = try await client.call("sessions.edit", EditParams(ref: ref, itemId: itemId, text: trimmed, clientRequestId: input.requestId), as: JSONValue.self)
+                _ = try await client.call("sessions.edit", EditParams(ref: ref, itemId: itemId, text: trimmed, clientRequestId: input.requestId), as: Empty.self)
             } else {
                 _ = try await client.call("sessions.submit", SubmitParams(ref: ref, text: trimmed, attachments: attachments, whenBusy: steer ? .steer : .followUp, clientRequestId: input.requestId), as: SubmitResult.self)
             }
@@ -332,8 +332,8 @@ final class ThreadModel {
         case .reply(let text):
             Task { await send(text) }
         case .openVisual(let id):
-            guard case .tool(let t)? = document.item(id), let html = t.args?["html"]?.stringValue else { return }
-            let visual = ShownVisual(title: t.args?["title"]?.stringValue ?? "Visual", html: html,
+            guard case .tool(let t)? = document.item(id), let html = t.args["html"]?.stringValue else { return }
+            let visual = ShownVisual(title: t.args["title"]?.stringValue ?? "Visual", html: html,
                                      send: { [weak self] text in Task { await self?.send(text) } },
                                      prefill: { [weak self] text in self?.draft = text })
             NotificationCenter.default.post(name: .showVisual, object: visual)
@@ -418,10 +418,10 @@ final class ThreadModel {
         do {
             switch kind {
             case "save": _ = try await client.call("learn.save", LearnSaveParams(ref: ref, callId: callId, items: items), as: LearnSaveResult.self)
-            case "later", "dismiss", "undo": try await engine.spaceCall("learn.answer", LearnAnswerParams(ref: ref, callId: callId, choice: kind))
+            case "later", "dismiss", "undo": if let choice = LearnAnswerParams.Choice(rawValue: kind) { try await engine.spaceCall("learn.answer", LearnAnswerParams(ref: ref, callId: callId, choice: choice)) }
             case "edit":
                 guard let item = document.items.last(where: { if case .tool(let t) = $0 { t.callId == callId } else { false } }),
-                      case .tool(let t) = item, case .learn(let file, let items)? = t.typedDetails else { return }
+                      case .tool(let t) = item, case .learn(let file, let items)? = t.details else { return }
                 editingLearn = LearnEdit(callId: callId, file: file, items: items, hasProject: ref.kind == .build)
                 return
             default: return
@@ -584,7 +584,7 @@ final class ThreadModel {
         }
     }
 
-    func setFinding(_ finding: ReviewFinding, _ state: ReviewFinding.State) async {
+    func setFinding(_ finding: ReviewFinding, _ state: ReviewFindingParams.State) async {
         await call("sessions.reviewFinding", ReviewFindingParams(ref: ref, id: finding.id, state: state))
     }
 

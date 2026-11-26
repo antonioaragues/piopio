@@ -360,7 +360,7 @@ private struct McpServerDetail: View {
                 CardTitle("Where it's used")
                 ListCard {
                     ToggleRow(title: "Use in Build sessions", subtitle: "Follows your Approvals settings", isOn: Binding(get: { server.enabled }, set: { on in
-                        call("mcp.setEnabled", McpNameParams(scope: server.scope, cwd: entry.cwd, name: server.name, enabled: on))
+                        call("mcp.setEnabled", McpSetEnabledParams(scope: server.scope, cwd: entry.cwd, name: server.name, enabled: on))
                     }))
                     if entry.project == nil {
                         ToggleRow(title: "Use in conversations", subtitle: "Tools run there without asking", subtitleColor: .dsAmber, last: true, isOn: Binding(get: { server.chat == true }, set: { on in
@@ -513,7 +513,7 @@ private struct McpImportSheet: View {
         Task {
             do {
                 for s in found.servers where picked.contains(s.name) {
-                    _ = try await engine.client?.call("mcp.add", McpAddParams(scope: .global, cwd: nil, name: s.name, command: s.command, args: s.args, url: s.url, description: nil, env: s.env), as: Empty.self)
+                    _ = try await engine.client?.call("mcp.add", McpAddParams(scope: .global, cwd: nil, name: s.name, command: s.command, args: s.args, url: s.url, env: s.env), as: Empty.self)
                 }
                 done()
                 dismiss()
@@ -787,7 +787,7 @@ struct AddMcpServerView: View {
         let p = project
         let params = McpAddParams(scope: p == nil ? .global : .project, cwd: p?.path, name: name.trimmingCharacters(in: .whitespaces),
                                   command: mode == .url ? nil : words.first, args: mode == .url ? nil : Array(words.dropFirst()), url: mode == .url ? url.trimmingCharacters(in: .whitespaces) : nil,
-                                  description: nil, env: envMap, enabled: build ? nil : false, chat: p == nil ? chat : nil)
+                                  env: envMap, enabled: build ? nil : false, chat: p == nil ? chat : nil)
         Task {
             do {
                 _ = try await engine.client?.call("mcp.add", params, as: Empty.self)

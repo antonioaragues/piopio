@@ -18,6 +18,7 @@ type Schema = {
 	properties?: Record<string, Schema>;
 	required?: string[];
 	anyOf?: Schema[];
+	allOf?: Schema[];
 	items?: Schema;
 	patternProperties?: Record<string, Schema>;
 };
@@ -25,13 +26,15 @@ type Schema = {
 /** The widest union anywhere in `s`: how many full samples it takes to see each of its branches. */
 function widest(s: Schema): number {
 	let n = s.anyOf?.length ?? 1;
-	for (const child of [...(s.anyOf ?? []), ...Object.values(s.properties ?? {}), ...Object.values(s.patternProperties ?? {}), ...(s.items ? [s.items] : [])]) n = Math.max(n, widest(child));
+	for (const child of [...(s.anyOf ?? []), ...(s.allOf ?? []), ...Object.values(s.properties ?? {}), ...Object.values(s.patternProperties ?? {}), ...(s.items ? [s.items] : [])]) n = Math.max(n, widest(child));
 	return n;
 }
 
 function sample(s: Schema, k: number, full: boolean): unknown {
 	if ("const" in s) return s.const;
 	if (s.anyOf) return sample(s.anyOf[k % s.anyOf.length]!, k, full);
+	// Type.Intersect: one object with every part's fields (a later part's wins, as it tightens one).
+	if (s.allOf) return Object.assign({}, ...s.allOf.map((part) => sample(part, k, full)));
 	switch (s.type) {
 		case "string":
 			return "x";

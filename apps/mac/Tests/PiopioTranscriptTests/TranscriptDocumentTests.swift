@@ -9,8 +9,8 @@ private let idle = SessionState(status: .idle, queue: [], model: nil, thinking: 
 private func user(_ id: String, _ text: String) -> TimelineItem { .user(UserItem(id: id, at: "", text: text)) }
 private func answer(_ id: String, _ text: String, status: AssistantItem.Status = .done, thinking: String? = nil) -> TimelineItem {
     var parts: [AssistantPart] = []
-    if let thinking { parts.append(AssistantPart(type: .thinking, text: thinking)) }
-    if !text.isEmpty || status != .streaming { parts.append(AssistantPart(type: .text, text: text)) }
+    if let thinking { parts.append(.thinking(text: thinking)) }
+    if !text.isEmpty || status != .streaming { parts.append(.text(text)) }
     return .assistant(AssistantItem(id: id, at: "", parts: parts, status: status))
 }
 private func snapshot(_ items: [TimelineItem]) -> Snapshot { Snapshot(ref: ContainerRef(kind: .thread, id: "thr"), items: items, state: idle) }
@@ -40,7 +40,7 @@ private func expectConsistent(_ doc: TranscriptDocument) {
 @MainActor @Test func streamsAnAnswerThenSwapsToTheFinalItem() async {
     let doc = await loaded([user("1", "Question")])
     let final = "Intro paragraph.\n\n- one\n- two\n\n```ts\nconst a = 1\n```\n\nDone."
-    doc.apply([.itemAdded(user("2", "Another")), .itemAdded(answer("gen:1", "", status: .streaming))])
+    doc.apply([.itemAdded(item: user("2", "Another")), .itemAdded(item: answer("gen:1", "", status: .streaming))])
     var sent = final.startIndex
     while sent < final.endIndex {
         let next = final.index(sent, offsetBy: 3, limitedBy: final.endIndex) ?? final.endIndex
@@ -59,7 +59,7 @@ private func expectConsistent(_ doc: TranscriptDocument) {
 
 @MainActor @Test func thinkingStreamsIntoACardBeforeTheText() async {
     let doc = await loaded([])
-    doc.apply([.itemAdded(answer("a", "", status: .streaming))])
+    doc.apply([.itemAdded(item: answer("a", "", status: .streaming))])
     doc.apply([.itemDelta(itemId: "a", partIndex: 0, partType: .thinking, textDelta: "Let me think")])
     doc.apply([.itemDelta(itemId: "a", partIndex: 1, partType: .text, textDelta: "The answer.")])
     expectConsistent(doc)
@@ -72,7 +72,7 @@ private func expectConsistent(_ doc: TranscriptDocument) {
     doc.apply([.itemUpdated(answer("2", "second version"))])
     #expect(doc.text.contains("second version"))
     #expect(!doc.text.contains("first"))
-    doc.apply([.itemRemoved(itemId: "1")])
+    doc.apply([.itemRemoved("1")])
     #expect(doc.documentIDs == ["2", "3"])
     expectConsistent(doc)
 }
@@ -158,7 +158,7 @@ private func expectConsistent(_ doc: TranscriptDocument) {
     // An edit: the engine resnapshots onto the new branch, then streams the new answer.
     let branch = TimelineItem.user(UserItem(id: "5", at: "", text: "first, edited", branch: BranchInfo(index: 1, count: 2, previous: "1")))
     doc.apply([.resnapshot(snapshot([branch]))])
-    doc.apply([.itemAdded(answer("gen:1", "", status: .streaming)), .itemDelta(itemId: "gen:1", partIndex: 0, partType: .text, textDelta: "Echo")])
+    doc.apply([.itemAdded(item: answer("gen:1", "", status: .streaming)), .itemDelta(itemId: "gen:1", partIndex: 0, partType: .text, textDelta: "Echo")])
     doc.apply([.itemReplaced(oldId: "gen:1", item: answer("7", "Echo"))])
     for _ in 0..<100 where doc.documentIDs != ["5", "7"] { try await Task.sleep(for: .milliseconds(10)) }
     #expect(doc.documentIDs == ["5", "7"])
@@ -189,7 +189,7 @@ private func expectConsistent(_ doc: TranscriptDocument) {
     let before = doc.text
     doc.showAskNext(["More", "Less"])
     #expect(doc.askNext.items == ["More", "Less"])
-    doc.apply([.itemAdded(user("3", "again"))])
+    doc.apply([.itemAdded(item: user("3", "again"))])
     // New items go before the suggestions; hiding them leaves exactly the items.
     #expect(doc.text.contains("again"))
     doc.showAskNext(nil)
@@ -219,7 +219,7 @@ private func expectConsistent(_ doc: TranscriptDocument) {
     #expect(doc.actionRow("5") != nil)
     // The turn goes on: the text that was last loses its row, the new one gets it.
     let more = answer("s2", "")
-    doc.apply([.itemAdded(more), .itemAdded(answer("6", "And one more thing."))])
+    doc.apply([.itemAdded(item: more), .itemAdded(item: answer("6", "And one more thing."))])
     #expect(TranscriptDocument.midTurn(items + [more, answer("6", "And one more thing.")]) == ["2", "5"])
     #expect(doc.actionRow("5") == nil)
     #expect(doc.actionRow("6") != nil)

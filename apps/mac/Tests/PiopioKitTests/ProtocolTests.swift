@@ -19,7 +19,7 @@ private let idleState = #"{"status":"idle","queue":[],"usage":{"inputTokens":0,"
     guard case .assistant(let a) = items[1] else { Issue.record("not assistant"); return }
     #expect(a.text == "Echo")
     guard case .tool(let t) = items[2] else { Issue.record("not tool"); return }
-    #expect(t.args?["command"]?.stringValue == "ls")
+    #expect(t.args["command"]?.stringValue == "ls")
 }
 
 @Test func unknownEventTypesAreTolerated() throws {
@@ -60,7 +60,8 @@ private let idleState = #"{"status":"idle","queue":[],"usage":{"inputTokens":0,"
     #expect(list.providers[0].isConnected)
     #expect(list.providers[0].methods[0].type == .oauth)
     let note = try decode(#"{"loginId":"l1","provider":"github-copilot","event":{"type":"device_code","userCode":"ABCD-1234","verificationUri":"https://github.com/login/device"}}"#, as: ProviderAuthNotification.self)
-    #expect(note.event.userCode == "ABCD-1234")
+    guard case .deviceCode(let userCode, _, _) = note.event else { Issue.record("not a device code: \(note.event)"); return }
+    #expect(userCode == "ABCD-1234")
     let model = try decode(#"{"provider":"openai-api","id":"gpt-6-sol","name":"GPT-6 Sol","contextWindow":400000,"maxOutputTokens":128000,"pricing":{"input":2,"output":10,"cacheRead":0,"cacheWrite":0},"supports":{"vision":true,"reasoning":true},"providerName":"OpenAI API","billing":"OpenAI API billing"}"#, as: ModelInfo.self)
     #expect(model.billing == "OpenAI API billing")
 }
@@ -83,14 +84,14 @@ private let idleState = #"{"status":"idle","queue":[],"usage":{"inputTokens":0,"
         .itemDelta(itemId: "a", partIndex: 0, partType: .thinking, textDelta: "m"),
         .itemDelta(itemId: "a", partIndex: 1, partType: .text, textDelta: "Hel"),
         .itemDelta(itemId: "a", partIndex: 1, partType: .text, textDelta: "lo"),
-        .itemRemoved(itemId: "x"),
+        .itemRemoved("x"),
         .itemDelta(itemId: "a", partIndex: 1, partType: .text, textDelta: "!"),
         .itemDelta(itemId: "b", partIndex: 1, partType: .text, textDelta: "?"),
     ]
     #expect(SessionEvent.coalesced(events) == [
         .itemDelta(itemId: "a", partIndex: 0, partType: .thinking, textDelta: "hm"),
         .itemDelta(itemId: "a", partIndex: 1, partType: .text, textDelta: "Hello"),
-        .itemRemoved(itemId: "x"),
+        .itemRemoved("x"),
         .itemDelta(itemId: "a", partIndex: 1, partType: .text, textDelta: "!"),
         .itemDelta(itemId: "b", partIndex: 1, partType: .text, textDelta: "?"),
     ])
@@ -113,7 +114,7 @@ private let idleState = #"{"status":"idle","queue":[],"usage":{"inputTokens":0,"
       {"id":"b2","kind":"visual","name":"Spending","at":"2026-11-22T09:12:00.000Z","by":"Rita","how":"visual",
        "origin":{"ref":{"kind":"agent","id":"a1","conversationId":"person:c1"},"title":"Rita"},"visual":{"callId":"c9"}},
       {"id":"c3","kind":"document","name":"gone.md","path":"/x/gone.md","at":"2026-11-20T09:00:00.000Z","by":"You","how":"added","missing":true}
-    ],"pins":["a1"]}
+    ],"pins":["a1"],"removed":[]}
     """)
     #expect(list.pins == ["a1"])
     #expect(list.items.map(\.id) == ["a1", "b2", "c3"])
@@ -137,8 +138,8 @@ private let idleState = #"{"status":"idle","queue":[],"usage":{"inputTokens":0,"
               "expenses":[{"amount":12.5}]}}}
     """)
     let app = result.app
-    #expect(app.sources.map(\.kind) == ["calendar", "file"])
-    #expect(app.sources[0].accounts?.map(\.state) == ["failed", "ok"])
+    #expect(app.sources.map(\.kind) == [.calendar, .file])
+    #expect(app.sources[0].accounts?.map(\.state) == [.failed, .ok])
     #expect(app.sources[0].accounts?[0].failedAt == "2026-11-23T09:00:00.000Z")
     #expect(app.sources[1].accounts == nil && app.sources[1].columns == ["amount"])
     #expect(app.undo?.label == "Green rows" && app.conversation == "thr_1")
