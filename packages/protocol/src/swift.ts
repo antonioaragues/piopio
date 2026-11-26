@@ -15,6 +15,7 @@
  */
 import { protocolSchema } from "./schema.js";
 import { reverseMethods } from "./index.js";
+import { protocolDocs } from "./swift-docs.js";
 import { swiftNames } from "./swift-names.js";
 
 export type Schema = {
@@ -61,6 +62,8 @@ function singular(word: string): string {
 	return word;
 }
 const key = (s: Schema) => JSON.stringify(s);
+/** Doc texts, each once: a comment and a `description` often say the same. */
+const joined = (...texts: (string | undefined)[]) => [...new Set(texts.filter((t): t is string => Boolean(t?.trim())).map((t) => t.trim()))].join("\n") || undefined;
 const doc = (text: string | undefined, indent: string) => (text ? text.split("\n").map((l) => `${indent}/// ${l}`.trimEnd()).join("\n") + "\n" : "");
 
 /** A reference to a top-level type, resolved once every type is known (a nested type of the same name shadows it). */
@@ -75,7 +78,7 @@ type Decl =
 	| { kind: "union"; scope: Scope; schemaKey: string; tag: string; open: boolean; cases: UnionCase[]; doc?: string }
 	| { kind: "choice"; scope: Scope; schemaKey: string; literals: { raw: string; name: string }[]; types: { name: string; type: string }[]; doc?: string }
 	| { kind: "empty"; scope: Scope; schemaKey: string };
-type UnionCase = { raw: string; name: string; type?: string; fields: Field[] };
+type UnionCase = { raw: string; name: string; type?: string; fields: Field[]; doc?: string };
 
 /** One type's use by a method: which direction it travels in, so a shared Swift type is checked against each. */
 type Use = { method: string; schema: Schema; direction: "send" | "receive" };
@@ -90,7 +93,14 @@ export class SwiftGenerator {
 	private readonly used = new Set<string>();
 	readonly tables: Record<"definitions" | "params" | "results" | "notifications" | "reverseParams" | "reverseResults", [string, string][]> = { definitions: [], params: [], results: [], notifications: [], reverseParams: [], reverseResults: [] };
 
-	constructor(private readonly definitions: Record<string, Schema>) {}
+	/** Each method's params, result or notification types, for their doc comments. */
+	private readonly roots = new Map<string, { method: string; part: string }[]>();
+
+	/** `docs`: index.ts's doc comments by schema path (src/swift-docs.ts). */
+	constructor(
+		private readonly definitions: Record<string, Schema>,
+		private readonly docs: Map<string, string> = new Map(),
+	) {}
 
 	run(): void {
 		const reverse = new Set(Object.keys(reverseMethods));
@@ -129,6 +139,8 @@ export class SwiftGenerator {
 		const merged = this.merge(schema);
 		if (merged.title) return this.named(merged);
 		if (isEmpty(merged)) return this.empty();
+		const dot = use.method.lastIndexOf(".");
+		this.roots.set(name, [...(this.roots.get(name) ?? []), { method: use.method.slice(0, dot), part: use.method.slice(dot + 1) }]);
 		const list = this.uses.get(name) ?? [];
 		list.push(use);
 		this.uses.set(name, list);
@@ -148,7 +160,7 @@ export class SwiftGenerator {
 			return ref(name);
 		}
 		if (isPrimitive(schema)) return this.type({ ...schema, title: undefined }, this.module, title, title).type;
-		this.declare(this.module, name, schema, schema.description, title);
+		this.declare(this.module, name, schema, joined(this.docs.get(title), schema.description), title);
 		return ref(name);
 	}
 
@@ -211,7 +223,7 @@ export class SwiftGenerator {
 			}
 			const t = this.type(child, scope, json, `${path}.${json}`);
 			this.trace.set(`${scope.path}.${json}`, `${path}.${json}`);
-			into.fields.push({ json, name: ident(json), type: t.type, optional: !required.has(json), nullable: t.nullable, doc: child.description });
+			into.fields.push({ json, name: ident(json), type: t.type, optional: !required.has(json), nullable: t.nullable, doc: joined(this.docs.get(`${path}.${json}`), child.description) });
 		}
 	}
 
@@ -224,7 +236,7 @@ export class SwiftGenerator {
 			const decl: Decl = { kind: "union", scope, schemaKey: k, tag, open, cases: [], doc: description };
 			for (const b of branches) {
 				const raw = String(b.properties![tag]!.const);
-				const c: UnionCase = { raw, name: caseName(raw), fields: [] };
+				const c: UnionCase = { raw, name: caseName(raw), fields: [], doc: b.title ? undefined : this.docs.get(`${path}.${raw}`) };
 				if (b.title) c.type = this.named(b);
 				else this.fields(b, scope, `${path}.${raw}`, c, tag);
 				decl.cases.push(c);
@@ -344,6 +356,16 @@ export class SwiftGenerator {
 
 	text(): string {
 		this.markSent();
+		for (const [name, uses] of this.roots) {
+			const d = this.top.get(name);
+			if (!d || d.kind === "empty") continue;
+			const what = { params: "params", result: "result", notification: "notification" }[uses[0]!.part] ?? uses[0]!.part;
+			const methods = uses.map((u) => `\`${u.method}\``);
+			const list = methods.length === 1 ? methods[0] : `${methods.slice(0, -1).join(", ")} and ${methods.at(-1)}`;
+			// One method's type has its doc; a type several share says only whose it is.
+			const own = uses.length === 1 ? joined(this.docs.get(uses[0]!.method), this.docs.get(`${uses[0]!.method}.${uses[0]!.part}`)) : undefined;
+			d.doc = joined(`${uses.every((u) => u.part === uses[0]!.part) ? `The ${what} of ${list}.` : `Used by ${list}.`}`, own);
+		}
 		const out: string[] = [HEADER];
 		for (const name of [...this.top.keys()].sort()) out.push(this.render(this.top.get(name)!, ""));
 		out.push(this.renderTables());
@@ -470,7 +492,7 @@ export class SwiftGenerator {
 			if (c.fields.length === 1) return `(${this.fieldType(c.fields[0]!, s)})`;
 			return `(${c.fields.map((f) => `${f.json}: ${this.fieldType(f, s)}${f.optional ? " = nil" : ""}`).join(", ")})`;
 		};
-		const lines = d.cases.map((c) => `${inner}case ${ident(c.name)}${assoc(c)}`);
+		const lines = d.cases.map((c) => `${doc(c.doc, inner)}${inner}case ${ident(c.name)}${assoc(c)}`);
 		if (d.open) lines.push(`${inner}/// A ${d.tag} this app doesn't know (a newer engine's).\n${inner}case unknown(String)`);
 		const keys = new Set([d.tag, ...d.cases.flatMap((c) => c.fields.map((f) => f.json))]);
 		lines.push(`${inner}private enum CodingKeys: String, CodingKey { case ${[...keys].map(ident).join(", ")} }`);
@@ -575,7 +597,8 @@ function tagOf(branches: Schema[]): string | undefined {
 export const SWIFT_FILE = new URL("../../../apps/mac/Sources/PiopioKit/Protocol.generated.swift", import.meta.url);
 
 export function protocolSwiftText(): string {
-	const g = new SwiftGenerator(JSON.parse(JSON.stringify(protocolSchema().definitions)) as Record<string, Schema>);
+	const docs = protocolDocs(new URL("../src/index.ts", import.meta.url));
+	const g = new SwiftGenerator(JSON.parse(JSON.stringify(protocolSchema().definitions)) as Record<string, Schema>, docs);
 	g.run();
 	return g.text();
 }
