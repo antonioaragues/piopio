@@ -769,7 +769,7 @@ struct EditModeChip: View {
                 let locked = mode == .fullAuto && project?.allowsFullAccess == false
                 Button { set(mode) } label: {
                     if !thread.planMode && mode == thread.approvalMode { Label(mode.title, systemImage: "checkmark") } else { Text(mode.title) }
-                    Text(locked ? ProjectInfo.fullAccessNeedsTrust : buildOn || mode == .readOnly ? mode.summary : "Turn on Build in Settings › General to change files")
+                    Text(locked ? project?.fullAccessLocked ?? "" : buildOn || mode == .readOnly ? mode.summary : "Turn on Build in Settings › General to change files")
                 }
                 .disabled((!buildOn && mode != .readOnly) || locked)
             }

@@ -319,7 +319,7 @@ struct ProjectSettingsSheet: View {
                         let locked = m == .fullAuto && !project.allowsFullAccess
                         Button { Task { await engine.setApprovalMode(m, for: project); await engine.loadProjects() } } label: {
                             if m == project.approvalMode { Label(m.title, systemImage: "checkmark") } else { Text(m.title) }
-                            Text(locked ? ProjectInfo.fullAccessNeedsTrust : m.summary)
+                            Text(locked ? project.fullAccessLocked : m.summary)
                         }
                         .disabled(locked)
                     }

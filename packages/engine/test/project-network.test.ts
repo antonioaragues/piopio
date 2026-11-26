@@ -15,7 +15,7 @@ test("a folder you open starts filtered unless it's trusted already; New project
 
 	const cloned = projects.add(folder("cloned"));
 	expect(cloned.network).toBe("filtered");
-	expect(projects.networkFiltered(join(cloned.path, "src"))).toBe(true);
+	expect(projects.networkFor(join(cloned.path, "src"))).toBe("filtered");
 
 	const trustedAlready = folder("mine");
 	new ProjectTrustStore(agentDir).set(trustedAlready, true);
@@ -24,7 +24,7 @@ test("a folder you open starts filtered unless it's trusted already; New project
 	expect(projects.create("Notes").network).toBe("open");
 
 	expect(projects.configure(cloned.id, { trust: true }).network).toBe("open");
-	expect(projects.networkFiltered(cloned.path)).toBe(false);
+	expect(projects.networkFor(cloned.path)).toBe("open");
 	expect(projects.configure(cloned.id, { network: "filtered" }).network).toBe("filtered");
 	expect(projects.configure(cloned.id, { network: "open" }).network).toBe("open");
 
@@ -47,5 +47,29 @@ test("Full access needs a trusted project: refused while filtered, allowed once 
 	expect(projects.modeFor(p.path)).toBe("full_auto");
 	expect(projects.configure(p.id, { network: "filtered" }).approvalMode).toBe("auto_edit");
 	expect(projects.modeFor(p.path)).toBe("auto_edit");
+});
+
+// Off (docs/spec/39 §8): only this Mac, set by hand, and trusting the project doesn't turn it on.
+test("a network turned off stays off through trust, keeps Full access away, and turns on only by hand", () => {
+	const base = realpathSync(mkdtempSync(join(tmpdir(), "piopio-net-off-")));
+	const agentDir = join(base, "agent");
+	mkdirSync(agentDir);
+	mkdirSync(join(base, "mine"));
+	new ProjectTrustStore(agentDir).set(join(base, "mine"), true);
+	const projects = new Projects(join(base, "projects.json"), agentDir, join(base, "Piopio"));
+	const p = projects.add(join(base, "mine"));
+	expect(projects.configure(p.id, { approvalMode: "full_auto" }).approvalMode).toBe("full_auto");
+
+	// Turning it off moves Full access to Auto-edit, so commands are sandboxed.
+	expect(projects.configure(p.id, { network: "off" })).toMatchObject({ network: "off", approvalMode: "auto_edit" });
+	expect(projects.networkFor(join(p.path, "src"))).toBe("off");
+	expect(() => projects.configure(p.id, { approvalMode: "full_auto" })).toThrow(/can't keep the network off/);
+	expect(projects.configure(p.id, { trust: true }).network).toBe("off");
+	expect(() => projects.configure(p.id, { trust: true, approvalMode: "full_auto" })).toThrow(/can't keep the network off/);
+
+	// Kept across a restart; on again by hand, Full access is back.
+	const again = new Projects(join(base, "projects.json"), agentDir, join(base, "Piopio"));
+	expect(again.networkFor(p.path)).toBe("off");
+	expect(again.configure(p.id, { network: "open", approvalMode: "full_auto" })).toMatchObject({ network: "open", approvalMode: "full_auto" });
 });
 

@@ -89,8 +89,8 @@ export type ApprovalPolicy = {
 	addRule(cwd: string, rule: { kind: ApprovalRule["kind"]; pattern: string }): void;
 	/** Folders linked to the project (docs/spec/18 §18). */
 	foldersFor?(cwd: string): { path: string; edit: boolean }[];
-	/** Its commands' network is filtered (docs/spec/39). */
-	networkFiltered?(cwd: string): boolean;
+	/** Its commands' network (docs/spec/39): open, filtered until it's trusted, or off. */
+	networkFor?(cwd: string): "open" | "filtered" | "off";
 	/** What a conversation hears about its pull request (docs/spec/17 §5). */
 	prEventsFor?(cwd: string): "off" | "tell" | "act";
 	/** The check after the agent's edits (05-build "Diagnostics"). */
@@ -304,11 +304,11 @@ export class Sessions {
 	}
 
 	/**
-	 * Full access needs a trusted project (docs/spec/39 §2): it has no sandbox and asks nothing, so in a project whose
-	 * network is filtered (one you added or cloned and haven't trusted) it's Auto-edit.
+	 * Full access needs a project whose network is open (docs/spec/39 §2): it has no sandbox and asks nothing, so in a
+	 * project whose network is filtered (one you added or cloned and haven't trusted) or off it's Auto-edit.
 	 */
 	private modeAt(place: string, mode: ApprovalMode): ApprovalMode {
-		return mode === "full_auto" && this.policy.networkFiltered?.(place) ? "auto_edit" : mode;
+		return mode === "full_auto" && (this.policy.networkFor?.(place) ?? "open") !== "open" ? "auto_edit" : mode;
 	}
 
 	/** The project folder a session works for: its own, a worktree's project, or a Board helper's (its worktree is elsewhere). */
@@ -1998,10 +1998,10 @@ export class Sessions {
 				},
 				addRule: (rule) => this.policy.addRule(entry.projectPath ?? entry.cwd!, rule),
 			},
-			// A project you haven't trusted yet: its commands reach only the sites allowed (docs/spec/39). A chat's own
-			// folder isn't a project, so its network stays open.
+			// A project you haven't trusted yet: its commands reach only the sites allowed; one whose network you turned off,
+			// only this Mac (docs/spec/39). A chat's own folder isn't a project, so its network stays open.
 			network: {
-				filtered: () => this.policy.networkFiltered?.(this.placeOf(entry)) ?? false,
+				mode: () => this.policy.networkFor?.(this.placeOf(entry)) ?? "open",
 				rules: () => this.policy.rulesFor(this.placeOf(entry)).filter((r) => r.kind === "host").map((r) => r.pattern),
 				addRule: (pattern: string) => this.policy.addRule(this.placeOf(entry), { kind: "host", pattern }),
 			},

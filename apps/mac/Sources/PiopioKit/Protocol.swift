@@ -2148,8 +2148,9 @@ public struct ProjectInfo: Codable, Sendable, Hashable, Identifiable {
     public enum Trust: String, Codable, Sendable { case trusted, untrusted, undecided }
     public var trust: Trust
     public var needsTrust: Bool
-    /// Its commands' network (docs/spec/39): open, or filtered until the project is trusted.
-    public enum Network: String, Codable, Sendable { case open, filtered }
+    /// Its commands' network (docs/spec/39): open, filtered until the project is trusted, or off (only this Mac) until
+    /// it's turned on.
+    public enum Network: String, Codable, Sendable { case open, filtered, off }
     public var network: Network?
     /// Where the project shows: Build, Chat, or both (04-chat P1).
     public enum Lens: String, Codable, Sendable { case build, chat }

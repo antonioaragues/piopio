@@ -11,6 +11,7 @@
  * - A name is resolved once, here, and the connection goes to the address checked: a name that resolves to this Mac or
  *   a private network (a LAN, 169.254.x.x) is refused, so an allowed name can't be pointed at them (DNS rebinding).
  *   An IP address is asked about as itself. Trusting the project opens the network, LAN included.
+ * - With the project's network off (`off`), every host but this Mac's is refused without asking.
  * - It keeps a list of what it refused, which the bash tool turns into a note for the agent.
  */
 import { createServer, request as httpRequest, type IncomingMessage, type Server, type ServerResponse } from "node:http";
@@ -73,6 +74,8 @@ export type NetworkFilterOptions = {
 	/** Always: the project keeps the host as a rule. */
 	addRule: (pattern: string) => void;
 	builtIn?: readonly string[];
+	/** The project's network is off: nothing outside this Mac, not even the built-in hosts, and nobody is asked. Read on every connection. */
+	off?: () => boolean;
 	/** Tests: where a host really is (no resolving, no address check). */
 	route?: (host: string, port: number) => { host: string; port: number };
 	/** Tests: a name's addresses. */
@@ -122,6 +125,7 @@ export class NetworkFilter {
 	async allows(host: string): Promise<boolean> {
 		const h = host.toLowerCase().replace(/\.$/, "");
 		if (LOCAL_NAMES.has(h)) return true;
+		if (this.opts.off?.()) return false;
 		if (this.denied.has(h)) return false;
 		if (this.allowed.has(h) || [...(this.opts.builtIn ?? BUILT_IN_HOSTS), ...this.opts.rules()].some((p) => hostMatches(h, p))) return true;
 		let pending = this.asking.get(h);

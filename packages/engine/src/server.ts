@@ -418,7 +418,7 @@ export class Engine {
 		this.hooks = new Hooks(join(options.paths.home, "hooks.key"), (first, second, body, delivery) => this.automations.fireHook(first, second, body, delivery), this.log);
 		this.sessions.hookUrl = (agent, trigger) => this.hooks.url(agent, trigger);
 		this.sessions.policy = {
-			networkFiltered: (cwd) => this.projects.networkFiltered(cwd),
+			networkFor: (cwd) => this.projects.networkFor(cwd),
 			projectFor: (cwd) => this.projects.projectFor(cwd),
 			modeFor: (cwd) => this.projects.modeFor(cwd),
 			rulesFor: (cwd) => this.projects.rulesFor(cwd),

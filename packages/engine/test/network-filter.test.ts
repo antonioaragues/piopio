@@ -40,10 +40,11 @@ function tunnel(proxy: number, target: string, say = "hello"): Promise<{ status:
 	});
 }
 
-function filter(answer: (host: string) => Promise<NetworkDecision | undefined>, rules: string[] = [], up = 0) {
+function filter(answer: (host: string) => Promise<NetworkDecision | undefined>, rules: string[] = [], up = 0, off?: () => boolean) {
 	const asked: string[] = [];
 	const added: string[] = [];
 	const f = new NetworkFilter({
+		...(off ? { off } : {}),
 		rules: () => rules,
 		ask: (host) => (asked.push(host), answer(host)),
 		addRule: (p) => added.push(p),
@@ -73,6 +74,22 @@ test("a listed host or a project's rule tunnels without asking; ports other than
 	expect((await tunnel(port, "registry.example:22")).status).toBe("HTTP/1.1 403 Forbidden");
 	expect(asked).toEqual([]);
 	expect(f.refusedSince(0)).toEqual(["registry.example:22"]);
+});
+
+test("with the network off, every site is refused without asking, the built-in ones and the project's too; on again, they pass", async () => {
+	const up = await echo();
+	let off = true;
+	const { f, asked } = filter(async () => "once", ["api.mine.example"], up, () => off);
+	const port = await f.start();
+	const at = Date.now();
+	for (const target of ["registry.example:443", "api.mine.example:443", "evil.example:443"]) expect((await tunnel(port, target)).status).toBe("HTTP/1.1 403 Forbidden");
+	expect(asked).toEqual([]);
+	expect(f.refusedSince(at)).toEqual(["registry.example", "api.mine.example", "evil.example"]);
+	// Read on every connection: turned back to filtered, the lists apply again, and nothing was remembered as a no.
+	off = false;
+	expect((await tunnel(port, "registry.example:443")).echoed).toBe("hello");
+	expect((await tunnel(port, "evil.example:443")).echoed).toBe("hello");
+	expect(asked).toEqual(["evil.example"]);
 });
 
 test("another host waits for the user, asked once however many connections want it; no is refused for the session", async () => {

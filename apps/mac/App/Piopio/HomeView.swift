@@ -659,7 +659,7 @@ struct AskBox: View {
                 let locked = m == .fullAuto && project?.allowsFullAccess == false
                 Button { mode = m; plan = false } label: {
                     if !plan && m == effectiveMode { Label(m.title, systemImage: "checkmark") } else { Text(m.title) }
-                    Text(locked ? ProjectInfo.fullAccessNeedsTrust : m.summary)
+                    Text(locked ? project?.fullAccessLocked ?? "" : m.summary)
                 }
                 .disabled(locked)
             }

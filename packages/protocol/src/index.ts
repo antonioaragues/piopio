@@ -926,10 +926,11 @@ export const ProjectInfo = Type.Object({
 	trust: literals("trusted", "untrusted", "undecided"),
 	needsTrust: Type.Boolean(),
 	/**
-	 * Its commands' network (docs/spec/39): open, or filtered (only package registries, GitHub and the sites allowed;
-	 * others ask). Projects added or cloned start filtered until they're trusted.
+	 * Its commands' network (docs/spec/39): open, filtered (only package registries, GitHub and the sites allowed;
+	 * others ask), or off (only this Mac). Projects added or cloned start filtered until they're trusted; off is set
+	 * by hand and stays until it's changed.
 	 */
-	network: Type.Optional(literals("open", "filtered")),
+	network: Type.Optional(literals("open", "filtered", "off")),
 	/** Where the project shows (04-chat P1): Build, Chat, or both. Detected when added; "Show in…" changes it. */
 	lenses: Type.Array(literals("build", "chat")),
 	/** The folder no longer exists. */
@@ -1849,8 +1850,8 @@ export const methods = {
 			prEvents: Type.Optional(literals("off", "tell", "act")),
 			/** The check after the agent's edits (05-build "Diagnostics"): a command, "" for off, null for automatic. */
 			check: Type.Optional(Type.Union([Type.String(), Type.Null()])),
-			/** Its commands' network (docs/spec/39). Trusting the project also opens it. */
-			network: Type.Optional(literals("open", "filtered")),
+			/** Its commands' network (docs/spec/39). Trusting the project also opens a filtered one, not one that's off. */
+			network: Type.Optional(literals("open", "filtered", "off")),
 		}),
 		result: Type.Object({ project: ProjectInfo }),
 	},

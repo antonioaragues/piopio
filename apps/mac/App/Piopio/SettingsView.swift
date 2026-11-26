@@ -285,6 +285,15 @@ private struct ProjectApprovalsPage: View {
         }
     }
 
+    /// What each choice of the commands' network means (docs/spec/39).
+    static func networkSubtitle(_ network: ProjectInfo.Network) -> String {
+        switch network {
+        case .open: return "Commands reach any site"
+        case .filtered: return "Only package registries, GitHub and the sites you allow; others ask"
+        case .off: return "Only this Mac (localhost); trusting the project doesn't turn it on. Claude Code, Codex and Antigravity aren't covered"
+        }
+    }
+
     var body: some View {
         SettingsDetail(back: "Approvals", title: project.name, goBack: back) {
             MemoryTile(symbol: "folder", color: .gray, size: 48)
@@ -310,12 +319,16 @@ private struct ProjectApprovalsPage: View {
                             .fixedSize()
                         }
                     }
-                    // docs/spec/39: on for a project you added or cloned until you trust it.
-                    SettingRow(title: "Filter commands' network", subtitle: project.network == .filtered ? "Only package registries, GitHub and the sites you allow; others ask" : "Commands reach any site") {
-                        Toggle("", isOn: Binding(get: { project.network == .filtered }, set: { on in Task { await engine.setNetwork(filtered: on, for: project) } }))
-                            .labelsHidden()
-                            .toggleStyle(.switch)
-                            .accessibilityLabel("Filter commands' network")
+                    // docs/spec/39: Filtered for a project you added or cloned until you trust it; Off only by hand.
+                    SettingRow(title: "Commands' network", subtitle: Self.networkSubtitle(project.network ?? .open)) {
+                        Picker("", selection: Binding(get: { project.network ?? .open }, set: { value in Task { await engine.setNetwork(value, for: project) } })) {
+                            Text("Open").tag(ProjectInfo.Network.open)
+                            Text("Filtered").tag(ProjectInfo.Network.filtered)
+                            Text("Off").tag(ProjectInfo.Network.off)
+                        }
+                        .labelsHidden()
+                        .accessibilityLabel("Commands' network")
+                        .fixedSize()
                     }
                     SettingRow(title: "New sessions start in", subtitle: ApprovalModeMenu.summary(project.approvalMode), last: true) {
                         Picker("", selection: Binding(get: { project.approvalMode }, set: { mode in Task { await engine.setApprovalMode(mode, for: project) } })) {

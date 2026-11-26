@@ -19,8 +19,13 @@ type Lens = "build" | "chat";
  * `lenses`: before docs/spec/18, whether the folder showed in Build, Chat or both. `folder: false` and `instructions`:
  * a project without a folder, before CF4. Both are read once to migrate, then dropped.
  */
-/** `network: "filtered"`: its commands reach only the hosts allowed (docs/spec/39); absent, open. */
-type StoredProject = { id: string; path: string; name: string; addedAt: string; approvalMode?: ApprovalMode; rules?: ApprovalRule[]; lenses?: Lens[]; folder?: false; instructions?: string; folders?: LinkedFolder[]; prEvents?: PrEvents; check?: string; network?: "filtered" };
+/**
+ * `network`: "filtered", its commands reach only the hosts allowed, until it's trusted; "off", only this Mac, until you
+ * turn it on (docs/spec/39); absent, open.
+ */
+type StoredProject = { id: string; path: string; name: string; addedAt: string; approvalMode?: ApprovalMode; rules?: ApprovalRule[]; lenses?: Lens[]; folder?: false; instructions?: string; folders?: LinkedFolder[]; prEvents?: PrEvents; check?: string; network?: "filtered" | "off" };
+/** A project's commands' network (docs/spec/39). */
+export type NetworkMode = "open" | "filtered" | "off";
 /** What a conversation hears about its pull request (docs/spec/17 §5): nothing, a notification, or a follow-up it works on. */
 export type PrEvents = "off" | "tell" | "act";
 
@@ -130,12 +135,12 @@ export class Projects {
 	}
 
 	/**
-	 * Whether the commands of the project at `path` (or containing it) have a filtered network (docs/spec/39). Read for
-	 * each command, so trusting the project opens it at once.
+	 * The network of the commands of the project at `path` (or containing it), docs/spec/39. Read for each command, so
+	 * trusting the project or changing it in Settings takes effect at once.
 	 */
-	networkFiltered(path: string): boolean {
+	networkFor(path: string): NetworkMode {
 		const entry = this.entries.find((p) => path === p.path || path.startsWith(`${p.path}/`));
-		return entry?.network === "filtered";
+		return entry?.network ?? "open";
 	}
 
 	/** The sites a project's commands may reach, besides the built-in ones: its "host" rules. */
@@ -210,7 +215,7 @@ export class Projects {
 	}
 
 	/** Default approval mode, or rule removal (Settings / project menu). */
-	configure(id: string, change: { approvalMode?: ApprovalMode; removeRule?: string; trust?: boolean | null; linkFolder?: LinkedFolder; unlinkFolder?: string; prEvents?: PrEvents; check?: string | null; network?: "open" | "filtered" }): ProjectInfo {
+	configure(id: string, change: { approvalMode?: ApprovalMode; removeRule?: string; trust?: boolean | null; linkFolder?: LinkedFolder; unlinkFolder?: string; prEvents?: PrEvents; check?: string | null; network?: NetworkMode }): ProjectInfo {
 		const entry = this.entries.find((p) => p.id === id);
 		if (!entry) throw new EngineError("NOT_FOUND", `No project ${id}`);
 		if (change.linkFolder) this.link(entry, change.linkFolder);
@@ -218,22 +223,23 @@ export class Projects {
 			entry.folders = (entry.folders ?? []).filter((f) => f.path !== change.unlinkFolder);
 			if (!entry.folders.length) delete entry.folders;
 		}
-		// Full access has no sandbox and asks nothing: not for a project you haven't trusted (docs/spec/39 §2).
-		const filteredAfter = change.network === "filtered" || (change.network === undefined && change.trust !== true && entry.network === "filtered");
-		if (change.approvalMode === "full_auto" && filteredAfter) throw new EngineError("INVALID", "Full access needs a trusted project. Trust it first: its commands run in the sandbox until then.");
+		// Full access has no sandbox and asks nothing, so it would go around a filtered or turned-off network (docs/spec/39 §2).
+		const networkAfter: NetworkMode = change.network ?? (change.trust === true && entry.network === "filtered" ? "open" : (entry.network ?? "open"));
+		if (change.approvalMode === "full_auto" && networkAfter === "filtered") throw new EngineError("INVALID", "Full access needs a trusted project. Trust it first: its commands run in the sandbox until then.");
+		if (change.approvalMode === "full_auto" && networkAfter === "off") throw new EngineError("INVALID", "Full access has no sandbox, so it can't keep the network off. Turn this project's network on first.");
 		if (change.approvalMode) entry.approvalMode = change.approvalMode;
-		// Filtering a project that started in Full access: Auto-edit, so its commands are sandboxed.
-		if (change.network === "filtered" && entry.approvalMode === "full_auto") entry.approvalMode = "auto_edit";
+		// Filtering a project, or turning its network off, when it started in Full access: Auto-edit, so its commands are sandboxed.
+		if (networkAfter !== "open" && entry.approvalMode === "full_auto") entry.approvalMode = "auto_edit";
 		if (change.prEvents) entry.prEvents = change.prEvents;
 		if (change.check === null) delete entry.check;
 		else if (change.check !== undefined) entry.check = change.check.trim();
 		if (change.removeRule) entry.rules = (entry.rules ?? []).filter((r) => r.id !== change.removeRule);
 		// Saved where the pi CLI reads it too. Sessions opened afterwards load (or skip) the project's resources.
 		if (change.trust !== undefined) this.trust.set(entry.path, change.trust);
-		// Trusting a project opens its network too; the switch in Settings sets it either way (docs/spec/39).
-		if (change.trust === true) delete entry.network;
-		if (change.network === "filtered") entry.network = "filtered";
-		else if (change.network === "open") delete entry.network;
+		// Trusting a project opens a filtered network; a network you turned off stays off. The picker in Settings sets
+		// it either way (docs/spec/39).
+		if (networkAfter === "open") delete entry.network;
+		else entry.network = networkAfter;
 		this.save();
 		return this.describe(entry);
 	}
@@ -250,11 +256,11 @@ export class Projects {
 		return entry && { id: entry.id, path: entry.path };
 	}
 
-	/** Approval mode for new sessions in `cwd` (global default: auto-edit, BQ1); Full access only in a project that isn't filtered (docs/spec/39 §2). */
+	/** Approval mode for new sessions in `cwd` (global default: auto-edit, BQ1); Full access only in a project whose network is open (docs/spec/39 §2). */
 	modeFor(cwd: string): ApprovalMode {
 		const entry = this.entryFor(cwd);
 		const mode = entry?.approvalMode ?? "auto_edit";
-		return mode === "full_auto" && entry?.network === "filtered" ? "auto_edit" : mode;
+		return mode === "full_auto" && entry?.network !== undefined ? "auto_edit" : mode;
 	}
 
 	/** What conversations in `cwd`'s project hear about their pull requests (default: tell). */

@@ -990,14 +990,17 @@ struct FlowLayout: Layout {
 
 /// The session's approval mode (toolbar pill, docs/design 2a "Ask before edits").
 extension ProjectInfo {
-    /// Full access has no sandbox and asks nothing, so only a project you've trusted gets it (docs/spec/39 §2).
-    var allowsFullAccess: Bool { network != .filtered }
+    /// Full access has no sandbox and asks nothing, so only a project whose network is open gets it (docs/spec/39 §2).
+    var allowsFullAccess: Bool { network != .filtered && network != .off }
     /// Trusting it would change something: its own setup loads (`needsTrust`), or its commands' network opens (docs/spec/39).
     /// The trust banner and Settings › Approvals both ask by this.
     var trustMatters: Bool { needsTrust || network == .filtered }
     /// No decision yet, and one matters: the banner shows, and the project's row in Approvals has a dot.
     var waitsForTrust: Bool { trust == .undecided && trustMatters }
-    static let fullAccessNeedsTrust = "Needs a trusted project: trust it first (Settings › Approvals)"
+    /// Why Full access is unavailable: a filtered network waits for trust, one that's off for you to turn it on.
+    var fullAccessLocked: String {
+        network == .off ? "Needs the project's network on (Settings › Approvals)" : "Needs a trusted project: trust it first (Settings › Approvals)"
+    }
 }
 
 struct ApprovalModeMenu: View {
@@ -1013,7 +1016,7 @@ struct ApprovalModeMenu: View {
                     Task { await session.setApprovalMode(mode) }
                 } label: {
                     Text(Self.title(mode) + (mode == session.approvalMode ? "  ✓" : ""))
-                    Text(locked ? ProjectInfo.fullAccessNeedsTrust : Self.summary(mode))
+                    Text(locked ? project?.fullAccessLocked ?? "" : Self.summary(mode))
                 }
                 .disabled(locked)
             }

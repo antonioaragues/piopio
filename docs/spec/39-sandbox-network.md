@@ -2,6 +2,7 @@
 
 Status: built 2026-11-23, from the security audit (its "step 2", after the sandbox hid credentials and the Keychain tool in 8137fa8).
 Decided: NF1 (who's filtered), NF2 (a new site asks in the tray), NF3 (no Full auto while filtered).
+**2026-11-26:** a third choice, the network **off** (§8, roadmap PAR12).
 
 ## 1. Why
 
@@ -27,9 +28,9 @@ proxy.
   and coding agents read it as Auto-edit, and filtering a project that started in Full auto moves it to Auto-edit.
 - **Trusting the project opens it** (the trust banner's Trust Project, or Settings › Approvals › the project). The
   banner shows for a filtered project as it does for one with its own setup. Settings › Approvals › the project has
-  a switch, "Filter commands' network", to turn it on or off by hand.
+  a picker, "Commands' network": Open, Filtered or Off (§8), to set it by hand.
 
-Stored as `network: "filtered"` on the project (`projects.json`); `ProjectInfo.network` tells the app.
+Stored as `network: "filtered"` (or `"off"`) on the project (`projects.json`); `ProjectInfo.network` tells the app.
 
 ## 3. What a filtered command can reach
 
@@ -87,3 +88,32 @@ user said no (or the run stopped), not to look for another way, and to tell the 
 - Real tools in a filtered profile through the proxy: `npm view left-pad version`, `git ls-remote` on GitHub over HTTPS
   and Node's `fetch` to the npm registry work without asking; `curl https://example.com` asks once and is refused on
   Deny; `curl` around the proxy and to a bare IP can't connect.
+
+## 8. The network off (2026-11-26, roadmap PAR12)
+
+For work that shouldn't touch the internet at all: a project with secrets in it, a repository you only want to read
+and build, or a check that the build works offline.
+
+- **Where:** Settings › Approvals › the project › **Commands' network**: Open, Filtered or **Off**. Per project, like
+  Filtered, and read on every command, so it applies to running sessions at once. Off is chosen by hand only: no project
+  starts off.
+- **What a command reaches:** this Mac only (`localhost`, any port: dev servers, tests that start one). Not the
+  built-in sites, not the project's host rules, and nobody is asked.
+- **How:** the same sandbox profile as Filtered (no address but this Mac's) and the same proxy, which refuses every
+  site without asking (`NetworkFilter`'s `off`). The proxy is kept so the agent hears what happened: a command that
+  tried a site ends with a note that the user turned the project's network off, to work offline, and not to look for
+  another way. Background commands and the check after edits get the same.
+- **Trust doesn't turn it on.** Trusting a filtered project opens it; a project that's off stays off until you choose
+  Open or Filtered.
+- **No Full auto while off,** as while filtered (NF3): Full auto has no sandbox. Setting it is refused ("Full access
+  has no sandbox, so it can't keep the network off"), mode pickers show it unavailable ("Needs the project's network
+  on"), and turning the network off moves a project in Full auto to Auto-edit.
+- **Limits:** the same as §6. DNS lookups still go out. Running a command again outside the sandbox
+  (`outside_project`) asks, as it does for any write outside, and runs with the network open. Coding agents (Claude
+  Code, Codex, Antigravity) and the terminal tab aren't covered. With the sandbox switched off in Settings there's
+  nothing to turn off.
+- **Not done:** `edit`/`write` under the sandbox's confinement (PAR12's other half). They only check paths.
+- **Verified:** `network-filter.test.ts` (off refuses built-in, rule and other sites without asking, and is read per
+  connection), `project-network.test.ts` (off survives trust and a restart, keeps Full auto away),
+  `network-build.test.ts` (in a Build session `curl https://registry.npmjs.org/` is refused without a question and the
+  agent gets the note), extensions `sandbox.test.ts` (the note), and the Swift contract test decoding `"off"`.

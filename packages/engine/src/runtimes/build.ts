@@ -106,10 +106,10 @@ export type BuildOpenOptions = {
 	/** Approval mode and the project's rules, read on every tool call (they can change mid-session). */
 	approvals: { mode(): ApprovalMode; rules(): readonly ApprovalRule[]; addRule(rule: Rule): void };
 	/**
-	 * The project's network (docs/spec/39): filtered until it's trusted, read on every command; the sites it may reach
-	 * besides the built-in ones, and how one becomes such a site (Always).
+	 * The project's network (docs/spec/39), read on every command: open, filtered until it's trusted, or off (only this
+	 * Mac); the sites a filtered one may reach besides the built-in ones, and how one becomes such a site (Always).
 	 */
-	network?: { filtered(): boolean; rules(): readonly string[]; addRule(pattern: string): void };
+	network?: { mode(): "open" | "filtered" | "off"; rules(): readonly string[]; addRule(pattern: string): void };
 	/** Folders linked to the project (docs/spec/18 §18), read on every turn. */
 	folders?: () => readonly { path: string; edit: boolean }[];
 	/** Shadow-git snapshots of the working tree (docs/spec/05-build §7). */
@@ -206,13 +206,17 @@ export class BuildRuntime implements Runtime {
 		let planHandle: PlanHandle | undefined;
 		const agentDir = o.piAgentDir ?? getAgentDir();
 		const settingsManager = SettingsManager.create(o.cwd, agentDir);
-		// A filtered network's proxy (docs/spec/39), the session's own, started the first time a command needs it.
+		// A filtered network's proxy (docs/spec/39), the session's own, started the first time a command needs it. With
+		// the network off it's the same proxy refusing every site without asking, so the agent hears what was refused.
 		let filter: NetworkFilter | undefined;
 		let filterPort: number | undefined;
+		const networkMode = () => o.network?.mode() ?? "open";
 		const network = async (): Promise<FilteredNetwork | undefined> => {
-			if (!o.network?.filtered()) return undefined;
+			const mode = networkMode();
+			if (mode === "open" || !o.network) return undefined;
 			const net = o.network;
 			filter ??= new NetworkFilter({
+				off: () => networkMode() === "off",
 				rules: () => net.rules(),
 				addRule: (pattern) => net.addRule(pattern),
 				ask: async (host) => {
@@ -228,10 +232,10 @@ export class BuildRuntime implements Runtime {
 				},
 			});
 			filterPort = await filter.start();
-			return { port: filterPort, refusedSince: (at) => filter!.refusedSince(at) };
+			return { port: filterPort, refusedSince: (at) => filter!.refusedSince(at), ...(mode === "off" ? { off: true } : {}) };
 		};
-		// Started now when it's filtered, so the check after edits (which can't wait) finds it running.
-		if (o.network?.filtered()) await network().catch(() => undefined);
+		// Started now when it's filtered or off, so the check after edits (which can't wait) finds it running.
+		if (networkMode() !== "open") await network().catch(() => undefined);
 		const resourceLoader = new DefaultResourceLoader({
 			cwd: o.cwd,
 			agentDir,
@@ -363,8 +367,8 @@ export class BuildRuntime implements Runtime {
 								shell: () => settingsManager.getShellPath() ?? process.env.SHELL ?? "/bin/sh",
 								wrap: (command, cwd) => {
 									const confined = (o.sandbox?.() ?? true) && o.approvals.mode() !== "full_auto" && process.platform === "darwin" && !sandboxUnavailable();
-									// Filtered like the session's commands: through its proxy, or nowhere outside this Mac.
-									const filtered = o.network?.filtered() ?? false;
+									// Filtered (or off) like the session's commands: through its proxy, or nowhere outside this Mac.
+									const filtered = networkMode() !== "open";
 									return confined ? confine(command, sandboxProfile(cwd, { filtered }), settingsManager.getShellPath() ?? process.env.SHELL ?? "/bin/sh", undefined, filtered && filterPort ? proxyEnv(filterPort) : {}) : command;
 								},
 							}),

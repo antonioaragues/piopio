@@ -43,9 +43,10 @@ export interface SandboxBridge {
 
 /**
  * A filtered network: the proxy's port (none when it couldn't start: then nothing outside this Mac is reachable), and
- * the hosts it refused since a moment, to tell the agent what stopped a command.
+ * the hosts it refused since a moment, to tell the agent what stopped a command. `off`: the user turned the project's
+ * network off, so the proxy refuses every site.
  */
-export type FilteredNetwork = { port?: number; refusedSince(at: number): string[] };
+export type FilteredNetwork = { port?: number; refusedSince(at: number): string[]; off?: boolean };
 
 /** The variables tools read their proxy from; Node's fetch reads them only with NODE_USE_ENV_PROXY. */
 export function proxyEnv(port: number): Record<string, string> {
@@ -298,7 +299,7 @@ export function sandboxUnavailable(): string | undefined {
 	return probed;
 }
 
-export const SANDBOX_GUIDELINE = `Commands run in a sandbox: they can read almost anything (not Piopio's own data, sign-ins and credentials: gh and git over HTTPS are signed out there) and use the network (in a project that isn't trusted yet, only package registries, GitHub and the sites the user allows: Piopio asks them about others), but write only inside the project folder, temporary folders and package/build caches. If a command must write elsewhere (a global install, a file in the home folder), run it again with ${OUTSIDE_PROJECT}: true; the user is asked first.`;
+export const SANDBOX_GUIDELINE = `Commands run in a sandbox: they can read almost anything (not Piopio's own data, sign-ins and credentials: gh and git over HTTPS are signed out there) and use the network (in a project that isn't trusted yet, only package registries, GitHub and the sites the user allows: Piopio asks them about others; in a project whose network the user turned off, only this Mac), but write only inside the project folder, temporary folders and package/build caches. If a command must write elsewhere (a global install, a file in the home folder), run it again with ${OUTSIDE_PROJECT}: true; the user is asked first.`;
 
 const NESTED_HINT = `\n\n[A tool tried to start its own macOS sandbox, which can't run inside Piopio's ("sandbox_apply: Operation not permitted"). Piopio already turns it off for swift and xcodebuild. For another tool, look for its flag that disables its own sandbox and run it again; Piopio's sandbox still keeps writes inside the project.]`;
 
@@ -314,8 +315,9 @@ export function sandboxHint(output: string): string | undefined {
 	return undefined;
 }
 
-/** What stopped a command in a filtered project: the hosts the filter didn't let through. */
-export function networkHint(hosts: readonly string[]): string {
+/** What stopped a command in a filtered project, or one whose network is off: the hosts the filter didn't let through. */
+export function networkHint(hosts: readonly string[], off = false): string {
+	if (off) return `\n\n[This command couldn't reach ${hosts.join(", ")}: the user turned this project's network off, so its commands reach only this Mac (localhost). Don't look for another way to reach the internet: work offline, or tell the user if the work needs the network (they can turn it on in Settings › Approvals).]`;
 	return `\n\n[Piopio's network filter kept this command from reaching ${hosts.join(", ")}. This project isn't trusted yet, so its commands reach only package registries, GitHub and the sites the user allowed; the user was asked about these and said no, or the run stopped. Don't look for another way to reach them: tell the user if the work needs them (they can allow the site, or trust the project in Settings › Approvals).]`;
 }
 
@@ -385,7 +387,7 @@ export function sandboxExtension(bridge: SandboxBridge, options: { shellPath?: (
 				const content = (result as { content?: Content }).content;
 				const text = content?.map((c) => c.text ?? "").join("") ?? "";
 				const refused = net?.refusedSince(startedAt) ?? [];
-				const hint = refused.length ? networkHint(refused) : (result as { isError?: boolean }).isError ? sandboxHint(text) : undefined;
+				const hint = refused.length ? networkHint(refused, net?.off) : (result as { isError?: boolean }).isError ? sandboxHint(text) : undefined;
 				if (hint) return { ...result, content: [...(content ?? []), { type: "text", text: hint }] } as never;
 				return result;
 			},

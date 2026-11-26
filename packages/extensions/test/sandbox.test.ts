@@ -192,4 +192,10 @@ describe.skipIf(process.platform !== "darwin")("a filtered network (docs/spec/39
 	test("the note after a refused site names it and says not to look for another way", () => {
 		expect(networkHint(["evil.example", "x.example:22"])).toMatch(/kept this command from reaching evil\.example, x\.example:22\..*Don't look for another way/s);
 	});
+
+	test("with the network off, the note says the user turned it off and to work offline", () => {
+		const note = networkHint(["registry.npmjs.org"], true);
+		expect(note).toMatch(/couldn't reach registry\.npmjs\.org: the user turned this project's network off.*work offline/s);
+		expect(note).not.toContain("isn't trusted");
+	});
 });
