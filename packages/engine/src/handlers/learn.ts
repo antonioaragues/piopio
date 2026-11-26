@@ -11,11 +11,11 @@ export function learnHandlers(engine: Engine): Handlers<"learn"> {
 	return {
 		"learn.save": async (params, _call) => {
 			const p = params as Params<"learn.save">;
-			return (await engine.sessions.learnSave(p.ref, p.callId, p.items)) satisfies Result<"learn.save">;
+			return (await engine.sessions.learn.save(p.ref, p.callId, p.items)) satisfies Result<"learn.save">;
 		},
 		"learn.answer": async (params, _call) => {
 			const p = params as Params<"learn.answer">;
-			await engine.sessions.learnAnswer(p.ref, p.callId, p.choice);
+			await engine.sessions.learn.answer(p.ref, p.callId, p.choice);
 			return {} satisfies Result<"learn.answer">;
 		},
 	};

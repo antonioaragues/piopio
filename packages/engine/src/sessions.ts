@@ -10,7 +10,7 @@ import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { listSubagents, matchModel, type Subagent } from "./custom-subagents.js";
 import { getAgentDir, SessionManager } from "@earendil-works/pi-coding-agent";
-import type { ApprovalMode, ApprovalRule, Budget, ContainerRef, LearnItem, ModelRef, PromptResponse, SessionSummary, TimelineItem, WorkOn } from "@piopio/protocol";
+import type { ApprovalMode, ApprovalRule, ContainerRef, ModelRef, PromptResponse, SessionSummary, TimelineItem, WorkOn } from "@piopio/protocol";
 import { EngineError, type ModelHub } from "./models.js";
 import type { EnginePaths } from "./paths.js";
 import { CheckpointStore } from "./checkpoints.js";
@@ -49,12 +49,8 @@ import type { Extension } from "@earendil-works/pi-durable";
 import type { WebOptions } from "./tools/web.js";
 import { exportTranscript, type ExportFormat } from "./export.js";
 import { SearchIndex } from "./search.js";
-import type { LedgerSource } from "./ledger.js";
 import { type Library, LibrarySearch, type LibraryOrigin, NOTE_PROMPT, noteRequest } from "./library.js";
 import type { HistoryBridge, HistoryHit } from "./tools/history.js";
-import type { LearnBridge } from "./tools/learn.js";
-import { addRules, instructionsFile, readInstructions, removeRules } from "./learn.js";
-import { formatSkill, parseSkill, skillName, skillsRoot, writeSkill } from "./skills.js";
 import { findAgent, installedAgents, type ExternalAgent } from "./external-agents.js";
 import type { TelegramChannels } from "./channels/manager.js";
 import type { AgentWatchers } from "./watchers.js";
@@ -63,22 +59,22 @@ import type { BoardBridge } from "./work/extension.js";
 import type { Watchdog } from "./watchdog.js";
 import type { GitHub } from "./github.js";
 import { agentBridge } from "./automations/tools.js";
-import { DEFAULT_BUDGET, PIOPIO, turnError, type Automation } from "./automations/model.js";
+import { turnError, type Automation } from "./automations/model.js";
 import type { Automations } from "./automations/service.js";
 import type { SessionEvent } from "@piopio/protocol";
 import { type CloudLink } from "./cloud.js";
 import type { SecretBroker } from "./secrets.js";
 import { portsServedIn } from "./ports.js";
 import { readJsonFile, writeFileAtomic } from "./atomic.js";
-import type { CatalogEntry } from "./sessions/catalog-entry.js";
+import { TEMPORARY_TITLE, type CatalogEntry } from "./sessions/catalog-entry.js";
 import { PullRequests } from "./sessions/pull-requests.js";
+import { SessionUsage } from "./sessions/usage.js";
+import { LearnCards } from "./sessions/learn.js";
 import { Children } from "./sessions/children.js";
 import { Agents } from "./sessions/agents.js";
 
 /** A temporary chat lasts this long after its last message (docs/spec/14 M4). */
 export const TEMPORARY_MS = 24 * 60 * 60_000;
-/** What the usage ledger calls a temporary chat. */
-export const TEMPORARY_TITLE = "Temporary chat";
 
 /** Where Build sessions get their default approval mode and "always allow" rules (the projects). */
 export type ApprovalPolicy = {
@@ -155,6 +151,28 @@ export class Sessions {
 	subagentsAt(place: string): Subagent[] {
 		return listSubagents(this.piOverrides.piAgentDir ?? getAgentDir(), this.policy.projectFor(place)?.path ?? place);
 	}
+	/** What conversations spent: the usage ledger's side, Overview's names and every budget (sessions/usage.ts). */
+	readonly usage = new SessionUsage({
+		entry: (id) => this.entries.get(id),
+		entries: () => this.entries.values(),
+		automations: () => this.automations,
+		ledger: () => this.hub.ledger,
+		indexContainer: (entry) => this.indexContainer(entry),
+		storedAnswers: (entry) => this.storedAnswers(entry),
+		agentAnswers: async (entry) => {
+			const agent = await this.open.get(entry.ref.id)?.catch(() => undefined);
+			return agent instanceof AgentRuntime ? agent.answers() : undefined;
+		},
+	});
+	/** /learn cards: what a conversation may write, saving one and taking it back (sessions/learn.ts). */
+	readonly learn = new LearnCards({
+		entry: (ref) => this.entry(ref),
+		runtime: (ref) => this.runtime(ref),
+		chat: () => this.chat,
+		save: () => this.save(),
+		changed: (entry) => this.changed(entry),
+		reloadResources: () => this.reloadResources(),
+	});
 	/** Conversations' pull requests (sessions/pull-requests.ts). */
 	readonly prs = new PullRequests({
 		entry: (ref) => this.entry(ref),
@@ -246,7 +264,7 @@ export class Sessions {
 		// Utility, web search and embeddings are recorded by scope (a conversation's or an agent's id).
 		this.hub.ledger.resolve = (scope) => {
 			const entry = this.entries.get(scope);
-			return entry ? this.ledgerSource(entry) : undefined;
+			return entry ? this.usage.source(entry) : undefined;
 		};
 		this.search = new LibrarySearch(join(paths.home, "search.db"), {
 			replaced: (key, items) => {
@@ -533,118 +551,6 @@ export class Sessions {
 		}
 	}
 
-	/**
-	 * /learn (docs/spec/14 M5): rules go into the project's instructions file where the session works (a worktree's own
-	 * copy, so they travel with its branch); facts go to About me. Not for agents, helpers or subagents.
-	 */
-	private learnBridge(entry: CatalogEntry): LearnBridge | undefined {
-		if ((entry.ref.kind !== "build" && entry.ref.kind !== "thread") || entry.parent || entry.helper || entry.reviewFor) return undefined;
-		const project = entry.ref.kind === "build" ? entry.cwd : undefined;
-		return {
-			project: () => project,
-			file: () => (project ? instructionsFile(project) : undefined),
-			aboutMe: () => !entry.temporary && Boolean(this.chat),
-			proposed: (callId) => {
-				(entry.learned ??= {})[callId] = { status: "pending" };
-				this.save();
-				this.changed(entry);
-			},
-			skills: async () => (await this.yourSkills()).map((s) => s.name),
-		};
-	}
-
-	/** Your skills (every project's folder): the ones /learn may add to. */
-	private async yourSkills(): Promise<{ name: string; filePath: string }[]> {
-		const resources = this.chat?.resources;
-		if (!resources) return [];
-		const roots = [skillsRoot(resources.agentDir), join(homedir(), ".agents", "skills")].map((r) => `${resolve(r)}/`);
-		return (await resources.allSkills()).filter((s) => roots.some((r) => resolve(s.filePath).startsWith(r)) && s.filePath.endsWith("SKILL.md"));
-	}
-
-	/** Saves a /learn card: its items, or the ones you edited. */
-	async learnSave(ref: ContainerRef, callId: string, edited?: LearnItem[]): Promise<{ file?: string; project: number; aboutMe: number; skills: string[] }> {
-		const entry = this.entry(ref);
-		const state = entry.learned?.[callId];
-		if (!state) throw new EngineError("NOT_FOUND", "That card isn't in this conversation.");
-		if (state.status === "saved") throw new EngineError("INVALID", "It's saved already.");
-		const tool = (await this.runtime(ref)).snapshot().items.find((i) => i.kind === "tool" && i.callId === callId);
-		const details = tool?.kind === "tool" && tool.details?.type === "learn" ? tool.details : undefined;
-		const items = edited ?? details?.items ?? [];
-		const project = entry.ref.kind === "build" ? entry.cwd : undefined;
-		const rules = project ? items.filter((i) => i.to === "project" && i.text.trim()) : [];
-		const facts = items.filter((i) => i.to === "about_me" && i.text.trim()).map((i) => i.text.trim());
-		const undo: NonNullable<CatalogEntry["learnUndo"]>[string] = { lines: [], facts: [] };
-		if (rules.length && project) {
-			const file = details?.file ?? instructionsFile(project);
-			const before = readInstructions(project, file);
-			const { content, added } = addRules(before, rules);
-			if (added.length) {
-				writeFileAtomic(join(project, file), content);
-				Object.assign(undo, { project, file, lines: added, ...(before ? {} : { created: true }) });
-			}
-		}
-		if (facts.length && this.chat && !entry.temporary) undo.facts = (await this.chat.aboutMe.patch("user", facts, [])).added;
-		// Skills (docs/spec/40 SH0): a new folder, or more instructions in one of yours.
-		const skills = items.filter((i) => i.to === "skill" && i.name?.trim() && i.body?.trim());
-		const named: string[] = [];
-		if (skills.length && this.chat?.resources) {
-			const agentDir = this.chat.resources.agentDir;
-			const mine = await this.yourSkills();
-			for (const item of skills) {
-				const target = item.addTo ? mine.find((s) => s.name === item.addTo) : undefined;
-				if (target) {
-					const text = readFileSync(target.filePath, "utf8");
-					const parsed = parseSkill(text);
-					writeFileAtomic(target.filePath, formatSkill({ ...parsed, body: `${parsed.body}\n\n${item.body!.trim()}` }, parsed.other));
-					(undo.skillsBefore ??= []).push({ path: target.filePath, text });
-					named.push(target.name);
-				} else {
-					const path = writeSkill(skillsRoot(agentDir, item.projectOnly && project ? project : undefined), { name: item.name!, description: item.text, body: item.body! });
-					(undo.skillsMade ??= []).push(dirname(path));
-					named.push(skillName(item.name!));
-				}
-			}
-			await this.chat.resources.reload();
-			await this.reloadResources();
-		}
-		(entry.learnUndo ??= {})[callId] = undo;
-		entry.learned![callId] = { status: "saved", ...(undo.file ? { file: undo.file } : {}), ...(undo.facts.length ? { aboutMe: undo.facts.length } : {}), ...(named.length ? { skills: named } : {}) };
-		this.save();
-		this.changed(entry);
-		return { ...(undo.file ? { file: undo.file } : {}), project: undo.lines.length, aboutMe: undo.facts.length, skills: named };
-	}
-
-	/** Not now, Dismiss, or Undo a save: exactly what it wrote comes out, and the card waits again. */
-	async learnAnswer(ref: ContainerRef, callId: string, choice: "later" | "dismiss" | "undo"): Promise<void> {
-		const entry = this.entry(ref);
-		const state = entry.learned?.[callId];
-		if (!state) throw new EngineError("NOT_FOUND", "That card isn't in this conversation.");
-		if (choice !== "undo") {
-			if (state.status === "saved") throw new EngineError("INVALID", "It's saved: use Undo.");
-			entry.learned![callId] = { status: choice === "later" ? "later" : "dismissed" };
-		} else {
-			const undo = entry.learnUndo?.[callId];
-			if (state.status !== "saved" || !undo) throw new EngineError("INVALID", "There's nothing saved to undo.");
-			if (undo.project && undo.file && undo.lines.length) {
-				const path = join(undo.project, undo.file);
-				const left = removeRules(readInstructions(undo.project, undo.file), undo.lines);
-				if (!left && undo.created) rmSync(path, { force: true });
-				else writeFileAtomic(path, left);
-			}
-			if (undo.facts.length && this.chat) await this.chat.aboutMe.patch("user", [], undo.facts);
-			for (const folder of undo.skillsMade ?? []) rmSync(folder, { recursive: true, force: true });
-			for (const before of undo.skillsBefore ?? []) writeFileAtomic(before.path, before.text);
-			if ((undo.skillsMade?.length || undo.skillsBefore?.length) && this.chat?.resources) {
-				await this.chat.resources.reload();
-				await this.reloadResources();
-			}
-			delete entry.learnUndo![callId];
-			entry.learned![callId] = { status: "pending" };
-		}
-		this.save();
-		this.changed(entry);
-	}
-
 	/** A temporary chat becomes a normal one (docs/spec/14 M4): searched from now on, with what it says so far. */
 	async keep(ref: ContainerRef): Promise<void> {
 		const entry = this.entry(ref);
@@ -846,7 +752,7 @@ export class Sessions {
 			if (!items.length) return;
 			this.search.setDestination(entry.ref.id, entry.ref, entry.title, entry.updatedAt);
 			this.search.replaceSession(entry.ref.id, entry.title, entry.updatedAt, items);
-			this.recordUsage(entry, items);
+			this.usage.record(entry, items);
 			this.searchReady.add(entry.ref.id);
 			return;
 		}
@@ -862,7 +768,7 @@ export class Sessions {
 			const key = ref.conversationId ? `${ref.id}/${ref.conversationId}` : ref.id;
 			this.search.setDestination(key, ref, title, entry.updatedAt);
 			this.search.replaceSession(key, title, entry.updatedAt, view.snapshot().items);
-			this.recordUsage({ ...entry, ref: { ...ref, id: key }, title }, view.snapshot().items);
+			this.usage.record({ ...entry, ref: { ...ref, id: key }, title }, view.snapshot().items);
 			if (!this.indexedViews.has(view)) {
 				this.indexedViews.add(view);
 				view.onEvents(events => this.index({ ...entry, ref: { ...ref, id: key }, title }, events));
@@ -883,11 +789,11 @@ export class Sessions {
 				case "item.added":
 				case "item.updated":
 					this.search.upsertItem(id, event.item);
-					this.recordUsage(entry, [event.item]);
+					this.usage.record(entry, [event.item]);
 					break;
 				case "item.replaced":
 					this.search.upsertItem(id, event.item, event.oldId);
-					this.recordUsage(entry, [event.item]);
+					this.usage.record(entry, [event.item]);
 					break;
 				case "item.removed":
 					// A removed answer (a branch left, a retry) was still paid for: the ledger keeps it.
@@ -895,137 +801,10 @@ export class Sessions {
 					break;
 				case "resnapshot":
 					this.search.replaceSession(id, entry.title, entry.updatedAt, event.snapshot.items);
-					this.recordUsage(entry, event.snapshot.items);
+					this.usage.record(entry, event.snapshot.items);
 					break;
 			}
 		}
-	}
-
-	// ── Usage ledger (docs/spec/34 §8.1) ──
-
-	/**
-	 * Where a conversation's requests belong: its container (a session, or the agent: one pi-durable session, so its
-	 * entry ids are unique across its conversations), and what it's part of. `entry.ref.id` may be search's key
-	 * ("<agent>/<conversationId>"). A subagent's or side conversation's requests count where its parent's do.
-	 */
-	private ledgerSource(entry: CatalogEntry): LedgerSource {
-		const key = entry.ref.id;
-		const slash = key.indexOf("/");
-		const container = slash < 0 ? key : key.slice(0, slash);
-		const conversation = slash < 0 ? entry.ref.conversationId : key.slice(slash + 1);
-		const own = this.entries.get(container) ?? { ...entry, ref: { ...entry.ref, id: container } };
-		const ref: ContainerRef = conversation ? { kind: own.ref.kind, id: container, conversationId: conversation } : { kind: own.ref.kind, id: container };
-		let root = own;
-		for (let i = 0; i < 8; i++) {
-			const up = root.parent?.id ?? root.side?.parent.id;
-			const next = up ? this.entries.get(up) : undefined;
-			if (!next) break;
-			root = next;
-		}
-		const agent = own.ref.kind === "agent" ? container : undefined;
-		const automation = agent
-			? conversation?.startsWith("run:") ? this.automations?.runOf({ agent, agentRun: conversation.slice(4) })?.run.automation : undefined
-			: (this.automations?.runOf({ conversation: container }) ?? this.automations?.runOf({ conversation: root.ref.id }))?.run.automation;
-		const project = root.helper?.project ?? root.projectPath ?? (root.ref.kind === "build" ? root.cwd : undefined);
-		return {
-			key,
-			container,
-			ref,
-			// A temporary chat's title is made from its first message: the ledger, kept for good, has its spend only
-			// (docs/spec/14 M4; re-audit 2026-11-25 V6). Keeping the chat names it on its next record.
-			title: own.temporary || root.temporary ? TEMPORARY_TITLE : entry.title,
-			sourceKind: root.ref.kind === "build" || root.helper ? "build" : own.ref.kind,
-			...(project ? { project } : {}),
-			...(agent ? { agent } : {}),
-			...(automation ? { automation } : {}),
-			place: own.cloud ? "cloud" : "mac",
-		};
-	}
-
-	/** Writes the finished answers' usage into the ledger (idempotent: an answer read again isn't counted twice). */
-	private recordUsage(entry: CatalogEntry, all: readonly TimelineItem[], fromFile = false): void {
-		// Only what's settled: a streaming answer or a running tool is written when it ends.
-		const items = all.filter((i) => (i.kind === "assistant" ? i.status !== "streaming" : i.kind === "tool" ? i.status !== "running" && i.status !== "pending_approval" : i.kind !== "system" && i.kind !== "agent_msg"));
-		if (!items.length) return;
-		try {
-			this.hub.ledger.recordItems(this.ledgerSource(entry), items, fromFile);
-		} catch (error) {
-			// Overview's numbers are never worth a failed turn.
-			console.error(`usage ledger: ${error instanceof Error ? error.message : String(error)}`);
-		}
-	}
-
-	private ledgerBackfill?: Promise<void>;
-
-	/**
-	 * Reads past usage into the ledger: every conversation that changed since it was last read (its updatedAt; an agent's also by its month's spend, since its runs don't touch the catalog). The first
-	 * time it reads everything; after that, only what's new. Returns when done.
-	 */
-	backfillLedger(): Promise<void> {
-		this.ledgerBackfill ??= (async () => {
-			const ledger = this.hub.ledger;
-			for (const entry of [...this.entries.values()]) {
-				if (!this.entries.has(entry.ref.id)) continue;
-				const mark = entry.ref.kind === "agent" ? `${entry.updatedAt}|${entry.agent?.status?.spendUsd ?? 0}` : entry.updatedAt;
-				if (ledger.synced(entry.ref.id) === mark) continue;
-				try {
-					if (entry.ref.kind === "agent" && entry.cloud) {
-						// Your cloud's agents (docs/spec/34 OV4): their conversations and runs, read through the cloud when it answers.
-						const read = await Promise.race([this.indexContainer(entry).then(() => true), new Promise<false>((r) => setTimeout(() => r(false), 10_000).unref())]).catch(() => false);
-						this.cloudLedger = read ? { ...this.cloudLedger, at: new Date().toISOString(), failed: false } : { ...this.cloudLedger, failed: true };
-						if (read) ledger.markSynced(entry.ref.id, mark);
-						continue;
-					}
-					await this.indexContainer(entry);
-					// The whole file, open or not: branches you left and what a compaction folded were paid for too.
-					if (entry.ref.kind === "thread" || entry.ref.kind === "build") this.recordUsage(entry, this.storedAnswers(entry), true);
-					// An agent's views show a window of the latest entries; its answers are all in the harness.
-					const agent = entry.ref.kind === "agent" ? await this.open.get(entry.ref.id)?.catch(() => undefined) : undefined;
-					if (agent instanceof AgentRuntime) this.recordUsage(entry, await agent.answers());
-					ledger.markSynced(entry.ref.id, mark);
-				} catch {
-					// Unreadable or missing files: tried again next time.
-				}
-			}
-		})().finally(() => {
-			this.ledgerBackfill = undefined;
-		});
-		return this.ledgerBackfill;
-	}
-
-	/** When the cloud's usage was last read, and whether the latest try failed (Spend says "Cloud usage up to 14:02"). */
-	private cloudLedger: { at?: string; failed?: boolean } = {};
-
-	/** Your cloud's usage is counted up to this time: set while the cloud didn't answer the latest read. */
-	cloudLedgerAsOf(): string | undefined {
-		if (!this.cloudLedger.failed) return undefined;
-		return this.cloudLedger.at ?? this.hub.ledger.since();
-	}
-
-	/** Names for Overview's rows: an agent's or an automation's current name. */
-	ledgerNames() {
-		return {
-			agent: (id: string) => this.entries.get(id)?.title,
-			automation: (id: string) => this.automations?.find(id)?.name,
-		};
-	}
-
-	/** Every budget Piopio has (docs/spec/34 §5.4): each agent's month (AS3) and each automation's run (27). */
-	budgets(now = new Date()): Budget[] {
-		const out: Budget[] = [];
-		const resets = new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString();
-		for (const e of this.entries.values()) {
-			const s = e.ref.kind === "agent" ? e.agent?.status : undefined;
-			if (s?.budgetUsd === undefined) continue;
-			out.push({ id: `agent:${e.ref.id}`, kind: "agent", name: e.title, spentUsd: s.spendUsd, limitUsd: s.budgetUsd, period: "month", resets, ref: { kind: "agent", id: e.ref.id } });
-		}
-		for (const a of this.automations?.list() ?? []) {
-			if (!a.enabled) continue;
-			const limit = a.budgetPerRunUsd ?? (a.runsAs === PIOPIO ? DEFAULT_BUDGET.piopio : DEFAULT_BUDGET.agent);
-			const last = this.automations!.lastRun(a.id);
-			out.push({ id: `automation:${a.id}`, kind: "automation", name: a.name, spentUsd: last?.costUsd ?? 0, limitUsd: limit, period: "run", automation: a.id });
-		}
-		return out.sort((a, b) => b.spentUsd / b.limitUsd - a.spentUsd / a.limitUsd);
 	}
 
 	/**
@@ -1213,7 +992,7 @@ export class Sessions {
 			if (!this.indexedViews.has(view)) {
 				this.indexedViews.add(view);
 				this.search.replaceSession(key, title, entry.updatedAt, view.snapshot().items);
-				this.recordUsage({ ...entry, title, ref: { ...ref, id: key } }, view.snapshot().items);
+				this.usage.record({ ...entry, title, ref: { ...ref, id: key } }, view.snapshot().items);
 				view.onEvents(events => {
 					this.searchReady.delete(entry.ref.id);
 					this.index({ ...entry, title: this.search.destination(key)?.title ?? title, ref: { ...ref, id: key } }, events);
@@ -1832,7 +1611,7 @@ export class Sessions {
 		if (entry.ref.kind !== "build") await this.chat?.resources.ready();
 		const runtime = this.withSegments(entry, await this.createRuntime(entry));
 		if (!this.search.isIndexed(entry.ref.id)) this.search.replaceSession(entry.ref.id, entry.title, entry.updatedAt, runtime.snapshot().items);
-		this.recordUsage(entry, runtime.snapshot().items);
+		this.usage.record(entry, runtime.snapshot().items);
 		runtime.onEvents((events) => {
 			this.searchReady.delete(entry.ref.id);
 			this.index(entry, events);
@@ -2008,7 +1787,7 @@ export class Sessions {
 				return parseVerdict(await ask(REVIEW_SYSTEM, reviewPrompt(command, entry.cwd!, request)));
 			},
 			...(this.historyBridge(entry) ? { history: this.historyBridge(entry)! } : {}),
-			...(this.learnBridge(entry) ? { learn: this.learnBridge(entry)! } : {}),
+			...(this.learn.bridge(entry) ? { learn: this.learn.bridge(entry)! } : {}),
 			...(entry.projectPath ? { trustPath: entry.projectPath } : {}),
 			plan: { initial: () => entry.planMode ?? false },
 			...(entry.parent || entry.helper
@@ -2095,7 +1874,7 @@ export class Sessions {
 			...this.visualsFor(entry.ref),
 			...this.appsFor(entry),
 			...(this.historyBridge(entry) ? { history: this.historyBridge(entry)! } : {}),
-			...(this.learnBridge(entry) ? { learn: this.learnBridge(entry)! } : {}),
+			...(this.learn.bridge(entry) ? { learn: this.learn.bridge(entry)! } : {}),
 			// Side conversations (docs/spec/24), here or in one of your projects (SCQ5).
 			side: this.children.sideBridge(entry),
 			...(this.automations ? { automations: this.automationsBridge(entry) } : {}),

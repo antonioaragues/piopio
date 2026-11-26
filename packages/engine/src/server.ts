@@ -479,16 +479,16 @@ export class Engine {
 	/** Projects without a folder became folders (CF4): what they remembered goes into their NOTES.md. */
 	/** What an app's piopio source reads (docs/spec/35 §3.2): Overview's numbers, automation runs, agents. */
 	private async piopioRead(what: PiopioRead, args: Record<string, unknown>): Promise<unknown> {
-		const names = this.sessions.ledgerNames();
+		const names = this.sessions.usage.names();
 		switch (what) {
 			case "stats.spend":
-				await this.sessions.backfillLedger();
+				await this.sessions.usage.backfill();
 				return this.hub.ledger.spend(args as Params<"stats.spend">, names);
 			case "stats.activity":
-				await this.sessions.backfillLedger();
+				await this.sessions.usage.backfill();
 				return activity(args.range as SpendRange, { ledger: this.hub.ledger, sessions: this.sessions.list(), runs: this.automations.allRuns(), automationName: (id) => this.automations.find(id)?.name, agentName: (id) => this.sessions.titleOf({ kind: "agent", id }) });
 			case "stats.budgets":
-				return { budgets: this.sessions.budgets(), piopio: this.hub.budget.state() };
+				return { budgets: this.sessions.usage.budgets(), piopio: this.hub.budget.state() };
 			case "automations.runs": {
 				const runs = await this.automations.runsOf(args.automation as string | undefined, (args.limit as number | undefined) ?? 30);
 				return runs.map((r) => ({ id: r.id, automation: r.automation, name: this.automations.find(r.automation)?.name ?? "Automation", firedAt: r.firedAt, status: r.status, ...(r.summary ? { summary: r.summary } : {}), ...(r.costUsd !== undefined ? { costUsd: r.costUsd } : {}) }));

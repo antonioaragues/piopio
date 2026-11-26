@@ -19,20 +19,20 @@ export function statsHandlers(engine: Engine): Handlers<"stats"> {
 		"stats.spend": async (params, _call) => {
 			const p = params as Params<"stats.spend">;
 			// The first open reads past conversations into the ledger; what's there after a moment is shown, marked.
-			const done = await Promise.race([engine.sessions.backfillLedger().then(() => true), new Promise<false>((r) => setTimeout(() => r(false), 1500))]);
-			const names = engine.sessions.ledgerNames();
+			const done = await Promise.race([engine.sessions.usage.backfill().then(() => true), new Promise<false>((r) => setTimeout(() => r(false), 1500))]);
+			const names = engine.sessions.usage.names();
 			const result = engine.hub.ledger.spend(p, names);
 			result.suggestions = await spendSuggestions(engine, p, names).catch(() => []);
-			const cloudAsOf = engine.sessions.cloudLedgerAsOf();
+			const cloudAsOf = engine.sessions.usage.cloudAsOf();
 			return { ...result, ...(done ? {} : { backfilling: true }), ...(cloudAsOf ? { cloudAsOf } : {}) } satisfies Result<"stats.spend">;
 		},
 		"stats.items": async (params, _call) => {
 			const p = params as Params<"stats.items">;
-			return { items: engine.hub.ledger.items(p, engine.sessions.ledgerNames()) } satisfies Result<"stats.items">;
+			return { items: engine.hub.ledger.items(p, engine.sessions.usage.names()) } satisfies Result<"stats.items">;
 		},
 		"stats.activity": async (params, _call) => {
 			const p = params as Params<"stats.activity">;
-			const done = await Promise.race([engine.sessions.backfillLedger().then(() => true), new Promise<false>((r) => setTimeout(() => r(false), 1500))]);
+			const done = await Promise.race([engine.sessions.usage.backfill().then(() => true), new Promise<false>((r) => setTimeout(() => r(false), 1500))]);
 			const result = activity(p.range, {
 				ledger: engine.hub.ledger,
 				sessions: engine.sessions.list(),
@@ -52,7 +52,7 @@ export function statsHandlers(engine: Engine): Handlers<"stats"> {
 			return (await setup(engine)) satisfies Result<"stats.setup">;
 		},
 		"stats.budgets": async (_params, _call) => {
-			return { budgets: engine.sessions.budgets(), piopio: engine.hub.budget.state() } satisfies Result<"stats.budgets">;
+			return { budgets: engine.sessions.usage.budgets(), piopio: engine.hub.budget.state() } satisfies Result<"stats.budgets">;
 		},
 		"stats.budget.set": async (params, _call) => {
 			const p = params as Params<"stats.budget.set">;
@@ -70,7 +70,7 @@ export function statsHandlers(engine: Engine): Handlers<"stats"> {
 		},
 		"stats.export": async (params, _call) => {
 			const p = params as Params<"stats.export">;
-			await engine.sessions.backfillLedger();
+			await engine.sessions.usage.backfill();
 			return engine.hub.ledger.csv(p.range) satisfies Result<"stats.export">;
 		},
 	};

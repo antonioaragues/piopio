@@ -7,6 +7,9 @@ import type { ApprovalMode, ContainerRef, SessionSummary } from "@piopio/protoco
 import type { Automation } from "../automations/model.js";
 import type { Segment } from "../runtimes/segments.js";
 
+/** What the usage ledger calls a temporary chat. */
+export const TEMPORARY_TITLE = "Temporary chat";
+
 export type CatalogEntry = SessionSummary & {
 	thinking?: string;
 	file?: string;
