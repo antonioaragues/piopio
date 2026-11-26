@@ -1,8 +1,7 @@
 /** Local Engine: Engine Protocol over a Unix domain socket. */
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import { join, resolve } from "node:path";
-import { appendFileSync, existsSync, unlinkSync, chmodSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { existsSync, unlinkSync, chmodSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:net";
 import { CALL_TIMEOUT_MS, methods, PROTOCOL_VERSION, reverseMethods, SLOW_METHODS, type MethodName, type Params, type Result } from "@piopio/protocol";
 import { Value } from "typebox/value";
@@ -41,9 +40,8 @@ import { AgentWatchers } from "./watchers.js";
 import { Automations } from "./automations/service.js";
 import { Library } from "./library.js";
 import { Apps } from "./apps.js";
-import { fromProjects, REPORT_FILE as AUTOMATIONS_REPORT, reportOf as automationsReport, type LegacyPlace } from "./automations/migrate.js";
+import { REPORT_FILE as AUTOMATIONS_REPORT, reportOf as automationsReport } from "./automations/migrate.js";
 import { WorkRunner } from "./work/runner.js";
-import { migrateTeams, needsMigration } from "./work/migrate.js";
 import { Watchdog, type WatchdogOptions } from "./watchdog.js";
 import { WakeWatch } from "./wake.js";
 import { GitHub, type GitHubOptions } from "./github.js";
@@ -75,8 +73,6 @@ export type EngineOptions = {
 	allowPrivateFetch?: boolean;
 	/** Where connected apps sign in and call their APIs (tests point them at a fake server). */
 	connectorEndpoints?: ConnectorEndpoints;
-	/** Where teams kept their folders before docs/spec/26, read once by the migration; default ~/Piopio/Teams or PIOPIO_TEAMS_DIR. */
-	teamsDir?: string;
 	/** The Watchdog's thresholds (tests: seconds, not minutes). */
 	watchdog?: WatchdogOptions;
 	/** GitHub (tests: a fake API and token, and how often PRs are polled; default every 2 minutes). */
@@ -126,8 +122,6 @@ export class Engine {
 	readonly wake = new WakeWatch();
 	readonly github: GitHub;
 	private prTimer?: NodeJS.Timeout;
-	private readonly teamsDir: string;
-	private readonly agentDir: string;
 	readonly app = new AppServices();
 	usageCache?: { at: number; value: Result<"usage.summary"> };
 	private server?: Server;
@@ -200,7 +194,7 @@ export class Engine {
 		// A test agent folder: pi's own lookups (MCP config, codemode) read it from the environment.
 		if (options.piAgentDir) process.env.PI_CODING_AGENT_DIR = options.piAgentDir;
 		const agentDir = options.piAgentDir ?? getAgentDir();
-		this.projects = new Projects(options.paths.projectsIndex, agentDir, options.paths.projectsRoot, join(options.paths.home, "projects"));
+		this.projects = new Projects(options.paths.projectsIndex, agentDir, options.paths.projectsRoot);
 		this.mcp = new McpConfig(agentDir);
 		this.browserSites = new BrowserSites(join(options.paths.home, "browser-sites.json"));
 		this.settings = new Settings(join(options.paths.home, "settings.json"));
@@ -218,8 +212,7 @@ export class Engine {
 		);
 		// Records written before semantic search (or while offline) get their vectors in the background.
 		setTimeout(() => this.memory.fill(), 15_000).unref();
-		void this.notesFromMemory();
-		this.aboutMe = new AboutMe(this.memory, this.settings, join(options.paths.home, "about-me.json"));
+		this.aboutMe = new AboutMe(this.memory, this.settings);
 		this.packages = new Packages(agentDir);
 		this.chatResources = new ChatResources(agentDir);
 		this.packages.onChange(() => {
@@ -352,8 +345,6 @@ export class Engine {
 		});
 		this.sessions.watchers = this.watchers;
 		// Projects' work (docs/spec/26): the way of working, the board and the routines of each project.
-		this.teamsDir = options.teamsDir ?? process.env.PIOPIO_TEAMS_DIR ?? join(homedir(), "Piopio", "Teams");
-		this.agentDir = agentDir;
 		this.work = new WorkRunner(
 			this.sessions.workHost({
 				stateFile: join(options.paths.home, "work.json"),
@@ -443,16 +434,6 @@ export class Engine {
 		}
 		this.token = loadOrCreateToken(this.options.paths);
 		await this.hub.ready();
-		await this.aboutMe.migrate().catch((error) => this.log(`About me: couldn't bring in the old doc: ${(error as Error).message}`));
-		// Chats from before one engine for conversations (2026-11-15) move to pi sessions first.
-		const moved = await this.sessions.migrateChats(this.log);
-		if (moved) this.log(`Moved ${moved} chat${moved === 1 ? "" : "s"} to the new engine.`);
-		// The interim browser (Playwright MCP, 2026-11-14) is gone: take out what it left (docs/spec/22 §13).
-		this.removeInterimBrowser();
-		// Teams from before docs/spec/26 become their projects' ways of working, once.
-		this.migrateTeams();
-		// Project routines from before docs/spec/27 become automations, once (agents' schedules move when each opens).
-		this.migrateRoutines();
 		this.server = createServer((stream) => this.accept(new RpcConnectionFor(stream)));
 		await new Promise<void>((resolve, reject) => {
 			this.server!.once("error", reject);
@@ -532,34 +513,6 @@ export class Engine {
 		}
 	}
 
-	private async notesFromMemory(): Promise<void> {
-		for (const { id, notes } of this.projects.migrated) {
-			const bank = `project:${id}`;
-			const facts = (await this.memory.builtin.list(bank, { kinds: ["fact"], limit: 500 }).catch(() => undefined))?.records ?? [];
-			if (facts.length) appendFileSync(notes, `\n${facts.map((f) => `- ${f.text}`).join("\n")}\n`);
-			this.memory.builtin.wipe(bank);
-		}
-	}
-
-	/** The interim browser's `browser` entry in pi's mcp.json (if it still points at its port), its chat switch and its folder. */
-	private removeInterimBrowser(): void {
-		const dir = join(this.options.paths.home, "browser");
-		const stateFile = join(dir, "state.json");
-		if (!existsSync(stateFile)) return;
-		try {
-			const { port } = JSON.parse(readFileSync(stateFile, "utf8")) as { port?: number };
-			const entry = this.mcp.globalServers().find((s) => s.name === "browser");
-			if (port && entry?.server.url === `http://127.0.0.1:${port}/mcp`) {
-				this.mcp.remove("global", undefined, "browser");
-				this.setChat("browser", false);
-			}
-			rmSync(dir, { recursive: true, force: true });
-			this.log("Browser: removed the interim Playwright browser");
-		} catch (error) {
-			this.log(`Browser: couldn't remove the interim one: ${(error as Error).message}`);
-		}
-	}
-
 	/** The known project a skill's file is in, if any. */
 	projectOf(path: string): string | undefined {
 		return this.projects.list().map((p) => p.path).find((root) => resolve(path).startsWith(`${resolve(root)}/`));
@@ -607,72 +560,6 @@ export class Engine {
 				};
 			}),
 		);
-	}
-
-	/** docs/spec/26 §8: teams.json and team-definitions.json, read once, become projects' work and playbooks. */
-	private migrateTeams(): void {
-		if (!needsMigration(this.options.paths.home)) return;
-		const agents = new Map(this.sessions.list("agent").map((a) => [a.ref.id, a.title]));
-		const result = migrateTeams({
-			home: this.options.paths.home,
-			teamsDir: this.teamsDir,
-			skillsDir: join(this.agentDir, "skills"),
-			project: (cwd) => {
-				const known = this.projects.projectFor(cwd);
-				if (known) return known;
-				try {
-					const added = this.projects.add(cwd);
-					return { id: added.id, path: added.path };
-				} catch {
-					return undefined;
-				}
-			},
-			agent: (id) => {
-				const name = agents.get(id);
-				if (!name) return undefined;
-				try {
-					const model = this.sessions.agents.agentDefinition(id).definition.models.default;
-					return { name, ...(model ? { model } : {}) };
-				} catch {
-					return { name };
-				}
-			},
-			log: this.log,
-		});
-		this.work.adopt(result.work);
-		// The teams' routines are automations run by Piopio in their projects (docs/spec/27 §6).
-		if (result.routines.length) this.adoptRoutines(result.routines);
-		this.sessions.migrateTeams((id) => result.projectOf.get(id));
-		this.log(`Teams became ways of working in ${result.work.length} project${result.work.length === 1 ? "" : "s"} (docs/spec/26).`);
-	}
-
-	/** docs/spec/27 §6: project-routines.json, read once, becomes automations run by Piopio in their projects. */
-	private migrateRoutines(): void {
-		const file = join(this.options.paths.home, "project-routines.json");
-		if (!existsSync(file)) return;
-		let places: LegacyPlace[] = [];
-		try {
-			places = JSON.parse(readFileSync(file, "utf8")) as LegacyPlace[];
-		} catch (error) {
-			this.log(`Automations: couldn't read the project routines: ${(error as Error).message}`);
-		}
-		this.adoptRoutines(places);
-		renameSync(file, join(this.options.paths.home, "project-routines.before-27.json"));
-	}
-
-	private adoptRoutines(places: LegacyPlace[]): void {
-		const name = (id: string) => {
-			try {
-				return this.projects.get(id).name;
-			} catch {
-				return undefined;
-			}
-		};
-		const migrated = fromProjects(places, name, Date.now());
-		if (!migrated.automations.length) return;
-		this.automations.adopt(migrated.automations, migrated.runs);
-		this.appendAutomationReport(migrated.lines);
-		this.log(`${migrated.automations.length} project routine${migrated.automations.length === 1 ? " is" : "s are"} now automations (docs/spec/27).`);
 	}
 
 	/** Lines for "What changed in your routines" (27 §6), shown in the app until you dismiss it. */

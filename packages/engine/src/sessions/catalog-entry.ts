@@ -19,8 +19,6 @@ export type CatalogEntry = SessionSummary & {
 	handoff?: boolean;
 	/** A review by an agent (05-build "Review by an agent"): the session whose `review` its findings go to. */
 	reviewFor?: ContainerRef;
-	/** Chats moved from pi-durable (2026-11-15): the old SQLite file, kept until the chat is deleted. */
-	migratedFrom?: string;
 	/** Original CLI file for recovered history; avoid importing a duplicate after restore. */
 	restoredFromSessionFile?: string;
 	/** The pi session file was seen on disk, so its disappearance means it was deleted. */

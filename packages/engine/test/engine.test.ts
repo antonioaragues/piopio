@@ -422,32 +422,6 @@ test("New project makes a folder with AGENTS.md and NOTES.md, in Auto-edit (docs
 	expect(existsSync(join(project.path, "NOTES.md"))).toBe(true);
 });
 
-test("a project without a folder (before CF4) becomes a folder: its files, instructions and memory (docs/spec/18 CF4)", async () => {
-	const home = mkdtempSync(join(tmpdir(), "piopio-test-"));
-	const first = await start(home);
-	await first.client.call("memory.add", { provider: "builtin", bank: "project:prj_old", text: "The sink moves 40 cm left." });
-	await stop(first);
-	const files = join(home, "projects", "prj_old", "files");
-	mkdirSync(files, { recursive: true });
-	writeFileSync(join(files, "budget.md"), "Kitchen budget: 12k\n");
-	writeFileSync(join(home, "projects.json"), JSON.stringify([{ id: "prj_old", path: files, name: "Kitchen", addedAt: "2026-11-07T10:00:00.000Z", folder: false, instructions: "Answer in metric." }]));
-	writeFileSync(join(home, "sessions.json"), JSON.stringify([{ ref: { kind: "thread", id: "thr_old" }, title: "Sink", createdAt: "2026-11-07T10:00:00.000Z", updatedAt: "2026-11-07T10:00:00.000Z", model: { provider: "faux", id: "faux-1" }, file: join(home, "threads", "thr_old.sqlite"), projectId: "prj_old" }]));
-	const a = await start(home);
-	const [project] = (await a.client.call("projects.list", {})).projects;
-	expect(project).toMatchObject({ id: "prj_old", name: "Kitchen", approvalMode: "auto_edit" });
-	expect(project.path).toBe(join(realpathSync(home), "Piopio", "Kitchen"));
-	expect(readFileSync(join(project.path, "budget.md"), "utf8")).toBe("Kitchen budget: 12k\n");
-	expect(readFileSync(join(project.path, "AGENTS.md"), "utf8")).toContain("Answer in metric.");
-	expect(existsSync(join(home, "projects", "prj_old"))).toBe(false);
-	for (let i = 0; i < 100 && !readFileSync(join(project.path, "NOTES.md"), "utf8").includes("sink"); i++) await new Promise((r) => setTimeout(r, 30));
-	expect(readFileSync(join(project.path, "NOTES.md"), "utf8")).toContain("- The sink moves 40 cm left.");
-	expect(((await a.client.call("memory.banks", {})).banks as { bank: string }[]).some((b) => b.bank === "project:prj_old")).toBe(false);
-	// Its conversation stays, as a conversation.
-	const [thread] = (await a.client.call("sessions.list", { kind: "thread" })).sessions as { title: string; projectId?: string }[];
-	expect(thread).toMatchObject({ title: "Sink" });
-	expect(thread!.projectId).toBeUndefined();
-});
-
 test("turn into an agent: a draft from the conversation, with the schedule it said (docs/spec/18 phase 3)", async () => {
 	const a = await start();
 	const { ref } = await a.client.call("sessions.create", { kind: "thread", title: "Umbrella check" });
@@ -1391,7 +1365,7 @@ describe("MCP, project trust and files (milestone 2.6)", () => {
 });
 
 describe("projects in the Chat lens (milestone 3.1)", () => {
-	test("a folder of documents starts in Read only, code in Auto-edit; projects only chatted about migrate to Read only", async () => {
+	test("a folder of documents starts in Read only, code in Auto-edit", async () => {
 		const a = await start();
 		const code = realpathSync(mkdtempSync(join(tmpdir(), "piopio-code-")));
 		writeFileSync(join(code, "package.json"), "{}");
@@ -1403,19 +1377,6 @@ describe("projects in the Chat lens (milestone 3.1)", () => {
 		const { ref } = await a.client.call("sessions.create", { kind: "build", cwd: notes });
 		expect((await a.client.call("sessions.list", { kind: "build" })).sessions.find((x: { ref: { id: string } }) => x.ref.id === ref.id)).toMatchObject({ approvalMode: "read_only", profile: "chat" });
 		await stop(a);
-
-		// Before docs/spec/18: lenses. A Build-only and a both-lens project keep their mode; a chat-only one is Read only.
-		const file = join(a.home, "projects.json");
-		const stored = JSON.parse(readFileSync(file, "utf8")) as { path: string; lenses?: string[]; approvalMode?: string }[];
-		const docs = realpathSync(mkdtempSync(join(tmpdir(), "piopio-docs-")));
-		stored.push({ id: "prj_old_chat", path: docs, name: "docs", addedAt: new Date().toISOString(), approvalMode: "full_auto", lenses: ["chat"] } as never);
-		for (const p of stored) if (p.path === code) Object.assign(p, { lenses: ["build", "chat"], approvalMode: "full_auto" });
-		writeFileSync(file, JSON.stringify(stored));
-		const b = await start(a.home);
-		const projects = (await b.client.call("projects.list", {})).projects as { path: string; approvalMode: string }[];
-		expect(projects.find((p) => p.path === docs)?.approvalMode).toBe("read_only");
-		expect(projects.find((p) => p.path === code)?.approvalMode).toBe("full_auto");
-		expect(JSON.parse(readFileSync(file, "utf8")).some((p: { lenses?: unknown }) => p.lenses)).toBe(false);
 	});
 
 	test("chat-profile sessions read, grep and fetch pages, but have no bash", async () => {
@@ -1658,13 +1619,12 @@ describe("Extensions and memory providers (milestone 4.1)", () => {
 		expect(await packages.preview("npm:@nobody/nothing")).toMatchObject({ ok: false, error: "No package @nobody/nothing on npm." });
 	});
 
-	test("About me lives in the built-in provider: the old doc comes in, edits and Undo are grouped changes", async () => {
-		const home = mkdtempSync(join(tmpdir(), "piopio-test-"));
-		writeFileSync(join(home, "about-me.json"), JSON.stringify({ text: "## Home\n- Lives in Valencia\n\n## Work\n- Nurse", revisions: [], proposals: {} }));
-		const a = await start(home);
+	test("About me lives in the built-in provider: edits and Undo are grouped changes", async () => {
+		const a = await start();
+		await a.client.call("aboutMe.set", { text: "## Home\n- Lives in Valencia\n\n## Work\n- Nurse" });
 		let me = await a.client.call("aboutMe.get", {});
-		expect(me).toMatchObject({ text: "## Home\n- Lives in Valencia\n\n## Work\n- Nurse", provider: "builtin", limited: false });
-		expect(existsSync(join(home, "about-me.json.migrated"))).toBe(true);
+		expect(me).toMatchObject({ provider: "builtin", limited: false });
+		expect(me.text.split("\n").filter((l: string) => l.startsWith("- ")).sort()).toEqual(["- Lives in Valencia", "- Nurse"]);
 		await a.client.call("aboutMe.set", { text: "## Home\n- Lives in Madrid\n\n## Work\n- Nurse\n- Night shifts in April" });
 		me = await a.client.call("aboutMe.get", {});
 		expect(me.text).toBe("## Work\n- Nurse\n- Night shifts in April\n\n## Home\n- Lives in Madrid");

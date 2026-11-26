@@ -195,46 +195,6 @@ test("a time automation missed while the engine was off runs once when it's back
 	await until(() => textOf(client, run!.conversation!), (s) => s.includes("[Automation] “Write the weekly brief”") && s.includes("Write the weekly brief"));
 }, 40_000);
 
-test("project routines from before become automations; their webhook URLs still work and a report says what changed", async () => {
-	const first = await start();
-	const created = (await first.client.call("projects.create", { name: "Leads" })) as { project: { id: string; path: string } };
-	const project = created.project.id;
-	const oldUrl = first.engine.hooks.url(project, "r_hook");
-	await stop();
-	const at = new Date().toISOString();
-	writeFileSync(
-		join(first.home, "project-routines.json"),
-		JSON.stringify([
-			{
-				project,
-				path: created.project.path,
-				routines: [
-					{ id: "r_week", on: "time", prompt: "Plan next week", cron: "0 9 * * 1", tz: "UTC", by: "you", createdAt: at, runs: 3, lastRun: at, lastConversation: "ses_old" },
-					{ id: "r_hook", on: "webhook", prompt: "A new lead: {{body}}", by: "piopio", createdAt: at, runs: 0 },
-				],
-			},
-		]),
-	);
-	const { client, engine } = await start(first.home);
-	const moved = await list(client, { project });
-	expect(moved.map((a) => [a.id, a.on, a.runsAs, a.by, a.runCount])).toEqual([
-		["r_week", "time", "piopio", "you", 3],
-		["r_hook", "webhook", "piopio", "piopio", 0],
-	]);
-	expect(moved[1]!.aliases).toEqual([`${project}/r_hook`]);
-	// The same address (the port is the test's own each time).
-	const sameUrl = engine.hooks.url(project, "r_hook");
-	expect(new URL(sameUrl).pathname).toBe(new URL(oldUrl).pathname);
-	expect((await fetch(sameUrl, { method: "POST", body: "Acme" })).status).toBe(202);
-	const [run] = await until(() => runs(client, "r_hook"), (r) => r.length === 1 && !!r[0]!.conversation);
-	await until(() => textOf(client, run!.conversation!), (s) => /A new lead: The text between the two (outside-[0-9a-f]{12}) lines came from outside: a webhook's body.*?\\n--- \1 ---\\nAcme\\n--- end \1 ---/.test(s) && s.includes("[Automation] “A new lead”"));
-	const { report } = (await client.call("automations.migrationReport", {})) as { report?: string };
-	expect(report).toContain("What changed in your routines");
-	expect(report).toContain("the routine “Plan next week”");
-	await client.call("automations.dismissMigrationReport", {});
-	expect(((await client.call("automations.migrationReport", {})) as { report?: string }).report).toBeUndefined();
-}, 40_000);
-
 test("an agent's run that needs your OK waits, named after its automation, or is skipped; a contact's name reaches them", async () => {
 	const { client } = await start();
 	const { ref } = await client.call("agents.create", { name: "Rita", owner: "Toño", instructions: "Help Toño.", model: { provider: "faux", id: "faux-1" } });

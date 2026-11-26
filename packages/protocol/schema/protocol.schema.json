@@ -44457,27 +44457,6 @@
 				}
 			}
 		},
-		"work.migrationReport.params": {
-			"type": "object",
-			"properties": {}
-		},
-		"work.migrationReport.result": {
-			"type": "object",
-			"properties": {
-				"report": {
-					"type": "string",
-					"description": "Markdown"
-				}
-			}
-		},
-		"work.dismissMigrationReport.params": {
-			"type": "object",
-			"properties": {}
-		},
-		"work.dismissMigrationReport.result": {
-			"type": "object",
-			"properties": {}
-		},
 		"automations.list.params": {
 			"type": "object",
 			"properties": {

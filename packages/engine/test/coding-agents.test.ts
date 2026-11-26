@@ -249,26 +249,21 @@ describe("switching between Piopio's agent and Claude Code (docs/spec/31 CA7)", 
 			const a = await start();
 			const { ref, branch, said: before } = await chatAndBranch(a);
 			await stop(a);
-			// What fork used to write: the branch pointing at the original's files, the old pi-durable one included.
+			// What fork used to write: the branch pointing at the original's files.
 			const catalog = enginePaths(a.home).catalogIndex;
-			const entries = JSON.parse(readFileSync(catalog, "utf8")) as { ref: { id: string }; segments?: unknown; migratedFrom?: string }[];
+			const entries = JSON.parse(readFileSync(catalog, "utf8")) as { ref: { id: string }; segments?: unknown }[];
 			const original = entries.find((e) => e.ref.id === ref.id)!;
 			const copy = entries.find((e) => e.ref.id === branch.id)!;
-			const old = join(a.home, "old-chat.sqlite");
-			writeFileSync(old, "");
-			original.migratedFrom = copy.migratedFrom = old;
 			copy.segments = original.segments;
 			writeFileSync(catalog, JSON.stringify(entries));
 			const b = await start(a.home);
 			const [deleted, kept] = gone === "branch" ? [branch, ref] : [ref, branch];
 			await b.client.call("sessions.delete", { ref: deleted });
-			expect(existsSync(old)).toBe(true);
 			await stop(b);
 			const c = await start(a.home);
 			expect(await transcript(c, kept)).toEqual(before);
 			// The last one to go takes them.
 			await c.client.call("sessions.delete", { ref: kept });
-			expect(existsSync(old)).toBe(false);
 		});
 	}
 

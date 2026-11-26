@@ -78,7 +78,7 @@ async function start(pollMs = 60_000) {
 	const port = (server.address() as { port: number }).port;
 	const home = mkdtempSync(join(tmpdir(), "piopio-gh-"));
 	const paths = enginePaths(home);
-	const engine = new Engine({ paths, faux: true, piSessionDir: join(home, "pi-sessions"), piAgentDir: join(home, "pi-agent"), trashDir: join(home, "trash"), agentsDir: join(home, "Agents"), teamsDir: join(home, "Teams"), hooksPort: 0, github: { api: `http://127.0.0.1:${port}`, token: "t0ken", gh: false, pollMs }, log: () => {} });
+	const engine = new Engine({ paths, faux: true, piSessionDir: join(home, "pi-sessions"), piAgentDir: join(home, "pi-agent"), trashDir: join(home, "trash"), agentsDir: join(home, "Agents"), hooksPort: 0, github: { api: `http://127.0.0.1:${port}`, token: "t0ken", gh: false, pollMs }, log: () => {} });
 	await engine.listen();
 	const client = await TestClient.connect(paths.socket);
 	open.push({ engine, client, api: server });

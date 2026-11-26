@@ -5,7 +5,6 @@
  * chats propose facts on the /learn card, written only when you save them. Nothing writes About me on its own. An MCP memory provider that can't list
  * what it stored (07 §6.2 MM3) shows no text here; the agents then recall from it instead.
  */
-import { existsSync, readFileSync, renameSync } from "node:fs";
 import type { ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import { defineExtension, section } from "@earendil-works/pi-durable";
 import type { BuiltinMemory, MemoryEvent, MemoryProvider, MemoryRecord } from "@piopio/runtime";
@@ -28,7 +27,6 @@ export class AboutMe {
 	constructor(
 		private readonly providers: MemoryProviders,
 		private readonly settings: Settings,
-		private readonly legacyFile: string,
 	) {
 		settings.onChange((next, previous) => {
 			if (next.aboutMe.provider !== previous.aboutMe.provider) this.cache = undefined;
@@ -41,19 +39,6 @@ export class AboutMe {
 
 	private get builtin(): BuiltinMemory | undefined {
 		return this.provider === this.providers.builtin ? this.providers.builtin : undefined;
-	}
-
-	/** Brings the 3.4 doc (`about-me.json`) into the built-in provider, once. */
-	async migrate(): Promise<void> {
-		if (!existsSync(this.legacyFile)) return;
-		const builtin = this.providers.builtin;
-		if (!(await builtin.list(ABOUT_ME_BANK, { limit: 1 })).records.length) {
-			const legacy = JSON.parse(readFileSync(this.legacyFile, "utf8")) as { text: string };
-			const batch = builtin.batch();
-			for (const f of parse(legacy.text)) await builtin.retain(ABOUT_ME_BANK, { content: f.text, kind: "fact", createdBy: "user", tags: [f.section] });
-			batch.end();
-		}
-		renameSync(this.legacyFile, `${this.legacyFile}.migrated`);
 	}
 
 	private async facts(): Promise<MemoryRecord[]> {

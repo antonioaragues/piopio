@@ -3,13 +3,10 @@
  * against the protocol before calling them. A new `work.*` method in packages/protocol goes here: handlers/index.ts
  * doesn't compile until it has one.
  */
-import { join } from "node:path";
-import { existsSync, readFileSync, renameSync } from "node:fs";
 import { type Params, type Result } from "@piopio/protocol";
 import { EngineError } from "../models.js";
 import { fitCheck } from "../work/fit.js";
 import { type ProjectWork } from "../work/runner.js";
-import { REPORT_FILE } from "../work/migrate.js";
 import type { Engine } from "../server.js";
 import type { Handlers } from "./types.js";
 
@@ -71,15 +68,6 @@ export function workHandlers(engine: Engine): Handlers<"work"> {
 			if (!work.git) throw new EngineError("INVALID", "This project's work isn't on a branch.");
 			const pr = await engine.github.createPullRequest(work.cwd, { head: work.git.branch, base: work.git.base, title: p.title, body: p.body, ...(p.draft ? { draft: true } : {}) });
 			return { pr: await engine.github.pullRequest(pr.repo, pr.number) } satisfies Result<"work.createPR">;
-		},
-		"work.migrationReport": async (_params, _call) => {
-			const file = join(engine.options.paths.home, REPORT_FILE);
-			return (existsSync(file) ? { report: readFileSync(file, "utf8").trim() } : {}) satisfies Result<"work.migrationReport">;
-		},
-		"work.dismissMigrationReport": async (_params, _call) => {
-			const file = join(engine.options.paths.home, REPORT_FILE);
-			if (existsSync(file)) renameSync(file, join(engine.options.paths.home, `${REPORT_FILE.replace(/\.md$/, "")}.seen.md`));
-			return {} satisfies Result<"work.dismissMigrationReport">;
 		},
 	};
 }

@@ -33,7 +33,6 @@ final class EngineController {
     /// Open apps' latest data, by path, as their files change (docs/spec/35 §14).
     var appUpdates: [String: AppView] = [:]
     /// Which migration report is showing ("work" or "automations").
-    @ObservationIgnored private var reportFrom = "work"
     /// The Watchdog's notes about your conversations (docs/spec/17 §4): in Needs you.
     private(set) var watchdogNotes: [WatchdogNote] = []
     /// Piopio's monthly budget (docs/spec/34 OV3): its state, and the automation runs it holds for your yes.
@@ -1179,20 +1178,13 @@ final class EngineController {
         return result
     }
 
-    /// What changed when teams became ways of working (docs/spec/26 §8), until you dismiss it.
-    /// What changed when teams became ways of working (26 §8), else when routines became automations (27 §6), until
-    /// you dismiss it.
+    /// What changed when an agent's schedules became automations (docs/spec/27 §6), until you dismiss it.
     func migrationReport() async -> String? {
-        if let report = try? await client?.call("work.migrationReport", Empty(), as: MigrationReport.self).report {
-            reportFrom = "work"
-            return report
-        }
-        reportFrom = "automations"
-        return try? await client?.call("automations.migrationReport", Empty(), as: MigrationReport.self).report
+        try? await client?.call("automations.migrationReport", Empty(), as: MigrationReport.self).report
     }
 
     func dismissMigrationReport() async {
-        _ = try? await client?.call("\(reportFrom).dismissMigrationReport", Empty(), as: Empty.self)
+        _ = try? await client?.call("automations.dismissMigrationReport", Empty(), as: Empty.self)
     }
 
     func agentTemplates() async -> [AgentTemplate] {

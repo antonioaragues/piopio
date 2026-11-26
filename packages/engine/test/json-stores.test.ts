@@ -13,7 +13,6 @@ const SRC = join(import.meta.dirname, "..", "src");
 
 /** The direct reads that stay, each a file the engine doesn't write back, or a read that throws instead of resetting. */
 const DIRECT_READS: Record<string, { count: number; why: string }> = {
-	"about-me.ts": { count: 1, why: "the pre-memory about-me.json, read once to move it into memory" },
 	"agent-file-store.ts": { count: 2, why: "a deleted file's entry.json, written once at delete and read to restore or expire it" },
 	"agent-files.ts": { count: 1, why: "agent.json: a broken one throws and is reported, nothing resets it" },
 	"cloud.ts": { count: 1, why: "the Worker build's wrangler.json" },
@@ -21,10 +20,8 @@ const DIRECT_READS: Record<string, { count: number; why: string }> = {
 	"packages.ts": { count: 1, why: "an installed package's package.json" },
 	"project-trust.ts": { count: 1, why: "Claude Code's ~/.claude.json, only read" },
 	"runtimes/segments.ts": { count: 2, why: "a coding agent's store, read for the timeline; its runtime owns the file" },
-	"server.ts": { count: 2, why: "the browser MCP's state.json (another process's) and the legacy routines, read once" },
 	"sessions.ts": { count: 1, why: "a coding agent's store, read for its session id; its runtime owns the file" },
 	"user-hooks.ts": { count: 1, why: "a project's .claude/settings.json, only read" },
-	"work/migrate.ts": { count: 1, why: "the legacy board files, read once to migrate them" },
 };
 
 function sources(dir: string): string[] {

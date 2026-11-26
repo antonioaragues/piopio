@@ -100,7 +100,7 @@ test("a task for a named subagent runs with its instructions and only its tools,
 	mkdirSync(join(agentDir, "agents"), { recursive: true });
 	writeFileSync(join(agentDir, "agents", "scout.md"), "---\nname: scout\ndescription: Reads the code and reports what it found\ntools: read, grep, ls\nmodel: faux/no-such-model\n---\n\nReport in three bullet points at most.\n");
 	const paths = enginePaths(home);
-	const engine = new Engine({ paths, faux: true, piSessionDir: join(home, "pi-sessions"), piAgentDir: agentDir, trashDir: join(home, "trash"), agentsDir: join(home, "Agents"), teamsDir: join(home, "Teams"), hooksPort: 0, log: () => {} });
+	const engine = new Engine({ paths, faux: true, piSessionDir: join(home, "pi-sessions"), piAgentDir: agentDir, trashDir: join(home, "trash"), agentsDir: join(home, "Agents"), hooksPort: 0, log: () => {} });
 	await engine.listen();
 	const client = await TestClient.connect(paths.socket);
 	open.push({ engine, client });

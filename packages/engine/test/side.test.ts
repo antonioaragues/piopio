@@ -35,7 +35,7 @@ async function until<T>(get: () => Promise<T> | T, ok: (v: T) => boolean, ms = 3
 async function start() {
 	const home = mkdtempSync(join(tmpdir(), "piopio-side-"));
 	const paths = enginePaths(home);
-	const engine = new Engine({ paths, faux: true, piSessionDir: join(home, "pi-sessions"), piAgentDir: join(home, "pi-agent"), trashDir: join(home, "trash"), agentsDir: join(home, "Agents"), teamsDir: join(home, "Teams"), hooksPort: 0, log: () => {} });
+	const engine = new Engine({ paths, faux: true, piSessionDir: join(home, "pi-sessions"), piAgentDir: join(home, "pi-agent"), trashDir: join(home, "trash"), agentsDir: join(home, "Agents"), hooksPort: 0, log: () => {} });
 	await engine.listen();
 	const client = await TestClient.connect(paths.socket);
 	open.push({ engine, client });

@@ -23,25 +23,3 @@ describe("the browser's URL check (docs/spec/22 §4.1)", () => {
 	});
 });
 
-describe("the interim Playwright browser (docs/spec/22 §13)", () => {
-	it("is taken out on start: its mcp.json entry, its chat switch and its folder; a `browser` of the user's stays", async () => {
-		for (const ours of [true, false]) {
-			const home = mkdtempSync(join(tmpdir(), "piopio-interim-"));
-			dirs.push(home);
-			const agentDir = join(home, "pi-agent");
-			mkdirSync(join(home, "browser", "profile"), { recursive: true });
-			mkdirSync(agentDir, { recursive: true });
-			writeFileSync(join(home, "browser", "state.json"), JSON.stringify({ seeded: true, port: 55972, version: 2 }));
-			const url = ours ? "http://127.0.0.1:55972/mcp" : "http://127.0.0.1:9999/mcp";
-			writeFileSync(join(agentDir, "mcp.json"), JSON.stringify({ mcpServers: { browser: { url }, other: { command: "x" } } }));
-			writeFileSync(join(home, "settings.json"), JSON.stringify({ chat: { mcpServers: ["browser", "other"] } }));
-			const engine = new Engine({ paths: enginePaths(home), faux: true, piAgentDir: agentDir, piSessionDir: join(home, "s"), agentsDir: join(home, "A"), hooksPort: 0, log: () => {} });
-			await engine.listen();
-			const servers = JSON.parse(readFileSync(join(agentDir, "mcp.json"), "utf8")).mcpServers;
-			expect(Object.keys(servers)).toEqual(ours ? ["other"] : ["browser", "other"]);
-			expect(engine.settings.get().chat.mcpServers).toEqual(ours ? ["other"] : ["browser", "other"]);
-			expect(existsSync(join(home, "browser"))).toBe(false);
-			await engine.stop();
-		}
-	});
-});

@@ -222,7 +222,9 @@ in your routines", until you choose **Got it** (as 26 §8 did for teams).
 - **Reminders and watches** (the agent's state) become automations run by that agent, `by` the agent. A one-off
   reminder that already fired isn't carried over.
 - **Project routines** become automations run by Piopio with that project, keeping `by`, `next` and the count of
-  runs. Their webhook URLs are aliased.
+  runs. Their webhook URLs are aliased. (Removed 2026-11-26 with the alpha migrations. An agent's schedules, heartbeat,
+  triggers, reminders and watches still become automations whenever an agent opens with them: that isn't only a
+  migration, a definition can still be written with them.)
 - **Agent definitions** lose `schedules`, `heartbeat` and `triggers`. Each changed definition is kept beside it as
   `definition.before-27.json`.
 - **Runs:** each agent's last 100 runs of these kinds, and each routine's last conversation, are copied into

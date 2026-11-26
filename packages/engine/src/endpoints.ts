@@ -7,10 +7,10 @@
  * The file is yours and pi's as much as Piopio's: it is edited in place (comments and formatting stay), only the
  * endpoint's own entry is touched, and a provider you wrote there by hand is listed like one added in Settings.
  */
-import { existsSync, mkdirSync, readFileSync, renameSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import { dirname } from "node:path";
 import { applyEdits, findNodeAtLocation, format, modify, parse, parseTree, type ParseError } from "jsonc-parser";
-import { readJsonFile, writeFileAtomic } from "./atomic.js";
+import { writeFileAtomic } from "./atomic.js";
 
 /** `vision` and `reasoning`: what the server's own model list says the model takes, when it says. */
 export type EndpointModel = { id: string; contextWindow?: number; embedding?: boolean; vision?: boolean; reasoning?: boolean };
@@ -35,8 +35,6 @@ export type Endpoint = {
 export type PiProvider = { name?: string; baseUrl?: string; api?: string; apiKey?: string; headers?: Record<string, string>; models?: PiModel[]; [other: string]: unknown };
 export type PiModel = { id: string; name?: string; api?: string; reasoning?: boolean; input?: string[]; contextWindow?: number; maxTokens?: number; [other: string]: unknown };
 
-/** What `endpoints.json` held before endpoints moved into pi's `models.json` (2026-11-25). */
-type LegacyEndpoint = { id: string; name: string; baseUrl: string; keyless: boolean; models: EndpointModel[]; format?: EndpointFormat; headers?: Record<string, string>; contextWindow?: number };
 
 export type EndpointError = "refused" | "auth" | "not_found" | "empty" | "tls" | "invalid" | "other";
 export type EndpointCheck = { ok: true; baseUrl: string; models: EndpointModel[]; latencyMs: number } | { ok: false; message: string; error: EndpointError };
@@ -165,23 +163,6 @@ export class Endpoints {
 		const mode = statSync(this.path, { throwIfNoEntry: false })?.mode;
 		writeFileAtomic(this.path, next.endsWith("\n") ? next : `${next}\n`, mode ? { mode: mode & 0o777 } : { mode: 0o600 });
 		this.cache = undefined;
-	}
-
-	/**
-	 * Endpoints from the `endpoints.json` Piopio kept before: each goes into `models.json` unless that id is already
-	 * there, and the old file is set aside (`.migrated`). Returns how many moved.
-	 */
-	migrate(legacyPath: string, known: (id: string) => KnownModel | undefined): number {
-		if (!this.path || !existsSync(legacyPath)) return 0;
-		const old = readJsonFile<LegacyEndpoint[]>(legacyPath, () => []);
-		let moved = 0;
-		for (const e of Array.isArray(old) ? old : []) {
-			if (!e?.id || this.providers()[e.id]) continue;
-			this.write(e.id, piProvider(undefined, { name: e.name, baseUrl: e.baseUrl, format: e.format ?? "openai", keyless: e.keyless, ...(e.headers ? { headers: e.headers } : {}) }, e.models, { ...(e.contextWindow ? { contextWindow: e.contextWindow } : {}), known }));
-			moved++;
-		}
-		renameSync(legacyPath, `${legacyPath}.migrated`);
-		return moved;
 	}
 }
 

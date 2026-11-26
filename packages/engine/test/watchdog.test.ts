@@ -35,7 +35,7 @@ async function start(mode = "full_auto", git = false, seed?: (home: string) => v
 	const home = mkdtempSync(join(tmpdir(), "piopio-wd-"));
 	seed?.(home);
 	const paths = enginePaths(home);
-	const engine = new Engine({ paths, faux: true, piSessionDir: join(home, "pi-sessions"), piAgentDir: join(home, "pi-agent"), trashDir: join(home, "trash"), agentsDir: join(home, "Agents"), teamsDir: join(home, "Teams"), hooksPort: 0, watchdog: { silentMs: 1500, waitingMs: 1500, tickMs: 200 }, log: () => {} });
+	const engine = new Engine({ paths, faux: true, piSessionDir: join(home, "pi-sessions"), piAgentDir: join(home, "pi-agent"), trashDir: join(home, "trash"), agentsDir: join(home, "Agents"), hooksPort: 0, watchdog: { silentMs: 1500, waitingMs: 1500, tickMs: 200 }, log: () => {} });
 	await engine.listen();
 	const client = await TestClient.connect(paths.socket);
 	open.push({ engine, client });

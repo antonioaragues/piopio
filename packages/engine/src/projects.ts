@@ -4,7 +4,7 @@
  * other). Kept in projects.json.
  */
 import { detectCheck } from "@piopio/pi-extensions";
-import { cpSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { hasTrustRequiringProjectResources, ProjectTrustStore } from "@earendil-works/pi-coding-agent";
 import { claudeCodeTrusted, hasClaudeCodeSetup, piTrust } from "./project-trust.js";
@@ -16,14 +16,10 @@ import { readJsonFile, writeFileAtomic } from "./atomic.js";
 
 type Lens = "build" | "chat";
 /**
- * `lenses`: before docs/spec/18, whether the folder showed in Build, Chat or both. `folder: false` and `instructions`:
- * a project without a folder, before CF4. Both are read once to migrate, then dropped.
- */
-/**
  * `network`: "filtered", its commands reach only the hosts allowed, until it's trusted; "off", only this Mac, until you
  * turn it on (docs/spec/39); absent, open.
  */
-type StoredProject = { id: string; path: string; name: string; addedAt: string; approvalMode?: ApprovalMode; rules?: ApprovalRule[]; lenses?: Lens[]; folder?: false; instructions?: string; folders?: LinkedFolder[]; prEvents?: PrEvents; check?: string; network?: "filtered" | "off" };
+type StoredProject = { id: string; path: string; name: string; addedAt: string; approvalMode?: ApprovalMode; rules?: ApprovalRule[]; folders?: LinkedFolder[]; prEvents?: PrEvents; check?: string; network?: "filtered" | "off" };
 /** A project's commands' network (docs/spec/39). */
 export type NetworkMode = "open" | "filtered" | "off";
 /** What a conversation hears about its pull request (docs/spec/17 §5): nothing, a notification, or a follow-up it works on. */
@@ -56,54 +52,9 @@ export class Projects {
 		private readonly agentDir: string,
 		/** Where New project makes its folders (~/Piopio). */
 		private readonly root?: string,
-		/** Where projects without a folder kept their files before CF4 (`<home>/projects`), to move them out. */
-		oldDataDir?: string,
 	) {
 		this.entries = readJsonFile<StoredProject[]>(file, () => this.entries);
 		this.trust = new ProjectTrustStore(agentDir);
-		// Lenses are gone (docs/spec/18 §4): a folder only used to chat about keeps that, as Read only, so removing the
-		// lens never leaves a folder of documents ready to edit. Folders in Build keep their mode.
-		if (this.entries.some((p) => p.lenses)) {
-			for (const p of this.entries) {
-				if (p.lenses?.length === 1 && p.lenses[0] === "chat") p.approvalMode = "read_only";
-				delete p.lenses;
-			}
-			this.save();
-		}
-		if (this.entries.some((p) => p.folder === false)) this.migrateWithoutFolder(oldDataDir);
-	}
-
-	/** Projects without a folder that became folders (CF4): their old id, and where their notes go. */
-	readonly migrated: { id: string; notes: string }[] = [];
-
-	/** A project without a folder becomes a folder in ~/Piopio: its files, AGENTS.md from its instructions, NOTES.md. */
-	private migrateWithoutFolder(oldDataDir?: string): void {
-		for (const p of this.entries.filter((e) => e.folder === false)) {
-			if (!this.root) break;
-			try {
-				const target = this.newFolder(p.name);
-				if (existsSync(p.path)) {
-					try {
-						renameSync(p.path, target);
-					} catch {
-						cpSync(p.path, target, { recursive: true });
-						rmSync(p.path, { recursive: true, force: true });
-					}
-				}
-				mkdirSync(target, { recursive: true });
-				this.seed(target, p.name, p.instructions);
-				if (oldDataDir) rmSync(join(oldDataDir, p.id), { recursive: true, force: true });
-				p.path = realpathSync(target);
-				p.name = basename(target);
-				p.approvalMode ??= "auto_edit";
-				delete p.folder;
-				delete p.instructions;
-				this.migrated.push({ id: p.id, notes: join(p.path, NOTES_FILE) });
-			} catch {
-				// Left as it was; tried again next time.
-			}
-		}
-		this.save();
 	}
 
 	/** A new folder in ~/Piopio named after the project ("Kitchen renovation", then "Kitchen renovation 2"). */
@@ -365,7 +316,7 @@ export class Projects {
 
 function describe(stored: StoredProject): Omit<ProjectInfo, "trust" | "needsTrust"> {
 	// `lenses` stays in the protocol for older apps: every project now does both (the permissions decide).
-	const { folder: _f, instructions: _i, lenses: _l, folders, ...rest } = stored;
+	const { folders, ...rest } = stored;
 	const p = {
 		...rest,
 		approvalMode: stored.approvalMode ?? "auto_edit",

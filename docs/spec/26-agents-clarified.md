@@ -283,6 +283,8 @@ and the `work.changed` notification. Every `teams.*` call is gone. Routines are 
   `by: "piopio"`.
 - `teams.json` and `team-definitions.json` are renamed `*.before-26.json`, so it runs once. The team folders aren't
   touched. A report, `<home>/work-migration.md`, is served by `work.migrationReport` until it's dismissed.
+- **Removed 2026-11-26** with the other alpha migrations, before the launch: `work/migrate.ts`,
+  `work.migrationReport` and `work.dismissMigrationReport` are gone.
 
 **CL12:** `tell_agent` says it's for notices, not for handing work to another agent. The WhatsApp front agent isn't
 built yet, so there's nothing to change there.

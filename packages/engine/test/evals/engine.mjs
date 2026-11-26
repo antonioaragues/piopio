@@ -83,7 +83,6 @@ export async function startEngine(root, { env = {}, log } = {}) {
 			PIOPIO_PI_SESSION_DIR: join(home, "pi-sessions"),
 			PIOPIO_PI_AGENT_DIR: join(home, "pi-agent"),
 			PIOPIO_AGENTS_DIR: join(home, "Agents"),
-			PIOPIO_TEAMS_DIR: join(home, "Teams"),
 			...env,
 		},
 		stdio: ["ignore", "ignore", "pipe"],

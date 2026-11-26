@@ -2299,9 +2299,6 @@ export const methods = {
 	"work.land": { params: Type.Object({ project: Type.String(), action: literals("merge", "push") }), result: Type.Object({ commit: Type.Optional(Type.String()), compareUrl: Type.Optional(Type.String()), output: Type.Optional(Type.String()) }) },
 	/** The project's work branch as a pull request into its base (G6 from the Board). */
 	"work.createPR": { params: Type.Object({ project: Type.String(), title: Type.String(), body: Type.String(), draft: Type.Optional(Type.Boolean()) }), result: Type.Object({ pr: PrStatus }) },
-	/** What changed when teams became projects' ways of working (docs/spec/26 §8): shown once, until dismissed. */
-	"work.migrationReport": { params: Type.Object({}), result: Type.Object({ report: Type.Optional(Type.String({ description: "Markdown" })) }) },
-	"work.dismissMigrationReport": { params: Type.Object({}), result: Type.Object({}) },
 	/** Automations (docs/spec/27): every one, or those a runner or a project has. */
 	"automations.list": {
 		params: Type.Object({ runsAs: Type.Optional(Type.String()), project: Type.Optional(Type.String()) }),

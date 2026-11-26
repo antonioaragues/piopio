@@ -145,28 +145,3 @@ test("a custom endpoint is a provider in pi's models.json: its models' abilities
 	}
 });
 
-test("endpoints kept in Piopio's own endpoints.json move into pi's models.json at the next start", async () => {
-	const home = scratch("endpoint-old-home");
-	const piAgentDir = scratch("endpoint-old-pi");
-	writeFileSync(
-		join(home, "endpoints.json"),
-		JSON.stringify([
-			{ id: "custom-ollama", name: "Ollama", baseUrl: "http://localhost:11434/v1", keyless: true, models: [{ id: "gemma3:27b", contextWindow: 32_768 }, { id: "nomic-embed", embedding: true }], addedAt: "2026-10-22T00:00:00Z" },
-			{ id: "custom-work", name: "Work", baseUrl: "https://llm.example.com/v1", keyless: false, models: [{ id: "big" }], addedAt: "2026-10-22T00:00:00Z", format: "anthropic", headers: { "x-team": "a" }, contextWindow: 64_000 },
-		]),
-	);
-	const hub = new ModelHub(new SecretBroker({}), { faux: true, home, piAgentDir });
-	const rt = await hub.ready();
-	expect(rt.getModel("custom-ollama", "gemma3:27b")).toMatchObject({ contextWindow: 32_768, api: "openai-completions" });
-	expect(rt.getModel("custom-ollama", "nomic-embed")).toBeUndefined();
-	expect(rt.getModel("custom-work", "big")).toMatchObject({ contextWindow: 64_000, api: "anthropic-messages", baseUrl: "https://llm.example.com" });
-	const written = JSON.parse(readFileSync(join(piAgentDir, "models.json"), "utf8")) as { providers: Record<string, { apiKey?: string; headers?: object }> };
-	expect(written.providers["custom-ollama"]!.apiKey).toBe("none");
-	// A server with a key: the key stays in the Keychain, under the same id.
-	expect(written.providers["custom-work"]).toMatchObject({ headers: { "x-team": "a" } });
-	expect(written.providers["custom-work"]!.apiKey).toBeUndefined();
-	expect(hub.endpoints.list().map((e) => [e.id, e.keyless, e.format])).toEqual([["custom-ollama", true, "openai"], ["custom-work", false, "anthropic"]]);
-	// Once: the old file is set aside.
-	expect(existsSync(join(home, "endpoints.json"))).toBe(false);
-	expect(existsSync(join(home, "endpoints.json.migrated"))).toBe(true);
-});

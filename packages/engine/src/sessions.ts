@@ -65,7 +65,6 @@ import type { GitHub } from "./github.js";
 import { agentBridge } from "./automations/tools.js";
 import { DEFAULT_BUDGET, PIOPIO, turnError, type Automation } from "./automations/model.js";
 import type { Automations } from "./automations/service.js";
-import { migrateChat } from "./migrate-chats.js";
 import type { SessionEvent } from "@piopio/protocol";
 import { type CloudLink } from "./cloud.js";
 import type { SecretBroker } from "./secrets.js";
@@ -1060,8 +1059,6 @@ export class Sessions {
 		const copy: CatalogEntry = { ...structuredClone(source), ref: { kind: "thread", id: newId("thr") }, title: `${source.title} (branch)`, createdAt: now, updatedAt: now, sessionFile: file };
 		delete copy.file;
 		delete copy.continuedIn;
-		// The old pi-durable file is the original's backup, not the branch's history.
-		delete copy.migratedFrom;
 		// Earlier parts (another runner, docs/spec/31 CA7): the branch's own copies, so deleting either keeps the other's.
 		if (source.segments) copy.segments = source.segments.map((s, i) => copyPart(s, `${copy.ref.id}-part${i}`, join(this.paths.chatsDir, "agents")));
 		copy.cwd = this.scratch(copy.ref.id);
@@ -1108,11 +1105,11 @@ export class Sessions {
 		this.open.delete(ref.id);
 		if (runtime) await (await runtime.catch(() => undefined))?.close();
 		await this.dropWorktree(entry);
-		// A file another conversation still reads stays: branches made before 2026-11-22 share their earlier parts (and a
-		// migrated chat's old file) with the chat they came from.
+		// A file another conversation still reads stays: branches made before 2026-11-22 share their earlier parts with
+		// the chat they came from.
 		const others = new Set([...this.entries.values()].filter((e) => e !== entry).flatMap(historyFiles));
 		const mine = (file: string | undefined): file is string => Boolean(file) && !others.has(file!);
-		for (const old of [entry.file, entry.migratedFrom]) if (mine(old)) for (const suffix of ["", "-wal", "-shm"]) rmSync(old + suffix, { force: true });
+		if (mine(entry.file)) for (const suffix of ["", "-wal", "-shm"]) rmSync(entry.file + suffix, { force: true });
 		// A coding agent's conversation: Piopio's copy of its transcript. A chat's own sessions in the agents go too (a
 		// Build session's stay, as its pi file goes to the Trash: you may carry on in the agent's CLI).
 		const agentParts = [{ model: entry.model, agentFile: entry.agentFile }, ...(entry.segments ?? [])].filter((p) => mine(p.agentFile) && p.model && isCodingAgent(p.model.provider));
@@ -1414,23 +1411,6 @@ export class Sessions {
 		const runtime = await this.runtime(ref);
 		await runtime.submit("[Board] The user chose to work in parallel. Plan what they asked above: put the independent parts on the board as tasks, then tell them in a sentence or two.", { whenBusy: "followUp" });
 		this.touch(ref);
-	}
-
-	/**
-	 * Sessions from before docs/spec/26: a lead's conversation is a plain one with Piopio; a member's is a helper's,
-	 * under its team's project (`projectOf`, from the migration).
-	 */
-	migrateTeams(projectOf: (teamId: string) => string | undefined): void {
-		let changed = false;
-		for (const entry of this.entries.values()) {
-			const old = (entry as CatalogEntry & { team?: { id: string; kind: string; taskId?: string } }).team;
-			if (!old) continue;
-			delete (entry as { team?: unknown }).team;
-			const project = projectOf(old.id);
-			if (old.kind !== "lead" && project && old.taskId) entry.helper = { project, kind: old.kind === "review" ? "review" : "build", taskId: old.taskId };
-			changed = true;
-		}
-		if (changed) this.save();
 	}
 
 	private aboutMeFor(kind: "thread" | "agent"): Extension | undefined {
@@ -2068,32 +2048,6 @@ export class Sessions {
 
 	// ── Chats: conversations without a project (one engine for conversations, 2026-11-15) ─────────
 
-	/**
-	 * Chats from before 2026-11-15 (pi-durable SQLite files) move to pi sessions, once, before the engine serves anything
-	 * (migrate-chats.ts). The old file stays where it was until the chat is deleted. A chat that can't be read is left as
-	 * it was and tried again next start.
-	 */
-	async migrateChats(log: (line: string) => void = () => {}): Promise<number> {
-		let moved = 0;
-		for (const entry of [...this.entries.values()]) {
-			if (entry.ref.kind !== "thread" || !entry.file || entry.sessionFile) continue;
-			const cwd = this.scratch(entry.ref.id);
-			try {
-				const file = await migrateChat(entry.file, entry.branches?.active, this.hub, cwd, this.paths.chatsDir);
-				entry.cwd = cwd;
-				entry.migratedFrom = entry.file;
-				if (file) entry.sessionFile = file;
-				delete entry.file;
-				delete entry.branches;
-				moved++;
-			} catch (error) {
-				log(`Couldn't move the chat “${entry.title}” (${entry.ref.id}) to the new engine: ${(error as Error).message}`);
-			}
-		}
-		if (moved) this.save();
-		return moved;
-	}
-
 	/** A chat's own folder, where its pi session runs. */
 	private scratch(id: string): string {
 		const dir = join(this.paths.scratchDir, id);
@@ -2287,7 +2241,7 @@ export const BACKUP_EXCLUDE = "backup-exclude.json";
 
 /** Every file a conversation's history reads. */
 function historyFiles(e: CatalogEntry): string[] {
-	return [e.file, e.migratedFrom, e.sessionFile, e.agentFile, ...(e.segments ?? []).flatMap((s) => [s.sessionFile, s.agentFile])].filter((f): f is string => Boolean(f));
+	return [e.file, e.sessionFile, e.agentFile, ...(e.segments ?? []).flatMap((s) => [s.sessionFile, s.agentFile])].filter((f): f is string => Boolean(f));
 }
 
 /**
@@ -2314,7 +2268,7 @@ function copyPart(segment: Segment, name: string, agentsDir: string): Segment {
 	return part;
 }
 
-function summary({ file: _f, sessionFile: _s, agentFile: _af, segments: _sg, handoff: _h, reviewFor: _rf, restoredFromSessionFile: _recovered, onDisk: _d, thinking: _t, migratedFrom: _m, sideBrief: _b, sideBy: _y, sideWoke: _w, sidePending: _p, sideOffers: _o, sideBriefs: _sb, prSeen: _ps, prFailedSha: _pf, learnUndo: _lu, ...rest }: CatalogEntry): SessionSummary {
+function summary({ file: _f, sessionFile: _s, agentFile: _af, segments: _sg, handoff: _h, reviewFor: _rf, restoredFromSessionFile: _recovered, onDisk: _d, thinking: _t, sideBrief: _b, sideBy: _y, sideWoke: _w, sidePending: _p, sideOffers: _o, sideBriefs: _sb, prSeen: _ps, prFailedSha: _pf, learnUndo: _lu, ...rest }: CatalogEntry): SessionSummary {
 	// Proposals go after a week (docs/spec/24 §3).
 	if (rest.sideProposals) {
 		const live = rest.sideProposals.filter((p) => Date.parse(p.expiresAt) > Date.now());

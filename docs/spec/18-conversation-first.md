@@ -116,6 +116,7 @@ line: a conversation without a folder can't touch your files.
   - Lenses `["chat"]` only: `read_only`.
   - `["build"]` or both: they keep their mode.
   - Then `lenses` is no longer read. No folder of documents silently becomes editable.
+  - Removed 2026-11-26 with the alpha migrations, and so is CF4's move of projects without a folder.
 
 | Mode | Reads, search, web | Edits | Commands |
 |---|---|---|---|

@@ -40,6 +40,7 @@ let contractResults: [String: any Decodable.Type] = [
     "apps.revoke": AppResult.self,
     "apps.undo": AppResult.self,
     "automations.add": AutomationResult.self,
+    "automations.dismissMigrationReport": Empty.self,
     "automations.get": AutomationDetail.self,
     "automations.list": AutomationsResult.self,
     "automations.migrationReport": MigrationReport.self,
@@ -203,7 +204,6 @@ let contractResults: [String: any Decodable.Type] = [
     "work.land": WorkLandResult.self,
     "work.landing": WorkLanding.self,
     "work.list": WorkListResult.self,
-    "work.migrationReport": MigrationReport.self,
     "work.playbooks": PlaybooksResult.self,
     "work.updateTask": Empty.self,
 ]

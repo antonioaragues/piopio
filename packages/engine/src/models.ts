@@ -127,7 +127,7 @@ export class ModelHub {
 			if (openrouter && !this.faux) rt.registerNativeProvider(withClaudeFlags(openrouter, this.anthropicCatalog(rt)));
 			if (this.faux) rt.registerNativeProvider(this.faux.provider);
 			this.runtime = rt;
-			return this.migrateEndpoints(rt).then(() => rt);
+			return rt;
 		});
 		return this.starting;
 	}
@@ -148,16 +148,6 @@ export class ModelHub {
 	/** pi reads `models.json` again (after Piopio wrote an endpoint there). Nothing goes over the network. */
 	private async reloadModelsFile(rt: ModelRuntime): Promise<void> {
 		await rt.refresh({ allowNetwork: false }).catch(() => undefined);
-	}
-
-	/** Endpoints kept in Piopio's own `endpoints.json` until 2026-11-25 move into pi's `models.json`, once. */
-	private async migrateEndpoints(rt: ModelRuntime): Promise<void> {
-		if (!this.options.home) return;
-		try {
-			if (this.endpoints.migrate(join(this.options.home, "endpoints.json"), this.knownModels(rt)) > 0) await this.reloadModelsFile(rt);
-		} catch {
-			// models.json has an error: the old file stays, and they move at the next start after it's fixed.
-		}
 	}
 
 	private catalogRestored = false;

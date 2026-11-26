@@ -1,32 +1,13 @@
 /**
- * What became automations (docs/spec/27 §6). Each agent's definition schedules, heartbeat and webhook triggers, and
- * the reminders and watches it set itself, become automations run by that agent; each project's routines become
- * automations run by Piopio there. Webhook addresses they had are kept as aliases, so callers don't break; watches
- * and routines keep their ids, so the mail watcher's place in each mailbox carries over. Pure functions: the engine
- * reads the old records, adopts what these return, and clears the old ones.
+ * What becomes automations (docs/spec/27 §6): an agent's definition schedules, heartbeat and webhook triggers, and the
+ * reminders and watches it set itself, become automations run by that agent. It runs whenever an agent opens with
+ * them (a definition written by hand or from a package, an agent moved back from your cloud). Webhook addresses they had
+ * are kept as aliases, so callers don't break; watches keep their ids, so the mail watcher's place in each mailbox
+ * carries over. Pure functions: the engine reads the old records, adopts what these return, and clears the old ones.
+ * (Projects' routines from before 27 were converted here too, once; that went with the alpha migrations, 2026-11-26.)
  */
 import type { AgentDefinition, Reminder, RunRecord, Watch } from "@piopio/runtime";
-import { nameOf, nextOf, PIOPIO, systemZone, whenLabel, type Automation, type AutomationRun } from "./model.js";
-
-/** A project routine as it was kept (docs/spec/21 AD5, 26 CL10). */
-export type LegacyRoutine = {
-	id: string;
-	on: "time" | "folder" | "email" | "webhook";
-	prompt: string;
-	cron?: string;
-	at?: number;
-	tz?: string;
-	folder?: string;
-	from?: string;
-	subject?: string;
-	by: string;
-	createdAt: string;
-	next?: number;
-	lastRun?: string;
-	runs: number;
-	lastConversation?: string;
-};
-export type LegacyPlace = { project: string; path: string; routines: LegacyRoutine[]; fired?: string[] };
+import { nameOf, nextOf, systemZone, whenLabel, type Automation, type AutomationRun } from "./model.js";
 
 export type Migrated = { automations: Automation[]; runs: AutomationRun[]; lines: string[] };
 
@@ -105,44 +86,6 @@ export function fromAgent(agent: { id: string; name: string; definition: AgentDe
 		a.lastRun = mine[mine.length - 1]!.firedAt;
 	}
 	out.runs = out.runs.slice(-MAX_RUNS * Math.max(1, out.automations.length));
-	return out;
-}
-
-/** Projects' routines: run by Piopio in their project, keeping who set them, their next time and their count. */
-export function fromProjects(places: LegacyPlace[], projectName: (id: string) => string | undefined, now: number): Migrated & { fired: string[] } {
-	const out: Migrated & { fired: string[] } = { automations: [], runs: [], lines: [], fired: [] };
-	for (const place of places) {
-		const name = projectName(place.project) ?? "a project";
-		for (const r of place.routines) {
-			const a: Automation = {
-				id: r.id,
-				name: nameOf(r.prompt.replaceAll("{{body}}", "").trim() || "Webhook"),
-				on: r.on,
-				...(r.cron ? { cron: r.cron } : {}),
-				...(r.at !== undefined ? { at: r.at } : {}),
-				...(r.on === "time" ? { tz: r.tz ?? systemZone() } : {}),
-				...(r.folder ? { folder: r.folder } : {}),
-				...(r.from ? { from: r.from } : {}),
-				...(r.subject ? { subject: r.subject } : {}),
-				runsAs: PIOPIO,
-				project: place.project,
-				prompt: r.prompt,
-				result: "conversation",
-				by: r.by === "you" ? "you" : "piopio",
-				...(r.on === "webhook" ? { aliases: [`${place.project}/${r.id}`] } : {}),
-				...base(now),
-				createdAt: r.createdAt,
-				runCount: r.runs,
-				...(r.lastRun ? { lastRun: r.lastRun } : {}),
-			};
-			if (a.on === "time") a.next = r.next ?? nextOf(a, now);
-			if (a.on === "time" && a.at !== undefined && a.next === undefined) continue;
-			out.automations.push(a);
-			if (r.lastRun && r.lastConversation) out.runs.push({ id: `ar_${r.id}_last`, automation: r.id, firedAt: r.lastRun, cause: r.on === "time" ? "time" : "event", status: "done", summary: "Opened a conversation", conversation: r.lastConversation });
-			out.lines.push(`- ${name}: the routine “${a.name}” (${whenLabel(a)}) is an automation run by Piopio there.`);
-		}
-		out.fired.push(...(place.fired ?? []));
-	}
 	return out;
 }
 
