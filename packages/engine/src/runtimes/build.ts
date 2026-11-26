@@ -807,13 +807,43 @@ export class BuildRuntime implements Runtime {
 		const list = kind === "steer" ? steering : followUp;
 		const found = i >= 0 && i < list.length;
 		if (found) list.splice(i, 1);
-		// The rest go back in order; if the run ended meanwhile, the first of them starts the next one.
+		await this.requeue(steering, followUp);
+		if (!found) throw new EngineError("NOT_FOUND", "That message is no longer queued.");
+	}
+
+	/**
+	 * Takes a note back out of the queue before the model reads it: a `[Task]` result that `task_wait` collected
+	 * while its note waited for the turn to end. A queued message that is only the note goes; one that holds it with
+	 * other notes (a burst of reports is one message) keeps the others. "message" when a whole queued message went,
+	 * "part" when others stay in it, undefined when it isn't queued any more (the model already has it).
+	 */
+	async withdrawQueued(note: string): Promise<"message" | "part" | undefined> {
+		const cut = (t: string) => (t === note ? "" : t.replace(`${note}\n\n`, "").replace(`\n\n${note}`, ""));
+		const w = this.waiting.findIndex((input) => typeof input === "string" && input.includes(note));
+		if (w >= 0) {
+			const rest = cut(this.waiting[w] as string);
+			if (rest.trim()) this.waiting[w] = rest;
+			else this.waiting.splice(w, 1);
+			this.showWaiting();
+			return rest.trim() ? "part" : "message";
+		}
+		const held = this.session.getFollowUpMessages().find((t) => t.includes(note));
+		if (held === undefined) return undefined;
+		const { steering, followUp } = this.session.clearQueue();
+		await this.requeue(
+			steering,
+			followUp.map(cut).filter((t) => t.trim()),
+		);
+		return cut(held).trim() ? "part" : "message";
+	}
+
+	/** Queued messages back in order after clearQueue; if the run ended meanwhile, the first of them starts the next one. */
+	private async requeue(steering: readonly string[], followUp: readonly string[]): Promise<void> {
 		const rest: [string, "steer" | "followUp"][] = [...steering.map((t) => [t, "steer"] as [string, "steer"]), ...followUp.map((t) => [t, "followUp"] as [string, "followUp"])];
 		for (const [text, mode] of rest) {
 			if (this.session.isStreaming) await this.queue(text, mode);
 			else this.start(text);
 		}
-		if (!found) throw new EngineError("NOT_FOUND", "That message is no longer queued.");
 	}
 
 	/**

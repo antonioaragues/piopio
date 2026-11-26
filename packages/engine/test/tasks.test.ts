@@ -92,6 +92,22 @@ test("task_wait collects a result here, and then no [Task] message comes; task_s
 	await until(() => items(client, ref), (x) => x.some((i) => i.tool === "task_wait" && i.status === "error" && i.output?.includes("isn't one of this conversation's subagents")));
 }, 90_000);
 
+test("a result that finished mid-turn and that task_wait then collects doesn't also wake the parent as a [Task] message", async () => {
+	const { client, ref } = await start();
+	// The subagent answers at once while the parent's turn is still busy, so its note waits in the parent's queue.
+	await client.call("sessions.submit", { ref, input: { text: `call: task | ${JSON.stringify({ description: "Quick one", prompt: "hello" })}\n$ sleep 4` } });
+	const id = (await until(() => items(client, ref), (x) => x.some((i) => i.tool === "task" && i.status === "done"))).find((i) => i.tool === "task")!.details!.sessionId!;
+	await until(() => children(client, ref), (c) => c.find((x) => x.ref.id === id)?.parent?.state === "done");
+	// Still in the same turn, the model collects it with task_wait.
+	await client.call("sessions.submit", { ref, input: { text: `call: task_wait | ${JSON.stringify({ ids: [id] })}` }, whenBusy: "steer" });
+	const waited = await until(() => items(client, ref), (x) => x.some((i) => i.tool === "task_wait" && i.status === "done"));
+	expect(waited.find((i) => i.tool === "task_wait")!.output).toContain(`${id}: Echo: hello`);
+	await idle(client, ref);
+	await new Promise((r) => setTimeout(r, 800));
+	await idle(client, ref);
+	expect((await items(client, ref)).some((i) => i.kind === "user" && i.text?.startsWith("[Task]"))).toBe(false);
+}, 60_000);
+
 test("past three running, a task waits as queued and starts when one ends; their results come back in one turn", async () => {
 	const { client, ref } = await start();
 	const four = [1, 2, 3, 4].map((n) => task(`Task ${n}`, `$ sleep 1\nwrite: t${n}.txt | ${n}`)).join("\n");

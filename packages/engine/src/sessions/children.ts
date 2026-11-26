@@ -60,6 +60,8 @@ export class Children {
 	private readonly taskProgress = new Map<string, (line: string) => void>();
 	private readonly taskWaiters = new Map<string, ((result: TaskResult) => void)[]>();
 	private readonly taskResults = new Map<string, TaskResult>();
+	/** The [Task] note each uncollected result went out as, so task_wait can take it back (see withdrawNote). */
+	private readonly taskNotes = new Map<string, string>();
 
 	/**
 	 * Starts a `task` as a child Build session (same folder, model and approval mode), one level deep, and returns at
@@ -101,6 +103,7 @@ export class Children {
 				const kept = this.taskResults.get(child.ref.id);
 				if (kept) {
 					this.taskResults.delete(child.ref.id);
+					await this.withdrawNote(parent, child.ref.id);
 					return kept;
 				}
 				if (child.parent!.state !== "working" && child.parent!.state !== "queued") return this.taskResultOf(child, await this.host.runtime(child.ref));
@@ -110,6 +113,28 @@ export class Children {
 				});
 			}),
 		);
+	}
+
+	/**
+	 * task_wait collected a result whose [Task] note already went out (the subagent finished while the parent's turn
+	 * ran, before it called task_wait): the note leaves the parent's pending notes, or its queue, so it doesn't wake
+	 * the parent for a turn about what it already read. A note the model already has stays.
+	 */
+	private async withdrawNote(parent: CatalogEntry, childId: string): Promise<void> {
+		const note = this.taskNotes.get(childId);
+		this.taskNotes.delete(childId);
+		if (!note) return;
+		if (parent.sidePending?.includes(note)) {
+			parent.sidePending = parent.sidePending.filter((n) => n !== note);
+			this.host.save();
+			return;
+		}
+		const inner = innerOf(await this.host.runtime(parent.ref));
+		if (inner instanceof BuildRuntime && (await inner.withdrawQueued(note)) === "message") {
+			// That wake won't happen: it doesn't count toward WAKE_LIMIT.
+			parent.sideWoke = Math.max(0, (parent.sideWoke ?? 0) - 1);
+			this.host.save();
+		}
 	}
 
 	/** `task_stop`: a queued one won't start; a working one's turn stops. */
@@ -145,7 +170,9 @@ export class Children {
 			this.taskResults.set(child.ref.id, result);
 			const word = result.status === "done" ? "finished" : result.status === "error" ? "failed" : "was stopped";
 			const text = result.text.length > 8000 ? `${result.text.slice(0, 8000).trimEnd()}… (read the rest with read_conversation ${child.ref.id})` : result.text;
-			await this.reportToParent(child, `[Task] “${child.title}” (${child.ref.id}) ${word}.${result.costUsd ? ` It cost $${result.costUsd.toFixed(2)}.` : ""}${text.trim() ? `\n\n${text.trim().split("\n").map((l) => `> ${l}`).join("\n")}` : ""}`, `Result from ${child.title} · ${result.status === "error" ? "failed" : result.status}`);
+			const note = `[Task] “${child.title}” (${child.ref.id}) ${word}.${result.costUsd ? ` It cost $${result.costUsd.toFixed(2)}.` : ""}${text.trim() ? `\n\n${text.trim().split("\n").map((l) => `> ${l}`).join("\n")}` : ""}`;
+			this.taskNotes.set(child.ref.id, note);
+			await this.reportToParent(child, note, `Result from ${child.title} · ${result.status === "error" ? "failed" : result.status}`);
 		}
 		const parentId = child.parent!.id;
 		const next = this.childrenOf(parentId).find((c) => c.parent?.state === "queued");
