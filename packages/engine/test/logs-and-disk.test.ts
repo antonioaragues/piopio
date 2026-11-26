@@ -6,7 +6,6 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, expect, test } from "vitest";
 import { CheckpointStore } from "../src/checkpoints.js";
-import { ExtraCosts } from "../src/costs.js";
 import { logLine, rotateLog } from "../src/logs.js";
 import { enginePaths } from "../src/paths.js";
 import { InputReceipts } from "../src/requests.js";
@@ -68,17 +67,6 @@ test("request receipts go after a week; those from before the change are dated w
 	expect(receipts.prune(Date.now() + 8 * 24 * 3600_000)).toBe(1);
 	receipts.close();
 	expect(new DatabaseSync(file).prepare("PRAGMA journal_mode").get()).toEqual({ journal_mode: "wal" });
-});
-
-test("a month's costs are read by range: the month's own, not the next one's", () => {
-	const costs = new ExtraCosts(join(mkdtempSync(join(tmpdir(), "piopio-costs-")), "extra-costs.db"));
-	const db = (costs as unknown as { db: DatabaseSync }).db;
-	for (const [at, usd] of [["2026-11-30T23:59:59.000Z", 1], ["2026-12-01T00:00:00.000Z", 2], ["2026-12-31T10:00:00.000Z", 3], ["2027-01-01T00:00:00.000Z", 4]] as const) db.prepare("INSERT INTO extra_costs VALUES (?, 'app', 'utility', 'm', ?)").run(at, usd);
-	expect(costs.monthUsd("app", "2026-11")).toBe(1);
-	expect(costs.monthUsd("app", "2026-12")).toBe(5);
-	expect(costs.monthUsd("app", "2027-01")).toBe(4);
-	expect((db.prepare("EXPLAIN QUERY PLAN SELECT SUM(usd) FROM extra_costs WHERE scope = 'app' AND at >= '2026-12' AND at < '2027-01'").all() as { detail: string }[]).map((r) => r.detail).join(" ")).toContain("extra_costs_scope_at");
-	costs.close();
 });
 
 test("deleting a conversation with a worktree: a clean one is removed, one with work goes to the Trash; the branch stays", async () => {

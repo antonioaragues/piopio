@@ -4,7 +4,8 @@
  * content, no credentials.
  *
  * Rows come from what sessions show (an assistant answer carries its `Usage`) and from the requests outside them
- * (`extra_costs`: utility, web search, embeddings), which it absorbs. Writing is idempotent: a row's id is its
+ * (utility, web search, embeddings: `recordCost`), which it is the only store of (`extra-costs.db` was folded in,
+ * 2026-11-26): a conversation's Cost and an agent's budget read them here. Writing is idempotent: a row's id is its
  * container, the answer's item id and its token counts, so reading a conversation again (backfill, a reopen, the live
  * events) never counts an answer twice, and a branch you left keeps what it cost. Answers read from a stored file's
  * other branches (`fromFile`) have no item id to match: one is added only when its conversation has no row with the
@@ -16,6 +17,10 @@ import type { AssistantItem, Budget, ContainerRef, SpendGroup, SpendGroupBy, Spe
 import { SQLITE_PRAGMAS } from "./requests.js";
 
 export type LedgerKind = "turn" | "utility" | "web_search" | "embedding";
+/** A request outside a conversation's turns, as the code that pays for it names it. */
+export type CostKind = "web_search" | "utility" | "embeddings";
+/** What Cost shows for one conversation or agent, or for all of them (`usage.extras`). */
+export type CostSummary = { scope: string; knownUsd: number; unknownCalls: number; calls: number; breakdown: { kind: string; calls: number; knownUsd: number; unknownCalls: number }[] };
 
 /** Where a conversation's requests belong: what opens it, and what it's part of. */
 export type LedgerSource = {
@@ -74,7 +79,7 @@ export class UsageLedger {
 	private readonly insertRow: StatementSync;
 	/** Whether requests through a provider are billed to a subscription (shown as tokens, OV4). */
 	planOf: (provider: string, usd: number) => boolean = () => false;
-	/** What an `extra_costs` scope is (a conversation's or an agent's id); unknown and "app" are Piopio's own work. */
+	/** What a cost's scope is (a conversation's or an agent's id); unknown and "app" are Piopio's own work. */
 	resolve: (scope: string) => LedgerSource | undefined = () => undefined;
 	/** After a write that added or changed rows (Piopio's monthly budget checks itself). */
 	onWrite: () => void = () => {};
@@ -222,7 +227,42 @@ export class UsageLedger {
 		});
 	}
 
-	/** A request outside the conversation harness (`ExtraCosts.record`), as it happens or from the old table. */
+	/**
+	 * A paid request outside the conversation harness (a utility model, web search, embeddings), as it happens. `scope`
+	 * is the conversation's or agent's id it counts toward ("app": Piopio's own work). A price that's missing, negative or
+	 * not a number is stored as unknown, never as $0.
+	 */
+	recordCost(kind: CostKind, model: string, usd: number | undefined, scope = "app"): void {
+		this.recordExtra({ at: new Date().toISOString(), scope, kind, model, usd: typeof usd === "number" && Number.isFinite(usd) && usd >= 0 ? usd : null });
+	}
+
+	/**
+	 * The requests outside the turns of one conversation or agent (`scope`, its id: its own rows, and an agent's from any
+	 * of its conversations), or of everything: what Cost shows. Unknown prices are counted, not added.
+	 */
+	costSummary(scope?: string): CostSummary {
+		const where = scope ? "AND (source = ? OR agent = ?)" : "";
+		const rows = this.db.prepare(`SELECT kind, COUNT(*) calls, SUM(usd) usd, SUM(CASE WHEN usd IS NULL THEN 1 ELSE 0 END) unknown FROM usage_ledger WHERE kind != 'turn' ${where} GROUP BY kind`).all(...(scope ? [scope, scope] : [])) as { kind: string; calls: number; usd: number | null; unknown: number }[];
+		return {
+			scope: scope ?? "app",
+			knownUsd: rows.reduce((sum, row) => sum + (row.usd ?? 0), 0),
+			unknownCalls: rows.reduce((sum, row) => sum + row.unknown, 0),
+			calls: rows.reduce((sum, row) => sum + row.calls, 0),
+			// The names Cost has always shown ("embeddings", not the ledger's "embedding").
+			breakdown: rows.map((row) => ({ kind: row.kind === "embedding" ? "embeddings" : row.kind, calls: row.calls, knownUsd: row.usd ?? 0, unknownCalls: row.unknown })),
+		};
+	}
+
+	/** Known USD of `scope`'s requests outside the turns in `month` ("YYYY-MM", UTC), for an agent's budget. */
+	costMonthUsd(scope: string, month: string): number {
+		// A range on `at` (ISO times sort as text), so the index answers it.
+		const [y, m] = month.split("-").map(Number) as [number, number];
+		const next = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`;
+		const row = this.db.prepare("SELECT SUM(usd) usd FROM usage_ledger WHERE kind != 'turn' AND (source = ? OR agent = ?) AND at >= ? AND at < ?").get(scope, scope, month, next) as { usd: number | null } | undefined;
+		return row?.usd ?? 0;
+	}
+
+	/** A cost's row, under `id` (a generated one as it happens; tests give their own). */
 	recordExtra(row: { at: string; scope: string; kind: string; model: string; usd: number | null }, id = `extra#${row.at}#${Math.random().toString(36).slice(2, 10)}`): boolean {
 		const source = row.scope === "app" ? undefined : this.resolve(row.scope);
 		const kind: LedgerKind = row.kind === "web_search" ? "web_search" : row.kind === "embeddings" ? "embedding" : "utility";
@@ -248,17 +288,6 @@ export class UsageLedger {
 			usd: row.usd,
 			plan: false,
 		});
-	}
-
-	/** Reads `extra_costs` into the ledger, once (rows from before it carry no role or route). */
-	importExtras(rows: Iterable<{ rowid: number; at: string; scope: string; kind: string; model: string; usd: number | null }>): number {
-		if (this.meta("extras_imported")) return 0;
-		let added = 0;
-		this.transaction(() => {
-			for (const r of rows) if (this.recordExtra(r, `extra#${r.rowid}`)) added++;
-			this.setMeta("extras_imported", new Date().toISOString());
-		});
-		return added;
 	}
 
 	private insert(r: LedgerRow): boolean {

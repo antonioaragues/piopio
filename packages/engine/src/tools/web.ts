@@ -86,7 +86,7 @@ export async function runWebSearch(hub: ModelHub, args: { query: string; max_res
 	const body = await response.text();
 	if (!response.ok) return { text: `Web search failed (${response.status}): ${body.slice(0, 300)}`, isError: true };
 	const json = JSON.parse(body) as { usage?: { cost?: number } };
-	hub.extraCosts.record("web_search", options.searchModel ?? process.env.PIOPIO_SEARCH_MODEL ?? "deepseek/deepseek-v4.1-flash", json.usage?.cost, options.scope);
+	hub.ledger.recordCost("web_search", options.searchModel ?? process.env.PIOPIO_SEARCH_MODEL ?? "deepseek/deepseek-v4.1-flash", json.usage?.cost, options.scope);
 	const { summary, sources } = parseSearchResponse(json);
 	return { text: formatSearch(args.query, summary, sources), details: { type: "web", results: sources } };
 }

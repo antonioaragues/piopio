@@ -59,7 +59,7 @@ test("with nothing connected, automatic uses Apple's model when it's there; off 
 	const fm = fakeHelper("available");
 	const hub = hubWith(fm.path);
 	expect(await hub.utility("Summarize.", "the sink moves 40 cm", "thread-a")).toBe("on-device: the sink moves 40 cm");
-	expect(hub.extraCosts.summary("thread-a")).toMatchObject({ calls: 1, knownUsd: 0, unknownCalls: 0 });
+	expect(hub.ledger.costSummary("thread-a")).toMatchObject({ calls: 1, knownUsd: 0, unknownCalls: 0 });
 	hub.utilityChoice = () => "off";
 	expect(await hub.utility("Summarize.", "x")).toBeUndefined();
 	// An agent's own choice wins over the setting.

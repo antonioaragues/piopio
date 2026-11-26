@@ -208,7 +208,7 @@ export class Engine {
 				return credential?.type === "api_key" ? credential.key : undefined;
 			},
 			// Search by meaning's embeddings, with the other spending outside conversations (Settings › Models › Costs).
-			(model, usd) => this.hub.extraCosts.record("embeddings", model, usd),
+			(model, usd) => this.hub.ledger.recordCost("embeddings", model, usd),
 		);
 		// Records written before semantic search (or while offline) get their vectors in the background.
 		setTimeout(() => this.memory.fill(), 15_000).unref();
@@ -590,7 +590,6 @@ export class Engine {
 		await this.sessions.closeAll();
 		await this.connectors.close();
 		this.inputReceipts.close();
-		this.hub.extraCosts.close();
 		this.hub.budget.close();
 		this.hub.ledger.close();
 		await this.memory.reset();

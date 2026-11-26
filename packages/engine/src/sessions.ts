@@ -958,14 +958,12 @@ export class Sessions {
 	private ledgerBackfill?: Promise<void>;
 
 	/**
-	 * Reads past usage into the ledger: `extra_costs` once, then every conversation that changed since it was last
-	 * read (its updatedAt; an agent's also by its month's spend, since its runs don't touch the catalog). The first
+	 * Reads past usage into the ledger: every conversation that changed since it was last read (its updatedAt; an agent's also by its month's spend, since its runs don't touch the catalog). The first
 	 * time it reads everything; after that, only what's new. Returns when done.
 	 */
 	backfillLedger(): Promise<void> {
 		this.ledgerBackfill ??= (async () => {
 			const ledger = this.hub.ledger;
-			ledger.importExtras(this.hub.extraCosts.all());
 			for (const entry of [...this.entries.values()]) {
 				if (!this.entries.has(entry.ref.id)) continue;
 				const mark = entry.ref.kind === "agent" ? `${entry.updatedAt}|${entry.agent?.status?.spendUsd ?? 0}` : entry.updatedAt;

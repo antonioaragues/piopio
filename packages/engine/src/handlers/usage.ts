@@ -12,7 +12,7 @@ export function usageHandlers(engine: Engine): Handlers<"usage"> {
 	return {
 		"usage.extras": async (params, _call) => {
 			const p = params as Params<"usage.extras">;
-			return engine.hub.extraCosts.summary(p.ref?.id) satisfies Result<"usage.extras">;
+			return engine.hub.ledger.costSummary(p.ref?.id) satisfies Result<"usage.extras">;
 		},
 		"usage.summary": async (params, _call) => {
 			const p = params as Params<"usage.summary">;

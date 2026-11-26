@@ -30,7 +30,7 @@ One page answers them. It reads what Piopio already stores; it never sends anyth
 | What | Where it comes from | Shown |
 |---|---|---|
 | A conversation's cost and tokens | pi's `Usage` on each assistant message (input, output, cache read, cache write, USD), summed in `ThreadState.usage` | Inspector footer; CostDetails popover |
-| Utility requests and web search | `extra_costs` (at, scope, kind, model, usd or null), per conversation or `app` | CostDetails ("Additional requests") |
+| Utility requests and web search | The usage ledger's rows other than turns (at, source, kind, model, usd or null), per conversation, agent or `app`; `extra_costs` until 2026-11-26 | CostDetails ("Additional requests") |
 | What the provider billed | `usage.summary`: the OpenRouter key's today / month / total, cached a minute; includes other apps on that key | Sidebar footer "This Mac · $0.91 today" |
 | An agent's month | Agent `status.spendUsd` against `budgetUsd` (AS3) | Agent info panel footer *(Since 21 §9: the agent page is Chat · Setup and the info panel is gone; the agent's month is in its Setup, §4.)* |
 | Automations and jobs | `budgetPerRunUsd`, `work.job` (a conversation's helpers against `budgetPerJob`) | Automation page, the way of working |
@@ -288,6 +288,9 @@ chats, Build, subagents, side conversations, agents' conversations and runs, and
   subscription) are `plan = true`: tokens, never dollars (OV4).
 - **extra_costs** keeps its table (agents' budgets read it), and each new row is also written to the ledger; the rows
   from before are read in once. A scope that's a conversation or an agent counts there; `app` is Piopio's own work.
+  **Folded in (2026-11-26):** `extra-costs.db` is gone. Utility, web search and embeddings are written only to the
+  ledger (`UsageLedger.recordCost`), and Cost (`usage.extras`) and an agent's budget read them there (`costSummary`,
+  `costMonthUsd`). An `extra-costs.db` left on disk is no longer read.
 - **What the backfill reads.** A conversation's view isn't its whole cost: Build's and chats' files keep branches you
   left and what a compaction folded, and an agent's views show a window of its latest entries. So the backfill also
   reads every answer in the file (`fileAnswers`) and every `pi.assistant` entry in an agent's harness

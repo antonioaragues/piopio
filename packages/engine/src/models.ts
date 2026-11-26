@@ -22,7 +22,6 @@ export const DEFAULT_MODEL: ModelRef = { provider: "openrouter", id: "anthropic/
 
 type FauxHandle = ReturnType<typeof fauxProvider>;
 
-import { ExtraCosts } from "./costs.js";
 import { UsageLedger } from "./ledger.js";
 import { MonthBudget } from "./budget.js";
 import { OnDeviceModel, OnDeviceUnavailable } from "./on-device.js";
@@ -34,8 +33,7 @@ import { readJsonFile, writeFileAtomic } from "./atomic.js";
 const CATALOG_CHECK_MS = 3_600_000;
 
 export class ModelHub {
-	readonly extraCosts: ExtraCosts;
-	/** Every paid request, for Overview (docs/spec/34 §8.1); `extraCosts` writes into it too. */
+	/** Every paid request, for Overview (docs/spec/34 §8.1), those outside conversations' turns included (`recordCost`). */
 	readonly ledger: UsageLedger;
 	/** Piopio this month (docs/spec/34 OV3): off until you set it. */
 	readonly budget: MonthBudget;
@@ -89,10 +87,8 @@ export class ModelHub {
 		this.credentials = new KeychainCredentialStore(secrets, options.home ? join(options.home, "credentials.json") : undefined);
 		// Custom endpoints are providers in pi's own models.json (endpoints.ts).
 		this.endpoints = new Endpoints(this.modelsPath);
-		this.extraCosts = new ExtraCosts(options.home ? join(options.home, "extra-costs.db") : undefined);
 		this.ledger = new UsageLedger(options.home ? join(options.home, "usage.db") : undefined);
 		this.ledger.planOf = (provider, usd) => this.billedToPlan(provider, usd);
-		this.extraCosts.onRecord = (row) => void this.ledger.recordExtra(row);
 		this.budget = new MonthBudget(options.home ? join(options.home, "budget.json") : undefined, this.ledger);
 		this.ledger.onWrite = () => this.budget.written();
 		this.loadVisibility();
@@ -548,7 +544,7 @@ export class ModelHub {
 		const reply = await rt.completeSimple(model, { systemPrompt, messages: [{ role: "user", content: prompt, timestamp: Date.now() }] });
 		const estimated = reply.usage?.cost?.total;
 		const hasPricing = Object.values(model.cost).some(value => typeof value === "number" && value > 0);
-		this.extraCosts.record("utility", `${ref.provider}/${ref.id}`, estimated === 0 && !hasPricing ? undefined : estimated, scope);
+		this.ledger.recordCost("utility", `${ref.provider}/${ref.id}`, estimated === 0 && !hasPricing ? undefined : estimated, scope);
 		if (reply.stopReason === "error" || reply.stopReason === "aborted") throw new EngineError("MODEL_ERROR", reply.errorMessage ?? "The utility model failed.");
 		return reply.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("").trim();
 	}
@@ -566,7 +562,7 @@ export class ModelHub {
 	private async onDeviceUtility(systemPrompt: string, prompt: string, scope?: string): Promise<string | undefined> {
 		try {
 			const text = await this.onDevice.complete(systemPrompt, prompt);
-			this.extraCosts.record("utility", "apple/on-device", 0, scope);
+			this.ledger.recordCost("utility", "apple/on-device", 0, scope);
 			return text;
 		} catch (error) {
 			if (error instanceof OnDeviceUnavailable) return undefined;

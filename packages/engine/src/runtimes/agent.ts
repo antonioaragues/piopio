@@ -201,7 +201,7 @@ export class AgentRuntime implements Runtime {
 				return options.hub.utility(system, prompt, options.ref.id, { model: { provider, id: modelId }, ...agentUtility(options.definition().models.utility) });
 			}),
 			// Web search and learned facts are recorded under this agent's id (scope): they count toward its budget.
-			extraSpend: (month) => options.hub.extraCosts.monthUsd(options.ref.id, month),
+			extraSpend: (month) => options.hub.ledger.costMonthUsd(options.ref.id, month),
 			...(options.learnQuietMs ? { learnQuietMs: options.learnQuietMs } : {}),
 			...(options.onLearned ? { onLearned: options.onLearned } : {}),
 			onPeerLog: () => options.onActivity?.(),

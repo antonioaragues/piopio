@@ -89,16 +89,12 @@ test("a plan's requests are tokens, never dollars", () => {
 	ledger.close();
 });
 
-test("extra costs come in once, then as they happen; Piopio's own work is its own row", () => {
+test("costs outside the turns are rows of their own; Piopio's own work is its own row", () => {
 	const ledger = new UsageLedger();
 	ledger.resolve = (scope) => (scope === "t1" ? chat : scope === "rita" ? rita("person:me") : undefined);
-	const old = [
-		{ rowid: 1, at: day(3), scope: "app", kind: "utility", model: "openrouter/google/gemini-flash", usd: 0.01 },
-		{ rowid: 2, at: day(3), scope: "t1", kind: "web_search", model: "deepseek/deepseek-v4.1-flash", usd: 0.02 },
-		{ rowid: 3, at: day(4), scope: "rita", kind: "embeddings", model: "text-embedding", usd: null },
-	];
-	expect(ledger.importExtras(old)).toBe(3);
-	expect(ledger.importExtras(old)).toBe(0);
+	ledger.recordExtra({ at: day(3), scope: "app", kind: "utility", model: "openrouter/google/gemini-flash", usd: 0.01 }, "x1");
+	ledger.recordExtra({ at: day(3), scope: "t1", kind: "web_search", model: "deepseek/deepseek-v4.1-flash", usd: 0.02 }, "x2");
+	ledger.recordExtra({ at: day(4), scope: "rita", kind: "embeddings", model: "text-embedding", usd: null }, "x3");
 	ledger.recordExtra({ at: day(6), scope: "app", kind: "utility", model: "apple/on-device", usd: 0 });
 	const s = ledger.spend({ range: "month" }, { agent: () => "Rita" }, now);
 	expect(s.calls).toBe(4);
@@ -204,3 +200,40 @@ test("Spend matches the conversation's own total, live and after a restart's bac
 	expect(csv.csv).not.toContain("hello");
 	await b.stop();
 }, 60_000);
+
+// extra-costs.db went into the ledger (re-audit 2026-11-25 P2): what Cost and an agent's budget read, from here.
+test("known costs and missing prices stay apart, by conversation, by agent and in all", () => {
+	const ledger = new UsageLedger();
+	ledger.resolve = (scope) => (scope === "t1" ? chat : scope === "rita" ? rita("person:me") : undefined);
+	ledger.recordCost("web_search", "model", 0.02, "t1");
+	ledger.recordCost("web_search", "model", undefined, "t1");
+	ledger.recordCost("utility", "model", Number.NaN, "t1");
+	ledger.recordCost("embeddings", "model", 0.003);
+	ledger.recordCost("utility", "model", 0.005, "rita");
+	ledger.recordCost("utility", "model", 0.001, "gone");
+	expect(ledger.costSummary("t1")).toMatchObject({ scope: "t1", calls: 3, knownUsd: 0.02, unknownCalls: 2 });
+	expect(ledger.costSummary("rita")).toMatchObject({ calls: 1, knownUsd: 0.005 });
+	// A scope nothing resolves (a conversation deleted since) still counts toward itself.
+	expect(ledger.costSummary("gone")).toMatchObject({ calls: 1, knownUsd: 0.001 });
+	expect(ledger.costSummary("other")).toMatchObject({ calls: 0, knownUsd: 0, unknownCalls: 0 });
+	const all = ledger.costSummary();
+	expect(all).toMatchObject({ scope: "app", calls: 6, unknownCalls: 2 });
+	expect(all.knownUsd).toBeCloseTo(0.029);
+	expect(all.breakdown.map((b) => b.kind).sort()).toEqual(["embeddings", "utility", "web_search"]);
+	ledger.close();
+});
+
+test("an agent's costs for a month are read by range, the month's own and not the next one's", () => {
+	const ledger = new UsageLedger();
+	ledger.resolve = (scope) => (scope === "rita" ? rita("person:me") : undefined);
+	for (const [at, usd] of [["2026-11-30T23:59:59.000Z", 1], ["2026-12-01T00:00:00.000Z", 2], ["2026-12-31T10:00:00.000Z", 3], ["2027-01-01T00:00:00.000Z", 4]] as const) {
+		ledger.recordExtra({ at, scope: "rita", kind: "utility", model: "m", usd }, `r${at}`);
+	}
+	ledger.recordExtra({ at: "2026-12-02T00:00:00.000Z", scope: "rita", kind: "utility", model: "m", usd: null }, "unknown");
+	ledger.recordExtra({ at: "2026-12-02T00:00:00.000Z", scope: "someone-else", kind: "utility", model: "m", usd: 9 }, "other");
+	expect(ledger.costMonthUsd("rita", "2026-11")).toBe(1);
+	expect(ledger.costMonthUsd("rita", "2026-12")).toBe(5);
+	expect(ledger.costMonthUsd("rita", "2027-01")).toBe(4);
+	expect(ledger.costMonthUsd("nobody", "2026-12")).toBe(0);
+	ledger.close();
+});
