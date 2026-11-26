@@ -5,7 +5,8 @@
  */
 import { Type } from "typebox";
 import { defineTool as defineCodingTool, type ExtensionFactory } from "@earendil-works/pi-coding-agent";
-import { PIOPIO_READS, PIOPIO_SHAPES, type Apps, type MakeContext } from "../apps.js";
+import { PIOPIO_READS, PIOPIO_SHAPES } from "../app-manifest.js";
+import type { Apps, MakeContext } from "../apps.js";
 import { promptSection, type PromptEvent } from "./prompt-sections.js";
 
 export const MAKE_APP = "make_app";

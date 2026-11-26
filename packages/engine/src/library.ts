@@ -16,7 +16,7 @@ import type { ModelRef } from "@piopio/protocol";
 import { agentUtility } from "./runtimes/agent.js";
 import { SearchIndex } from "./search.js";
 import { replacedVisuals } from "./tools/visuals.js";
-import { isAppFile } from "./apps.js";
+import { isAppFile } from "./app-manifest.js";
 import { readJsonFile, writeFileAtomic } from "./atomic.js";
 
 /** Where an item came from, as the session manager knows it. */

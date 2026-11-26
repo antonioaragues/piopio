@@ -540,8 +540,10 @@ scripts, Piopio's numbers, timers) are unchanged and come later.
 ### L2 as built (2026-11-22)
 
 **Engine**
-- `apps.ts`: the manifest (checked, and written by the engine), reading and checking sources, the cache
-  (`apps-cache/`), what's allowed (`apps.json`), and watching an open app's page and source folders.
+- `app-manifest.ts`: the manifest (checked, and written by the engine), its sources' kinds and rules, and what each
+  Piopio read may ask for. `app-sources.ts`: reading and checking a file source.
+- `apps.ts`: the service: reading calendar and Piopio sources, the cache (`apps-cache/`), what's allowed
+  (`apps.json`), the page's history for Undo, and watching an open app's page and source folders.
 - `tools/apps-tool.ts`: `make_app`, in chats, Build sessions and conversations on a coding agent. It asks through
   each one's approval card, and writes nothing before Allow.
 - **The Library** lists the app from the tool's result as kind App: an `.html` with a manifest is an app.
@@ -738,7 +740,7 @@ numbers are what apps read.
 - **What it reads:** `stats.spend` (args `range`, `groupBy`, `filter { agent, automation, place }`), `stats.activity`
   (`range`), `stats.budgets`, `automations.runs` (`limit` 1–100, `automation`), `agents` (each with where it runs,
   its model, paused, this month's spend and budget, next run, what waits in its Inbox). The same reads Overview
-  makes, in the engine, with no model ([apps.ts](../../packages/engine/src/apps.ts) `checkPiopio`, the server's
+  makes, in the engine, with no model ([app-manifest.ts](../../packages/engine/src/app-manifest.ts) `checkPiopio`, the server's
   `piopioRead`). Anything else in `args` is refused with what's wrong; `range` defaults to the month.
 - **The same as a calendar source:** read when the app opens (if the last read is over a minute old) and on
   Refresh; a failed read keeps the last good numbers, dated, with Try Again; it's part of what Allow covers, so

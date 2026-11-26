@@ -3,7 +3,9 @@ import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSyn
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { Apps, calendarSpan, isAppFile, parseManifest, parseTable, type AppView } from "../src/apps.js";
+import { calendarSpan, isAppFile, parseManifest } from "../src/app-manifest.js";
+import { parseTable } from "../src/app-sources.js";
+import { Apps, type AppView } from "../src/apps.js";
 import { kindOf } from "../src/library.js";
 import { endDetails } from "@piopio/runtime";
 
@@ -284,7 +286,8 @@ describe("what an app may read (audit M1)", () => {
 		}
 	});
 
-	it("an app allowed with the old short hash stays allowed, and keeps the full one from then on", async () => {
+	// The short hash's fallback (apps allowed before 2026-11-22) went with the alpha migrations on 2026-11-26.
+	it("an app allowed only with the old short hash asks again", async () => {
 		const { home, apps, plan } = await projectApp();
 		const state = JSON.parse(readFileSync(join(home, "apps.json"), "utf8")) as { allowed: Record<string, string> };
 		expect(state.allowed[plan.path]).toMatch(/^[0-9a-f]{64}$/);
@@ -292,8 +295,7 @@ describe("what an app may read (audit M1)", () => {
 		state.allowed[plan.path] = createHash("sha1").update(sorted).digest("hex").slice(0, 16);
 		writeFileSync(join(home, "apps.json"), JSON.stringify(state));
 		const again = new Apps({ home, appsDir: join(dirname(home), "Piopio", "Apps") });
-		expect((await again.refresh(plan.path)).allowed).toBe(true);
-		expect((JSON.parse(readFileSync(join(home, "apps.json"), "utf8")) as typeof state).allowed[plan.path]).toMatch(/^[0-9a-f]{64}$/);
+		expect((await again.refresh(plan.path)).allowed).toBe(false);
 		apps.closeApp(plan.path);
 	});
 });

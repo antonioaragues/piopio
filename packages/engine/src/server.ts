@@ -8,7 +8,7 @@ import { CALL_TIMEOUT_MS, methods, PROTOCOL_VERSION, reverseMethods, SLOW_METHOD
 import { Value } from "typebox/value";
 import { EngineError, ModelHub } from "./models.js";
 import { activity } from "./activity.js";
-import type { PiopioRead } from "./apps.js";
+import type { PiopioRead } from "./app-manifest.js";
 import { ensureDirs, loadOrCreateToken, type EnginePaths } from "./paths.js";
 import { socketAnswers } from "./lock.js";
 import { MethodNotFound, RpcConnection } from "./rpc/connection.js";
